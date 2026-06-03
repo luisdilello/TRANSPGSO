@@ -1894,7 +1894,9 @@ async function analizarEtiqueta(base64img,mediaType){
       },
       body:JSON.stringify({
         model:'claude-haiku-4-5-20251001',
-        max_tokens:400,
+        max_tokens:500,
+        temperature:0,
+        system:'Eres un sistema OCR especializado en etiquetas de despacho de MercadoLibre Chile. Tu única función es extraer datos con precisión absoluta. NUNCA inventes datos. Si no puedes leer un campo con certeza, devuelve null para ese campo.',
         messages:[{
           role:'user',
           content:[
@@ -1904,18 +1906,7 @@ async function analizarEtiqueta(base64img,mediaType){
             },
             {
               type:'text',
-              text:`Analiza esta etiqueta de envío de Mercado Libre o courier similar. Extrae exactamente estos campos:
-
-- codigo: número COMPLETO que aparece JUNTO a "Envío:" o "Envio:" al final de la etiqueta. REGLAS ESTRICTAS: (1) Copia TODOS los dígitos sin omitir ninguno. (2) ELIMINA cualquier espacio — si ves "4719499 9177" el código correcto es "47194999177". (3) Solo dígitos, sin espacios ni guiones ni letras. (4) Puede tener entre 11 y 20 dígitos. Si el número parece corto (menos de 10 dígitos) busca más dígitos en la etiqueta que puedas haber omitido.
-- comuna: la comuna aparece DOS VECES en la zona del código QR, en letras grandes en mayúsculas (ej: LA FLORIDA). Es el nombre de la ciudad/sector de entrega. NO incluyas "RM", "Metropolitana" ni nada extra.
-- direccion: dirección completa con calle y número (ej: Los Sauces 4025 4025)
-- referencia: texto DESPUÉS de la palabra "Referencia:" (ej: Calle)
-- destinatario: SOLO el nombre de la persona que está después de "Destinatario:". NO incluyas códigos entre paréntesis como (ULCA...) ni (REC...)
-
-IMPORTANTE sobre la comuna: busca el texto en MAYÚSCULAS que aparece repetido al lado derecho del código QR. Es la misma palabra escrita dos veces. Ese es el nombre de la comuna.
-
-Responde ÚNICAMENTE con JSON válido, sin explicaciones ni markdown:
-{"codigo":"465969010021","comuna":"LA FLORIDA","direccion":"Los Sauces 4025 4025","referencia":"Calle","destinatario":"Carolina Ulloa"}`
+              text:`CÓDIGO DE ENVÍO (dato más importante):\n- Busca "Envío:" o "Envio:" seguido de un número\n- Cópialo dígito por dígito SIN OMITIR NINGUNO\n- Si tiene espacio en medio (ej: "4719499 9177") → únelos → "47194999177"\n- Solo dígitos, entre 11 y 20 caracteres\n- Si no aparece "Envío:" usa el número más largo de la parte inferior\n\nCOMUNA:\n- Aparece en MAYÚSCULAS junto al QR, repetida dos veces (ej: "COLINA COLINA" o "PADRE HURTADO PADRE HURTADO")\n- Devuelve SOLO UNA vez (ej: "COLINA"). Sin "RM" ni números.\n\nDIRECCIÓN: calle y número completo\nREFERENCIA: texto después de "Referencia:"\nDESTINATARIO: nombre completo después de "Destinatario:", sin códigos entre paréntesis\n\nResponde SOLO con JSON válido, sin markdown:\n{"codigo":"47194999177","comuna":"PADRE HURTADO","direccion":"Luis Pasteur 159","referencia":"Casa","destinatario":"Ricardo Velasquez"}`
             }
           ]
         }]
