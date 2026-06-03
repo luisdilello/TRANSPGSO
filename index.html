@@ -1906,7 +1906,7 @@ async function analizarEtiqueta(base64img,mediaType){
               type:'text',
               text:`Analiza esta etiqueta de envío de Mercado Libre o courier similar. Extrae exactamente estos campos:
 
-- codigo: número COMPLETO que aparece JUNTO a "Envío:" o "Envio:" al final de la etiqueta. Cópialo EXACTAMENTE tal como aparece, todos los dígitos sin omitir ninguno. Puede tener entre 11 y 20 dígitos. Solo dígitos, sin espacios ni guiones.
+- codigo: número COMPLETO que aparece JUNTO a "Envío:" o "Envio:" al final de la etiqueta. REGLAS ESTRICTAS: (1) Copia TODOS los dígitos sin omitir ninguno. (2) ELIMINA cualquier espacio — si ves "4719499 9177" el código correcto es "47194999177". (3) Solo dígitos, sin espacios ni guiones ni letras. (4) Puede tener entre 11 y 20 dígitos. Si el número parece corto (menos de 10 dígitos) busca más dígitos en la etiqueta que puedas haber omitido.
 - comuna: la comuna aparece DOS VECES en la zona del código QR, en letras grandes en mayúsculas (ej: LA FLORIDA). Es el nombre de la ciudad/sector de entrega. NO incluyas "RM", "Metropolitana" ni nada extra.
 - direccion: dirección completa con calle y número (ej: Los Sauces 4025 4025)
 - referencia: texto DESPUÉS de la palabra "Referencia:" (ej: Calle)
@@ -1930,6 +1930,10 @@ Responde ÚNICAMENTE con JSON válido, sin explicaciones ni markdown:
     const clean=text.replace(/```json|```/g,'').trim();
     let parsed;
     try{ parsed=JSON.parse(clean); }catch(e){ return{_error:'No se pudo leer la etiqueta: '+clean.slice(0,80)}; }
+    // Limpiar el código: eliminar espacios, guiones y caracteres no numéricos
+    if(parsed.codigo){
+      parsed.codigo=parsed.codigo.toString().replace(/[^0-9]/g,'');
+    }
     if(!parsed.destinatario&&!parsed.direccion&&!parsed.codigo){
       return{_error:'Sin datos extraídos — verifica que la foto sea legible'};
     }
