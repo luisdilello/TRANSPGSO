@@ -1859,8 +1859,8 @@ function extraerCodigoQR(raw){
     const c=String(cod).trim().replace(/\s+/g,'');
     if(c.length<11) return null; // mínimo 11 caracteres
     if(/[^a-zA-Z0-9]/.test(c)) return null; // sin caracteres especiales
-    // ML: exactamente 11 dígitos numéricos
-    if(/^\d{11}$/.test(c)) return c;
+    // ML: 11 o más dígitos numéricos (MercadoLibre varía entre 11-13 dígitos)
+    if(/^\d{11,}$/.test(c)) return c;
     // PGSO: alfanumérico (nuestro sistema), mínimo 11 chars
     if(/^[A-Z0-9]{11,}$/.test(c)) return c;
     // Permitir también códigos alfanuméricos mixtos de otras plataformas (min 11)
@@ -2067,8 +2067,19 @@ function ColectaRider(_ref_cr){
       analizarEtiqueta(base64,mediaType).then(datos=>{
         setFotoAnalisis({codigo,base64,mediaType,analizando:false,datos});
         if(datos&&!datos._error){
-          setPaquetes(prev=>prev.map(p=>p.codigo===codigo?{...p,datos}:p));
-          toast('✓ '+(datos.destinatario||datos.direccion||'Datos extraídos'));
+          setPaquetes(prev=>prev.map(p=>{
+            if(p.codigo!==codigo) return p;
+            // Si Claude extrajo un código válido y diferente al del escáner, usarlo
+            const codigoFinal=(datos.codigo&&datos.codigo!==codigo&&/^[a-zA-Z0-9]{11,}$/.test(datos.codigo.replace(/\\s/g,'')))?datos.codigo:p.codigo;
+            const updatedPkg={...p,datos,codigo:codigoFinal};
+            if(codigoFinal!==p.codigo){
+              // Actualizar el set de códigos para evitar duplicados
+              codigosRef.current.delete(p.codigo);
+              codigosRef.current.add(codigoFinal);
+            }
+            return updatedPkg;
+          }));
+          toast('✓ '+(datos.destinatario||datos.direccion||'Datos extraídos')+(datos.codigo&&datos.codigo!==codigo?' · Código: '+datos.codigo:''));
         } else {
           toast('⚠ '+(datos?._error||'No se pudo leer la etiqueta'));
           setFotoAnalisis(null);
