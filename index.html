@@ -1904,15 +1904,18 @@ async function analizarEtiqueta(base64img,mediaType){
             },
             {
               type:'text',
-              text:`Analiza esta etiqueta de envío de Mercado Libre o similar. Extrae exactamente estos campos:
-- codigo: el número que aparece junto a la palabra "Envío:" o "Envio:" (solo dígitos, sin espacios)
-- comuna: el nombre de la comuna/ciudad que aparece al lado del código QR (en mayúsculas, solo el nombre, sin región)
-- direccion: la dirección completa (calle y número)
-- referencia: el texto que aparece junto a la palabra "Referencia:"
-- destinatario: solo el nombre de la persona, SIN códigos entre paréntesis como (ULCA...) o (REC...)
+              text:`Analiza esta etiqueta de envío de Mercado Libre o courier similar. Extrae exactamente estos campos:
 
-Responde ÚNICAMENTE con un objeto JSON válido, sin explicaciones, sin markdown, sin bloques de código. Ejemplo:
-{"codigo":"46596901002","comuna":"LA FLORIDA","direccion":"Los Sauces 4025","referencia":"Calle","destinatario":"Carolina Ulloa"}`
+- codigo: número que aparece JUNTO a "Envío:" o "Envio:" al final de la etiqueta (ej: 46596901002). Solo dígitos.
+- comuna: la comuna aparece DOS VECES en la zona del código QR, en letras grandes en mayúsculas (ej: LA FLORIDA). Es el nombre de la ciudad/sector de entrega. NO incluyas "RM", "Metropolitana" ni nada extra.
+- direccion: dirección completa con calle y número (ej: Los Sauces 4025 4025)
+- referencia: texto DESPUÉS de la palabra "Referencia:" (ej: Calle)
+- destinatario: SOLO el nombre de la persona que está después de "Destinatario:". NO incluyas códigos entre paréntesis como (ULCA...) ni (REC...)
+
+IMPORTANTE sobre la comuna: busca el texto en MAYÚSCULAS que aparece repetido al lado derecho del código QR. Es la misma palabra escrita dos veces. Ese es el nombre de la comuna.
+
+Responde ÚNICAMENTE con JSON válido, sin explicaciones ni markdown:
+{"codigo":"46596901002","comuna":"LA FLORIDA","direccion":"Los Sauces 4025 4025","referencia":"Calle","destinatario":"Carolina Ulloa"}`
             }
           ]
         }]
@@ -2090,9 +2093,8 @@ function ColectaRider(_ref_cr){
   async function analizarFotosGaleria(){
     if(!fotosGaleria.length) return;
     setProcesandoGaleria(true);
-    const clienteNombre=clienteSel?.nombre||clienteSel||'Sin cliente';
-    const resultados=[];
     for(let i=0;i<fotosGaleria.length;i++){
+      if(fotosGaleria[i].datos||fotosGaleria[i].error) continue; // ya analizada
       setFotosGaleria(prev=>prev.map((f,j)=>j===i?{...f,analizando:true}:f));
       try{
         const file=fotosGaleria[i].file;
@@ -2104,44 +2106,47 @@ function ColectaRider(_ref_cr){
         });
         const mediaType=file.type||'image/jpeg';
         const datos=await analizarEtiqueta(b64,mediaType);
-        resultados.push({...fotosGaleria[i],analizando:false,datos,error:datos?._error||null});
         setFotosGaleria(prev=>prev.map((f,j)=>j===i?{...f,analizando:false,datos,error:datos?._error||null}:f));
       }catch(e){
-        resultados.push({...fotosGaleria[i],analizando:false,datos:null,error:e.message});
         setFotosGaleria(prev=>prev.map((f,j)=>j===i?{...f,analizando:false,error:e.message}:f));
       }
     }
     setProcesandoGaleria(false);
-    // Auto-confirmar los que tienen código válido
-    const conCodigo=resultados.filter(f=>f.datos?.codigo&&!f.error);
-    if(conCodigo.length>0){
-      const ts=new Date().toISOString();
-      const inserts=conCodigo.map(f=>{
-        const d=f.datos||{};
-        return{
-          codigo:d.codigo,
-          cliente:clienteNombre,
-          estado:'en_bodega',
-          fuente:'colecta_galeria_'+turno,
-          mensajero:'',
-          destinatario:d.destinatario||'',
-          direccion:d.direccion||'',
-          telefono:d.telefono||'',
-          comuna:d.comuna||'',
-          referencia:'',
-          fecha:new Date().toISOString().slice(0,10),
-          monto:0,
-          en_un_cambio:false,
-          nota:'Colecta Galería '+turno+' - '+usuario.nombre
-        };
-      });
-      try{
-        await db.from('envios').insert(inserts);
-        toast('✓ '+conCodigo.length+' paquetes registrados desde galería');
-      }catch(e){ toast('⚠ Error al guardar: '+e.message); }
-    } else {
-      toast('⚠ No se detectaron códigos válidos en las fotos');
-    }
+    toast('✓ Análisis completo — revisa y confirma');
+  }
+
+  async function cargarGaleriaEnSistema(){
+    const clienteNombre=clienteSel?.nombre||clienteSel||'Sin cliente';
+    const conCodigo=fotosGaleria.filter(f=>f.datos?.codigo&&!f.error);
+    if(conCodigo.length===0){ toast('⚠ No hay paquetes con código válido para cargar'); return; }
+    setProcesandoGaleria(true);
+    const inserts=conCodigo.map(f=>{
+      const d=f.datos||{};
+      return{
+        codigo:d.codigo,
+        cliente:clienteNombre,
+        estado:'en_bodega',
+        fuente:'colecta_galeria_'+turno,
+        mensajero:'',
+        destinatario:d.destinatario||'',
+        direccion:d.direccion||'',
+        telefono:d.telefono||'',
+        comuna:d.comuna||'',
+        referencia:d.referencia||'',
+        fecha:new Date().toISOString().slice(0,10),
+        monto:0,
+        en_un_cambio:false,
+        nota:'Colecta Galería '+turno+' - '+usuario.nombre
+      };
+    });
+    try{
+      const {error}=await db.from('envios').insert(inserts);
+      if(error) throw error;
+      toast('✓ '+conCodigo.length+' paquetes cargados en sistema');
+      setFotosGaleria([]);
+      setFase('seleccion');
+    }catch(e){ toast('⚠ Error al guardar: '+e.message); }
+    setProcesandoGaleria(false);
   }
 
   async function confirmarColecta(){
@@ -2229,7 +2234,7 @@ function ColectaRider(_ref_cr){
         React.createElement('div',{style:{fontSize:40,marginBottom:8}},'🖼'),
         React.createElement('div',{style:{fontSize:13}},'Cargando fotos...')
       ),
-      fotosGaleria.map((f,i)=>React.createElement('div',{key:i,style:{display:'flex',gap:12,padding:'10px',borderRadius:10,background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',marginBottom:8,alignItems:'flex-start'}},
+      fotosGaleria.map((f,i)=>React.createElement('div',{key:i,style:{display:'flex',gap:12,padding:'10px',borderRadius:10,background:'rgba(255,255,255,0.04)',border:'1px solid '+(f.datos?.codigo?'rgba(200,168,75,0.25)':f.error?'rgba(176,48,48,0.3)':'rgba(255,255,255,0.08)'),marginBottom:8,alignItems:'flex-start'}},
         React.createElement('img',{src:f.preview,style:{width:72,height:72,objectFit:'cover',borderRadius:8,flexShrink:0,border:'2px solid '+(f.datos?.codigo?'var(--gold)':f.error?'rgba(176,48,48,0.6)':'rgba(255,255,255,0.1)')}}),
         React.createElement('div',{style:{flex:1,minWidth:0}},
           f.analizando&&React.createElement('div',{style:{fontSize:12,color:'var(--gold)',marginBottom:4}},'⏳ Analizando...'),
@@ -2238,12 +2243,47 @@ function ColectaRider(_ref_cr){
           f.datos?.direccion&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)',marginBottom:2}},f.datos.direccion+(f.datos.comuna?' · '+f.datos.comuna:'')),
           f.error&&React.createElement('div',{style:{fontSize:11,color:'#e88',marginBottom:2}},'⚠ '+f.error),
           !f.analizando&&!f.datos&&!f.error&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.3)'}},'Pendiente de análisis')
-        )
+        ),
+        React.createElement('button',{onClick:()=>setFotosGaleria(prev=>prev.filter((_,j)=>j!==i)),disabled:f.analizando,style:{background:'rgba(176,48,48,0.15)',border:'1px solid rgba(176,48,48,0.3)',borderRadius:6,color:'#e88',cursor:f.analizando?'default':'pointer',fontSize:13,padding:'4px 8px',flexShrink:0,alignSelf:'center',opacity:f.analizando?0.4:1}},'✕')
       ))
     ),
     React.createElement('div',{style:{padding:'16px',background:'rgba(0,0,0,0.5)',borderTop:'1px solid rgba(255,255,255,0.08)',flexShrink:0,display:'flex',gap:10}},
       React.createElement('button',{onClick:()=>{galeriaInputRef.current?.click();},style:{flex:1,padding:'12px',borderRadius:10,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1,cursor:'pointer'}},'🖼 Agregar más'),
-      React.createElement('button',{onClick:analizarFotosGaleria,disabled:procesandoGaleria||fotosGaleria.length===0,style:{flex:2,padding:'12px',borderRadius:10,border:'none',background:procesandoGaleria||fotosGaleria.length===0?'rgba(255,255,255,0.1)':'linear-gradient(135deg,var(--gold),#a87d2a)',color:procesandoGaleria||fotosGaleria.length===0?'rgba(255,255,255,0.3)':'var(--dark-deep)',fontFamily:'Bebas Neue',fontSize:16,letterSpacing:2,cursor:procesandoGaleria||fotosGaleria.length===0?'default':'pointer'}},procesandoGaleria?'⏳ ANALIZANDO...':'🤖 ANALIZAR Y CARGAR')
+      fotosGaleria.some(f=>!f.datos&&!f.error&&!f.analizando)
+        ?React.createElement('button',{onClick:analizarFotosGaleria,disabled:procesandoGaleria,style:{flex:2,padding:'12px',borderRadius:10,border:'none',background:procesandoGaleria?'rgba(255,255,255,0.1)':'linear-gradient(135deg,var(--gold),#a87d2a)',color:procesandoGaleria?'rgba(255,255,255,0.3)':'var(--dark-deep)',fontFamily:'Bebas Neue',fontSize:16,letterSpacing:2,cursor:procesandoGaleria?'default':'pointer'}},procesandoGaleria?'⏳ ANALIZANDO...':'🤖 ANALIZAR')
+        :React.createElement('button',{onClick:cargarGaleriaEnSistema,disabled:procesandoGaleria||fotosGaleria.filter(f=>f.datos?.codigo&&!f.error).length===0,style:{flex:2,padding:'12px',borderRadius:10,border:'none',background:fotosGaleria.filter(f=>f.datos?.codigo&&!f.error).length>0?'linear-gradient(135deg,#2e7d4f,#1a5c34)':'rgba(255,255,255,0.1)',color:fotosGaleria.filter(f=>f.datos?.codigo&&!f.error).length>0?'#fff':'rgba(255,255,255,0.3)',fontFamily:'Bebas Neue',fontSize:16,letterSpacing:2,cursor:'pointer'}},procesandoGaleria?'⏳ CARGANDO...':'✅ CARGAR '+fotosGaleria.filter(f=>f.datos?.codigo&&!f.error).length+' EN SISTEMA')
+    )
+  );
+
+  if(fase==='revision') return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
+    React.createElement('div',{style:{background:'var(--dark)',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'2px solid var(--gold)',flexShrink:0}},
+      React.createElement('div',null,
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:16,color:'var(--gold)',letterSpacing:2}},'👁 REVISIÓN · '+(clienteSel?.nombre||'')+' · '+turno),
+        React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)',marginTop:2}},paquetes.length+' paquetes listos para cargar')
+      ),
+      React.createElement('button',{onClick:()=>setFase('escaneo'),style:{background:'none',border:'1px solid rgba(255,255,255,0.2)',borderRadius:8,color:'rgba(255,255,255,0.6)',padding:'8px 14px',cursor:'pointer',fontSize:13}},'← Volver')
+    ),
+    React.createElement('div',{style:{flex:1,overflowY:'auto',padding:12}},
+      paquetes.map((p,i)=>React.createElement('div',{key:i,style:{display:'flex',alignItems:'flex-start',gap:10,padding:'10px 12px',borderRadius:8,background:'rgba(255,255,255,0.04)',border:'1px solid '+(p.datos?'rgba(200,168,75,0.2)':'rgba(255,255,255,0.08)'),marginBottom:6}},
+        React.createElement('div',{style:{fontSize:18,marginTop:2}},p.datos?'🏷':'📦'),
+        React.createElement('div',{style:{flex:1}},
+          React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:12,color:'var(--gold)',fontWeight:700}},p.codigo),
+          p.datos?.destinatario&&React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.8)',marginTop:2,fontWeight:600}},p.datos.destinatario),
+          p.datos?.direccion&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:1}},p.datos.direccion+(p.datos.comuna?' · '+p.datos.comuna:'')),
+          !p.datos&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.3)',marginTop:1}},'Sin datos de etiqueta · '+new Date(p.ts).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}))
+        ),
+        React.createElement('button',{onClick:()=>{setPaquetes(prev=>prev.filter((_,j)=>j!==i));codigosRef.current.delete(p.codigo);if(paquetes.length<=1)setFase('escaneo');},style:{background:'rgba(176,48,48,0.15)',border:'1px solid rgba(176,48,48,0.3)',borderRadius:6,color:'#e88',cursor:'pointer',fontSize:13,padding:'4px 8px',flexShrink:0,alignSelf:'center'}},'✕')
+      ))
+    ),
+    React.createElement('div',{style:{padding:'16px',background:'rgba(0,0,0,0.6)',borderTop:'2px solid var(--gold)',flexShrink:0}},
+      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:10,padding:'10px 12px',background:'rgba(200,168,75,0.08)',borderRadius:8,border:'1px solid rgba(200,168,75,0.2)'}},
+        React.createElement('div',{style:{fontSize:13,color:'rgba(255,255,255,0.7)',flex:1}},
+          React.createElement('span',{style:{color:'var(--gold)',fontWeight:700}},paquetes.length,' paquetes'),
+          ' · Cliente: ',React.createElement('span',{style:{color:'var(--gold)',fontWeight:700}},clienteSel?.nombre||''),
+          ' · Turno ',React.createElement('span',{style:{color:'var(--gold)',fontWeight:700}},turno)
+        )
+      ),
+      React.createElement('button',{onClick:confirmarColecta,disabled:guardando,style:{width:'100%',padding:'14px',borderRadius:10,border:'none',background:guardando?'rgba(200,168,75,0.3)':'linear-gradient(135deg,#2e7d4f,#1a5c34)',color:'#fff',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,cursor:guardando?'default':'pointer',fontWeight:700}},guardando?'⏳ GUARDANDO...':'✅ CONFIRMAR Y CARGAR EN SISTEMA')
     )
   );
 
@@ -2338,7 +2378,7 @@ function ColectaRider(_ref_cr){
       ))
     ),
     paquetes.length>0&&React.createElement('div',{style:{padding:'12px 16px',background:'rgba(0,0,0,0.6)',borderTop:'2px solid var(--gold)',flexShrink:0}},
-      React.createElement('button',{onClick:confirmarColecta,disabled:guardando,style:{width:'100%',padding:'14px',borderRadius:10,border:'none',background:guardando?'rgba(200,168,75,0.3)':'linear-gradient(135deg,var(--gold),#a87d2a)',color:'var(--dark-deep)',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,cursor:guardando?'default':'pointer',fontWeight:700}},guardando?'GUARDANDO...':'✓ CONFIRMAR '+paquetes.length+' PAQUETE'+(paquetes.length!==1?'S':''))
+      React.createElement('button',{onClick:()=>{if(paquetes.length===0){toast('⚠ No hay paquetes escaneados');return;}setFase('revision');},disabled:guardando||paquetes.length===0,style:{width:'100%',padding:'14px',borderRadius:10,border:'none',background:paquetes.length>0?'linear-gradient(135deg,var(--gold),#a87d2a)':'rgba(255,255,255,0.1)',color:paquetes.length>0?'var(--dark-deep)':'rgba(255,255,255,0.3)',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,cursor:paquetes.length>0?'pointer':'default',fontWeight:700}},'👁 REVISAR '+paquetes.length+' PAQUETE'+(paquetes.length!==1?'S':''))
     )
   );
 
