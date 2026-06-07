@@ -2018,92 +2018,97 @@ const msg=conCodigo>0&&sinCodigo>0?`✓ ${nuevos.length} envíos cargados · ${c
       window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       const pdfDoc=await window.pdfjsLib.getDocument({data:arrayBuffer}).promise;
       const totalPags=pdfDoc.numPages;
-      setProgresoPDF('📄 PDF cargado · '+totalPags+' páginas · Extrayendo texto...');
-      // PASO 1: Extraer texto de todas las páginas localmente
-      let textoCompleto='';
+      setProgresoPDF('📄 PDF cargado · '+totalPags+' páginas · Extrayendo datos...');
+      const envios=[];
       for(let i=1;i<=totalPags;i++){
-        if(i%20===0)setProgresoPDF('📝 Extrayendo texto... ('+i+' / '+totalPags+')');
-        const page=await pdfDoc.getPage(i);
-        const tc=await page.getTextContent();
-        const txt=tc.items.map(it=>it.str).join(' ');
-        textoCompleto+='---PAGINA_'+i+'---\n'+txt+'\n';
-      }
-      // PASO 2: Enviar SOLO el texto a Claude (mucho más liviano que el PDF)
-      setProgresoPDF('🤖 IA extrayendo datos de las etiquetas...');
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          model:'claude-haiku-4-5-20251001',
-          max_tokens:8000,
-          messages:[{role:'user',content:'Tengo el texto extraído de un PDF de etiquetas de envío Flex de MercadoLibre. Cada página es un envío separado por "---PAGINA_N---". Extrae de cada página: codigo (el número después de "Envio:" sin espacios), destinatario (el nombre después de "Destinatario:" sin lo que está entre paréntesis), direccion (el texto después de "Direccion:"), referencia (el texto después de "Referencia:", puede repetirse), comuna (la palabra en mayúsculas que aparece después de "ANILLO ESTE" o "ANILLO OESTE"), fecha (convertir "06 JUN" a "2026-06-06"). Responde SOLO con JSON válido sin backticks: {"envios":[{"codigo":"...","destinatario":"...","direccion":"...","referencia":"...","comuna":"...","fecha":"YYYY-MM-DD"}]}\n\nTEXTO DEL PDF:\n'+textoCompleto.slice(0,60000)}]
-        })
-      });
-      const data=await resp.json();
-      const txt2=data.content?.map(c=>c.text||'').join('');
-      let parsed;
-      try{parsed=JSON.parse(txt2.replace(/```json?|```/g,'').trim());}
-      catch(e2){throw new Error('Error parseando IA: '+txt2.slice(0,200));}
-      const metadatos={};
-      (parsed.envios||[]).forEach(e=>{if(e.codigo)metadatos[e.codigo.replace(/\s+/g,'')]={...e};});
-      // PASO 3: Renderizar páginas como imágenes (una por una, sin batch)
-      setProgresoPDF('🖼 Renderizando etiquetas... (0 / '+totalPags+')');
-      const etiquetas={};
-      // Construir mapa página → código desde el texto
-      const paginaCodigo={};
-      textoCompleto.split('---PAGINA_').slice(1).forEach(bloque=>{
-        const numMatch=bloque.match(/^(\d+)---/);
-        const codMatch=bloque.match(/Envio[:\s]+(\d+\s*\d*)/i);
-        if(numMatch&&codMatch){
-          paginaCodigo[parseInt(numMatch[1])]=codMatch[1].replace(/\s+/g,'');
-        }
-      });
-      for(let i=1;i<=totalPags;i++){
-        if(i%5===0||i===totalPags)setProgresoPDF('🖼 Renderizando etiquetas... ('+i+' / '+totalPags+')');
+        if(i%10===0||i===1)setProgresoPDF('⚙ Procesando página '+i+' / '+totalPags+'...');
         try{
           const page=await pdfDoc.getPage(i);
-          const viewport=page.getViewport({scale:1.4});
-          const canvas=document.createElement('canvas');
-          canvas.width=viewport.width;
-          canvas.height=viewport.height;
-          const ctx=canvas.getContext('2d');
-          await page.render({canvasContext:ctx,viewport}).promise;
-          const b64img=canvas.toDataURL('image/jpeg',0.72);
-          const cod=paginaCodigo[i];
-          if(cod)etiquetas[cod]=b64img;
-          // Liberar canvas
-          canvas.width=0;canvas.height=0;
-        }catch(pe){console.warn('Error pág '+i,pe);}
+          // Extraer texto
+          const tc=await page.getTextContent();
+          const lineas=[];
+          let lastY=-1,linea='';
+          tc.items.forEach(it=>{
+            const y=Math.round(it.transform[5]);
+            if(lastY!==-1&&Math.abs(y-lastY)>3){lineas.push(linea.trim());linea='';}
+            linea+=it.str;
+            lastY=y;
+          });
+          if(linea.trim())lineas.push(linea.trim());
+          const texto=lineas.filter(l=>l).join('\n');
+          // Parsear campos
+          let codigo='',destinatario='',direccion='',referencia='',comuna='',fecha=new Date().toISOString().slice(0,10),zona='';
+          const meses={ENE:'01',FEB:'02',MAR:'03',ABR:'04',MAY:'05',JUN:'06',JUL:'07',AGO:'08',SEP:'09',OCT:'10',NOV:'11',DIC:'12'};
+          lineas.forEach((l,idx)=>{
+            // Código: "Envio: 4723828 3907" o "Envio:47238283907"
+            const mCod=l.match(/Envio[:\s]+(\d[\d\s]{5,})/i);
+            if(mCod&&!codigo)codigo=mCod[1].replace(/\s+/g,'');
+            // Fecha: "06 JUN" en cualquier línea
+            const mFecha=l.match(/(\d{2})\s+(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC)/i);
+            if(mFecha){
+              const anio=new Date().getFullYear();
+              fecha=anio+'-'+(meses[mFecha[2].toUpperCase()]||'01')+'-'+mFecha[1];
+            }
+            // Zona y comuna
+            if(/^ANILLO/i.test(l)){zona=l.trim();}
+            if(zona&&idx>0&&lineas[idx-1]&&/^ANILLO/i.test(lineas[idx-1])&&!comuna){
+              // La línea DESPUÉS de ANILLO es la comuna
+              const posible=l.trim().toUpperCase();
+              if(posible&&!/^(RESIDENCIAL|FLEX|DIST)/i.test(posible))comuna=posible;
+            }
+            // Alternativa: buscar comuna como línea en mayúsculas sola después de ANILLO
+            if(/^ANILLO/i.test(l)&&idx+1<lineas.length){
+              const sig=lineas[idx+1]?.trim()||'';
+              if(sig===sig.toUpperCase()&&sig.length>3&&!/^\d/.test(sig))comuna=sig;
+            }
+            // Dirección
+            const mDir=l.match(/^Direcci[oó]n[:\s]+(.+)/i);
+            if(mDir&&!direccion)direccion=mDir[1].trim();
+            // Referencia (puede haber varias líneas)
+            const mRef=l.match(/^Referencia[:\s]+(.+)/i);
+            if(mRef){
+              let refVal=mRef[1].replace(/^Referencia[:\s]*/i,'').trim();
+              if(refVal)referencia=referencia?referencia+' '+refVal:refVal;
+            }
+            // Destinatario
+            const mDest=l.match(/^Destinatario[:\s]+(.+)/i);
+            if(mDest&&!destinatario){
+              destinatario=mDest[1].replace(/\([^)]*\)/g,'').trim();
+            }
+          });
+          if(!codigo)continue;
+          // Renderizar página como imagen
+          let foto_etiqueta=null;
+          if(i<=totalPags){
+            try{
+              const vp=page.getViewport({scale:1.5});
+              const cv=document.createElement('canvas');
+              cv.width=vp.width;cv.height=vp.height;
+              await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+              foto_etiqueta=cv.toDataURL('image/jpeg',0.72);
+              cv.width=0;cv.height=0; // liberar memoria
+            }catch(re){console.warn('Error render pág '+i,re);}
+          }
+          envios.push({
+            id:Date.now()+i,
+            codigo,cliente,destinatario,direccion,referencia,
+            comuna:comuna.toUpperCase(),zona,telefono:'',fecha,
+            estado:'sin_asignar',mensajero:'',monto:0,
+            nota:referencia?'Ref: '+referencia:'',
+            fuente:'externo',foto_etiqueta,
+            historial:[{fecha:new Date().toISOString(),estado:'sin_asignar',nota:'PDF Flex · '+cliente}]
+          });
+        }catch(pe){console.warn('Error página '+i+':',pe.message);}
       }
-      setProgresoPDF('✅ Finalizando...');
-      // PASO 4: Construir envíos
-      const envios=Object.entries(metadatos).map(([cod,meta],i)=>({
-        id:Date.now()+i,
-        codigo:cod,
-        cliente:cliente,
-        destinatario:meta.destinatario||'',
-        direccion:meta.direccion||'',
-        referencia:meta.referencia||'',
-        comuna:(meta.comuna||'').toUpperCase(),
-        telefono:'',
-        fecha:meta.fecha||new Date().toISOString().slice(0,10),
-        estado:'sin_asignar',
-        mensajero:'',
-        monto:0,
-        nota:meta.referencia?'Ref: '+meta.referencia:'',
-        fuente:'externo',
-        foto_etiqueta:etiquetas[cod]||null,
-        historial:[{fecha:new Date().toISOString(),estado:'sin_asignar',nota:'PDF Flex · '+cliente}]
-      }));
       if(!envios.length){toast('⚠ No se encontraron envíos en el PDF');setProcesandoPDF(false);setProgresoPDF('');return;}
       const conFoto=envios.filter(e=>e.foto_etiqueta).length;
+      setProgresoPDF('✅ Listo · '+envios.length+' envíos · '+conFoto+' con foto');
       setPdfPreview({envios,cliente,total:envios.length,conFoto});
       setProcesandoPDF(false);
       setProgresoPDF('');
     }catch(err){
       toast('⚠ Error procesando PDF: '+err.message);
-      setProcesandoPDF(false);
-      setProgresoPDF('');
+      setProcesandoPDF(false);setProgresoPDF('');
     }
   };
   reader.readAsArrayBuffer(file);
