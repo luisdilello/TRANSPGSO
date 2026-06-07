@@ -1476,7 +1476,7 @@ const localEnvios=lsLoad('gestion_envios',[]);for(const e of lista){try{const en
   },[codigo]);
   return React.createElement(FotosEntrega,{codigo,fotoEtiqueta});
 }
-function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoEtiqueta;const _useState54=useState([]),fotos=_useState54[0],setFotos=_useState54[1];const _useState55=useState(true),loading=_useState55[0],setLoading=_useState55[1];useEffect(()=>{if(!codigo)return;db.storage.from('evidencias').list('',{limit:500,offset:0,sortBy:{column:'created_at',order:'desc'}}).then(_ref24=>{let data=_ref24.data,error=_ref24.error;if(error){console.warn('Storage list error:',error);setLoading(false);return;}if(data&&data.length>0){const archivos=data.filter(f=>f.name&&f.name.includes(codigo));if(archivos.length>0){const urls=archivos.map(f=>{const _db$storage$from$getP=db.storage.from('evidencias').getPublicUrl(f.name),u=_db$storage$from$getP.data;return{name:f.name,url:(u==null?void 0:u.publicUrl)||''};}).filter(f=>f.url);setFotos(urls);}}setLoading(false);}).catch(e=>{console.warn('Storage error:',e);setLoading(false);});},[codigo]);// Mostrar foto de etiqueta directamente desde el campo del envio
+function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoEtiqueta;const [zoomFoto,setZoomFoto]=useState(null);const _useState54=useState([]),fotos=_useState54[0],setFotos=_useState54[1];const _useState55=useState(true),loading=_useState55[0],setLoading=_useState55[1];useEffect(()=>{if(!codigo)return;db.storage.from('evidencias').list('',{limit:500,offset:0,sortBy:{column:'created_at',order:'desc'}}).then(_ref24=>{let data=_ref24.data,error=_ref24.error;if(error){console.warn('Storage list error:',error);setLoading(false);return;}if(data&&data.length>0){const archivos=data.filter(f=>f.name&&f.name.includes(codigo));if(archivos.length>0){const urls=archivos.map(f=>{const _db$storage$from$getP=db.storage.from('evidencias').getPublicUrl(f.name),u=_db$storage$from$getP.data;return{name:f.name,url:(u==null?void 0:u.publicUrl)||''};}).filter(f=>f.url);setFotos(urls);}}setLoading(false);}).catch(e=>{console.warn('Storage error:',e);setLoading(false);});},[codigo]);// Mostrar foto de etiqueta directamente desde el campo del envio
   const fotosEtiquetaDirecta=fotoEtiqueta?[{url:fotoEtiqueta,name:'etiqueta_colecta'}]:[];
   if(loading)return/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginBottom:16,padding:'8px 12px',background:'var(--cream)',borderRadius:7}},"\u23F3 Buscando fotos...");const allFotos=[...fotosEtiquetaDirecta,...fotos];const sinFotos=allFotos.length===0&&!fotoEtiqueta;if(sinFotos)return/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginBottom:16,padding:'8px 12px',background:'var(--cream)',borderRadius:7}},"\uD83D\uDCF7 Sin fotos de evidencia registradas");const fotosEtiqueta=[...fotosEtiquetaDirecta,...fotos.filter(f=>f.name.includes('__etiqueta__'))];
   const fotosEntrega=fotos.filter(f=>!f.name.includes('__etiqueta__'));
@@ -1485,7 +1485,7 @@ function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoE
     fotosEtiqueta.length>0&&React.createElement("div",{style:{marginBottom:14}},
       React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:1.5,color:'var(--dark)',marginBottom:8}},"📋 FOTO DE ETIQUETA (colecta)"),
       React.createElement("div",{style:{display:'flex',gap:8,flexWrap:'wrap'}},
-        fotosEtiqueta.map((f,i)=>React.createElement("a",{key:i,href:f.url,target:"_blank",rel:"noopener noreferrer",style:{display:'block',borderRadius:10,overflow:'hidden',border:'2px solid var(--gold)',flexShrink:0,transition:'transform 0.15s',cursor:'zoom-in'},onMouseEnter:e=>e.currentTarget.style.transform='scale(1.02)',onMouseLeave:e=>e.currentTarget.style.transform='scale(1)'},
+        fotosEtiqueta.map((f,i)=>React.createElement("div",{key:i,onClick:()=>setZoomFoto(f.url),style:{display:'block',borderRadius:10,overflow:'hidden',border:'2px solid var(--gold)',flexShrink:0,transition:'transform 0.15s',cursor:'zoom-in'},onMouseEnter:e=>e.currentTarget.style.transform='scale(1.02)',onMouseLeave:e=>e.currentTarget.style.transform='scale(1)'},
           React.createElement("img",{src:f.url,alt:"Etiqueta",style:{width:180,height:230,objectFit:'cover',display:'block'},onError:e=>e.target.parentElement.style.display='none'})
         ))
       )
@@ -1499,7 +1499,14 @@ function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoE
         ))
       )
     ),
-    fotosEtiqueta.length===0&&fotosEntrega.length===0&&React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',padding:'8px 12px',background:'var(--cream)',borderRadius:7}},"📷 Sin fotos registradas")
+    fotosEtiqueta.length===0&&fotosEntrega.length===0&&React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',padding:'8px 12px',background:'var(--cream)',borderRadius:7}},"📷 Sin fotos registradas"),
+    // Modal zoom
+    zoomFoto&&React.createElement('div',{onClick:()=>setZoomFoto(null),style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.92)',zIndex:99999,display:'flex',alignItems:'center',justifyContent:'center',cursor:'zoom-out',padding:16}},
+      React.createElement('div',{style:{position:'relative',maxWidth:'95vw',maxHeight:'92vh'}},
+        React.createElement('img',{src:zoomFoto,style:{maxWidth:'95vw',maxHeight:'88vh',objectFit:'contain',borderRadius:8,boxShadow:'0 0 40px rgba(200,168,75,0.3)',border:'2px solid var(--gold)'}}),
+        React.createElement('div',{style:{textAlign:'center',marginTop:10,fontSize:12,color:'rgba(255,255,255,0.5)'}},"Toca para cerrar")
+      )
+    )
   );}// ── ADMIN: EDITAR CAMPOS DEL ENVÍO ───────────────────────────────
 function ColectaAdmin(_ref35){let clientes=_ref35.clientes,mensajeros=_ref35.mensajeros,toast=_ref35.toast,esAdmin=_ref35.esAdmin;
   const caHoy=new Date().toISOString().slice(0,10);
