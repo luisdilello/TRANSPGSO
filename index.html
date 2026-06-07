@@ -1475,8 +1475,16 @@ const localEnvios=lsLoad('gestion_envios',[]);for(const e of lista){try{const en
         if(data?.foto_etiqueta)setFotoEtiqueta(data.foto_etiqueta);
         if(data?.fotos_entrega){
           try{
-            const arr=JSON.parse(data.fotos_entrega);
-            if(Array.isArray(arr))setFotosEntregaDB(arr.map((url,i)=>({url,name:'entrega_'+i})));
+            const parsed=JSON.parse(data.fotos_entrega);
+            if(Array.isArray(parsed)&&parsed.length>0){
+              if(typeof parsed[0]==='string'){
+                // Formato viejo: array plano de urls
+                setFotosEntregaDB([{intento:1,estado:'desconocido',fecha:'',mensajero:'',fotos:parsed.map((url,i)=>({url,name:'entrega_'+i}))}]);
+              }else{
+                // Formato nuevo: array de intentos
+                setFotosEntregaDB(parsed.map(it=>({...it,fotos:(it.fotos||[]).map((url,i)=>({url,name:'intento_'+it.intento+'_'+i}))})));
+              }
+            }
           }catch(e){}
         }
       })
@@ -1487,7 +1495,8 @@ const localEnvios=lsLoad('gestion_envios',[]);for(const e of lista){try{const en
 function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoEtiqueta,fotosEntregaExternas=_ref23.fotosEntregaExternas;const [zoomFoto,setZoomFoto]=useState(null);const _useState54=useState([]),fotos=_useState54[0],setFotos=_useState54[1];const _useState55=useState(true),loading=_useState55[0],setLoading=_useState55[1];useEffect(()=>{if(!codigo)return;db.storage.from('evidencias').list('',{limit:500,offset:0,sortBy:{column:'created_at',order:'desc'}}).then(_ref24=>{let data=_ref24.data,error=_ref24.error;if(error){console.warn('Storage list error:',error);setLoading(false);return;}if(data&&data.length>0){const archivos=data.filter(f=>f.name&&f.name.includes(codigo));if(archivos.length>0){const urls=archivos.map(f=>{const _db$storage$from$getP=db.storage.from('evidencias').getPublicUrl(f.name),u=_db$storage$from$getP.data;return{name:f.name,url:(u==null?void 0:u.publicUrl)||''};}).filter(f=>f.url);setFotos(urls);}}setLoading(false);}).catch(e=>{console.warn('Storage error:',e);setLoading(false);});},[codigo]);// Mostrar foto de etiqueta directamente desde el campo del envio
   const fotosEtiquetaDirecta=fotoEtiqueta?[{url:fotoEtiqueta,name:'etiqueta_colecta'}]:[];
   const fotosEntregaArrCheck=fotosEntregaExternas||[];if(loading&&fotosEntregaArrCheck.length===0&&!fotoEtiqueta)return/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginBottom:16,padding:'8px 12px',background:'var(--cream)',borderRadius:7}},"\u23F3 Buscando fotos...");const allFotos=[...fotosEtiquetaDirecta,...fotos,...fotosEntregaArrCheck];const sinFotos=allFotos.length===0&&!fotoEtiqueta;if(sinFotos)return/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginBottom:16,padding:'8px 12px',background:'var(--cream)',borderRadius:7}},"\uD83D\uDCF7 Sin fotos de evidencia registradas");const fotosEtiqueta=[...fotosEtiquetaDirecta,...fotos.filter(f=>f.name.includes('__etiqueta__'))];
-  const fotosEntregaArr=fotosEntregaExternas||[];const fotosEntrega=[...fotosEntregaArr,...fotos.filter(f=>!f.name.includes('__etiqueta__'))];
+  const intentosEntrega=fotosEntregaExternas||[];
+  const estadoColor=(est)=>{const m={'entregado':'#2e7d4f','reprogramado':'#b07d10','cancelado':'#b03030','en_ruta':'#C8A84B','pendiente_retiro':'#7a7d6a'};return m[est]||'#7a7d6a';};
   return/*#__PURE__*/React.createElement("div",{style:{marginBottom:16}},
     // Foto de etiqueta (colecta) — destacada arriba
     fotosEtiqueta.length>0&&React.createElement("div",{style:{marginBottom:14}},
@@ -1498,13 +1507,26 @@ function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoE
         ))
       )
     ),
-    // Fotos de entrega
-    fotosEntrega.length>0&&React.createElement("div",null,
-      React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:1.5,color:'var(--dark)',marginBottom:8}},"📷 FOTOS DE ENTREGA (",fotosEntrega.length,")"),
-      React.createElement("div",{style:{display:'flex',gap:8,flexWrap:'wrap'}},
-        fotosEntrega.map((f,i)=>React.createElement('div',{key:i,onClick:()=>setZoomFoto(f.url),style:{position:'relative',borderRadius:8,overflow:'hidden',border:'2px solid var(--gold)',width:110,height:110,flexShrink:0,cursor:'zoom-in',transition:'transform 0.15s'},onMouseEnter:e=>e.currentTarget.style.transform='scale(1.05)',onMouseLeave:e=>e.currentTarget.style.transform='scale(1)'},React.createElement('img',{src:f.url,style:{width:'100%',height:'100%',objectFit:'cover'},onError:e=>e.target.style.display='none'}),React.createElement('div',{style:{position:'absolute',bottom:0,left:0,right:0,background:'rgba(0,0,0,0.5)',fontSize:9,color:'#fff',textAlign:'center',padding:'2px 0'}},(i+1)+'/'+fotosEntrega.length))))
+    // Fotos de entrega agrupadas por intento
+    intentosEntrega.length>0&&React.createElement("div",null,
+      React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:1.5,color:'var(--dark)',marginBottom:10}},"📷 FOTOS DE ENTREGA — "+intentosEntrega.reduce((a,it)=>a+(it.fotos||[]).length,0)+" fotos en "+intentosEntrega.length+" intento"+(intentosEntrega.length>1?"s":"")),
+      intentosEntrega.map((it,ii)=>React.createElement("div",{key:ii,style:{marginBottom:12,borderRadius:8,border:`1px solid ${estadoColor(it.estado)}44`,overflow:'hidden'}},
+        React.createElement("div",{style:{background:`${estadoColor(it.estado)}18`,padding:'7px 12px',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',borderBottom:`1px solid ${estadoColor(it.estado)}33`}},
+          React.createElement("span",{style:{fontFamily:'Bebas Neue',fontSize:12,letterSpacing:1,color:estadoColor(it.estado)}},"INTENTO ",it.intento),
+          React.createElement("span",{style:{fontSize:11,fontWeight:700,color:estadoColor(it.estado),background:`${estadoColor(it.estado)}22`,padding:'2px 8px',borderRadius:10}},estadoInfo(it.estado)?.label||it.estado),
+          it.mensajero&&React.createElement("span",{style:{fontSize:10,color:'var(--text-soft)'}},"· ",it.mensajero),
+          it.fecha&&React.createElement("span",{style:{fontSize:10,color:'var(--text-soft)',marginLeft:'auto',fontFamily:'JetBrains Mono'}},new Date(it.fecha).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})),
+          it.nota&&React.createElement("div",{style:{width:'100%',fontSize:10,color:'var(--text-soft)',fontStyle:'italic',marginTop:2}},"📌 ",it.nota)
+        ),
+        React.createElement("div",{style:{display:'flex',gap:6,flexWrap:'wrap',padding:8}},
+          (it.fotos||[]).map((f,fi)=>React.createElement("div",{key:fi,onClick:()=>setZoomFoto(f.url||f),style:{position:'relative',borderRadius:7,overflow:'hidden',border:`2px solid ${estadoColor(it.estado)}`,width:90,height:90,flexShrink:0,cursor:'zoom-in',transition:'transform 0.15s'},onMouseEnter:e=>e.currentTarget.style.transform='scale(1.05)',onMouseLeave:e=>e.currentTarget.style.transform='scale(1)'},
+            React.createElement("img",{src:f.url||f,style:{width:'100%',height:'100%',objectFit:'cover'},onError:e=>e.target.style.display='none'}),
+            React.createElement("div",{style:{position:'absolute',bottom:0,left:0,right:0,background:'rgba(0,0,0,0.5)',fontSize:8,color:'#fff',textAlign:'center',padding:'1px 0'}},(fi+1)+"/"+(it.fotos||[]).length)
+          ))
+        )
+      ))
     ),
-    fotosEtiqueta.length===0&&fotosEntrega.length===0&&React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',padding:'8px 12px',background:'var(--cream)',borderRadius:7}},"📷 Sin fotos registradas"),
+    fotosEtiqueta.length===0&&intentosEntrega.length===0&&React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',padding:'8px 12px',background:'var(--cream)',borderRadius:7}},"📷 Sin fotos registradas"),
     // Modal zoom
     zoomFoto&&React.createElement('div',{onClick:()=>setZoomFoto(null),style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.92)',zIndex:99999,display:'flex',alignItems:'center',justifyContent:'center',cursor:'zoom-out',padding:16}},
       React.createElement('div',{style:{position:'relative',maxWidth:'95vw',maxHeight:'92vh'}},
@@ -3348,7 +3370,25 @@ showScanner&&/*#__PURE__*/React.createElement(ScannerRider,{usuario:usuario,onSc
         }catch(e){console.warn('Foto compress error:',e.message);}
       }
       if(fotosB64.length>0){
-        await db.from('envios').update({fotos_entrega:JSON.stringify(fotosB64)}).eq('codigo',envio.codigo);
+        // Leer intentos anteriores y ACUMULAR
+        let intentosAnteriores=[];
+        try{
+          const _r=await db.from('envios').select('fotos_entrega').eq('codigo',envio.codigo).single();
+          if(_r.data?.fotos_entrega){
+            const parsed=JSON.parse(_r.data.fotos_entrega);
+            // Compatibilidad: si era array plano (formato viejo), convertir a intento
+            if(Array.isArray(parsed)&&parsed.length>0){
+              if(typeof parsed[0]==='string'){
+                intentosAnteriores=[{intento:1,estado:envio.estado||'desconocido',fecha:new Date().toISOString(),mensajero:usuario.nombre,fotos:parsed}];
+              }else{
+                intentosAnteriores=parsed;
+              }
+            }
+          }
+        }catch(e){}
+        const nuevoIntento={intento:intentosAnteriores.length+1,estado:estadoSel,fecha:new Date().toISOString(),mensajero:usuario.nombre,nota:nota||'',fotos:fotosB64};
+        const todosIntentos=[...intentosAnteriores,nuevoIntento];
+        await db.from('envios').update({fotos_entrega:JSON.stringify(todosIntentos)}).eq('codigo',envio.codigo);
       }
       onUpdate(envio.codigo,estadoSel,nota,fotosB64,usuario.nombre);
       onClose();
