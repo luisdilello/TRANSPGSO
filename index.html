@@ -2318,25 +2318,34 @@ function ColectaRider(_ref_cr){
       const {error}=await db.from('envios').insert(inserts);
       // Si hay error de duplicado, continuar igual para subir las fotos
       if(error&&!error.message.includes('duplicate')&&!error.code?.includes('23505')) throw error;
-      // Subir foto de colecta al Storage y guardar URL en tabla envios
+      // Guardar foto como base64 directamente en la tabla envios (sin Storage)
       let fotasSubidas=0;
       let errFotos=[];
       await Promise.all(conCodigo.map(async f=>{
         try{
-          const blob=await fetch(f.preview).then(r=>r.blob());
-          const fileName=`${f.datos.codigo}__etiqueta__${Date.now()}.jpg`;
-          const {error:upErr}=await db.storage.from('evidencias').upload(fileName,blob,{upsert:true,contentType:'image/jpeg'});
-          if(upErr){errFotos.push('Storage: '+upErr.message);return;}
-          const {data:urlData}=db.storage.from('evidencias').getPublicUrl(fileName);
-          if(!urlData?.publicUrl){errFotos.push('Sin URL publica');return;}
-          // Usar upsert en vez de update para garantizar que se guarda
-          const {error:updErr}=await db.from('envios').update({foto_etiqueta:urlData.publicUrl}).eq('codigo',f.datos.codigo);
-          if(updErr){errFotos.push('Update: '+updErr.message);return;}
+          // Comprimir a tamaño pequeño para guardar en DB
+          const fotoBase64=await new Promise(res=>{
+            const img=new Image();
+            img.onload=()=>{
+              const MAX=600;
+              const scale=Math.min(1,MAX/Math.max(img.width,img.height));
+              const canvas=document.createElement('canvas');
+              canvas.width=Math.round(img.width*scale);
+              canvas.height=Math.round(img.height*scale);
+              canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+              res(canvas.toDataURL('image/jpeg',0.65));
+            };
+            img.onerror=()=>res(null);
+            img.src=f.preview;
+          });
+          if(!fotoBase64){errFotos.push('Error comprimiendo imagen');return;}
+          const {error:updErr}=await db.from('envios').update({foto_etiqueta:fotoBase64}).eq('codigo',f.datos.codigo);
+          if(updErr){errFotos.push('DB: '+updErr.message);return;}
           fotasSubidas++;
         }catch(e){errFotos.push(e.message);}
       }));
       if(errFotos.length>0) console.warn('Errores foto colecta:',errFotos);
-      toast('✓ '+conCodigo.length+' paquetes cargados'+(fotasSubidas>0?' · '+fotasSubidas+' fotos':errFotos.length>0?' · ⚠ fotos fallaron: '+errFotos[0].slice(0,40):''));
+      toast('✓ '+conCodigo.length+' paquetes cargados'+(fotasSubidas>0?' · '+fotasSubidas+' fotos guardadas':errFotos.length>0?' · ⚠ '+errFotos[0].slice(0,50):''));
       setFotosGaleria([]);
       setFase('seleccion');
     }catch(e){ toast('⚠ Error al guardar: '+e.message); }
