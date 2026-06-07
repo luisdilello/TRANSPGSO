@@ -2778,7 +2778,7 @@ function AsignacionRider(_ref_ar){
       const data=encontrados[cod];
       if(data.estado==='entregado'||data.estado==='cancelado'){ err++; continue; }
       try{
-        await db.from('envios').update({estado:'en_ruta',mensajero:usuario.nombre,updated_at:ts}).eq('codigo',cod);
+        await db.from('envios').update({estado:'en_ruta',mensajero:usuario.nombre}).eq('codigo',cod);
         const env={...data,estado:'en_ruta',mensajero:usuario.nombre};
         if(onEnviosUpdate) onEnviosUpdate(env);
         ok++;
@@ -2789,7 +2789,8 @@ function AsignacionRider(_ref_ar){
     setGuardando(false);
     if(ok>0) playSound('ruta');
     setFinalizado(true);
-    toast('✓ Asignación confirmada: '+ok+' en ruta');
+    const msg=ok>0?'✓ '+ok+' en ruta'+(noExiste>0?' · '+noExiste+' no encontrados':'')+(err>0?' · '+err+' con error':''):'⚠ No se pudo confirmar — verifica conexión';
+    toast(msg);
   }
 
   if(finalizado) return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif',alignItems:'center',justifyContent:'center',padding:24}},
