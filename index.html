@@ -1929,7 +1929,7 @@ function extraerCodigoQR(raw){
 
 // ─── FLUJO COLECTA (Rider recibe paquetes en cliente y los registra) ───────
 // Función que analiza una foto de etiqueta con Claude Vision
-async function analizarEtiqueta(base64img,mediaType){
+async function analizarEtiqueta(base64img,mediaType,_retry=0){
   try{
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
@@ -1953,13 +1953,17 @@ async function analizarEtiqueta(base64img,mediaType){
             },
             {
               type:'text',
-              text:`Eres un OCR especializado en etiquetas MercadoLibre Flex Chile. Extrae exactamente estos campos:\n\nCÓDIGO DE ENVÍO:\n- Busca la línea que dice "Envio:" seguida de DOS números separados por espacio\n- Únelos sin espacio: "Envio: 4721799 1526" → "47217991526"\n- "Envio: 4721900 5690" → "47219005690"\n- NUNCA uses "Pack ID", "Venta:", ni ningún número que empiece con "20000"\n- Solo dígitos del campo "Envio:", unidos\n\nCOMUNA (MUY IMPORTANTE):\n- La etiqueta tiene dos zonas. IGNORA COMPLETAMENTE la parte superior (datos del remitente con ciudad como "Colina, RM")\n- DEBAJO DEL QR aparecen DOS líneas en MAYÚSCULAS:\n  · Primera línea = zona logística ML (ej: "ANILLO OESTE") → IGNORAR\n  · Segunda línea = COMUNA DE DESTINO → USAR ESTA\n- Ejemplos: "ANILLO OESTE / CERRO NAVIA" → "CERRO NAVIA". "ANILLO OESTE / ESTACION CENTRAL" → "ESTACION CENTRAL". "MAIPU / MAIPÚ" → "MAIPU"\n- Ignora "COMERCIAL" y "RESIDENCIAL" — son tipo de entrega, no comuna\n\nDIRECCIÓN: texto después de "Direccion:" en la parte inferior\nREFERENCIA: texto después de "Referencia:" (omite la palabra "Referencia:" si se repite)\nDESTINATARIO: solo el nombre antes del paréntesis en "Destinatario:"\n\nResponde SOLO con JSON válido:\n{"codigo":"47217991526","comuna":"CERRO NAVIA","direccion":"Florencia 1547","referencia":"casa esquina porton de madera","destinatario":"Humberto Forero"}`
+              text:`Eres un OCR especializado en etiquetas de paquetes de Chile. Hay DOS tipos de etiquetas:\n\nTIPO A — MercadoLibre Flex (tiene logo ML, dice "FLEX", tiene QR grande):\n- CÓDIGO: línea "Envio:" con DOS números → únelos: "Envio: 4721799 1526" → "47217991526". NUNCA uses Pack ID ni Venta ni números con "20000"\n- COMUNA: debajo del QR hay DOS líneas mayúsculas. PRIMERA = zona logística (ignorar). SEGUNDA = comuna real (usar). Ej: "ANILLO OESTE / CERRO NAVIA" → "CERRO NAVIA"\n- DIRECCIÓN: después de "Direccion:"\n- DESTINATARIO: nombre antes del paréntesis en "Destinatario:"\n- REFERENCIA: después de "Referencia:"\n\nTIPO B — Manual/Otro courier (tiene campos como "Nomber:", "RUT:", "Ciudad:", "Comuna:", "Dirección:"):\n- CÓDIGO: busca cualquier código alfanumérico tipo "RG-CL-00768*1" o similar — úsalo como codigo\n- COMUNA: campo "Ciudad:" o "Comuna:" (usa Ciudad si Comuna tiene dirección)\n- DIRECCIÓN: campo "Dirección:"\n- DESTINATARIO: campo "Nomber:" o "Nombre:"\n- REFERENCIA: null\n\nResponde SOLO con JSON válido:\n{"codigo":"47217991526","comuna":"CERRO NAVIA","direccion":"Florencia 1547","referencia":"casa esquina porton de madera","destinatario":"Humberto Forero","tipo":"flex"}\nO para manual:\n{"codigo":"RG-CL-00768*1","comuna":"Pudahuel","direccion":"La Vara 21089, None-Pudahuel","referencia":null,"destinatario":"Luis Rolando Duarte Videla","tipo":"manual"}`
 
             }
           ]
         }]
       })
     });
+    if(resp.status===429){
+      if(_retry<3){await new Promise(r=>setTimeout(r,(_retry+1)*3500));return analizarEtiqueta(base64img,mediaType,_retry+1);}
+      return{_error:'Límite API alcanzado — espera un momento y reintenta'};
+    }
     if(!resp.ok){
       const err=await resp.text();
       return{_error:'HTTP '+resp.status+': '+err.slice(0,120)};
@@ -1969,9 +1973,13 @@ async function analizarEtiqueta(base64img,mediaType){
     const clean=text.replace(/```json|```/g,'').trim();
     let parsed;
     try{ parsed=JSON.parse(clean); }catch(e){ return{_error:'No se pudo leer la etiqueta: '+clean.slice(0,80)}; }
-    // Limpiar el código: eliminar espacios, guiones y caracteres no numéricos
+    // Limpiar código: para Flex solo dígitos; para manual preservar alfanumérico
     if(parsed.codigo){
-      parsed.codigo=parsed.codigo.toString().replace(/[^0-9]/g,'');
+      if(parsed.tipo==='manual'){
+        parsed.codigo=parsed.codigo.toString().trim();
+      } else {
+        parsed.codigo=parsed.codigo.toString().replace(/[^0-9]/g,'');
+      }
     }
     if(!parsed.destinatario&&!parsed.direccion&&!parsed.codigo){
       return{_error:'Sin datos extraídos — verifica que la foto sea legible'};
@@ -2177,9 +2185,10 @@ function ColectaRider(_ref_cr){
     const pendientes=fotosGaleria.map((f,i)=>({...f,idx:i})).filter(f=>!f.datos&&!f.error);
     // Marcar todas como analizando de una vez
     setFotosGaleria(prev=>prev.map((f,i)=>pendientes.find(p=>p.idx===i)?{...f,analizando:true}:f));
-    // Procesar en lotes de 5 en paralelo
-    const LOTE=5;
+    // Procesar en lotes de 3 en paralelo con pausa entre lotes (evitar rate limit 429)
+    const LOTE=3;
     for(let offset=0;offset<pendientes.length;offset+=LOTE){
+      if(offset>0) await new Promise(r=>setTimeout(r,2000)); // 2s pausa entre lotes
       const lote=pendientes.slice(offset,offset+LOTE);
       await Promise.all(lote.map(async item=>{
         try{
