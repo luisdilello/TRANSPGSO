@@ -1951,6 +1951,7 @@ const _useState71c=useState(false),showPDFModal=_useState71c[0],setShowPDFModal=
 const _useState71d=useState(''),clientePDF=_useState71d[0],setClientePDF=_useState71d[1];
 const _useState71e=useState(null),pdfPreview=_useState71e[0],setPdfPreview=_useState71e[1];
 const _useState71f=useState(false),procesandoPDF=_useState71f[0],setProcesandoPDF=_useState71f[1];
+const _useState71g=useState(''),progresoPDF=_useState71g[0],setProgresoPDF=_useState71g[1];
 const pdfRef=useRef();const PAGE_SIZE=50;const fileRef=useRef();useEffect(()=>{lsSave('gestion_envios',envios);},[envios]);async function sincronizarDesdeSupabase(){setSincronizando(true);try{const _await$db$from$select2=await db.from('envios').select('*').order('updated_at',{ascending:false}),data=_await$db$from$select2.data,error=_await$db$from$select2.error;if(error)throw error;if(data&&data.length>0){setEnvios(prev=>{const mapaLocal={};prev.forEach(e=>{mapaLocal[e.codigo]=e;});const merged=data.map(sb=>{var _mapaLocal$sb$codigo,_mapaLocal$sb$codigo2;return{id:((_mapaLocal$sb$codigo=mapaLocal[sb.codigo])==null?void 0:_mapaLocal$sb$codigo.id)||sb.id,codigo:sb.codigo,cliente:sb.cliente||'',destinatario:sb.destinatario||'',telefono:sb.telefono||'',direccion:sb.direccion||'',comuna:sb.comuna||'',referencia:sb.referencia||'',fecha:sb.fecha||new Date().toISOString().slice(0,10),estado:sb.estado||'sin_asignar',mensajero:sb.mensajero||'',monto:sb.monto||0,enUnCambio:sb.en_un_cambio||false,nota:sb.nota||'',fuente:sb.fuente||'propio',historial:((_mapaLocal$sb$codigo2=mapaLocal[sb.codigo])==null?void 0:_mapaLocal$sb$codigo2.historial)||[{fecha:sb.created_at,estado:sb.estado,nota:'Desde Supabase'}]};});const codigosSupabase=new Set(data.map(e=>e.codigo));const eliminados=new Set(lsLoad('envios_eliminados',[]));const soloLocal=prev.filter(e=>!codigosSupabase.has(e.codigo)&&!eliminados.has(e.codigo));const mergedFiltrado=merged.filter(e=>!eliminados.has(e.codigo));return[...mergedFiltrado,...soloLocal];});toast(`✓ Sincronizado: ${data.length} envíos desde la nube`);}else{toast('Sin datos en Supabase todavía');}}catch(e){toast('⚠ Error de sincronización: '+e.message);}setSincronizando(false);}useEffect(()=>{const channel=db.channel('admin-envios').on('postgres_changes',{event:'UPDATE',schema:'public',table:'envios'},payload=>{const sb=payload.new;setEnvios(prev=>prev.map(e=>{if(e.codigo!==sb.codigo)return e;return{...e,estado:sb.estado,mensajero:sb.mensajero||e.mensajero,nota:sb.nota||e.nota,historial:[...e.historial,{fecha:new Date().toISOString(),estado:sb.estado,nota:'Actualizado por Rider'}]};}));}).subscribe();return()=>{db.removeChannel(channel);};},[]);const mensajerosActivos=mensajeros.filter(m=>m.activo);const clientesActivos=clientes.filter(c=>c.activo);function importarExcelSistema(file){const reader=new FileReader();reader.onload=e=>{try{let wb;try{wb=XLSX.read(e.target.result,{type:'array',cellDates:true});}catch(e1){wb=XLSX.read(e.target.result,{type:'array'});}const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});if(!rows.length){toast('⚠ Archivo vacío');return;}const nuevos=rows.map((r,i)=>{const codigo=String(r['Envio']||r['Código']||r['codigo']||'').replace(/^'/,'').trim();const est=parseEstadoSistema(r['Estatus de Envio']||r['Estado']||'');return{id:Date.now()+i,codigo:codigo||'IMP-'+String(i+1).padStart(6,'0'),cliente:(r['Cliente']||'').toString().trim().toUpperCase(),despachador:(r['Despachador']||'').toString().trim(),destinatario:(r['Destinatario']||'').toString().trim(),telefono:(r['Telefono']||r['Teléfono']||'').toString().trim(),direccion:(r['Direccion']||r['Dirección']||'').toString().trim(),comuna:(r['Comuna']||'').toString().trim(),fecha:(r['Fecha Envio']||r['Fecha']||new Date().toISOString().slice(0,10)).toString().slice(0,10),estado:est,mensajero:normalizarNombre(r['Despachador']||''),monto:parseFloat(String(r['Cobrar/Monto']||0).replace(/[^0-9.]/g,''))||0,nota:(r['Nota']||'').toString().trim(),fuente:'sistema',historial:[{fecha:new Date().toISOString(),estado:est,nota:'Importado desde sistema'}]};}).filter(e=>e.codigo);const syncToSupabase=async enviosNuevos=>{for(const e of enviosNuevos.slice(0,200)){try{await db.from('envios').upsert({codigo:e.codigo,cliente:e.cliente||'',destinatario:e.destinatario||'',telefono:e.telefono||'',direccion:e.direccion||'',comuna:e.comuna||'',referencia:e.referencia||'',fecha:e.fecha||new Date().toISOString().slice(0,10),estado:e.estado||'sin_asignar',mensajero:e.mensajero||'',monto:e.monto||0,en_un_cambio:e.enUnCambio||false,nota:e.nota||'',fuente:e.fuente||'sistema'},{onConflict:'codigo'});}catch(err){}}};setEnvios(prev=>{
   const mapaExist={};
   prev.forEach(e=>{mapaExist[e.codigo]=e;});
@@ -2012,8 +2013,16 @@ const msg=conCodigo>0&&sinCodigo>0?`✓ ${nuevos.length} envíos cargados · ${c
   reader.onload=async e=>{
     try{
       const arrayBuffer=e.target.result;
-      const b64=btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      // Convertir ArrayBuffer a base64 en chunks para no explotar el stack
+      const bytes=new Uint8Array(arrayBuffer);
+      let binary='';
+      const chunkSize=8192;
+      for(let ci=0;ci<bytes.length;ci+=chunkSize){
+        binary+=String.fromCharCode(...bytes.subarray(ci,ci+chunkSize));
+      }
+      const b64=btoa(binary);
       // PASO 1: Extraer datos via Anthropic API
+      setProgresoPDF('📄 Leyendo PDF... ('+Math.round(arrayBuffer.byteLength/1024)+'KB)');
       const resp=await fetch('https://api.anthropic.com/v1/messages',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -2026,6 +2035,7 @@ const msg=conCodigo>0&&sinCodigo>0?`✓ ${nuevos.length} envíos cargados · ${c
           ]}]
         })
       });
+      setProgresoPDF('🤖 IA extrayendo datos de las etiquetas...');
       const data=await resp.json();
       const txt=data.content?.map(c=>c.text||'').join('');
       let parsed;
@@ -2041,8 +2051,9 @@ const msg=conCodigo>0&&sinCodigo>0?`✓ ${nuevos.length} envíos cargados · ${c
         window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         const pdfDoc=await window.pdfjsLib.getDocument({data:arrayBuffer}).promise;
         const totalPags=pdfDoc.numPages;
-        // Renderizar en batches de 10 para no bloquear
+        setProgresoPDF('🖼 Renderizando etiquetas... (0 / '+totalPags+')');
         for(let i=1;i<=totalPags;i++){
+          if(i%10===0||i===totalPags)setProgresoPDF('🖼 Renderizando etiquetas... ('+i+' / '+totalPags+')');
           try{
             const page=await pdfDoc.getPage(i);
             const viewport=page.getViewport({scale:1.5});
@@ -2064,6 +2075,7 @@ const msg=conCodigo>0&&sinCodigo>0?`✓ ${nuevos.length} envíos cargados · ${c
           }catch(pe){console.warn('Error renderizando pág '+i,pe);}
         }
       }
+      setProgresoPDF('✅ Finalizando...');
       // PASO 3: Construir envíos combinando metadatos + imagen
       const envios=Object.entries(metadatos).map(([cod,meta],i)=>({
         id:Date.now()+i,
@@ -2087,9 +2099,11 @@ const msg=conCodigo>0&&sinCodigo>0?`✓ ${nuevos.length} envíos cargados · ${c
       const conFoto=envios.filter(e=>e.foto_etiqueta).length;
       setPdfPreview({envios,cliente,total:envios.length,conFoto});
       setProcesandoPDF(false);
+      setProgresoPDF('');
     }catch(err){
       toast('⚠ Error procesando PDF: '+err.message);
       setProcesandoPDF(false);
+      setProgresoPDF('');
     }
   };
   reader.readAsArrayBuffer(file);
@@ -2150,9 +2164,28 @@ setEnvios(prev=>prev.filter(e=>!selected.has(e.id)));setSelected(new Set());toas
     clientePDF&&/*#__PURE__*/React.createElement('div',{className:'form-group'},
       /*#__PURE__*/React.createElement('label',{className:'form-label'},'2. Sube el PDF de etiquetas Flex'),
       procesandoPDF
-        ?/*#__PURE__*/React.createElement('div',{style:{textAlign:'center',padding:'30px 0',color:'var(--gold)',fontWeight:700}},
-            /*#__PURE__*/React.createElement('div',{style:{fontSize:32,marginBottom:8}},'⏳'),
-            'Procesando PDF con IA...'
+        ?/*#__PURE__*/React.createElement('div',{style:{padding:'24px 16px'}},
+            /*#__PURE__*/React.createElement('div',{style:{textAlign:'center',marginBottom:16}},
+              /*#__PURE__*/React.createElement('div',{style:{fontSize:32,marginBottom:8,animation:'spin 1.5s linear infinite',display:'inline-block'}},'⏳'),
+              /*#__PURE__*/React.createElement('div',{style:{fontWeight:700,color:'var(--dark)',marginBottom:4}},'Procesando PDF...'),
+              /*#__PURE__*/React.createElement('div',{style:{fontSize:13,color:'var(--gold)',fontWeight:600,minHeight:20}},progresoPDF)
+            ),
+            /*#__PURE__*/React.createElement('div',{style:{background:'var(--cream)',borderRadius:10,height:8,overflow:'hidden',border:'1px solid var(--border)'}},
+              /*#__PURE__*/React.createElement('div',{style:{
+                height:'100%',
+                borderRadius:10,
+                background:'linear-gradient(90deg,var(--gold),#a87d2a)',
+                width: progresoPDF.includes('Renderizando')?
+                  (()=>{const m=progresoPDF.match(/(\d+)\s*\/\s*(\d+)/);return m?Math.round(parseInt(m[1])/parseInt(m[2])*100)+'%':'60%';})()
+                  :progresoPDF.includes('IA')||progresoPDF.includes('extrayendo')?'40%'
+                  :progresoPDF.includes('Finalizando')?'90%'
+                  :progresoPDF.includes('Leyendo')?'15%':'10%',
+                transition:'width 0.4s ease'
+              }})
+            ),
+            /*#__PURE__*/React.createElement('div',{style:{textAlign:'center',fontSize:11,color:'var(--text-soft)',marginTop:8}},
+              'Esto puede tomar 30-60 segundos para PDFs grandes'
+            )
           )
         :/*#__PURE__*/React.createElement('div',{onClick:()=>pdfRef.current.click(),style:{border:'2px dashed rgba(200,168,75,0.4)',borderRadius:10,padding:'24px',textAlign:'center',cursor:'pointer',background:'rgba(200,168,75,0.04)',transition:'all 0.2s'},onMouseEnter:e=>e.currentTarget.style.borderColor='var(--gold)',onMouseLeave:e=>e.currentTarget.style.borderColor='rgba(200,168,75,0.4)'},
             /*#__PURE__*/React.createElement('div',{style:{fontSize:36,marginBottom:8}},'📄'),
