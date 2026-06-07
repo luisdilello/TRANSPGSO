@@ -2316,7 +2316,8 @@ function ColectaRider(_ref_cr){
     });
     try{
       const {error}=await db.from('envios').insert(inserts);
-      if(error) throw error;
+      // Si hay error de duplicado, continuar igual para subir las fotos
+      if(error&&!error.message.includes('duplicate')&&!error.code?.includes('23505')) throw error;
       // Subir foto de colecta al Storage y guardar URL en tabla envios
       let fotasSubidas=0;
       let errFotos=[];
