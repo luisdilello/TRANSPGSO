@@ -2050,16 +2050,24 @@ const msg=conCodigo>0&&sinCodigo>0?`✓ ${nuevos.length} envíos cargados · ${c
               fecha=anio+'-'+(meses[mFecha[2].toUpperCase()]||'01')+'-'+mFecha[1];
             }
             // Zona y comuna
-            if(/^ANILLO/i.test(l)){zona=l.trim();}
-            if(zona&&idx>0&&lineas[idx-1]&&/^ANILLO/i.test(lineas[idx-1])&&!comuna){
-              // La línea DESPUÉS de ANILLO es la comuna
-              const posible=l.trim().toUpperCase();
-              if(posible&&!/^(RESIDENCIAL|FLEX|DIST)/i.test(posible))comuna=posible;
+            // Caso 1: con ANILLO (ANILLO ESTE/OESTE → siguiente línea es comuna)
+            if(/^ANILLO/i.test(l)){
+              zona=l.trim();
+              if(idx+1<lineas.length){
+                const sig=lineas[idx+1]?.trim()||'';
+                if(sig.length>2&&!/^(RESIDENCIAL|FLEX|Direcci|Referencia|Destinatario)/i.test(sig))
+                  comuna=sig.toUpperCase();
+              }
             }
-            // Alternativa: buscar comuna como línea en mayúsculas sola después de ANILLO
-            if(/^ANILLO/i.test(l)&&idx+1<lineas.length){
+            // Caso 2: sin ANILLO — la comuna aparece directamente después de FLEX + fecha
+            // Detectar línea FLEX con fecha y tomar las 1-2 líneas siguientes como candidato
+            if(!zona&&/FLEX/i.test(l)&&idx+1<lineas.length&&!comuna){
               const sig=lineas[idx+1]?.trim()||'';
-              if(sig===sig.toUpperCase()&&sig.length>3&&!/^\d/.test(sig))comuna=sig;
+              // Es comuna si: todo mayúsculas, largo >3, no es número, no empieza con keyword
+              if(sig===sig.toUpperCase()&&sig.length>3&&!/^\d/.test(sig)&&
+                 !/^(RESIDENCIAL|FLEX|Direcci|Referencia|Destinatario|DIST|Pack|Venta|Envio)/i.test(sig)){
+                comuna=sig.toUpperCase();
+              }
             }
             // Dirección
             const mDir=l.match(/^Direcci[oó]n[:\s]+(.+)/i);
