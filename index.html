@@ -2009,74 +2009,74 @@ const sinCodigo=nuevos.filter(e=>e.fuente==='propio').length;
 const msg=conCodigo>0&&sinCodigo>0?`✓ ${nuevos.length} envíos cargados · ${conCodigo} con código externo · ${sinCodigo} con código PGSO`:conCodigo>0?`✓ ${nuevos.length} envíos cargados con códigos externos (ML/Falabella/Shopify)`:`✓ ${nuevos.length} envíos cargados con códigos PGSO`;toast(msg);}catch(err){toast('⚠ Error: '+err.message);}};reader.readAsArrayBuffer(file);}function importarPDF(file,cliente){
   if(!cliente){toast('⚠ Selecciona un cliente primero');return;}
   setProcesandoPDF(true);
+  setProgresoPDF('📄 Leyendo PDF...');
   const reader=new FileReader();
   reader.onload=async e=>{
     try{
       const arrayBuffer=e.target.result;
-      // Convertir ArrayBuffer a base64 en chunks para no explotar el stack
-      const bytes=new Uint8Array(arrayBuffer);
-      let binary='';
-      const chunkSize=8192;
-      for(let ci=0;ci<bytes.length;ci+=chunkSize){
-        binary+=String.fromCharCode(...bytes.subarray(ci,ci+chunkSize));
+      if(!window.pdfjsLib){throw new Error('pdf.js no cargado. Recarga la página.');}
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      const pdfDoc=await window.pdfjsLib.getDocument({data:arrayBuffer}).promise;
+      const totalPags=pdfDoc.numPages;
+      setProgresoPDF('📄 PDF cargado · '+totalPags+' páginas · Extrayendo texto...');
+      // PASO 1: Extraer texto de todas las páginas localmente
+      let textoCompleto='';
+      for(let i=1;i<=totalPags;i++){
+        if(i%20===0)setProgresoPDF('📝 Extrayendo texto... ('+i+' / '+totalPags+')');
+        const page=await pdfDoc.getPage(i);
+        const tc=await page.getTextContent();
+        const txt=tc.items.map(it=>it.str).join(' ');
+        textoCompleto+='---PAGINA_'+i+'---\n'+txt+'\n';
       }
-      const b64=btoa(binary);
-      // PASO 1: Extraer datos via Anthropic API
-      setProgresoPDF('📄 Leyendo PDF... ('+Math.round(arrayBuffer.byteLength/1024)+'KB)');
+      // PASO 2: Enviar SOLO el texto a Claude (mucho más liviano que el PDF)
+      setProgresoPDF('🤖 IA extrayendo datos de las etiquetas...');
       const resp=await fetch('https://api.anthropic.com/v1/messages',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           model:'claude-haiku-4-5-20251001',
           max_tokens:8000,
-          messages:[{role:'user',content:[
-            {type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},
-            {type:'text',text:'Extrae TODOS los envíos de este PDF de etiquetas Flex. Para cada página/envío extrae: codigo_envio (número del campo "Envio:" sin espacios), destinatario (nombre del campo "Destinatario:" sin el código entre paréntesis), direccion (campo "Direccion:"), referencia (campo "Referencia:", puede ser vacío), comuna (la línea en mayúsculas que sigue a "ANILLO ESTE" o "ANILLO OESTE"), fecha (formato DD MMM convertido a YYYY-MM-DD). Responde SOLO con JSON: {"envios":[{"codigo":"...","destinatario":"...","direccion":"...","referencia":"...","comuna":"...","fecha":"YYYY-MM-DD"},...]}. Sin texto extra ni backticks.'}
-          ]}]
+          messages:[{role:'user',content:'Tengo el texto extraído de un PDF de etiquetas de envío Flex de MercadoLibre. Cada página es un envío separado por "---PAGINA_N---". Extrae de cada página: codigo (el número después de "Envio:" sin espacios), destinatario (el nombre después de "Destinatario:" sin lo que está entre paréntesis), direccion (el texto después de "Direccion:"), referencia (el texto después de "Referencia:", puede repetirse), comuna (la palabra en mayúsculas que aparece después de "ANILLO ESTE" o "ANILLO OESTE"), fecha (convertir "06 JUN" a "2026-06-06"). Responde SOLO con JSON válido sin backticks: {"envios":[{"codigo":"...","destinatario":"...","direccion":"...","referencia":"...","comuna":"...","fecha":"YYYY-MM-DD"}]}\n\nTEXTO DEL PDF:\n'+textoCompleto.slice(0,60000)}]
         })
       });
-      setProgresoPDF('🤖 IA extrayendo datos de las etiquetas...');
       const data=await resp.json();
-      const txt=data.content?.map(c=>c.text||'').join('');
+      const txt2=data.content?.map(c=>c.text||'').join('');
       let parsed;
-      try{parsed=JSON.parse(txt.replace(/```json?|```/g,'').trim());}
-      catch(e2){throw new Error('No se pudo parsear respuesta IA: '+txt.slice(0,200));}
+      try{parsed=JSON.parse(txt2.replace(/```json?|```/g,'').trim());}
+      catch(e2){throw new Error('Error parseando IA: '+txt2.slice(0,200));}
       const metadatos={};
-      (parsed.envios||[]).forEach(e=>{
-        if(e.codigo)metadatos[e.codigo.replace(/\s+/g,'')]={...e};
-      });
-      // PASO 2: Renderizar cada página como imagen usando pdf.js
+      (parsed.envios||[]).forEach(e=>{if(e.codigo)metadatos[e.codigo.replace(/\s+/g,'')]={...e};});
+      // PASO 3: Renderizar páginas como imágenes (una por una, sin batch)
+      setProgresoPDF('🖼 Renderizando etiquetas... (0 / '+totalPags+')');
       const etiquetas={};
-      if(window.pdfjsLib){
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-        const pdfDoc=await window.pdfjsLib.getDocument({data:arrayBuffer}).promise;
-        const totalPags=pdfDoc.numPages;
-        setProgresoPDF('🖼 Renderizando etiquetas... (0 / '+totalPags+')');
-        for(let i=1;i<=totalPags;i++){
-          if(i%10===0||i===totalPags)setProgresoPDF('🖼 Renderizando etiquetas... ('+i+' / '+totalPags+')');
-          try{
-            const page=await pdfDoc.getPage(i);
-            const viewport=page.getViewport({scale:1.5});
-            const canvas=document.createElement('canvas');
-            canvas.width=viewport.width;
-            canvas.height=viewport.height;
-            const ctx=canvas.getContext('2d');
-            await page.render({canvasContext:ctx,viewport}).promise;
-            // Comprimir a JPEG 75%
-            const b64img=canvas.toDataURL('image/jpeg',0.75);
-            // Extraer texto de la página para asociar al código
-            const textContent=await page.getTextContent();
-            const pageText=textContent.items.map(it=>it.str).join(' ');
-            const mEnvio=pageText.match(/Envio[:\s]+(\d+\s*\d*)/i);
-            if(mEnvio){
-              const cod=mEnvio[1].replace(/\s+/g,'');
-              etiquetas[cod]=b64img;
-            }
-          }catch(pe){console.warn('Error renderizando pág '+i,pe);}
+      // Construir mapa página → código desde el texto
+      const paginaCodigo={};
+      textoCompleto.split('---PAGINA_').slice(1).forEach(bloque=>{
+        const numMatch=bloque.match(/^(\d+)---/);
+        const codMatch=bloque.match(/Envio[:\s]+(\d+\s*\d*)/i);
+        if(numMatch&&codMatch){
+          paginaCodigo[parseInt(numMatch[1])]=codMatch[1].replace(/\s+/g,'');
         }
+      });
+      for(let i=1;i<=totalPags;i++){
+        if(i%5===0||i===totalPags)setProgresoPDF('🖼 Renderizando etiquetas... ('+i+' / '+totalPags+')');
+        try{
+          const page=await pdfDoc.getPage(i);
+          const viewport=page.getViewport({scale:1.4});
+          const canvas=document.createElement('canvas');
+          canvas.width=viewport.width;
+          canvas.height=viewport.height;
+          const ctx=canvas.getContext('2d');
+          await page.render({canvasContext:ctx,viewport}).promise;
+          const b64img=canvas.toDataURL('image/jpeg',0.72);
+          const cod=paginaCodigo[i];
+          if(cod)etiquetas[cod]=b64img;
+          // Liberar canvas
+          canvas.width=0;canvas.height=0;
+        }catch(pe){console.warn('Error pág '+i,pe);}
       }
       setProgresoPDF('✅ Finalizando...');
-      // PASO 3: Construir envíos combinando metadatos + imagen
+      // PASO 4: Construir envíos
       const envios=Object.entries(metadatos).map(([cod,meta],i)=>({
         id:Date.now()+i,
         codigo:cod,
@@ -2095,7 +2095,7 @@ const msg=conCodigo>0&&sinCodigo>0?`✓ ${nuevos.length} envíos cargados · ${c
         foto_etiqueta:etiquetas[cod]||null,
         historial:[{fecha:new Date().toISOString(),estado:'sin_asignar',nota:'PDF Flex · '+cliente}]
       }));
-      if(!envios.length){toast('⚠ No se encontraron envíos en el PDF');setProcesandoPDF(false);return;}
+      if(!envios.length){toast('⚠ No se encontraron envíos en el PDF');setProcesandoPDF(false);setProgresoPDF('');return;}
       const conFoto=envios.filter(e=>e.foto_etiqueta).length;
       setPdfPreview({envios,cliente,total:envios.length,conFoto});
       setProcesandoPDF(false);
