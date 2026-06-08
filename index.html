@@ -3680,7 +3680,7 @@ return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0
 // This is a surgical replacement of the RiderApp function
 
 function GananciasRider(_ref_gr){
-  let usuario=_ref_gr.usuario,envios=_ref_gr.envios;
+  let usuario=_ref_gr.usuario,envios=_ref_gr.envios,colectasKey=_ref_gr.colectasKey;
   // Get tarifa from mensajeros via Supabase using mensajero_id
   const _sg1=useState(null),tarifa=_sg1[0],setTarifa=_sg1[1];
   const _sg2=useState('hoy'),periodo=_sg2[0],setPeriodo=_sg2[1];
@@ -3755,6 +3755,30 @@ function GananciasRider(_ref_gr){
   const todosEntregados=envios.filter(e=>e.estado==='entregado');
   const hoyCount=todosEntregados.filter(e=>fechaEntrega(e).toISOString().slice(0,10)===hoy).length;
 
+  // Retiros/colectas del rider
+  const colectasRider=React.useMemo(()=>{
+    try{
+      const key='transpgso_v2_colecta_registros_'+colectasKey?.split('colecta_rider_')[1];
+      const data=JSON.parse(localStorage.getItem(key)||'[]');
+      return Array.isArray(data)?data:[];
+    }catch(e){return[];}
+  },[colectasKey]);
+  // Filtrar colectas por período
+  const colectasFiltradas=colectasRider.filter(c=>{
+    const d=new Date(c.fecha||c.timestamp||0);
+    const hoyD=new Date(); hoyD.setHours(23,59,59,999);
+    if(periodo==='hoy'){const hoyS=new Date();hoyS.setHours(0,0,0,0);return d>=hoyS&&d<=hoyD;}
+    if(periodo==='semana'){const lunes=new Date();lunes.setDate(lunes.getDate()-((lunes.getDay()+6)%7));lunes.setHours(0,0,0,0);return d>=lunes;}
+    if(periodo==='mes'){const ini=new Date();ini.setDate(1);ini.setHours(0,0,0,0);return d>=ini;}
+    if(periodo==='personalizado'&&fechaDesde&&fechaHasta){const desde=new Date(fechaDesde+'T00:00:00');const hasta=new Date(fechaHasta+'T23:59:59');return d>=desde&&d<=hasta;}
+    return true;
+  });
+  const totalRetiros=colectasFiltradas.length;
+  // Tarifa retiro: $500 por defecto (configurable)
+  const tarifaRetiro=500;
+  const gananciaRetiros=totalRetiros*tarifaRetiro;
+  const gananciaTotal=totalPesos+gananciaRetiros;
+
   const periodos=[
     {val:'hoy',label:'Hoy'},
     {val:'semana',label:'Semana'},
@@ -3791,11 +3815,23 @@ function GananciasRider(_ref_gr){
         periodo==='hoy'?'Ganancias de hoy':periodo==='semana'?'Ganancias esta semana':periodo==='mes'?'Ganancias este mes':'Ganancias del período'
       ),
       React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:48,color:'var(--gold)',letterSpacing:2,lineHeight:1}},
-        '$'+totalPesos.toLocaleString('es-CL')
+        '$'+gananciaTotal.toLocaleString('es-CL')
       ),
       React.createElement('div',{style:{fontSize:13,color:'rgba(255,255,255,0.4)',marginTop:8}},
-        filtrados.length+' entrega'+(filtrados.length!==1?'s':'')+
-        (tarifaVal?' · $'+tarifaVal.toLocaleString('es-CL')+' c/u':'')
+        filtrados.length+' entregas · '+(totalRetiros>0?totalRetiros+' retiros · ':'')+(tarifaVal?'$'+tarifaVal.toLocaleString('es-CL')+' c/u':'')
+      )
+    ),
+    // Desglose entregas + retiros
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,margin:'0 12px 16px'}},
+      React.createElement('div',{style:{background:'rgba(46,125,79,0.12)',border:'1px solid rgba(46,125,79,0.3)',borderRadius:10,padding:14,textAlign:'center'}},
+        React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.4)',letterSpacing:1.5,textTransform:'uppercase',marginBottom:6}},'📦 Entregas'),
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:28,color:'#4caf84',lineHeight:1}},'$'+totalPesos.toLocaleString('es-CL')),
+        React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.3)',marginTop:4}},filtrados.length+' envíos × $'+tarifaVal.toLocaleString('es-CL'))
+      ),
+      React.createElement('div',{style:{background:'rgba(200,168,75,0.08)',border:'1px solid rgba(200,168,75,0.25)',borderRadius:10,padding:14,textAlign:'center'}},
+        React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.4)',letterSpacing:1.5,textTransform:'uppercase',marginBottom:6}},'🔄 Retiros'),
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:28,color:'var(--gold)',lineHeight:1}},'$'+gananciaRetiros.toLocaleString('es-CL')),
+        React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.3)',marginTop:4}},totalRetiros+' retiros × $'+tarifaRetiro.toLocaleString('es-CL'))
       )
     ),
     // Grid de stats rápidas
@@ -3833,28 +3869,28 @@ function GananciasRider(_ref_gr){
     )
   );
 }
-function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout;const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);};const ESTADOS_RIDER=[{val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#C8A84B',bg:'rgba(200,168,75,0.15)'},{val:'entregado',label:'Entregado',icon:'✅',color:'#2e7d4f',bg:'rgba(46,125,79,0.15)'},{val:'reprogramado',label:'Reprogramado',icon:'📅',color:'#b07d10',bg:'rgba(176,125,16,0.15)'},{val:'cancelado',label:'Cancelado',icon:'❌',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'siniestro',label:'Siniestro',icon:'⚠️',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'pendiente_retiro',label:'Pend. Retiro',icon:'📦',color:'#7a7d6a',bg:'rgba(122,125,106,0.12)'}];async function cargarEnvios(){setLoading(true);playSound('ruta');try{var _nombreRider$split$;const nombreRider=usuario.nombre;const primerNombre=nombreRider.split(' ')[0].split(',')[0].trim();const apellido=(_nombreRider$split$=nombreRider.split(',')[0])==null?void 0:_nombreRider$split$.trim();const _await$db$from$select4=await db.from('envios').select('*').or(`mensajero.ilike.%${primerNombre}%,mensajero.ilike.%${apellido||primerNombre}%`).order('updated_at',{ascending:false}).limit(500),data=_await$db$from$select4.data,error=_await$db$from$select4.error;if(error)throw error;// Supabase respondió OK
-if(data&&data.length>0){
-  // Hay envíos en Supabase → actualizar caché y mostrar
-  setEnvios(data);lsSave('rider_envios_'+primerNombre.toLowerCase(),data);
+function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout;const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);};const ESTADOS_RIDER=[{val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#C8A84B',bg:'rgba(200,168,75,0.15)'},{val:'entregado',label:'Entregado',icon:'✅',color:'#2e7d4f',bg:'rgba(46,125,79,0.15)'},{val:'reprogramado',label:'Reprogramado',icon:'📅',color:'#b07d10',bg:'rgba(176,125,16,0.15)'},{val:'cancelado',label:'Cancelado',icon:'❌',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'siniestro',label:'Siniestro',icon:'⚠️',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'pendiente_retiro',label:'Pend. Retiro',icon:'📦',color:'#7a7d6a',bg:'rgba(122,125,106,0.12)'}];async function cargarEnvios(){setLoading(true);try{const nombreRider=usuario.nombre;const primerNombre=nombreRider.split(' ')[0].split(',')[0].trim();const apellido=(nombreRider.split(',')[0]||'').trim();const {data,error}=await db.from('envios').select('*').or(`mensajero.ilike.%${primerNombre}%,mensajero.ilike.%${apellido||primerNombre}%`).order('updated_at',{ascending:false}).limit(500);if(error)throw error;if(data&&data.length>0){
+  // Auto en_ruta: asignados → en_ruta
+  const asignados=data.filter(e=>e.estado==='asignado');
+  let dataFinal=data;
+  if(asignados.length>0){
+    const ts=new Date().toISOString();
+    for(const e of asignados){
+      try{await db.from('envios').update({estado:'en_ruta',updated_at:ts}).eq('codigo',e.codigo);}catch(err){}
+    }
+    dataFinal=data.map(e=>asignados.find(a=>a.codigo===e.codigo)?{...e,estado:'en_ruta'}:e);
+  }
+  setEnvios(dataFinal);
+  lsSave('rider_envios_'+primerNombre.toLowerCase(),dataFinal);
 }else{
-  // Supabase respondió OK pero sin datos → limpiar caché y mostrar vacío
-  lsSave('rider_envios_'+primerNombre.toLowerCase(),[]);
-  setEnvios([]);
-}}catch(e){const primerNombre2=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();const cached=lsLoad('rider_envios_'+primerNombre2,null);if(cached&&cached.length>0){setEnvios(cached);}else{const local=lsLoad('gestion_envios',[]);setEnvios(local.filter(e=>e.mensajero&&e.mensajero.toLowerCase().includes(primerNombre2)));}}// Auto en_ruta: todos los asignados pasan a en_ruta al cargar
-      const asignados=data.filter(e=>e.estado==='asignado');
-      if(asignados.length>0){
-        const ts=new Date().toISOString();
-        for(const e of asignados){
-          try{
-            await db.from('envios').update({estado:'en_ruta',updated_at:ts}).eq('codigo',e.codigo);
-            await db.from('historial_envios').insert({codigo_envio:e.codigo,estado:'en_ruta',nota:'Auto: en ruta al iniciar app',usuario:usuario.nombre,fecha:ts});
-          }catch(err){}
-        }
-        // Actualizar state local
-        setEnvios(prev=>prev.map(e=>e.estado==='asignado'?{...e,estado:'en_ruta',historial:[...(e.historial||[]),{fecha:ts,estado:'en_ruta',nota:'Auto: en ruta al iniciar app',usuario:usuario.nombre}]}:e));
-      }
-      setLoading(false);}useEffect(()=>{cargarEnvios();},[]);useEffect(()=>{const channel=db.channel('rider-envios').on('postgres_changes',{event:'UPDATE',schema:'public',table:'envios'},payload=>{setEnvios(prev=>{const updated=prev.map(e=>e.codigo===payload.new.codigo?{...e,...payload.new}:e);const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,updated);return updated;});}).subscribe();return()=>{db.removeChannel(channel);};},[]);const enviosFiltrados=useMemo(()=>{if(filtro==='pendientes')return envios.filter(e=>!['entregado','cancelado'].includes(e.estado));if(filtro==='entregados')return envios.filter(e=>e.estado==='entregado');if(filtro==='todos')return envios;return envios;},[envios,filtro]);const stats={total:envios.length,entregados:envios.filter(e=>e.estado==='entregado').length,pendientes:envios.filter(e=>!['entregado','cancelado'].includes(e.estado)).length,cancelados:envios.filter(e=>e.estado==='cancelado').length};const efectividad=stats.total>0?Math.round(stats.entregados/stats.total*100):0;return/*#__PURE__*/React.createElement("div",{style:{minHeight:'100vh',background:'var(--dark-deep)',color:'#fff',fontFamily:'DM Sans,sans-serif',paddingBottom:90}},/*#__PURE__*/React.createElement("div",{style:{background:'var(--dark)',borderBottom:'3px solid var(--gold)',padding:'calc(env(safe-area-inset-top,0px) + 10px) 16px 10px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:100}},/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:10}},/*#__PURE__*/React.createElement("div",{style:{width:42,height:42,borderRadius:8,overflow:'hidden',flexShrink:0,border:'2px solid var(--gold)',background:'var(--dark-deep)'}},/*#__PURE__*/React.createElement("img",{src:LOGO_SRC,style:{width:'100%',height:'100%',objectFit:'cover'},onError:e=>{e.target.style.display='none';}})),/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:15,letterSpacing:2,color:'var(--gold)',lineHeight:1}},"TRANSPGSO"),/*#__PURE__*/React.createElement("div",{style:{fontSize:10,color:'rgba(200,168,75,0.5)',letterSpacing:1}},"RIDER \xB7 ",usuario.nombre.replace(/,\s*/g,' ').split(' ')[0]))),/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:8}},/*#__PURE__*/React.createElement("button",{onClick:cargarEnvios,title:"Actualizar",style:{background:'none',border:'1px solid rgba(200,168,75,0.25)',borderRadius:10,padding:'9px 10px',color:'var(--gold)',cursor:'pointer',fontSize:16,minWidth:40,minHeight:40,display:'flex',alignItems:'center',justifyContent:'center'}},"\u21BA"),/*#__PURE__*/React.createElement("button",{onClick:onLogout,title:"Salir",style:{background:'none',border:'1px solid rgba(255,255,255,0.12)',borderRadius:10,padding:'9px 10px',color:'rgba(255,255,255,0.4)',cursor:'pointer',fontSize:14,minWidth:40,minHeight:40,display:'flex',alignItems:'center',justifyContent:'center'}},"\uD83D\uDEAA"))),riderTab==='envios'&&/*#__PURE__*/React.createElement(React.Fragment,null,/*#__PURE__*/React.createElement("div",{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:1,background:'rgba(200,168,75,0.1)',margin:'0 0 0 0'}},[{label:'Total',val:stats.total,color:'#fff'},{label:'Entregados',val:stats.entregados,color:'#2e7d4f'},{label:'Pendientes',val:stats.pendientes,color:'#C8A84B'},{label:`${efectividad}%`,val:'Efect.',color:efectividad>=90?'#2e7d4f':efectividad>=80?'#C8A84B':'#b03030'}].map((s,i)=>/*#__PURE__*/React.createElement("div",{key:i,style:{padding:'10px 8px',textAlign:'center',background:'rgba(43,46,32,0.8)'}},/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:22,color:s.color,lineHeight:1}},s.val),/*#__PURE__*/React.createElement("div",{style:{fontSize:9,color:'rgba(255,255,255,0.4)',letterSpacing:1,textTransform:'uppercase',marginTop:2}},s.label)))),/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:0,padding:'12px 16px',background:'var(--dark-deep)'}},[{val:'pendientes',label:`Pendientes (${stats.pendientes})`},{val:'entregados',label:`Entregados (${stats.entregados})`},{val:'todos',label:'Todos'}].map(f=>/*#__PURE__*/React.createElement("button",{key:f.val,onClick:()=>setFiltro(f.val),style:{flex:1,padding:'8px 4px',border:'none',cursor:'pointer',fontSize:11,fontWeight:700,background:filtro===f.val?'var(--gold)':'rgba(255,255,255,0.06)',color:filtro===f.val?'var(--dark-deep)':'rgba(255,255,255,0.5)',borderRadius:filtro===f.val?6:0,transition:'all 0.2s'}},f.label))),/*#__PURE__*/React.createElement("div",{style:{padding:'0 12px'}},loading&&/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:40,color:'rgba(255,255,255,0.3)'}},/*#__PURE__*/React.createElement("div",{style:{fontSize:32,marginBottom:8}},"\u23F3"),"Cargando tus env\xEDos..."),!loading&&enviosFiltrados.length===0&&/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:40,color:'rgba(255,255,255,0.3)'}},/*#__PURE__*/React.createElement("div",{style:{fontSize:40,marginBottom:8}},"\uD83D\uDCED"),/*#__PURE__*/React.createElement("div",{style:{fontSize:14}},"No hay env\xEDos ",filtro==='pendientes'?'pendientes':filtro==='entregados'?'entregados':'registrados')),!loading&&(()=>{
+  // Sin datos en Supabase → usar caché local
+  const cached=lsLoad('rider_envios_'+primerNombre.toLowerCase(),null);
+  if(cached&&cached.length>0){setEnvios(cached);}
+  else{
+    const local=lsLoad('gestion_envios',[]);
+    setEnvios(local.filter(e=>e.mensajero&&e.mensajero.toLowerCase().includes(primerNombre.toLowerCase())));
+  }
+}}catch(e){const primerNombre2=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();const cached=lsLoad('rider_envios_'+primerNombre2,null);if(cached&&cached.length>0){setEnvios(cached);}else{const local=lsLoad('gestion_envios',[]);setEnvios(local.filter(e=>e.mensajero&&e.mensajero.toLowerCase().includes(primerNombre2)));}}finally{setLoading(false);}}useEffect(()=>{cargarEnvios();},[]);useEffect(()=>{const channel=db.channel('rider-envios').on('postgres_changes',{event:'UPDATE',schema:'public',table:'envios'},payload=>{setEnvios(prev=>{const updated=prev.map(e=>e.codigo===payload.new.codigo?{...e,...payload.new}:e);const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,updated);return updated;});}).subscribe();return()=>{db.removeChannel(channel);};},[]);const enviosFiltrados=useMemo(()=>{if(filtro==='pendientes')return envios.filter(e=>!['entregado','cancelado'].includes(e.estado));if(filtro==='entregados')return envios.filter(e=>e.estado==='entregado');if(filtro==='todos')return envios;return envios;},[envios,filtro]);const stats={total:envios.length,entregados:envios.filter(e=>e.estado==='entregado').length,pendientes:envios.filter(e=>!['entregado','cancelado'].includes(e.estado)).length,cancelados:envios.filter(e=>e.estado==='cancelado').length};const efectividad=stats.total>0?Math.round(stats.entregados/stats.total*100):0;return/*#__PURE__*/React.createElement("div",{style:{minHeight:'100vh',background:'var(--dark-deep)',color:'#fff',fontFamily:'DM Sans,sans-serif',paddingBottom:90}},/*#__PURE__*/React.createElement("div",{style:{background:'var(--dark)',borderBottom:'3px solid var(--gold)',padding:'calc(env(safe-area-inset-top,0px) + 10px) 16px 10px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:100}},/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:10}},/*#__PURE__*/React.createElement("div",{style:{width:42,height:42,borderRadius:8,overflow:'hidden',flexShrink:0,border:'2px solid var(--gold)',background:'var(--dark-deep)'}},/*#__PURE__*/React.createElement("img",{src:LOGO_SRC,style:{width:'100%',height:'100%',objectFit:'cover'},onError:e=>{e.target.style.display='none';}})),/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:15,letterSpacing:2,color:'var(--gold)',lineHeight:1}},"TRANSPGSO"),/*#__PURE__*/React.createElement("div",{style:{fontSize:10,color:'rgba(200,168,75,0.5)',letterSpacing:1}},"RIDER \xB7 ",usuario.nombre.replace(/,\s*/g,' ').split(' ')[0]))),/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:8}},/*#__PURE__*/React.createElement("button",{onClick:cargarEnvios,title:"Actualizar",style:{background:'none',border:'1px solid rgba(200,168,75,0.25)',borderRadius:10,padding:'9px 10px',color:'var(--gold)',cursor:'pointer',fontSize:16,minWidth:40,minHeight:40,display:'flex',alignItems:'center',justifyContent:'center'}},"\u21BA"),/*#__PURE__*/React.createElement("button",{onClick:onLogout,title:"Salir",style:{background:'none',border:'1px solid rgba(255,255,255,0.12)',borderRadius:10,padding:'9px 10px',color:'rgba(255,255,255,0.4)',cursor:'pointer',fontSize:14,minWidth:40,minHeight:40,display:'flex',alignItems:'center',justifyContent:'center'}},"\uD83D\uDEAA"))),riderTab==='envios'&&/*#__PURE__*/React.createElement(React.Fragment,null,/*#__PURE__*/React.createElement("div",{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:1,background:'rgba(200,168,75,0.1)',margin:'0 0 0 0'}},[{label:'Total',val:stats.total,color:'#fff'},{label:'Entregados',val:stats.entregados,color:'#2e7d4f'},{label:'Pendientes',val:stats.pendientes,color:'#C8A84B'},{label:`${efectividad}%`,val:'Efect.',color:efectividad>=90?'#2e7d4f':efectividad>=80?'#C8A84B':'#b03030'}].map((s,i)=>/*#__PURE__*/React.createElement("div",{key:i,style:{padding:'10px 8px',textAlign:'center',background:'rgba(43,46,32,0.8)'}},/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:22,color:s.color,lineHeight:1}},s.val),/*#__PURE__*/React.createElement("div",{style:{fontSize:9,color:'rgba(255,255,255,0.4)',letterSpacing:1,textTransform:'uppercase',marginTop:2}},s.label)))),/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:0,padding:'12px 16px',background:'var(--dark-deep)'}},[{val:'pendientes',label:`Pendientes (${stats.pendientes})`},{val:'entregados',label:`Entregados (${stats.entregados})`},{val:'todos',label:'Todos'}].map(f=>/*#__PURE__*/React.createElement("button",{key:f.val,onClick:()=>setFiltro(f.val),style:{flex:1,padding:'8px 4px',border:'none',cursor:'pointer',fontSize:11,fontWeight:700,background:filtro===f.val?'var(--gold)':'rgba(255,255,255,0.06)',color:filtro===f.val?'var(--dark-deep)':'rgba(255,255,255,0.5)',borderRadius:filtro===f.val?6:0,transition:'all 0.2s'}},f.label))),/*#__PURE__*/React.createElement("div",{style:{padding:'0 12px'}},loading&&/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:40,color:'rgba(255,255,255,0.3)'}},/*#__PURE__*/React.createElement("div",{style:{fontSize:32,marginBottom:8}},"\u23F3"),"Cargando tus env\xEDos..."),!loading&&enviosFiltrados.length===0&&/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:40,color:'rgba(255,255,255,0.3)'}},/*#__PURE__*/React.createElement("div",{style:{fontSize:40,marginBottom:8}},"\uD83D\uDCED"),/*#__PURE__*/React.createElement("div",{style:{fontSize:14}},"No hay env\xEDos ",filtro==='pendientes'?'pendientes':filtro==='entregados'?'entregados':'registrados')),!loading&&(()=>{
   // Agrupar por dirección normalizada
   const dirMap={};
   enviosFiltrados.forEach(e=>{
@@ -3930,7 +3966,7 @@ if(data&&data.length>0){
     );
     return acc;
   },{seen:new Set(),items:[]}).items;
-})())),riderTab==='ganancias'&&/*#__PURE__*/React.createElement(GananciasRider,{usuario:usuario,envios:envios}),showColecta&&/*#__PURE__*/React.createElement(ColectaRider,{usuario:usuario,clientes:lsLoad('clientes',[]),toast:toast,onClose:()=>setShowColecta(false)}),showAsignacion&&/*#__PURE__*/React.createElement(AsignacionRider,{usuario:usuario,toast:toast,onClose:()=>setShowAsignacion(false),onEnviosUpdate:envioNuevo=>{setEnvios(prev=>{const nuevos=prev.find(e=>e.codigo===envioNuevo.codigo)?prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e):[envioNuevo,...prev];const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,nuevos);return nuevos;});}}),showAjustes&&/*#__PURE__*/React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:9999,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},
+})())),riderTab==='ganancias'&&/*#__PURE__*/React.createElement(GananciasRider,{usuario:usuario,envios:envios,colectasKey:'colecta_rider_'+usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase()}),showColecta&&/*#__PURE__*/React.createElement(ColectaRider,{usuario:usuario,clientes:lsLoad('clientes',[]),toast:toast,onClose:()=>setShowColecta(false)}),showAsignacion&&/*#__PURE__*/React.createElement(AsignacionRider,{usuario:usuario,toast:toast,onClose:()=>setShowAsignacion(false),onEnviosUpdate:envioNuevo=>{setEnvios(prev=>{const nuevos=prev.find(e=>e.codigo===envioNuevo.codigo)?prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e):[envioNuevo,...prev];const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,nuevos);return nuevos;});}}),showAjustes&&/*#__PURE__*/React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:9999,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},
   React.createElement('div',{style:{background:'#1a1d14',borderRadius:'20px 20px 0 0',padding:24,border:'1px solid rgba(200,168,75,0.2)',maxHeight:'80vh',overflowY:'auto'}},
     React.createElement('div',{style:{width:40,height:4,background:'rgba(255,255,255,0.2)',borderRadius:2,margin:'0 auto 20px'}},null),
     React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:2,color:'var(--gold)',marginBottom:20}},"⚙ AJUSTES"),
