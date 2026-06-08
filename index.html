@@ -730,43 +730,7 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
     React.createElement('div',{className:'panel'},
       React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}},
         React.createElement('div',{className:'panel-title',style:{margin:0}},'🏢 Resumen por Cliente'),
-        React.createElement('button',{
-          onClick:()=>{
-            const mes=periodo==='mes'?mesFiltro:periodo==='hoy'?hoy:periodo==='semana'?lunesStr.slice(0,7):hoy.slice(0,7);
-            const titulo='Resumen TransPgso · '+(periodo==='mes'?mesFiltro:periodo==='hoy'?'Hoy '+hoy:periodo==='semana'?'Semana '+lunesStr+' al '+hoy:'Todo el período');
-            const win=window.open('','_blank','width=900,height=700');
-            const filas=clientesSort.map(([cli,d])=>`
-              <tr>
-                <td>${cli}</td>
-                <td style="text-align:center">${d.total}</td>
-                <td style="text-align:center">${d.sin_asignar||0}</td>
-                <td style="text-align:center">${d.en_ruta||0}</td>
-                <td style="text-align:center;color:#2e7d4f;font-weight:700">${d.entregado||0}</td>
-                <td style="text-align:center">${d.reprogramado||0}</td>
-                <td style="text-align:center;color:#b03030">${d.cancelado||0}</td>
-                <td style="text-align:center">${d.total>0?((d.entregado||0)/d.total*100).toFixed(1)+'%':'—'}</td>
-              </tr>`).join('');
-            const css='body{font-family:Arial,sans-serif;padding:30px;color:#222}h1{font-size:22px;color:#3A3D2E}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#3A3D2E;color:#C8A84B;padding:10px 12px;text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase}td{padding:9px 12px;border-bottom:1px solid #eee}tr:nth-child(even){background:#faf9f5}.total-row{background:#f5f0e0!important;font-weight:700}@media print{button{display:none}}';
-            const html2='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+titulo+'</title><style>'+css+'</style></head><body>'
-              +'<h1>📊 '+titulo+'</h1>'
-              +'<div style="font-size:13px;color:#888;margin-bottom:24px">Generado: '+new Date().toLocaleString('es-CL')+' · TransPgso SpA</div>'
-              +'<table><thead><tr><th>Cliente</th><th>Total</th><th>Sin Asignar</th><th>En Ruta</th><th>Entregado</th><th>Reprog.</th><th>Cancelado</th><th>Efectividad</th></tr></thead>'
-              +'<tbody>'+filas
-              +'<tr class="total-row"><td>TOTALES</td><td style="text-align:center">'+filtrados.length+'</td>'
-              +'<td style="text-align:center">'+porEstado.sin_asignar+'</td>'
-              +'<td style="text-align:center">'+porEstado.en_ruta+'</td>'
-              +'<td style="text-align:center;color:#2e7d4f">'+porEstado.entregado+'</td>'
-              +'<td style="text-align:center">'+porEstado.reprogramado+'</td>'
-              +'<td style="text-align:center;color:#b03030">'+porEstado.cancelado+'</td>'
-              +'<td style="text-align:center">'+(filtrados.length>0?((porEstado.entregado/filtrados.length)*100).toFixed(1)+'%':'—')+'</td></tr>'
-              +'</tbody></table>'
-              +'<div style="margin-top:30px;text-align:center"><button onclick="window.print()" style="padding:10px 24px;background:#C8A84B;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">🖨 Imprimir / Guardar PDF</button></div>'
-              +'</body></html>';
-            win.document.write(html2);
-            win.document.close();
-          },
-          style:{padding:'7px 14px',borderRadius:8,border:'1px solid var(--gold)',background:'rgba(200,168,75,0.1)',color:'var(--gold)',fontWeight:700,fontSize:11,cursor:'pointer',display:'flex',alignItems:'center',gap:6}
-        },'📄 Generar Recibo')
+
       ),
       clientesSort.length===0
         ?React.createElement('div',{style:{color:'var(--text-soft)',fontSize:13,textAlign:'center',padding:'20px 0'}},'Sin envíos en este período')
@@ -792,7 +756,71 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
                 React.createElement('td',{className:'mono',style:{color:'#2e7d4f',fontWeight:600}},d.entregado||'—'),
                 React.createElement('td',{className:'mono',style:{color:'#b07d10'}},d.reprogramado||'—'),
                 React.createElement('td',{className:'mono',style:{color:'#b03030'}},d.cancelado||'—'),
-                React.createElement('td',null,React.createElement(KpiBar,{value:efCli}))
+                React.createElement('td',null,React.createElement(KpiBar,{value:efCli})),
+                React.createElement('td',null,
+                  React.createElement('button',{
+                    onClick:()=>{
+                      const enviosCli=filtrados.filter(e=>e.cliente===cli);
+                      const entregados=enviosCli.filter(e=>e.estado==='entregado');
+                      const cancelados=enviosCli.filter(e=>e.estado==='cancelado');
+                      const efectividad=enviosCli.length>0?((entregados.length/enviosCli.length)*100).toFixed(1)+'%':'0%';
+                      const periodoLabel=periodo==='hoy'?'Hoy '+hoy:periodo==='semana'?'Semana '+lunesStr+' al '+hoy:periodo==='mes'?mesFiltro:periodo==='rango'?(desde||'...')+' al '+(hasta||'...'):'Todo el período';
+                      const filasDet=enviosCli.map((e,i)=>{
+                        const estColor=e.estado==='entregado'?'#2e7d4f':e.estado==='cancelado'?'#b03030':e.estado==='reprogramado'?'#b07d10':'#7a7d6a';
+                        const estLabel={'entregado':'Entregado','cancelado':'Cancelado','reprogramado':'Reprogramado','en_ruta':'En Ruta','sin_asignar':'Sin Asignar','asignado':'Asignado','en_bodega':'En Bodega','pendiente_retiro':'Pend. Retiro'}[e.estado]||e.estado;
+                        return '<tr style="background:'+(i%2===0?'#fff':'#faf9f5')+'">'
+                          +'<td style="color:#888;text-align:center;padding:7px 10px">'+(i+1)+'</td>'
+                          +'<td style="font-family:monospace;font-size:12px;padding:7px 10px;font-weight:700">'+e.codigo+'</td>'
+                          +'<td style="padding:7px 10px">'+e.destinatario+'</td>'
+                          +'<td style="padding:7px 10px;color:#555">'+e.direccion+'</td>'
+                          +'<td style="padding:7px 10px"><span style="background:#3A3D2E;color:#C8A84B;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700">'+(e.comuna||'—')+'</span></td>'
+                          +'<td style="padding:7px 10px;font-size:11px;color:#888">'+(e.fecha||'—')+'</td>'
+                          +'<td style="padding:7px 10px"><span style="color:'+estColor+';font-weight:700;font-size:11px">'+estLabel+'</span></td>'
+                          +'</tr>';
+                      }).join('');
+                      const css='*{box-sizing:border-box}body{font-family:Arial,sans-serif;padding:30px;color:#222;margin:0}'
+                        +'h1{font-size:22px;color:#3A3D2E;margin-bottom:2px}'
+                        +'.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}'
+                        +'.card{background:#faf9f5;border:1px solid #e0d9c8;border-radius:8px;padding:14px}'
+                        +'.card-title{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#888;margin-bottom:8px}'
+                        +'.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}'
+                        +'.kpi{background:#3A3D2E;color:#fff;border-radius:8px;padding:14px;text-align:center}'
+                        +'.kpi-num{font-size:28px;font-weight:700;color:#C8A84B;display:block}'
+                        +'.kpi-label{font-size:10px;opacity:0.7;margin-top:4px}'
+                        +'table{width:100%;border-collapse:collapse;font-size:12px}'
+                        +'th{background:#3A3D2E;color:#C8A84B;padding:9px 10px;text-align:left;font-size:10px;letter-spacing:1px;text-transform:uppercase}'
+                        +'@media print{.no-print{display:none}}';
+                      const win=window.open('','_blank','width=1000,height=800');
+                      win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Recibo '+cli+' - '+periodoLabel+'</title><style>'+css+'</style></head><body>'
+                        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">'
+                        +'<div><h1>'+cli+' · Recibo de Cobro</h1><div style="font-size:12px;color:#888">'+periodoLabel+' · Generado: '+new Date().toLocaleString('es-CL')+'</div></div>'
+                        +'<div style="text-align:right;font-size:13px;color:#3A3D2E;font-weight:700">TRANSPGSO SpA</div></div>'
+                        +'<div class="grid">'
+                        +'<div class="card"><div class="card-title">📋 Cliente</div>'
+                        +'<div style="font-size:18px;font-weight:700;color:#3A3D2E">'+cli+'</div>'
+                        +'<div style="font-size:13px;margin-top:4px">Período: '+periodoLabel+'</div></div>'
+                        +'<div class="card"><div class="card-title">🏦 Datos Bancarios TransPgso</div>'
+                        +'<div style="font-size:13px;line-height:1.8">'
+                        +'<strong>TransPgso SpA</strong><br>RUT: 78.143.701-8<br>'
+                        +'Banco Santander · Cta Corriente<br>N° 00009784496-8<br>'
+                        +'Contacto: +56 9 4211 2940</div></div></div>'
+                        +'<div class="kpi-grid">'
+                        +'<div class="kpi"><span class="kpi-num">'+enviosCli.length+'</span><div class="kpi-label">Total Recibidos</div></div>'
+                        +'<div class="kpi"><span class="kpi-num" style="color:#4caf84">'+entregados.length+'</span><div class="kpi-label">Entregados</div></div>'
+                        +'<div class="kpi"><span class="kpi-num" style="color:#e88">'+cancelados.length+'</span><div class="kpi-label">Cancelados</div></div>'
+                        +'<div class="kpi"><span class="kpi-num">'+efectividad+'</span><div class="kpi-label">Efectividad</div></div>'
+                        +'</div>'
+                        +'<h3 style="color:#3A3D2E;margin-bottom:10px">📦 Detalle de Envíos ('+enviosCli.length+')</h3>'
+                        +'<table><thead><tr><th>#</th><th>Código</th><th>Destinatario</th><th>Dirección</th><th>Comuna</th><th>Fecha</th><th>Estado</th></tr></thead>'
+                        +'<tbody>'+filasDet+'</tbody></table>'
+                        +'<div style="margin-top:24px;text-align:center" class="no-print">'
+                        +'<button onclick="window.print()" style="padding:10px 28px;background:#C8A84B;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">🖨 Imprimir / Guardar PDF</button>'
+                        +'</div></body></html>');
+                      win.document.close();
+                    },
+                    style:{padding:'5px 10px',borderRadius:6,border:'1px solid var(--gold)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',fontWeight:700,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}
+                  },'📄 Recibo')
+                )
               );
             }))
           )
