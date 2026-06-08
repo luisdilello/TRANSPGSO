@@ -2042,7 +2042,10 @@ const msg=conCodigo>0&&sinCodigo>0?`✓ ${nuevos.length} envíos cargados · ${c
       setProgresoPDF('📄 PDF cargado · '+totalPags+' páginas · Extrayendo datos...');
       const envios=[];
       for(let i=1;i<=totalPags;i++){
-        if(i%10===0||i===1)setProgresoPDF('⚙ Procesando página '+i+' / '+totalPags+'...');
+        if(i%10===0||i===1){
+            setProgresoPDF('⚙ Procesando página '+i+' / '+totalPags+'...');
+            await new Promise(r=>setTimeout(r,0)); // yield al browser para re-render
+          }
         try{
           const page=await pdfDoc.getPage(i);
           // Extraer texto
