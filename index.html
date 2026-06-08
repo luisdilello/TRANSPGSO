@@ -2060,51 +2060,57 @@ const msg=conCodigo>0&&sinCodigo>0?`✓ ${nuevos.length} envíos cargados · ${c
           // Parsear campos
           let codigo='',destinatario='',direccion='',referencia='',comuna='',fecha=new Date().toISOString().slice(0,10),zona='';
           const meses={ENE:'01',FEB:'02',MAR:'03',ABR:'04',MAY:'05',JUN:'06',JUL:'07',AGO:'08',SEP:'09',OCT:'10',NOV:'11',DIC:'12'};
+          // Palabras clave que NO son comunas
+          const NO_COMUNA=/^(RESIDENCIAL|FLEX|ANILLO|DISTRIBUIDOR|PUNTO|Pack|Venta|Envio|Avenida|Quilicura|Recorta|Color|Unidad|Led)/i;
+          let flexIdx=-1;
           lineas.forEach((l,idx)=>{
-            // Código: "Envio: 4723828 3907" o "Envio:47238283907"
+            // Código
             const mCod=l.match(/Envio[:\s]+(\d[\d\s]{5,})/i);
             if(mCod&&!codigo)codigo=mCod[1].replace(/\s+/g,'');
-            // Fecha: "06 JUN" en cualquier línea
+            // Fecha
             const mFecha=l.match(/(\d{2})\s+(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC)/i);
-            if(mFecha){
-              const anio=new Date().getFullYear();
-              fecha=anio+'-'+(meses[mFecha[2].toUpperCase()]||'01')+'-'+mFecha[1];
-            }
-            // Zona y comuna
-            // Caso 1: con ANILLO (ANILLO ESTE/OESTE → siguiente línea es comuna)
-            if(/^ANILLO/i.test(l)){
-              zona=l.trim();
-              if(idx+1<lineas.length){
-                const sig=lineas[idx+1]?.trim()||'';
-                if(sig.length>2&&!/^(RESIDENCIAL|FLEX|Direcci|Referencia|Destinatario)/i.test(sig))
-                  comuna=sig.toUpperCase();
-              }
-            }
-            // Caso 2: sin ANILLO — la comuna aparece directamente después de FLEX + fecha
-            // Detectar línea FLEX con fecha y tomar las 1-2 líneas siguientes como candidato
-            if(!zona&&/FLEX/i.test(l)&&idx+1<lineas.length&&!comuna){
-              const sig=lineas[idx+1]?.trim()||'';
-              // Es comuna si: todo mayúsculas, largo >3, no es número, no empieza con keyword
-              if(sig===sig.toUpperCase()&&sig.length>3&&!/^\d/.test(sig)&&
-                 !/^(RESIDENCIAL|FLEX|Direcci|Referencia|Destinatario|DIST|Pack|Venta|Envio)/i.test(sig)){
-                comuna=sig.toUpperCase();
-              }
-            }
+            if(mFecha){fecha=new Date().getFullYear()+'-'+(meses[mFecha[2].toUpperCase()]||'01')+'-'+mFecha[1];}
+            // Marcar índice de FLEX
+            if(/FLEX/i.test(l)&&/\d{2}\s+(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC)/i.test(l))flexIdx=idx;
+            // ANILLO: marcar zona
+            if(/^ANILLO/i.test(l))zona=l.trim();
             // Dirección
             const mDir=l.match(/^Direcci[oó]n[:\s]+(.+)/i);
             if(mDir&&!direccion)direccion=mDir[1].trim();
-            // Referencia (puede haber varias líneas)
+            // Referencia
             const mRef=l.match(/^Referencia[:\s]+(.+)/i);
-            if(mRef){
-              let refVal=mRef[1].replace(/^Referencia[:\s]*/i,'').trim();
-              if(refVal)referencia=referencia?referencia+' '+refVal:refVal;
-            }
+            if(mRef){let rv=mRef[1].replace(/^Referencia[:\s]*/i,'').trim();if(rv)referencia=referencia?referencia+' '+rv:rv;}
             // Destinatario
             const mDest=l.match(/^Destinatario[:\s]+(.+)/i);
-            if(mDest&&!destinatario){
-              destinatario=mDest[1].replace(/\([^)]*\)/g,'').trim();
-            }
+            if(mDest&&!destinatario)destinatario=mDest[1].replace(/\([^)]*\)/g,'').trim();
           });
+          // Buscar comuna: primera línea TODO MAYÚSCULAS después de FLEX que no sea keyword
+          // Funciona con y sin ANILLO porque en ambos casos la comuna viene después de FLEX
+          if(flexIdx>=0&&!comuna){
+            for(let ci=flexIdx+1;ci<lineas.length&&ci<flexIdx+8;ci++){
+              const c=lineas[ci]?.trim()||'';
+              if(!c)continue;
+              const esMayus=c===c.toUpperCase()&&/[A-ZÁÉÍÓÚÑ]/.test(c);
+              if(esMayus&&c.length>3&&!NO_COMUNA.test(c)&&!/^\d/.test(c)){
+                // Evitar duplicar (PUDAHUEL PUDAHUEL → tomar solo 1)
+                // Si la siguiente igual también es la misma, tomamos esta
+                comuna=c;
+                break;
+              }
+              // Si encontramos ANILLO, la siguiente línea válida es la comuna
+              if(/^ANILLO/i.test(c)){
+                for(let ci2=ci+1;ci2<lineas.length&&ci2<ci+4;ci2++){
+                  const c2=lineas[ci2]?.trim()||'';
+                  if(c2&&c2===c2.toUpperCase()&&c2.length>3&&!NO_COMUNA.test(c2)&&!/^\d/.test(c2)){
+                    comuna=c2;break;
+                  }
+                }
+                if(comuna)break;
+              }
+              // Si llegamos a Direccion, paramos
+              if(/^Direcci/i.test(c))break;
+            }
+          }
           if(!codigo)continue;
           // Renderizar página como imagen
           let foto_etiqueta=null;
