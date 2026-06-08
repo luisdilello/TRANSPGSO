@@ -617,20 +617,32 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
   let kpi=_ref7.kpi,mensajerosDia=_ref7.mensajerosDia,db=_ref7.db,enviosLocales=_ref7.enviosLocales;
   // ── FILTRO DE PERÍODO ─────────────────────────────────────────
   const _uP=useState('semana'),periodo=_uP[0],setPeriodo=_uP[1];
+  const _uMes=useState(new Date().toISOString().slice(0,7)),mesFiltro=_uMes[0],setMesFiltro=_uMes[1];
   const _uD1=useState(''),desde=_uD1[0],setDesde=_uD1[1];
   const _uD2=useState(''),hasta=_uD2[0],setHasta=_uD2[1];
   const hoy=new Date().toISOString().slice(0,10);
   const lunesStr=(()=>{const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));return d.toISOString().slice(0,10);})();
-  function enPeriodo(fecha){
-    if(!fecha)return false;
-    if(periodo==='hoy')return fecha===hoy;
-    if(periodo==='semana')return fecha>=lunesStr&&fecha<=hoy;
-    if(periodo==='rango')return(!desde||fecha>=desde)&&(!hasta||fecha<=hasta);
+  // Fecha de ingreso al sistema = primera entrada del historial (cuando se creó)
+  function fechaIngreso(e){
+    if(e.historial&&e.historial.length>0){
+      return(e.historial[0].fecha||'').slice(0,10);
+    }
+    return e.fecha||'';
+  }
+  function enPeriodo(e){
+    const fi=fechaIngreso(e);
+    if(periodo==='hoy')return fi===hoy;
+    if(periodo==='semana')return fi>=lunesStr&&fi<=hoy;
+    if(periodo==='mes'){
+      const mes=_uMes[0]||hoy.slice(0,7);
+      return fi.startsWith(mes);
+    }
+    if(periodo==='rango')return(!desde||fi>=desde)&&(!hasta||fi<=hasta);
     return true; // 'todos'
   }
   // ── DATOS FILTRADOS ───────────────────────────────────────────
   const todos=enviosLocales||[];
-  const filtrados=todos.filter(e=>enPeriodo(e.fecha));
+  const filtrados=todos.filter(e=>enPeriodo(e));
   const total=filtrados.length;
   const porEstado={
     sin_asignar:filtrados.filter(e=>e.estado==='sin_asignar').length,
@@ -656,12 +668,13 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
   // ── COLORES ───────────────────────────────────────────────────
   const ESTADO_COLORS={sin_asignar:'#7a7d6a',asignado:'#b07d10',en_bodega:'#1a6b8a',en_ruta:'#C8A84B',entregado:'#2e7d4f',reprogramado:'#b07d10',pendiente_retiro:'#7a7d6a',cancelado:'#b03030'};
   const ESTADO_LABELS={sin_asignar:'Sin Asignar',asignado:'Asignado',en_bodega:'En Bodega',en_ruta:'En Ruta',entregado:'Entregado',reprogramado:'Reprogramado',pendiente_retiro:'Pend. Retiro',cancelado:'Cancelado'};
-  const periodos=[{val:'hoy',label:'Hoy'},{val:'semana',label:'Esta semana'},{val:'todos',label:'Todo'},{val:'rango',label:'Rango'}];
+  const periodos=[{val:'hoy',label:'Hoy'},{val:'semana',label:'Esta semana'},{val:'mes',label:'Mes'},{val:'todos',label:'Todo'},{val:'rango',label:'Rango'}];
   return React.createElement('div',null,
     // ── SELECTOR PERÍODO ──
     React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',marginBottom:20,flexWrap:'wrap'}},
       React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:2,color:'var(--text-soft)',marginRight:4}},'PERÍODO:'),
       periodos.map(p=>React.createElement('button',{key:p.val,onClick:()=>setPeriodo(p.val),style:{padding:'6px 16px',borderRadius:20,border:`1px solid ${periodo===p.val?'var(--gold)':'var(--border)'}`,background:periodo===p.val?'rgba(200,168,75,0.12)':'#fff',color:periodo===p.val?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer',transition:'all 0.15s'}},p.label)),
+      periodo==='mes'&&React.createElement('input',{type:'month',value:mesFiltro,onChange:e=>setMesFiltro(e.target.value),style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--gold)',fontSize:12,outline:'none',color:'var(--dark)'}}),
       periodo==='rango'&&React.createElement(React.Fragment,null,
         React.createElement('input',{type:'date',value:desde,onChange:e=>setDesde(e.target.value),style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12,outline:'none'}}),
         React.createElement('span',{style:{color:'var(--text-soft)',fontSize:12}},'al'),
@@ -715,7 +728,46 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
     ),
     // ── RESUMEN POR CLIENTE ──
     React.createElement('div',{className:'panel'},
-      React.createElement('div',{className:'panel-title'},'🏢 Resumen por Cliente'),
+      React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}},
+        React.createElement('div',{className:'panel-title',style:{margin:0}},'🏢 Resumen por Cliente'),
+        React.createElement('button',{
+          onClick:()=>{
+            const mes=periodo==='mes'?mesFiltro:periodo==='hoy'?hoy:periodo==='semana'?lunesStr.slice(0,7):hoy.slice(0,7);
+            const titulo='Resumen TransPgso · '+(periodo==='mes'?mesFiltro:periodo==='hoy'?'Hoy '+hoy:periodo==='semana'?'Semana '+lunesStr+' al '+hoy:'Todo el período');
+            const win=window.open('','_blank','width=900,height=700');
+            const filas=clientesSort.map(([cli,d])=>`
+              <tr>
+                <td>${cli}</td>
+                <td style="text-align:center">${d.total}</td>
+                <td style="text-align:center">${d.sin_asignar||0}</td>
+                <td style="text-align:center">${d.en_ruta||0}</td>
+                <td style="text-align:center;color:#2e7d4f;font-weight:700">${d.entregado||0}</td>
+                <td style="text-align:center">${d.reprogramado||0}</td>
+                <td style="text-align:center;color:#b03030">${d.cancelado||0}</td>
+                <td style="text-align:center">${d.total>0?((d.entregado||0)/d.total*100).toFixed(1)+'%':'—'}</td>
+              </tr>`).join('');
+            const css='body{font-family:Arial,sans-serif;padding:30px;color:#222}h1{font-size:22px;color:#3A3D2E}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#3A3D2E;color:#C8A84B;padding:10px 12px;text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase}td{padding:9px 12px;border-bottom:1px solid #eee}tr:nth-child(even){background:#faf9f5}.total-row{background:#f5f0e0!important;font-weight:700}@media print{button{display:none}}';
+            const html2='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+titulo+'</title><style>'+css+'</style></head><body>'
+              +'<h1>📊 '+titulo+'</h1>'
+              +'<div style="font-size:13px;color:#888;margin-bottom:24px">Generado: '+new Date().toLocaleString('es-CL')+' · TransPgso SpA</div>'
+              +'<table><thead><tr><th>Cliente</th><th>Total</th><th>Sin Asignar</th><th>En Ruta</th><th>Entregado</th><th>Reprog.</th><th>Cancelado</th><th>Efectividad</th></tr></thead>'
+              +'<tbody>'+filas
+              +'<tr class="total-row"><td>TOTALES</td><td style="text-align:center">'+filtrados.length+'</td>'
+              +'<td style="text-align:center">'+porEstado.sin_asignar+'</td>'
+              +'<td style="text-align:center">'+porEstado.en_ruta+'</td>'
+              +'<td style="text-align:center;color:#2e7d4f">'+porEstado.entregado+'</td>'
+              +'<td style="text-align:center">'+porEstado.reprogramado+'</td>'
+              +'<td style="text-align:center;color:#b03030">'+porEstado.cancelado+'</td>'
+              +'<td style="text-align:center">'+(filtrados.length>0?((porEstado.entregado/filtrados.length)*100).toFixed(1)+'%':'—')+'</td></tr>'
+              +'</tbody></table>'
+              +'<div style="margin-top:30px;text-align:center"><button onclick="window.print()" style="padding:10px 24px;background:#C8A84B;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">🖨 Imprimir / Guardar PDF</button></div>'
+              +'</body></html>';
+            win.document.write(html2);
+            win.document.close();
+          },
+          style:{padding:'7px 14px',borderRadius:8,border:'1px solid var(--gold)',background:'rgba(200,168,75,0.1)',color:'var(--gold)',fontWeight:700,fontSize:11,cursor:'pointer',display:'flex',alignItems:'center',gap:6}
+        },'📄 Generar Recibo')
+      ),
       clientesSort.length===0
         ?React.createElement('div',{style:{color:'var(--text-soft)',fontSize:13,textAlign:'center',padding:'20px 0'}},'Sin envíos en este período')
         :React.createElement('div',{className:'table-wrap'},
