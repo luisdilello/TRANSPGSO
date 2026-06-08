@@ -621,14 +621,17 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
     if(kpi.totalPaquetes>0)return; // ya hay datos importados, no necesita Supabase
     const hoy=new Date().toISOString().slice(0,10);
     // Primero usar envíos locales para respuesta inmediata
-    const locales=(enviosLocales||[]).filter(e=>e.fecha===hoy);
+    // Buscar la fecha más reciente con datos (hoy o ayer si aún no hay de hoy)
+    const todasFechas=[...new Set((enviosLocales||[]).map(e=>e.fecha).filter(Boolean))].sort().reverse();
+    const fechaActiva=todasFechas.find(f=>f<=hoy)||hoy;
+    const locales=(enviosLocales||[]).filter(e=>e.fecha===fechaActiva);
     if(locales.length>0){
       const tot=locales.length;
       const ent=locales.filter(e=>e.estado==='entregado').length;
       const cam=locales.filter(e=>e.estado==='en_ruta').length;
       const rep=locales.filter(e=>e.estado==='reprogramado').length;
       const can=locales.filter(e=>e.estado==='cancelado').length;
-      setKpiSB({totalPaquetes:tot,entregados:ent,enCamino:cam,reprogramados:rep,cancelados:can,fecha:hoy,obs:''});
+      setKpiSB({totalPaquetes:tot,entregados:ent,enCamino:cam,reprogramados:rep,cancelados:can,fecha:fechaActiva,obs:''});
       const menMap={};
       locales.forEach(e=>{
         const n=e.mensajero||'Sin asignar';
@@ -642,14 +645,14 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
       setMenSB(Object.values(menMap).filter(m=>m.nombre&&m.nombre!=='Sin asignar'));
     }
     // Luego sincronizar con Supabase en background
-    db.from('envios').select('*').eq('fecha',hoy).then(({data})=>{
+    db.from('envios').select('*').eq('fecha',fechaActiva).then(({data})=>{
       if(!data||!data.length)return;
       const tot=data.length;
       const ent=data.filter(e=>e.estado==='entregado').length;
       const cam=data.filter(e=>e.estado==='en_ruta').length;
       const rep=data.filter(e=>e.estado==='reprogramado').length;
       const can=data.filter(e=>e.estado==='cancelado').length;
-      setKpiSB({totalPaquetes:tot,entregados:ent,enCamino:cam,reprogramados:rep,cancelados:can,fecha:hoy,obs:''});
+      setKpiSB({totalPaquetes:tot,entregados:ent,enCamino:cam,reprogramados:rep,cancelados:can,fecha:fechaActiva,obs:''});
       const menMap={};
       data.forEach(e=>{
         const n=e.mensajero||'Sin asignar';
