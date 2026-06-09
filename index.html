@@ -1193,13 +1193,16 @@ const _useRetiroConf=useState({}),retiroConf=_useRetiroConf[0],setRetiroConf=_us
 const _useRetirocobro=useState({}),retiroCobro=_useRetirocobro[0],setRetiroCobro=_useRetirocobro[1];
 const _useExtrasModal=useState(null),extrasModal=_useExtrasModal[0],setExtrasModal=_useExtrasModal[1];
 const _useConsumoModal=useState(null),consumoModal=_useConsumoModal[0],setConsumoModal=_useConsumoModal[1];
-// Cargar retiros desde Supabase (colectas del día)
+// Cargar retiros desde localStorage (planilla) o Supabase
 React.useEffect(()=>{
+  const local=lsLoad('retiros_planilla_'+retiroFecha,[]);
+  if(local.length>0){setRetirosDB(local);return;}
   async function cargarRetiros(){
     try{
       const {data}=await db.from('colectas').select('*').eq('fecha',retiroFecha).order('created_at',{ascending:false});
-      if(data)setRetirosDB(data);
-    }catch(e){}
+      if(data&&data.length>0)setRetirosDB(data);
+      else setRetirosDB([]);
+    }catch(e){setRetirosDB([]);}
   }
   cargarRetiros();
 },[retiroFecha]);
@@ -1746,85 +1749,161 @@ function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoE
   ),
   // ── PLANILLA DE RETIROS ──────────────────────────────────────────────
   pagosTab==='retiros'&&/*#__PURE__*/React.createElement('div',null,
-    // Header y filtro de fecha
-    /*#__PURE__*/React.createElement('div',{style:{display:'flex',gap:10,alignItems:'center',marginBottom:16,flexWrap:'wrap'}},
-      /*#__PURE__*/React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)'}},        '📅 Fecha:'),
-      /*#__PURE__*/React.createElement('input',{type:'date',value:retiroFecha,onChange:e=>setRetiroFecha(e.target.value),        style:{padding:'6px 12px',borderRadius:8,border:'1px solid var(--border)',fontSize:13,outline:'none'}}),
-      /*#__PURE__*/React.createElement('span',{style:{fontSize:12,color:'var(--text-soft)'}},        retirosDB.length+' retiros registrados')
-    ),
-    retirosDB.length===0
-      ?/*#__PURE__*/React.createElement('div',{className:'info-banner'},'Sin retiros registrados para esta fecha. Los retiros se crean automáticamente desde Colecta.')
-      :/*#__PURE__*/React.createElement('div',{className:'table-wrap'},
-          /*#__PURE__*/React.createElement('table',null,
-            /*#__PURE__*/React.createElement('thead',null,
-              /*#__PURE__*/React.createElement('tr',null,
-                /*#__PURE__*/React.createElement('th',null,'Fecha'),
-                /*#__PURE__*/React.createElement('th',null,'Cliente'),
-                /*#__PURE__*/React.createElement('th',null,'Dirección'),
-                /*#__PURE__*/React.createElement('th',null,'Mensajero'),
-                /*#__PURE__*/React.createElement('th',{style:{textAlign:'center'}},'Piezas'),
-                /*#__PURE__*/React.createElement('th',{style:{textAlign:'center'}},'Confirmado'),
-                /*#__PURE__*/React.createElement('th',{style:{textAlign:'center'}},'Retirado / Bodega'),
-                /*#__PURE__*/React.createElement('th',{style:{textAlign:'center'}},'Respaldo'),
-                /*#__PURE__*/React.createElement('th',null,'Cobro a Cliente')
-              )
-            ),
-            /*#__PURE__*/React.createElement('tbody',null,
-              retirosDB.map((r,i)=>{
-                const piezas=r.piezas||r.codigos?.length||0;
-                const colorPiezas=piezas>=5?'rgba(46,125,79,0.12)':'rgba(176,48,48,0.1)';
-                const textPiezas=piezas>=5?'#2e7d4f':'#b03030';
-                const confirmado=retiroConf[r.id]||false;
-                // Retirado/En bodega: automático si existe registro en colecta (estado creado)
-                const retirado=!!r.codigo||r.codigos?.length>0;
-                // Respaldo: tiene foto de etiqueta
-                const respaldo=!!(r.foto_etiqueta||r.foto);
-                const cobro=retiroCobro[r.id]||'';
-                return /*#__PURE__*/React.createElement('tr',{key:r.id,
-                  style:{background:i%2===0?'#fff':'var(--cream)'}},
-                  /*#__PURE__*/React.createElement('td',{style:{fontSize:12,color:'var(--text-soft)'}},r.fecha||retiroFecha),
-                  /*#__PURE__*/React.createElement('td',{style:{fontWeight:700,fontSize:12}},r.cliente||'—'),
-                  /*#__PURE__*/React.createElement('td',{style:{fontSize:12,color:'var(--text-mid)',maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},r.direccion||r.address||'—'),
-                  /*#__PURE__*/React.createElement('td',{style:{fontSize:12}},r.mensajero||'—'),
-                  /*#__PURE__*/React.createElement('td',{style:{textAlign:'center'}},
-                    /*#__PURE__*/React.createElement('span',{style:{display:'inline-block',minWidth:36,padding:'3px 10px',borderRadius:20,background:colorPiezas,color:textPiezas,fontFamily:'JetBrains Mono',fontSize:13,fontWeight:700}},piezas||'—')
-                  ),
-                  // Confirmado — manual admin
-                  /*#__PURE__*/React.createElement('td',{style:{textAlign:'center'}},
-                    /*#__PURE__*/React.createElement('button',{
-                      onClick:()=>toggleConf(r.id),
-                      style:{width:28,height:28,borderRadius:6,border:`2px solid ${confirmado?'#2e7d4f':'var(--border)'}`,background:confirmado?'rgba(46,125,79,0.15)':'#fff',cursor:'pointer',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto'}
-                    },confirmado?'✅':'')
-                  ),
-                  // Retirado/Bodega — automático desde colecta
-                  /*#__PURE__*/React.createElement('td',{style:{textAlign:'center'}},
-                    retirado
-                      ?/*#__PURE__*/React.createElement('span',{style:{color:'#2e7d4f',fontSize:18}},'✅')
-                      :/*#__PURE__*/React.createElement('span',{style:{color:'var(--text-soft)',fontSize:18}},'—')
-                  ),
-                  // Respaldo — automático si tiene foto
-                  /*#__PURE__*/React.createElement('td',{style:{textAlign:'center'}},
-                    respaldo
-                      ?/*#__PURE__*/React.createElement('span',{style:{color:'#2e7d4f',fontSize:18},title:'Foto disponible'},'📷')
-                      :/*#__PURE__*/React.createElement('span',{style:{color:'var(--text-soft)',fontSize:16}},'—')
-                  ),
-                  // Cobro a cliente — manual
-                  /*#__PURE__*/React.createElement('td',null,
-                    /*#__PURE__*/React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6}},
-                      /*#__PURE__*/React.createElement('span',{style:{color:'var(--text-soft)',fontSize:12}},'$'),
-                      /*#__PURE__*/React.createElement('input',{
-                        type:'number',min:'0',placeholder:'0',value:cobro,
-                        onChange:e=>setCobroCliente(r.id,e.target.value),
-                        style:{width:80,padding:'4px 8px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,outline:'none',fontFamily:'JetBrains Mono'}
-                      })
+  // Header: fecha + botón agregar fila
+  /*#__PURE__*/React.createElement('div',{style:{display:'flex',gap:10,alignItems:'center',marginBottom:16,flexWrap:'wrap'}},
+    /*#__PURE__*/React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)'}},'📅 Fecha:'),
+    /*#__PURE__*/React.createElement('input',{type:'date',value:retiroFecha,onChange:e=>setRetiroFecha(e.target.value),
+      style:{padding:'6px 12px',borderRadius:8,border:'1px solid var(--border)',fontSize:13,outline:'none'}}),
+    /*#__PURE__*/React.createElement('button',{
+      className:'btn-add',
+      onClick:()=>{
+        const nuevo={id:Date.now(),fecha:retiroFecha,cliente:'',mensajero:'',piezas:0,confirmado:false,retirado:false,cobro:0};
+        setRetirosDB(prev=>{
+          const n=[...prev,nuevo];
+          lsSave('retiros_planilla_'+retiroFecha,n);
+          return n;
+        });
+      }
+    },'+ Agregar retiro')
+  ),
+  // Tabla
+  retirosDB.length===0
+    ?/*#__PURE__*/React.createElement('div',{className:'info-banner'},'Sin retiros para esta fecha. Haz clic en "+ Agregar retiro" para registrar uno.')
+    :/*#__PURE__*/React.createElement('div',{className:'table-wrap'},
+        /*#__PURE__*/React.createElement('table',null,
+          /*#__PURE__*/React.createElement('thead',null,
+            /*#__PURE__*/React.createElement('tr',null,
+              /*#__PURE__*/React.createElement('th',null,'Cliente'),
+              /*#__PURE__*/React.createElement('th',null,'Mensajero'),
+              /*#__PURE__*/React.createElement('th',{style:{textAlign:'center'}},'Piezas'),
+              /*#__PURE__*/React.createElement('th',{style:{textAlign:'center'}},'Confirmado'),
+              /*#__PURE__*/React.createElement('th',null,'Cobro a Cliente ($)'),
+              /*#__PURE__*/React.createElement('th',null,'')
+            )
+          ),
+          /*#__PURE__*/React.createElement('tbody',null,
+            retirosDB.map((r,i)=>{
+              const piezas=parseInt(r.piezas)||0;
+              return /*#__PURE__*/React.createElement('tr',{key:r.id,style:{background:i%2===0?'#fff':'var(--cream)'}},
+                // Cliente desplegable
+                /*#__PURE__*/React.createElement('td',null,
+                  /*#__PURE__*/React.createElement('select',{
+                    value:r.cliente||'',
+                    onChange:e=>{
+                      setRetirosDB(prev=>{const n=prev.map(x=>x.id===r.id?{...x,cliente:e.target.value}:x);lsSave('retiros_planilla_'+retiroFecha,n);return n;});
+                    },
+                    style:{width:'100%',padding:'5px 8px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,background:'var(--cream)',outline:'none'}
+                  },
+                    /*#__PURE__*/React.createElement('option',{value:''},'Seleccionar...'),
+                    clientes.filter(c=>c.activo!==false).map(c=>
+                      /*#__PURE__*/React.createElement('option',{key:c.id,value:c.nombre},c.nombre)
                     )
                   )
-                );
-              })
-            )
+                ),
+                // Mensajero desplegable
+                /*#__PURE__*/React.createElement('td',null,
+                  /*#__PURE__*/React.createElement('select',{
+                    value:r.mensajero||'',
+                    onChange:e=>{
+                      setRetirosDB(prev=>{const n=prev.map(x=>x.id===r.id?{...x,mensajero:e.target.value}:x);lsSave('retiros_planilla_'+retiroFecha,n);return n;});
+                    },
+                    style:{width:'100%',padding:'5px 8px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,background:'var(--cream)',outline:'none'}
+                  },
+                    /*#__PURE__*/React.createElement('option',{value:''},'Seleccionar...'),
+                    mensajeros.filter(m=>m.activo!==false).map(m=>
+                      /*#__PURE__*/React.createElement('option',{key:m.id,value:m.nombre},m.nombre.replace(/,\s*/g,' '))
+                    )
+                  )
+                ),
+                // Piezas (verde ≥5, rojo <5)
+                /*#__PURE__*/React.createElement('td',{style:{textAlign:'center'}},
+                  /*#__PURE__*/React.createElement('input',{
+                    type:'number',min:'0',value:r.piezas||'',
+                    onChange:e=>{
+                      setRetirosDB(prev=>{const n=prev.map(x=>x.id===r.id?{...x,piezas:parseInt(e.target.value)||0}:x);lsSave('retiros_planilla_'+retiroFecha,n);return n;});
+                    },
+                    style:{width:60,padding:'4px 8px',borderRadius:6,border:`2px solid ${piezas>=5?'#2e7d4f':piezas>0?'#b03030':'var(--border)'}`,
+                      background:piezas>=5?'rgba(46,125,79,0.08)':piezas>0?'rgba(176,48,48,0.08)':'#fff',
+                      color:piezas>=5?'#2e7d4f':piezas>0?'#b03030':'var(--text)',
+                      fontFamily:'JetBrains Mono',fontSize:13,fontWeight:700,textAlign:'center',outline:'none'}
+                  })
+                ),
+                // Confirmado
+                /*#__PURE__*/React.createElement('td',{style:{textAlign:'center'}},
+                  /*#__PURE__*/React.createElement('button',{
+                    onClick:()=>{setRetirosDB(prev=>{const n=prev.map(x=>x.id===r.id?{...x,confirmado:!x.confirmado}:x);lsSave('retiros_planilla_'+retiroFecha,n);return n;});},
+                    style:{width:30,height:30,borderRadius:6,border:`2px solid ${r.confirmado?'#2e7d4f':'var(--border)'}`,
+                      background:r.confirmado?'rgba(46,125,79,0.15)':'#fff',cursor:'pointer',fontSize:16,
+                      display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto'}
+                  },r.confirmado?'✅':'')
+                ),
+                // Cobro a cliente
+                /*#__PURE__*/React.createElement('td',null,
+                  /*#__PURE__*/React.createElement('div',{style:{display:'flex',alignItems:'center',gap:4}},
+                    /*#__PURE__*/React.createElement('span',{style:{color:'var(--text-soft)',fontSize:12}},'$'),
+                    /*#__PURE__*/React.createElement('input',{
+                      type:'number',min:'0',value:r.cobro||'',placeholder:'0',
+                      onChange:e=>{setRetirosDB(prev=>{const n=prev.map(x=>x.id===r.id?{...x,cobro:parseFloat(e.target.value)||0}:x);lsSave('retiros_planilla_'+retiroFecha,n);return n;});},
+                      style:{width:90,padding:'4px 8px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,outline:'none',fontFamily:'JetBrains Mono'}
+                    })
+                  )
+                ),
+                // Eliminar fila
+                /*#__PURE__*/React.createElement('td',null,
+                  /*#__PURE__*/React.createElement('button',{
+                    onClick:()=>{setRetirosDB(prev=>{const n=prev.filter(x=>x.id!==r.id);lsSave('retiros_planilla_'+retiroFecha,n);return n;});},
+                    style:{padding:'4px 8px',borderRadius:6,border:'none',background:'rgba(176,48,48,0.1)',color:'#b03030',cursor:'pointer',fontSize:12}
+                  },'✕')
+                )
+              );
+            })
           )
         )
-        ),
+      ),
+  // Resumen por mensajero (para conectar con ganancias)
+  retirosDB.length>0&&(()=>{
+    const porMen={};
+    retirosDB.filter(r=>r.mensajero).forEach(r=>{
+      if(!porMen[r.mensajero])porMen[r.mensajero]={retiros:0,piezas:0};
+      porMen[r.mensajero].retiros++;
+      porMen[r.mensajero].piezas+=parseInt(r.piezas)||0;
+    });
+    const entradas=Object.entries(porMen);
+    if(!entradas.length)return null;
+    return /*#__PURE__*/React.createElement('div',{className:'panel',style:{marginTop:16}},
+      /*#__PURE__*/React.createElement('div',{className:'panel-title'},'🔄 Resumen por Mensajero'),
+      /*#__PURE__*/React.createElement('div',{className:'table-wrap'},
+        /*#__PURE__*/React.createElement('table',null,
+          /*#__PURE__*/React.createElement('thead',null,
+            /*#__PURE__*/React.createElement('tr',null,
+              /*#__PURE__*/React.createElement('th',null,'Mensajero'),
+              /*#__PURE__*/React.createElement('th',{style:{textAlign:'center'}},'Retiros'),
+              /*#__PURE__*/React.createElement('th',{style:{textAlign:'center'}},'Piezas'),
+              /*#__PURE__*/React.createElement('th',null,'Tarifa Retiro'),
+              /*#__PURE__*/React.createElement('th',null,'Total Retiros')
+            )
+          ),
+          /*#__PURE__*/React.createElement('tbody',null,
+            entradas.map(([nombre,d])=>{
+              const men=mensajeros.find(m=>m.nombre===nombre)||{};
+              const tarifa=men.tarifaRetiro||500;
+              const total=d.retiros*tarifa;
+              // Guardar en localStorage para que la app rider lo lea
+              const key='transpgso_v2_retiros_rider_'+nombre.toLowerCase().replace(/[^a-z]/g,'_');
+              lsSave(key,{retiros:d.retiros,piezas:d.piezas,tarifa,total,fecha:retiroFecha});
+              return /*#__PURE__*/React.createElement('tr',{key:nombre},
+                /*#__PURE__*/React.createElement('td',{style:{fontWeight:700}},nombre.replace(/,\s*/g,' ')),
+                /*#__PURE__*/React.createElement('td',{className:'mono',style:{textAlign:'center',color:'var(--gold)',fontWeight:700}},d.retiros),
+                /*#__PURE__*/React.createElement('td',{className:'mono',style:{textAlign:'center'}},d.piezas),
+                /*#__PURE__*/React.createElement('td',{className:'mono',style:{color:'var(--text-soft)'}},'$'+(tarifa).toLocaleString('es-CL')),
+                /*#__PURE__*/React.createElement('td',{className:'mono',style:{fontWeight:700,color:'#2e7d4f'}},'$'+total.toLocaleString('es-CL'))
+              );
+            })
+          )
+        )
+      )
+    );
+  })()  ),
   // ── MODAL CONSUMO LOCAL ────────────────────────────────────────────
   consumoModal&&/*#__PURE__*/React.createElement(Modal,{title:'💳 Consumo Local — '+consumoModal.nombre,onClose:()=>setConsumoModal(null)},
     /*#__PURE__*/React.createElement('div',{style:{marginBottom:12,fontSize:13,color:'var(--text-soft)'}},
@@ -3993,6 +4072,15 @@ function GananciasRider(_ref_gr){
   const hoyCount=todosEntregados.filter(e=>fechaEntrega(e).toISOString().slice(0,10)===hoy).length;
 
   // Retiros/colectas del rider
+  // Leer retiros desde la planilla del admin (fuente principal)
+  const retirosPlanilla=React.useMemo(()=>{
+    const nombre=usuario.nombre.trim().toUpperCase();
+    const key='transpgso_v2_retiros_rider_'+nombre.toLowerCase().replace(/[^a-z]/g,'_');
+    try{
+      const d=JSON.parse(localStorage.getItem(key)||'null');
+      return d||{retiros:0,piezas:0,tarifa:tarifaRetiro,total:0};
+    }catch(e){return{retiros:0,piezas:0,tarifa:tarifaRetiro,total:0};}
+  },[colectasKey,tarifaRetiro]);
   const colectasRider=React.useMemo(()=>{
     try{
       const key='transpgso_v2_colecta_registros_'+colectasKey?.split('colecta_rider_')[1];
@@ -4010,7 +4098,8 @@ function GananciasRider(_ref_gr){
     if(periodo==='personalizado'&&fechaDesde&&fechaHasta){const desde=new Date(fechaDesde+'T00:00:00');const hasta=new Date(fechaHasta+'T23:59:59');return d>=desde&&d<=hasta;}
     return true;
   });
-  const totalRetiros=colectasFiltradas.length;
+  // Retiros del día desde planilla admin (más preciso) o colectas
+  const totalRetiros=retirosPlanilla.retiros>0?retirosPlanilla.retiros:colectasFiltradas.length;
   // Tarifa retiro + consumo + extras desde localStorage
   const [tarifaRetiro,setTarifaRetiro]=React.useState(500);
   const [consumoAdmin,setConsumoAdmin]=React.useState(0);
