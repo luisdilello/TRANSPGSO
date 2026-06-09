@@ -1241,7 +1241,11 @@ React.useEffect(()=>{
     if(!menMap[n])menMap[n]={nombre:n,tarifa:1200,tarifaRetiro:500,envios:0,retiros:0};
     menMap[n].envios++;
   });
-  return Object.values(menMap).filter(m=>m.envios>0||mensajerosDia.find(md=>md.nombre===m.nombre&&md.total>0)).map((m,i)=>{
+  // Agregar mensajeros activos que no tienen envíos esta semana
+  mensajeros.filter(m=>m.activo!==false).forEach(m=>{
+    if(!menMap[m.nombre])menMap[m.nombre]={nombre:m.nombre,tarifa:m.tarifa||1200,tarifaRetiro:m.tarifaRetiro||500,envios:0,retiros:0};
+  });
+  return Object.values(menMap).filter(m=>m.nombre&&m.nombre.trim()).map((m,i)=>{
     const tarifa=m.tarifa||1200;
     const bruto=m.envios*tarifa;
     const savedPago=lsLoad('pagos_semana',[]).find(p=>p.nombre===m.nombre)||{};
