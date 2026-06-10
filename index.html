@@ -4369,11 +4369,109 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios}){
   function imprimirEtiquetas(){
     var aImprimir=envios.filter(function(e){return seleccionados.includes(e.codigo);});
     if(!aImprimir.length){setMsg('⚠ Selecciona al menos un envío');return;}
-    var win=window.open('','_blank');
-    var html=aImprimir.map(function(e){
-      return '<div class="et"><div class="hd"><span class="lg">TRANSPGSO</span><span class="cd">'+e.codigo+'</span></div><div class="bd"><div class="row"><div class="lbl">DESTINATARIO</div><div class="val bold">'+(e.destinatario||'—')+'</div></div><div class="row"><div class="lbl">DIRECCIÓN</div><div class="val">'+(e.direccion||'—')+(e.comuna?' · '+e.comuna:'')+'</div></div><div class="row"><div class="lbl">TELÉFONO</div><div class="val">'+(e.telefono||'—')+'</div></div><div class="row"><div class="lbl">CLIENTE REMITENTE</div><div class="val bold">'+nombreCliente+'</div></div>'+(e.referencia?'<div class="row"><div class="lbl">REFERENCIA</div><div class="val italic">'+(e.referencia||'')+'</div></div>':'')+'</div><div class="ft"><div class="bc">||||| '+e.codigo+' |||||</div><div class="fd">'+(e.fecha||new Date().toLocaleDateString('es-CL'))+'</div></div></div>';
-    }).join('');
-    win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Etiquetas</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;background:#fff;padding:5mm;}.et{width:10cm;height:6cm;border:2px solid #3A3D2E;border-radius:5px;margin:3mm;display:inline-block;vertical-align:top;overflow:hidden;page-break-inside:avoid;display:inline-flex;flex-direction:column;}.hd{background:#3A3D2E;color:#C8A84B;display:flex;justify-content:space-between;align-items:center;padding:4px 8px;flex-shrink:0;}.lg{font-size:10px;font-weight:900;letter-spacing:2px;}.cd{font-family:monospace;font-size:9px;font-weight:700;}.bd{padding:5px 8px;flex:1;display:flex;flex-direction:column;gap:2px;overflow:hidden;}.row{display:flex;flex-direction:column;}.lbl{font-size:6px;text-transform:uppercase;letter-spacing:1px;color:#777;font-weight:700;}.val{font-size:9px;color:#111;}.bold{font-weight:700;font-size:10px;}.italic{font-style:italic;}.ft{border-top:1px solid #e0d8c0;padding:3px 8px;display:flex;justify-content:space-between;align-items:center;background:#FEF8EA;flex-shrink:0;}.bc{font-family:monospace;font-size:7px;color:#3A3D2E;letter-spacing:1px;}.fd{font-size:7px;color:#999;}@media print{@page{margin:5mm;}body{padding:0;}.et{border:1px solid #333;}}</style></head><body>'+html+'<script>window.onload=function(){window.print();}<\/script></body></html>');
+    var lista=aImprimir.map(function(e,i){return Object.assign({},e,{id:e.id||e.codigo||('ec'+i),monto:e.monto||0,enUnCambio:e.monto>0,rutRemitente:'',tipoCliente:'registrado'});});
+    var win=window.open('','_blank','width=600,height=800');
+    if(!win)return;
+    var etiquetasHTML=lista.map(e=>{const qrData=`CODIGO:${e.codigo}|CLIENTE:${e.cliente}|DEST:${e.destinatario}|DIR:${e.direccion}|COM:${e.comuna}|TEL:${e.telefono}|MONTO:${e.monto||0}|COD:${e.enUnCambio?'SI':'NO'}`;return`
+      <div class="etiqueta">
+        <div class="hdr">
+          <div class="logo-area">
+            <img src="${logoSrc}" onerror="this.style.display='none'" style="width:34px;height:34px;object-fit:contain;border-radius:5px"/>
+            <div><div style="font-family:'Bebas Neue',sans-serif;font-weight:900;font-size:15px;color:#C8A84B;letter-spacing:3px">TRANSPGSO</div>
+            <div style="font-size:7px;color:rgba(200,168,75,0.6);letter-spacing:2px">LAST MILE DELIVERY</div></div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:7px;color:rgba(255,255,255,0.5);letter-spacing:1px">CÓDIGO</div>
+            <div style="font-family:monospace;font-weight:700;font-size:10px;color:#C8A84B">${e.codigo}</div>
+          </div>
+        </div>
+        <div class="cliente-bar">
+          <div>
+            <div style="font-size:7px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase">Remitente / Cliente</div>
+            <div style="font-weight:900;font-size:12px">${e.cliente||'—'}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:8px;opacity:0.7">${e.fecha}</div>
+            ${e.tipoCliente==='ocasional'?'<div style="background:rgba(200,168,75,0.2);color:#2b2e20;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:700;margin-top:2px">ENVÍO OCASIONAL</div>':''}
+          </div>
+        </div>
+        ${e.enUnCambio?`
+        <div style="background:linear-gradient(135deg,#b03030,#8b1a1a);padding:10px 13px;display:flex;align-items:center;justify-content:space-between">
+          <div style="background:rgba(255,255,255,0.15);border-radius:5px;padding:4px 10px;font-size:10px;font-weight:900;color:#fff;letter-spacing:1px">💵 COBRO CONTRA ENTREGA</div>
+          <div style="text-align:right">
+            <div style="font-size:8px;color:rgba(255,255,255,0.6);letter-spacing:1px">MONTO A COBRAR</div>
+            <div style="font-size:20px;font-weight:900;color:#fff;line-height:1">$${(e.monto||0).toLocaleString('es-CL')}</div>
+          </div>
+        </div>`:''}
+        <div class="section-dest">
+          <div class="slabel">Destinatario</div>
+          <div style="font-weight:900;font-size:14px;margin-bottom:3px">${e.destinatario||'—'}</div>
+          <div style="font-size:10px">📞 ${e.telefono||'—'}</div>
+        </div>
+        <div class="section-dir">
+          <div class="slabel">Dirección de Entrega</div>
+          <div style="font-weight:700;font-size:12px;margin-bottom:4px">${e.direccion||'—'}</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="background:#2b2e20;color:#C8A84B;padding:3px 10px;border-radius:4px;font-size:10px;font-weight:900">${e.comuna||'—'}</span>
+            ${e.referencia?`<span style="font-size:9px;color:#7a7d6a">Ref: ${e.referencia}</span>`:''}
+          </div>
+        </div>
+        <div class="section-qr">
+          <div id="qr_${e.id}" class="qr-box" style="width:110px;height:110px"></div>
+          <div style="flex:1">
+            <div style="font-size:7px;color:#7a7d6a;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px">Escanea para ver detalles</div>
+            <div class="barcode">${'|'.repeat(30)}</div>
+            <div style="font-family:monospace;font-size:8px;letter-spacing:2px;color:#4a4d3a;text-align:center;margin-top:2px">${e.codigo}</div>
+            ${e.nota?`<div style="margin-top:5px;font-size:8px;color:#7a7d6a;font-style:italic">📌 ${e.nota}</div>`:''}
+          </div>
+        </div>
+        <div class="footer">
+          <span>transpgso.cl · Last Mile Delivery</span>
+          <span>Santiago, Chile</span>
+        </div>
+      </div>`;}).join('');
+    const qrScripts=lista.map(e=>`
+      try{
+        new QRCode(document.getElementById('qr_${e.id}'),{
+          text:'${JSON.stringify({codigo:e.codigo,destinatario:e.destinatario,direccion:e.direccion,comuna:e.comuna,cliente:e.cliente}).replace(/'/g,"\\'")}',
+          width:76,height:76,colorDark:'#2b2e20',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M
+        });
+      }catch(err){document.getElementById('qr_${e.id}').innerHTML='<div style="width:76px;height:76px;background:#f0e8d0"></div>';}
+    `).join('\n');
+    win.document.write(`<!DOCTYPE html><html><head>
+    <meta charset="UTF-8"/><title>Etiquetas TransPgso</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{background:#f0f0f0;display:flex;flex-wrap:wrap;gap:10px;padding:10px;justify-content:center;}
+      .etiqueta{width:377px;min-height:560px;background:#fff;border:2px solid #2b2e20;border-radius:8px;
+        font-family:Arial,sans-serif;font-size:11px;color:#2b2e20;overflow:hidden;
+        display:flex;flex-direction:column;page-break-inside:avoid;}
+      .hdr{background:#2b2e20;padding:9px 13px;display:flex;align-items:center;justify-content:space-between;}
+      .logo-area{display:flex;align-items:center;gap:9px;}
+      .cliente-bar{background:#C8A84B;padding:6px 13px;display:flex;justify-content:space-between;align-items:center;}
+      .section-dest{padding:11px 13px;border-bottom:1px dashed #e0d8c0;}
+      .section-dir{padding:9px 13px;border-bottom:1px dashed #e0d8c0;}
+      .section-qr{padding:9px 13px;display:flex;align-items:center;gap:13px;flex:1;}
+      .qr-box{background:#fff;border:1px solid #e0d8c0;border-radius:5px;padding:3px;flex-shrink:0;}
+      .barcode{font-family:monospace;font-size:22px;letter-spacing:-1px;color:#2b2e20;line-height:1;margin-bottom:3px;}
+      .footer{background:#f9f5eb;border-top:1px solid #e0d8c0;padding:5px 13px;display:flex;justify-content:space-between;font-size:8px;color:#7a7d6a;}
+      .slabel{font-size:7px;color:#7a7d6a;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:3px;}
+      @media print{
+        body{background:#fff;padding:0;gap:0;}
+        .etiqueta{border:1px solid #ccc;margin:2mm;width:100mm;min-height:150mm;}
+        @page{size:100mm 150mm;margin:0;}
+      }
+    </style>
+    </head><body>
+    ${etiquetasHTML}
+    <script>
+    window.onload=function(){
+      ${qrScripts}
+      setTimeout(function(){window.print();},800);
+    };
+    <\/script>
+    </body></html>`);
     win.document.close();
   }
 
