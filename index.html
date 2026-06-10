@@ -4763,7 +4763,7 @@ estadoSel==='siniestro'&&/*#__PURE__*/React.createElement("div",{style:{marginBo
       ),
 
       // Etiquetas tab
-      tab==='etiquetas'&&React.createElement(EtiquetasCliente,{nombreCliente:nombreCliente,envios:envios})
+      tab==='etiquetas'&&React.createElement(EtiquetasCliente,{nombreCliente:nombreCliente,envios:envios,setEnvios:setEnvios})
     ),
 
     // Modal detalle envío
@@ -4786,63 +4786,306 @@ estadoSel==='siniestro'&&/*#__PURE__*/React.createElement("div",{style:{marginBo
   );
 }
 
-function EtiquetasCliente({nombreCliente,envios}){
+function EtiquetasCliente({nombreCliente,envios,setEnvios}){
   var _sel=useState([]),seleccionados=_sel[0],setSeleccionados=_sel[1];
-  var todos=envios;
+  var _tab=useState('lista'),subTab=_tab[0],setSubTab=_tab[1];
+  var _fm=useState(false),showForm=_fm[0],setShowForm=_fm[1];
+  var _guardando=useState(false),guardando=_guardando[0],setGuardando=_guardando[1];
+  var _form=useState({destinatario:'',telefono:'',direccion:'',comuna:'',referencia:'',monto:''}),form=_form[0],setForm=_form[1];
+  var _preview=useState([]),preview=_preview[0],setPreview=_preview[1];
+  var _msg=useState(''),msg=_msg[0],setMsg=_msg[1];
+  var fileRef=React.useRef();
+
+  // Obtener próximo correlativo PGSO desde Supabase
+  async function getSiguienteCodigo(){
+    try{
+      var res=await db.from('envios').select('codigo').like('codigo','PGSO%').order('codigo',{ascending:false}).limit(1);
+      if(res.data&&res.data.length>0){
+        var last=res.data[0].codigo;
+        var num=parseInt(last.replace('PGSO',''))||0;
+        return 'PGSO'+String(num+1).padStart(9,'0');
+      }
+      return 'PGSO000000001';
+    }catch(e){
+      // Fallback: usar localStorage
+      var n=parseInt(localStorage.getItem('transpgso_pgso_counter')||'0')+1;
+      localStorage.setItem('transpgso_pgso_counter',String(n));
+      return 'PGSO'+String(n).padStart(9,'0');
+    }
+  }
+
+  // Guardar envío individual
+  async function guardarIndividual(){
+    if(!form.destinatario||!form.direccion){setMsg('⚠ Completa destinatario y dirección');return;}
+    setGuardando(true);setMsg('');
+    try{
+      var codigo=await getSiguienteCodigo();
+      var nuevo={
+        codigo:codigo,cliente:nombreCliente,
+        destinatario:form.destinatario.trim(),telefono:form.telefono.trim(),
+        direccion:form.direccion.trim(),comuna:form.comuna.trim(),
+        referencia:form.referencia.trim(),monto:parseFloat(form.monto)||0,
+        fecha:new Date().toISOString().slice(0,10),
+        estado:'sin_asignar',mensajero:'',nota:'',fuente:'cliente',
+        historial:[{fecha:new Date().toISOString(),estado:'sin_asignar',nota:'Ingresado por cliente '+nombreCliente}]
+      };
+      // Guardar en Supabase
+      await db.from('envios').insert({
+        codigo:nuevo.codigo,cliente:nuevo.cliente,destinatario:nuevo.destinatario,
+        telefono:nuevo.telefono,direccion:nuevo.direccion,comuna:nuevo.comuna,
+        referencia:nuevo.referencia,monto:nuevo.monto,fecha:nuevo.fecha,
+        estado:nuevo.estado,mensajero:'',nota:'',fuente:'cliente'
+      });
+      // Guardar en localStorage para notificación admin
+      var notifs=JSON.parse(localStorage.getItem('transpgso_v2_notificaciones')||'[]');
+      notifs.unshift({id:Date.now(),tipo:'nuevo_envio',cliente:nombreCliente,codigo:nuevo.codigo,fecha:new Date().toISOString(),leida:false});
+      localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifs.slice(0,100)));
+      // Actualizar estado local
+      var local=lsLoad('gestion_envios',[]);
+      lsSave('gestion_envios',[nuevo,...local]);
+      setEnvios(function(prev){return[nuevo,...prev];});
+      setMsg('✓ Envío '+codigo+' creado correctamente');
+      setForm({destinatario:'',telefono:'',direccion:'',comuna:'',referencia:'',monto:''});
+      setSeleccionados(function(p){return[...p,nuevo.codigo];});
+    }catch(e){setMsg('⚠ Error: '+e.message);}
+    setGuardando(false);
+  }
+
+  // Carga masiva desde Excel
+  function procesarExcel(file){
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      try{
+        var wb=XLSX.read(ev.target.result,{type:'array'});
+        var ws=wb.Sheets[wb.SheetNames[0]];
+        var rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
+        if(!rows.length){setMsg('⚠ Archivo vacío');return;}
+        var cols_ok=rows[0].hasOwnProperty('Destinatario')||rows[0].hasOwnProperty('destinatario');
+        if(!cols_ok){setMsg('⚠ Usa la plantilla descargable. Columnas requeridas: Destinatario, Teléfono, Dirección, Comuna');return;}
+        var parsed=rows.map(function(r){return{
+          destinatario:(r['Destinatario']||r['destinatario']||'').toString().trim(),
+          telefono:(r['Teléfono']||r['Telefono']||r['telefono']||'').toString().trim(),
+          direccion:(r['Dirección']||r['Direccion']||r['direccion']||'').toString().trim(),
+          comuna:(r['Comuna']||r['comuna']||'').toString().trim(),
+          referencia:(r['Referencia']||r['referencia']||'').toString().trim(),
+          monto:parseFloat(String(r['Monto']||r['monto']||'0').replace(/[^0-9.]/g,''))||0
+        };}).filter(function(r){return r.destinatario&&r.direccion;});
+        setPreview(parsed);
+        setMsg('✓ '+parsed.length+' envíos listos para cargar. Revisa y confirma.');
+      }catch(e){setMsg('⚠ Error al leer el archivo: '+e.message);}
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  async function confirmarCargaMasiva(){
+    if(!preview.length)return;
+    setGuardando(true);setMsg('Procesando '+preview.length+' envíos...');
+    var creados=0;var errores=0;
+    for(var i=0;i<preview.length;i++){
+      try{
+        var codigo=await getSiguienteCodigo();
+        var r=preview[i];
+        var nuevo={codigo:codigo,cliente:nombreCliente,destinatario:r.destinatario,telefono:r.telefono,direccion:r.direccion,comuna:r.comuna,referencia:r.referencia,monto:r.monto,fecha:new Date().toISOString().slice(0,10),estado:'sin_asignar',mensajero:'',nota:'',fuente:'cliente',historial:[{fecha:new Date().toISOString(),estado:'sin_asignar',nota:'Carga masiva por '+nombreCliente}]};
+        await db.from('envios').insert({codigo:nuevo.codigo,cliente:nuevo.cliente,destinatario:nuevo.destinatario,telefono:nuevo.telefono,direccion:nuevo.direccion,comuna:nuevo.comuna,referencia:nuevo.referencia,monto:nuevo.monto,fecha:nuevo.fecha,estado:nuevo.estado,mensajero:'',nota:'',fuente:'cliente'});
+        var local=lsLoad('gestion_envios',[]);lsSave('gestion_envios',[nuevo,...local]);
+        setEnvios(function(prev){return[nuevo,...prev];});
+        setSeleccionados(function(p){return[...p,nuevo.codigo];});
+        creados++;
+      }catch(e){errores++;}
+    }
+    // Notificación admin
+    var notifs=JSON.parse(localStorage.getItem('transpgso_v2_notificaciones')||'[]');
+    notifs.unshift({id:Date.now(),tipo:'carga_masiva',cliente:nombreCliente,cantidad:creados,fecha:new Date().toISOString(),leida:false});
+    localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifs.slice(0,100)));
+    setPreview([]);
+    setMsg('✓ '+creados+' envíos creados'+(errores>0?' ('+errores+' errores)':''));
+    setGuardando(false);
+  }
+
+  // Descargar plantilla Excel
+  function descargarPlantilla(){
+    var headers=['Destinatario','Teléfono','Dirección','Comuna','Referencia','Monto'];
+    var ejemplo=[['Juan Pérez','+56 9 1234 5678','Av. Providencia 1234, Depto 5','Providencia','Frágil - manejar con cuidado',5990],['María González','+56 9 8765 4321','Las Condes 456','Las Condes','','0']];
+    exportToExcel('Plantilla_Envios_TransPgso',[{name:'Plantilla',headers:headers,rows:ejemplo}]);
+  }
+
   function toggleSel(id){setSeleccionados(function(p){return p.includes(id)?p.filter(function(x){return x!==id;}):p.concat([id]);});}
-  function selTodo(){setSeleccionados(todos.map(function(e){return e.id||e.codigo;}));}
+  function selTodo(){setSeleccionados(envios.map(function(e){return e.codigo;}));}
   function deselTodo(){setSeleccionados([]);}
 
   function imprimirEtiquetas(){
-    var etiquetasAImprimir=todos.filter(function(e){return seleccionados.includes(e.id||e.codigo);});
-    if(etiquetasAImprimir.length===0){alert('Selecciona al menos un envío');return;}
+    var aImprimir=envios.filter(function(e){return seleccionados.includes(e.codigo);});
+    if(!aImprimir.length){setMsg('⚠ Selecciona al menos un envío');return;}
     var win=window.open('','_blank');
-    var eticsHTML=etiquetasAImprimir.map(function(e){
-      return '<div class="etiqueta"><div class="header-et"><div class="logo-et">TRANSPGSO</div><div class="cod">'+e.codigo+'</div></div><div class="body-et"><div class="dest"><div class="label-et">DESTINATARIO</div><div class="valor">'+( e.destinatario||'—')+'</div></div><div class="dir"><div class="label-et">DIRECCIÓN</div><div class="valor">'+(e.direccion||'—')+(e.comuna?' · '+e.comuna:'')+'</div></div><div class="tel"><div class="label-et">TELÉFONO</div><div class="valor">'+(e.telefono||'—')+'</div></div><div class="cli"><div class="label-et">CLIENTE</div><div class="valor">'+nombreCliente+'</div></div></div><div class="footer-et"><div class="barcode">'+e.codigo+'</div><div class="fecha">'+( e.fecha||new Date().toLocaleDateString('es-CL'))+'</div></div></div>';
+    var html=aImprimir.map(function(e){
+      return '<div class="et"><div class="hd"><span class="lg">TRANSPGSO</span><span class="cd">'+e.codigo+'</span></div><div class="bd"><div class="row"><div class="lbl">DESTINATARIO</div><div class="val bold">'+(e.destinatario||'—')+'</div></div><div class="row"><div class="lbl">DIRECCIÓN</div><div class="val">'+(e.direccion||'—')+(e.comuna?' · '+e.comuna:'')+'</div></div><div class="row"><div class="lbl">TELÉFONO</div><div class="val">'+(e.telefono||'—')+'</div></div><div class="row"><div class="lbl">CLIENTE REMITENTE</div><div class="val bold">'+nombreCliente+'</div></div>'+(e.referencia?'<div class="row"><div class="lbl">REFERENCIA</div><div class="val italic">'+(e.referencia||'')+'</div></div>':'')+'</div><div class="ft"><div class="bc">||||| '+e.codigo+' |||||</div><div class="fd">'+(e.fecha||new Date().toLocaleDateString('es-CL'))+'</div></div></div>';
     }).join('');
-    win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Etiquetas '+nombreCliente+'</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;background:#fff;}.etiqueta{width:10cm;height:6cm;border:2px solid #3A3D2E;border-radius:6px;margin:4mm;display:inline-block;overflow:hidden;page-break-inside:avoid;vertical-align:top;}.header-et{background:#3A3D2E;color:#C8A84B;display:flex;justify-content:space-between;align-items:center;padding:4px 8px;}.logo-et{font-size:10px;font-weight:900;letter-spacing:2px;}.cod{font-family:monospace;font-size:9px;font-weight:700;}.body-et{padding:6px 8px;flex:1;display:flex;flex-direction:column;gap:3px;}.label-et{font-size:6px;text-transform:uppercase;letter-spacing:1px;color:#666;font-weight:700;}.valor{font-size:9px;font-weight:700;color:#1a1a1a;}.footer-et{border-top:1px solid #e0d8c0;padding:4px 8px;display:flex;justify-content:space-between;align-items:center;background:#FEF8EA;}.barcode{font-family:monospace;font-size:8px;color:#3A3D2E;letter-spacing:2px;}.fecha{font-size:7px;color:#999;}@media print{body{margin:0;}.etiqueta{border:1px solid #333;}}</style></head><body>'+eticsHTML+'<script>window.onload=function(){window.print();}<\/script></body></html>');
+    win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Etiquetas</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;background:#fff;padding:5mm;}.et{width:10cm;height:6cm;border:2px solid #3A3D2E;border-radius:5px;margin:3mm;display:inline-block;vertical-align:top;overflow:hidden;page-break-inside:avoid;display:inline-flex;flex-direction:column;}.hd{background:#3A3D2E;color:#C8A84B;display:flex;justify-content:space-between;align-items:center;padding:4px 8px;flex-shrink:0;}.lg{font-size:10px;font-weight:900;letter-spacing:2px;}.cd{font-family:monospace;font-size:9px;font-weight:700;}.bd{padding:5px 8px;flex:1;display:flex;flex-direction:column;gap:2px;overflow:hidden;}.row{display:flex;flex-direction:column;}.lbl{font-size:6px;text-transform:uppercase;letter-spacing:1px;color:#777;font-weight:700;}.val{font-size:9px;color:#111;}.bold{font-weight:700;font-size:10px;}.italic{font-style:italic;}.ft{border-top:1px solid #e0d8c0;padding:3px 8px;display:flex;justify-content:space-between;align-items:center;background:#FEF8EA;flex-shrink:0;}.bc{font-family:monospace;font-size:7px;color:#3A3D2E;letter-spacing:1px;}.fd{font-size:7px;color:#999;}@media print{@page{margin:5mm;}body{padding:0;}.et{border:1px solid #333;}}</style></head><body>'+html+'<script>window.onload=function(){window.print();}<\/script></body></html>');
     win.document.close();
   }
 
+  var btnSub=function(v,l){return React.createElement('button',{onClick:function(){setSubTab(v);setMsg('');},style:{padding:'6px 16px',borderRadius:8,border:'1px solid '+(subTab===v?'var(--gold)':'var(--border)'),background:subTab===v?'rgba(200,168,75,0.12)':'#fff',color:subTab===v?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer'}},l);};
+
   return React.createElement('div',null,
+    // Header
     React.createElement('div',{className:'section-head'},
       React.createElement('div',{className:'section-title'},'Mis ',React.createElement('span',null,'Etiquetas')),
-      React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center'}},
-        React.createElement('button',{className:'btn-secondary',onClick:selTodo},'Seleccionar todos'),
-        React.createElement('button',{className:'btn-secondary',onClick:deselTodo},'Limpiar'),
-        React.createElement('button',{className:'btn-primary',onClick:imprimirEtiquetas,disabled:seleccionados.length===0},'🖨 Imprimir '+( seleccionados.length>0?seleccionados.length+' etiquetas':'etiquetas'))
+      React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}},
+        btnSub('lista','📋 Mis Envíos'),
+        btnSub('nuevo','➕ Nuevo Envío'),
+        btnSub('masiva','📥 Carga Masiva'),
+        subTab==='lista'&&React.createElement(React.Fragment,null,
+          React.createElement('div',{style:{width:1,height:20,background:'var(--border)',margin:'0 4px'}}),
+          React.createElement('button',{className:'btn-secondary',onClick:selTodo},'Sel. todos'),
+          React.createElement('button',{className:'btn-secondary',onClick:deselTodo},'Limpiar'),
+          React.createElement('button',{className:'btn-primary',onClick:imprimirEtiquetas,disabled:seleccionados.length===0,style:{whiteSpace:'nowrap'}},'🖨 Imprimir '+(seleccionados.length>0?'('+seleccionados.length+')':''))
+        )
       )
     ),
-    todos.length===0?React.createElement('div',{className:'info-banner'},'Sin envíos disponibles para generar etiquetas.'):
-    React.createElement('div',{className:'table-wrap'},
-      React.createElement('table',null,
-        React.createElement('thead',null,
-          React.createElement('tr',null,
-            React.createElement('th',{style:{width:40}},React.createElement('input',{type:'checkbox',checked:seleccionados.length===todos.length&&todos.length>0,onChange:function(){seleccionados.length===todos.length?deselTodo():selTodo();}})),
-            React.createElement('th',null,'Código'),
-            React.createElement('th',null,'Destinatario'),
-            React.createElement('th',null,'Dirección'),
-            React.createElement('th',null,'Estado')
+
+    msg&&React.createElement('div',{style:{margin:'0 0 16px',padding:'10px 14px',borderRadius:8,background:msg.startsWith('✓')?'rgba(46,125,79,0.1)':'rgba(200,168,75,0.1)',border:'1px solid '+(msg.startsWith('✓')?'var(--success)':'var(--warning)'),fontSize:13,color:msg.startsWith('✓')?'var(--success)':'var(--text)',fontWeight:600}},msg),
+
+    // Tab: Nuevo envío individual
+    subTab==='nuevo'&&React.createElement('div',{className:'panel'},
+      React.createElement('div',{className:'panel-title'},'➕ Nuevo Envío Individual'),
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}},
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',{className:'form-label'},'Destinatario *'),
+          React.createElement('input',{className:'form-input',value:form.destinatario,placeholder:'Nombre completo',onChange:function(e){setForm(function(p){return Object.assign({},p,{destinatario:e.target.value});});}})
+        ),
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',{className:'form-label'},'Teléfono'),
+          React.createElement('input',{className:'form-input',value:form.telefono,placeholder:'+56 9 XXXX XXXX',onChange:function(e){setForm(function(p){return Object.assign({},p,{telefono:e.target.value});});}})
+        ),
+        React.createElement('div',{className:'form-group',style:{gridColumn:'span 2'}},
+          React.createElement('label',{className:'form-label'},'Dirección *'),
+          React.createElement('input',{className:'form-input',value:form.direccion,placeholder:'Av. Ejemplo 1234, Depto 5',onChange:function(e){setForm(function(p){return Object.assign({},p,{direccion:e.target.value});});}})
+        ),
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',{className:'form-label'},'Comuna'),
+          React.createElement('input',{className:'form-input',value:form.comuna,placeholder:'Providencia',onChange:function(e){setForm(function(p){return Object.assign({},p,{comuna:e.target.value});});}})
+        ),
+        React.createElement('div',{className:'form-group'},
+          React.createElement('label',{className:'form-label'},'Monto cobro (si aplica)'),
+          React.createElement('input',{className:'form-input',type:'number',value:form.monto,placeholder:'0',onChange:function(e){setForm(function(p){return Object.assign({},p,{monto:e.target.value});});}})
+        ),
+        React.createElement('div',{className:'form-group',style:{gridColumn:'span 2'}},
+          React.createElement('label',{className:'form-label'},'Referencia / Instrucciones'),
+          React.createElement('input',{className:'form-input',value:form.referencia,placeholder:'Frágil, dejar en portería, etc.',onChange:function(e){setForm(function(p){return Object.assign({},p,{referencia:e.target.value});});}})
+        )
+      ),
+      React.createElement('div',{style:{marginTop:16,display:'flex',gap:8,justifyContent:'flex-end'}},
+        React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',alignSelf:'center',flex:1}},'El código PGSO se asignará automáticamente en correlativo.'),
+        React.createElement('button',{className:'btn-primary',onClick:guardarIndividual,disabled:guardando,style:{padding:'10px 24px'}},guardando?'Guardando...':'✓ Crear Envío y Generar Etiqueta')
+      )
+    ),
+
+    // Tab: Carga masiva
+    subTab==='masiva'&&React.createElement('div',null,
+      React.createElement('div',{className:'panel',style:{marginBottom:16}},
+        React.createElement('div',{className:'panel-title'},'📥 Carga Masiva desde Excel'),
+        React.createElement('div',{style:{fontSize:13,color:'var(--text-soft)',marginBottom:16}},'Descarga la plantilla, completa los datos de tus envíos y sube el archivo.'),
+        React.createElement('div',{style:{display:'flex',gap:12,marginBottom:20,flexWrap:'wrap'}},
+          React.createElement('button',{className:'btn-secondary',onClick:descargarPlantilla,style:{padding:'10px 20px'}},
+            '⬇ Descargar Plantilla Excel'
+          ),
+          React.createElement('div',{style:{flex:1,minWidth:200}},
+            React.createElement('div',{
+              style:{border:'2px dashed var(--gold)',borderRadius:10,padding:'20px',textAlign:'center',cursor:'pointer',background:'rgba(200,168,75,0.04)'},
+              onClick:function(){fileRef.current&&fileRef.current.click();},
+              onDragOver:function(e){e.preventDefault();},
+              onDrop:function(e){e.preventDefault();var f=e.dataTransfer.files[0];if(f)procesarExcel(f);}
+            },
+              React.createElement('div',{style:{fontSize:28,marginBottom:8}},'📂'),
+              React.createElement('div',{style:{fontWeight:700,color:'var(--dark)',marginBottom:4}},'Arrastra tu Excel aquí o haz clic'),
+              React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)'}},'Formatos: .xlsx, .xls'),
+              React.createElement('input',{ref:fileRef,type:'file',accept:'.xlsx,.xls',style:{display:'none'},onChange:function(e){if(e.target.files[0])procesarExcel(e.target.files[0]);}})
+            )
           )
         ),
-        React.createElement('tbody',null,
-          todos.map(function(e,i){
-            var id=e.id||e.codigo;
-            var sel=seleccionados.includes(id);
-            var ei=estadoInfo?estadoInfo(e.estado):{label:e.estado,color:'#666'};
-            return React.createElement('tr',{key:id,style:{background:sel?'rgba(200,168,75,0.08)':i%2===0?'#fff':'var(--cream)',cursor:'pointer'},onClick:function(){toggleSel(id);}},
-              React.createElement('td',{style:{textAlign:'center'}},React.createElement('input',{type:'checkbox',checked:sel,onChange:function(){toggleSel(id);},onClick:function(ev){ev.stopPropagation();}})),
-              React.createElement('td',{style:{fontFamily:'JetBrains Mono',fontSize:11,fontWeight:700}},e.codigo),
-              React.createElement('td',{style:{fontSize:12}},e.destinatario||'—'),
-              React.createElement('td',{style:{fontSize:11,color:'var(--text-mid)'}},e.direccion||'—'),
-              React.createElement('td',null,React.createElement('span',{style:{padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:700,color:ei.color||'#333'}},ei.label||e.estado))
-            );
-          })
+        React.createElement('div',{style:{background:'var(--cream)',borderRadius:8,padding:'12px 16px',border:'1px solid var(--border)',fontSize:12}},
+          React.createElement('div',{style:{fontWeight:700,marginBottom:8,color:'var(--dark)'}},'📋 Columnas requeridas en la plantilla:'),
+          React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
+            ['Destinatario','Teléfono','Dirección','Comuna','Referencia','Monto'].map(function(c){
+              return React.createElement('span',{key:c,style:{background:'rgba(200,168,75,0.15)',color:'var(--dark)',padding:'3px 10px',borderRadius:20,fontFamily:'JetBrains Mono',fontSize:11,fontWeight:700}},c);
+            })
+          )
+        )
+      ),
+      preview.length>0&&React.createElement('div',{className:'panel'},
+        React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
+          React.createElement('div',{className:'panel-title',style:{marginBottom:0}},'Vista previa — '+preview.length+' envíos'),
+          React.createElement('button',{className:'btn-primary',onClick:confirmarCargaMasiva,disabled:guardando},guardando?'Cargando...':'✓ Confirmar y Crear '+preview.length+' Envíos')
+        ),
+        React.createElement('div',{className:'table-wrap'},
+          React.createElement('table',null,
+            React.createElement('thead',null,
+              React.createElement('tr',null,
+                React.createElement('th',null,'#'),
+                React.createElement('th',null,'Destinatario'),
+                React.createElement('th',null,'Dirección'),
+                React.createElement('th',null,'Comuna'),
+                React.createElement('th',null,'Teléfono'),
+                React.createElement('th',null,'Monto')
+              )
+            ),
+            React.createElement('tbody',null,
+              preview.slice(0,20).map(function(r,i){
+                return React.createElement('tr',{key:i,style:{background:i%2===0?'#fff':'var(--cream)'}},
+                  React.createElement('td',{style:{textAlign:'center',color:'var(--text-soft)',fontFamily:'JetBrains Mono',fontSize:11}},i+1),
+                  React.createElement('td',{style:{fontWeight:600}},r.destinatario),
+                  React.createElement('td',{style:{fontSize:11,color:'var(--text-mid)'}},r.direccion),
+                  React.createElement('td',null,r.comuna||'—'),
+                  React.createElement('td',{style:{fontFamily:'JetBrains Mono',fontSize:11}},r.telefono||'—'),
+                  React.createElement('td',{style:{fontFamily:'JetBrains Mono',fontSize:11,color:'var(--success)'}},r.monto>0?'$'+r.monto.toLocaleString('es-CL'):'—')
+                );
+              }),
+              preview.length>20&&React.createElement('tr',null,
+                React.createElement('td',{colSpan:6,style:{textAlign:'center',padding:'10px',color:'var(--text-soft)',fontSize:12}},'... y '+(preview.length-20)+' más')
+              )
+            )
+          )
+        )
+      )
+    ),
+
+    // Tab: Lista de envíos
+    subTab==='lista'&&React.createElement('div',null,
+      envios.length===0?React.createElement('div',{className:'info-banner'},'Aún no tienes envíos. Usa "➕ Nuevo Envío" o "📥 Carga Masiva" para comenzar.'):
+      React.createElement('div',{className:'table-wrap'},
+        React.createElement('table',null,
+          React.createElement('thead',null,
+            React.createElement('tr',null,
+              React.createElement('th',{style:{width:40}},React.createElement('input',{type:'checkbox',checked:seleccionados.length===envios.length&&envios.length>0,onChange:function(){seleccionados.length===envios.length?deselTodo():selTodo();}})),
+              React.createElement('th',null,'Código'),
+              React.createElement('th',null,'Destinatario'),
+              React.createElement('th',null,'Dirección'),
+              React.createElement('th',null,'Comuna'),
+              React.createElement('th',null,'Estado'),
+              React.createElement('th',null,'Fecha')
+            )
+          ),
+          React.createElement('tbody',null,
+            envios.map(function(e,i){
+              var sel=seleccionados.includes(e.codigo);
+              var ei=estadoInfo?estadoInfo(e.estado):{label:e.estado,color:'#666'};
+              return React.createElement('tr',{key:e.codigo,style:{background:sel?'rgba(200,168,75,0.08)':i%2===0?'#fff':'var(--cream)',cursor:'pointer'},onClick:function(){toggleSel(e.codigo);}},
+                React.createElement('td',{style:{textAlign:'center'}},React.createElement('input',{type:'checkbox',checked:sel,onChange:function(){toggleSel(e.codigo);},onClick:function(ev){ev.stopPropagation();}})),
+                React.createElement('td',{style:{fontFamily:'JetBrains Mono',fontSize:11,fontWeight:700}},e.codigo),
+                React.createElement('td',{style:{fontSize:12}},e.destinatario||'—'),
+                React.createElement('td',{style:{fontSize:11,color:'var(--text-mid)',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis'}},e.direccion||'—'),
+                React.createElement('td',null,e.comuna?React.createElement('span',{style:{background:'var(--dark-deep)',color:'var(--gold)',padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:700}},e.comuna):'—'),
+                React.createElement('td',null,React.createElement('span',{style:{padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:700,color:ei.color||'#333'}},ei.label||e.estado)),
+                React.createElement('td',{style:{fontFamily:'JetBrains Mono',fontSize:11,color:'var(--text-soft)'}},e.fecha||'—')
+              );
+            })
+          )
         )
       )
     )
   );
 }
+
 function App(){useEffect(()=>{try{const saved=localStorage.getItem('transpgso_v1_mensajeros');if(saved){const parsed=JSON.parse(saved);const nombres=parsed.map(m=>m.nombre);const hayDuplicados=new Set(nombres).size<nombres.length;const muchosMensajeros=parsed.length>40;const muchasTarifas1800=parsed.filter(m=>m.tarifa===1800).length>15;if(hayDuplicados||muchosMensajeros||muchasTarifas1800){['mensajeros','pagos_semana','cierre_semanas','cierre_colecta'].forEach(k=>{localStorage.removeItem('transpgso_v1_'+k);});console.log('Migración v2: duplicados eliminados');}}}catch(e){}},[]);const _useState100=useState('dashboard'),tab=_useState100[0],setTab=_useState100[1];const _useState101=useState(()=>lsLoad('clientes',INIT_CLIENTES)),clientes=_useState101[0],setClientes=_useState101[1];const _useState102=useState(()=>lsLoad('mensajeros',INIT_MENSAJEROS)),mensajeros=_useState102[0],setMensajeros=_useState102[1];const _useState103=useState(()=>lsLoad('mensajerosDia',[])),mensajerosDia=_useState103[0],setMensajerosDia=_useState103[1];const _useState104=useState(()=>lsLoad('kpi',{fecha:'',totalPaquetes:0,entregados:0,enCamino:0,reprogramados:0,cancelados:0,obs:''})),kpi=_useState104[0],setKpi=_useState104[1];const _useState105=useState(null),toastMsg=_useState105[0],setToastMsg=_useState105[1];const _useState106=useState(()=>lsLoad('session_usuario',null)),usuarioActivo=_useState106[0],setUsuarioActivo=_useState106[1];const _useState107=useState(()=>lsLoad('session_perfil',null)),perfil=_useState107[0],setPerfil=_useState107[1];const _useState108=useState(false),showManifiesto=_useState108[0],setShowManifiesto=_useState108[1];const _useState109=useState([]),enviosSupabase=_useState109[0],setEnviosSupabase=_useState109[1];
 const _useState110=useState(()=>lsLoad('gestion_envios',[])),enviosGestion=_useState110[0],setEnviosGestion=_useState110[1];const toast=msg=>setToastMsg(msg);useEffect(()=>{lsSave('clientes',clientes);},[clientes]);useEffect(()=>{
   lsSave('mensajeros',mensajeros);
