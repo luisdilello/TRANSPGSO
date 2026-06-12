@@ -1236,7 +1236,7 @@ function PlanillaRetiros({clientes,mensajeros,retirosDB,setRetirosDB,retiroFecha
         if(i!==idx)return r;
         var actualizado=Object.assign({},r,{[campo]:valor});
         // Calcular cobro automático
-        if(campo==='retirado'&&valor===true&&actualizado.mensajero){
+        if(campo==='confirmado'&&valor===true&&actualizado.mensajero){
           // Notificar al mensajero y registrar el retiro en su historial
           var keyRetiro='transpgso_v2_retiros_rider_'+actualizado.mensajero.toLowerCase().replace(/[^a-z]/g,'_');
           try{
@@ -1253,6 +1253,18 @@ function PlanillaRetiros({clientes,mensajeros,retirosDB,setRetirosDB,retiroFecha
             var notifs=JSON.parse(localStorage.getItem(notifKey)||'[]');
             notifs.unshift({id:Date.now(),tipo:'retiro_asignado',cliente:actualizado.cliente||'',direccion:actualizado.direccion||'',fecha:new Date().toISOString(),pago:pagoEsteRetiro,leida:false});
             localStorage.setItem(notifKey,JSON.stringify(notifs.slice(0,50)));
+          }catch(ex){}
+        }
+        if(campo==='retirado'&&valor===true){
+          // Al marcar retirado, automáticamente poner en bodega
+          actualizado.enBodega=true;
+        }
+        if(campo==='respaldos'&&valor===true){
+          // Notificar al admin que hay respaldos nuevos
+          try{
+            var notifAdmin=JSON.parse(localStorage.getItem('transpgso_v2_notificaciones')||'[]');
+            notifAdmin.unshift({id:Date.now(),tipo:'respaldos_retiro',cliente:actualizado.cliente||'',mensajero:actualizado.mensajero||'',fecha:new Date().toISOString(),leida:false});
+            localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifAdmin.slice(0,100)));
           }catch(ex){}
         }
         if(campo==='piezas'){
@@ -3416,16 +3428,99 @@ function ColectaRider(_ref_cr){
 
   if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
     React.createElement('div',
-    retirosNotif.length>0&&React.createElement('div',{style:{margin:'12px 16px 0',background:'rgba(200,168,75,0.15)',border:'1px solid var(--gold)',borderRadius:10,padding:'12px 14px'}},
-      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}},
-        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--gold)'}},'🚚 '+retirosNotif.length+' RETIRO'+(retirosNotif.length>1?'S':'')+' ASIGNADO'+(retirosNotif.length>1?'S':'')),
-        React.createElement('button',{onClick:marcarRetirosLeidos,style:{padding:'3px 10px',borderRadius:6,border:'none',background:'rgba(200,168,75,0.2)',color:'var(--gold)',cursor:'pointer',fontSize:11,fontWeight:700}},'OK ✓')
+    retirosNotif.length>0&&React.createElement('div',{style:{margin:'12px 16px 0',background:'rgba(200,168,75,0.12)',border:'2px solid var(--gold)',borderRadius:12,padding:'14px',flexShrink:0}},
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}},
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:15,letterSpacing:1.5,color:'var(--gold)'}},'🚚 RETIROS ASIGNADOS ('+retirosNotif.length+')'),
+        React.createElement('button',{onClick:marcarRetirosLeidos,style:{padding:'4px 12px',borderRadius:6,border:'none',background:'rgba(200,168,75,0.3)',color:'var(--gold)',cursor:'pointer',fontSize:11,fontWeight:700}},'Cerrar')
       ),
-      retirosNotif.map(function(n,i){return React.createElement('div',{key:n.id||i,style:{background:'rgba(255,255,255,0.05)',borderRadius:7,padding:'8px 10px',marginBottom:i<retirosNotif.length-1?6:0,fontSize:12}},
-        React.createElement('div',{style:{fontWeight:700,color:'#fff',marginBottom:2}},n.cliente||'Cliente'),
-        React.createElement('div',{style:{color:'rgba(255,255,255,0.7)',fontSize:11}},n.direccion||''),
-        n.pago>0&&React.createElement('div',{style:{color:'var(--gold)',fontFamily:'JetBrains Mono',fontWeight:700,marginTop:2}},'Pago: $'+n.pago.toLocaleString('es-CL'))
-      );})
+      retirosNotif.map(function(n,ni){
+        return React.createElement('div',{key:n.id||ni,style:{background:'rgba(0,0,0,0.3)',borderRadius:9,padding:'10px 12px',marginBottom:ni<retirosNotif.length-1?8:0,border:'1px solid rgba(200,168,75,0.2)'}},
+          React.createElement('div',{style:{fontWeight:700,color:'#fff',fontSize:13,marginBottom:3}},n.cliente||'Cliente'),
+          React.createElement('div',{style:{color:'rgba(255,255,255,0.6)',fontSize:11,marginBottom:8}},n.direccion||''),
+          n.pago>0&&React.createElement('div',{style:{color:'var(--gold)',fontFamily:'JetBrains Mono',fontWeight:700,fontSize:12,marginBottom:8}},'Pago: $'+n.pago.toLocaleString('es-CL')),
+          React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
+            React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6}},
+              React.createElement('span',{style:{color:'rgba(255,255,255,0.6)',fontSize:11}},'Piezas:'),
+              React.createElement('input',{type:'number',min:0,
+                style:{width:60,padding:'4px 8px',borderRadius:6,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(255,255,255,0.1)',color:'#fff',fontFamily:'JetBrains Mono',fontWeight:700,fontSize:13,textAlign:'center'},
+                value:n.piezasConfirmadas||'',
+                placeholder:'0',
+                onChange:function(e){
+                  var val=e.target.value;
+                  setRetirosNotif(function(prev){
+                    var arr=prev.map(function(x,xi){return xi===ni?Object.assign({},x,{piezasConfirmadas:val}):x;});
+                    try{var nb=(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');localStorage.setItem('transpgso_v2_notif_rider_'+nb,JSON.stringify(arr.concat(JSON.parse(localStorage.getItem('transpgso_v2_notif_rider_'+nb)||'[]').filter(function(x){return x.leida;}))));}catch(ex){}
+                    return arr;
+                  });
+                }
+              })
+            ),
+            React.createElement('button',{
+              disabled:!!n.retiradoConfirmado,
+              onClick:function(){
+                setRetirosNotif(function(prev){
+                  var arr=prev.map(function(x,xi){
+                    if(xi!==ni)return x;
+                    var upd=Object.assign({},x,{retiradoConfirmado:true,enBodega:true});
+                    // Guardar en planilla admin
+                    try{
+                      var fecha=new Date().toISOString().slice(0,10);
+                      var keyDia='transpgso_v2_retiros_dia_'+fecha;
+                      var planilla=JSON.parse(localStorage.getItem(keyDia)||'[]');
+                      var updated=planilla.map(function(r){
+                        if(r.cliente===upd.cliente&&r.mensajero===(usuario.nombre||'').toUpperCase().replace(/,\s*/g,' ')){
+                          return Object.assign({},r,{retirado:true,enBodega:true,piezas:upd.piezasConfirmadas||r.piezas});
+                        }
+                        return r;
+                      });
+                      localStorage.setItem(keyDia,JSON.stringify(updated));
+                      // Actualizar retiros del rider
+                      var keyRider='transpgso_v2_retiros_rider_'+(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');
+                      var rd=JSON.parse(localStorage.getItem(keyRider)||'null')||{retiros:0,piezas:0,tarifa:0,total:0};
+                      rd.retiros=(rd.retiros||0)+1;
+                      rd.total=(rd.total||0)+(upd.pago||0);
+                      localStorage.setItem(keyRider,JSON.stringify(rd));
+                    }catch(ex){}
+                    return upd;
+                  });
+                  try{var nb2=(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');localStorage.setItem('transpgso_v2_notif_rider_'+nb2,JSON.stringify(arr));}catch(ex){}
+                  return arr;
+                });
+              },
+              style:{padding:'5px 12px',borderRadius:7,border:'none',background:n.retiradoConfirmado?'rgba(46,125,79,0.3)':'rgba(200,168,75,0.8)',color:n.retiradoConfirmado?'rgba(255,255,255,0.5)':'#000',cursor:n.retiradoConfirmado?'default':'pointer',fontWeight:700,fontSize:11}
+            },n.retiradoConfirmado?'✓ Retirado':'Confirmar Retiro'),
+            n.retiradoConfirmado&&React.createElement('button',{
+              disabled:!!n.respaldosEnviados,
+              onClick:function(){
+                setRetirosNotif(function(prev){
+                  var arr=prev.map(function(x,xi){
+                    if(xi!==ni)return x;
+                    var upd=Object.assign({},x,{respaldosEnviados:true});
+                    // Marcar respaldos en planilla y notificar admin
+                    try{
+                      var fecha=new Date().toISOString().slice(0,10);
+                      var keyDia='transpgso_v2_retiros_dia_'+fecha;
+                      var planilla=JSON.parse(localStorage.getItem(keyDia)||'[]');
+                      var updated=planilla.map(function(r){
+                        if(r.cliente===upd.cliente){return Object.assign({},r,{respaldos:true});}
+                        return r;
+                      });
+                      localStorage.setItem(keyDia,JSON.stringify(updated));
+                      var notifAdmin=JSON.parse(localStorage.getItem('transpgso_v2_notificaciones')||'[]');
+                      notifAdmin.unshift({id:Date.now(),tipo:'respaldos_retiro',cliente:upd.cliente||'',mensajero:(usuario.nombre||'').replace(/,\s*/g,' '),fecha:new Date().toISOString(),leida:false});
+                      localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifAdmin.slice(0,100)));
+                    }catch(ex){}
+                    return upd;
+                  });
+                  try{var nb3=(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');localStorage.setItem('transpgso_v2_notif_rider_'+nb3,JSON.stringify(arr));}catch(ex){}
+                  return arr;
+                });
+              },
+              style:{padding:'5px 12px',borderRadius:7,border:'none',background:n.respaldosEnviados?'rgba(46,125,79,0.3)':'rgba(255,255,255,0.15)',color:n.respaldosEnviados?'rgba(255,255,255,0.5)':'#fff',cursor:n.respaldosEnviados?'default':'pointer',fontWeight:700,fontSize:11}
+            },n.respaldosEnviados?'✓ Respaldos enviados':'📎 Enviar Respaldos')
+          )
+        );
+      })
     ),{style:{background:'var(--dark)',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'2px solid var(--gold)',flexShrink:0}},
       React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,color:'var(--gold)',letterSpacing:2}},'📥 COLECTA'),
       React.createElement('button',{onClick:onClose,style:{background:'none',border:'1px solid rgba(255,255,255,0.2)',borderRadius:8,color:'rgba(255,255,255,0.6)',padding:'8px 14px',cursor:'pointer',fontSize:13}},'✕ Cerrar')
