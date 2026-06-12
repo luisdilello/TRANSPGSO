@@ -2887,18 +2887,18 @@ function ColectaRider(_ref_cr){
   const _s2=useState('AM'),turno=_s2[0],setTurno=_s2[1];
   const _s3=useState('seleccion'),fase=_s3[0],setFase=_s3[1];
   // Retiros asignados desde planilla admin
-  const _sRetiros=useState(()=>{
+  var _sRetiros=useState(function(){
     try{
-      const nombre=(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');
-      const notifs=JSON.parse(localStorage.getItem('transpgso_v2_notif_rider_'+nombre)||'[]');
+      var nombre=(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');
+      var notifs=JSON.parse(localStorage.getItem('transpgso_v2_notif_rider_'+nombre)||'[]');
       return notifs.filter(function(n){return !n.leida;});
     }catch(e){return[];}
   }),retirosNotif=_sRetiros[0],setRetirosNotif=_sRetiros[1];
   function marcarRetirosLeidos(){
     try{
-      const nombre=(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');
-      const notifs=JSON.parse(localStorage.getItem('transpgso_v2_notif_rider_'+nombre)||'[]');
-      const leidas=notifs.map(function(n){return Object.assign({},n,{leida:true});});
+      var nombre=(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');
+      var notifs=JSON.parse(localStorage.getItem('transpgso_v2_notif_rider_'+nombre)||'[]');
+      var leidas=notifs.map(function(n){return Object.assign({},n,{leida:true});});
       localStorage.setItem('transpgso_v2_notif_rider_'+nombre,JSON.stringify(leidas));
       setRetirosNotif([]);
     }catch(e){}
