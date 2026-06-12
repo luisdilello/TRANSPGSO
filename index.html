@@ -3427,7 +3427,7 @@ function ColectaRider(_ref_cr){
   );
 
   if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
-    React.createElement('div',
+    React.createElement('div', null,
     retirosNotif.length>0&&React.createElement('div',{style:{margin:'12px 16px 0',background:'rgba(200,168,75,0.12)',border:'2px solid var(--gold)',borderRadius:12,padding:'14px',flexShrink:0}},
       React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}},
         React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:15,letterSpacing:1.5,color:'var(--gold)'}},'🚚 RETIROS ASIGNADOS ('+retirosNotif.length+')'),
@@ -3448,9 +3448,7 @@ function ColectaRider(_ref_cr){
                 onChange:function(e){
                   var val=e.target.value;
                   setRetirosNotif(function(prev){
-                    var arr=prev.map(function(x,xi){return xi===ni?Object.assign({},x,{piezasConfirmadas:val}):x;});
-                    try{var nb=(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');localStorage.setItem('transpgso_v2_notif_rider_'+nb,JSON.stringify(arr.concat(JSON.parse(localStorage.getItem('transpgso_v2_notif_rider_'+nb)||'[]').filter(function(x){return x.leida;}))));}catch(ex){}
-                    return arr;
+                    return prev.map(function(x,xi){return xi===ni?Object.assign({},x,{piezasConfirmadas:val}):x;});
                   });
                 }
               })
