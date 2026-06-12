@@ -2899,13 +2899,15 @@ function ColectaRider(_ref_cr){
   const _s2=useState('AM'),turno=_s2[0],setTurno=_s2[1];
   const _s3=useState('seleccion'),fase=_s3[0],setFase=_s3[1];
   // Retiros asignados desde planilla admin
-  var _sRetiros=useState(function(){
+  var _sRetiros=useState([]),retirosNotif=_sRetiros[0],setRetirosNotif=_sRetiros[1];
+  // Cargar retiros asignados
+  useEffect(function(){
     try{
-      var nombre=(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');
+      var nombre=(usuario&&usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');
       var notifs=JSON.parse(localStorage.getItem('transpgso_v2_notif_rider_'+nombre)||'[]');
-      return notifs.filter(function(n){return !n.leida;});
-    }catch(e){return[];}
-  }),retirosNotif=_sRetiros[0],setRetirosNotif=_sRetiros[1];
+      setRetirosNotif(notifs.filter(function(n){return !n.leida;}));
+    }catch(e){}
+  },[]);
   function marcarRetirosLeidos(){
     try{
       var nombre=(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');
