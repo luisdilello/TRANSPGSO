@@ -1441,7 +1441,9 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
                   ),
                   // Confirmado
                   React.createElement('td',{style:{padding:'4px',textAlign:'center'}},
-                    React.createElement('input',{type:'checkbox',style:chkStyle,checked:!!fila.confirmado,onChange:function(e){actualizarFila(idx,'confirmado',e.target.checked);}})
+                    React.createElement('input',{type:'checkbox',style:chkStyle,checked:!!fila.confirmado,onChange:function(e){var pm=parseFloat(fila.pagoMensajero)||0;
+                  if(e.target.checked&&pm<=0){alert('\u26a0 Debes ingresar el Pago al Mensajero antes de confirmar el retiro.');return;}
+                  actualizarFila(idx,'confirmado',e.target.checked);}})
                   ),
                   // Piezas
                   React.createElement('td',{style:{padding:'4px 6px',textAlign:'center',width:70}},
@@ -4332,13 +4334,24 @@ var ColectaErrorBoundary = (function(_React$Component) {
   return ColectaErrorBoundary;
 }(React.Component));
 
-function RetirosRider(_ref_rr){var usuario=_ref_rr.usuario;
+function RetirosRider(_ref_rr){
+  var usuario=_ref_rr.usuario;
   var hoy=new Date().toISOString().slice(0,10);
   var _sf=React.useState(hoy),fechaVer=_sf[0],setFechaVer=_sf[1];
   var _sr=React.useState([]),retiros=_sr[0],setRetiros=_sr[1];
   var _sl=React.useState(false),loading=_sl[0],setLoading=_sl[1];
+  var _sfr=React.useState('ver'),faseRetiro=_sfr[0],setFaseRetiro=_sfr[1];
+  var _srs=React.useState(null),retiroSelRespaldo=_srs[0],setRetiroSelRespaldo=_srs[1];
+  var _sfoto=React.useState([]),fotosRespaldo=_sfoto[0],setFotosRespaldo=_sfoto[1];
+  var _sproc=React.useState(false),procesandoRespaldo=_sproc[0],setProcesandoRespaldo=_sproc[1];
+  var respaldoInputRef=useRef();
 
-  React.useEffect(function(){cargarRetiros(fechaVer);},[fechaVer]);
+  // Cargar retiros + polling cada 30 seg
+  React.useEffect(function(){
+    cargarRetiros(fechaVer);
+    var interval=setInterval(function(){cargarRetiros(fechaVer);},30000);
+    return function(){clearInterval(interval);};
+  },[fechaVer]);
 
   function cargarRetiros(fecha){
     setLoading(true);
@@ -4351,18 +4364,16 @@ function RetirosRider(_ref_rr){var usuario=_ref_rr.usuario;
             return (r.mensajero||'').replace(/,\s*/g,' ').toUpperCase().trim()===nombre;
           });
           setRetiros(mios.map(function(r){
-            return {id:r.id,cliente:r.cliente,direccion:r.direccion,mensajero:r.mensajero,
-              confirmado:r.confirmado,piezas:r.piezas,retirado:r.retirado,
-              enBodega:r.en_bodega,respaldos:r.respaldos,pagoMensajero:r.pago_mensajero,cobro:r.cobro};
+            return {id:r.id,cliente:r.cliente,direccion:r.direccion,
+              mensajero:r.mensajero,confirmado:r.confirmado,piezas:r.piezas,
+              retirado:r.retirado,enBodega:r.en_bodega,respaldos:r.respaldos,
+              pagoMensajero:r.pago_mensajero,cobro:r.cobro};
           }));
-        } else {
-          setRetiros([]);
-        }
-      }).catch(function(){setLoading(false);setRetiros([]);});
+        }else{setRetiros([]);}
+      }).catch(function(){setLoading(false);});
   }
 
   function actualizarRetiro(idx,campo,valor){
-    // 1. Actualizar estado local inmediatamente
     var retiroActual=retiros[idx];
     var nuevo=retiros.map(function(r,i){
       if(i!==idx)return r;
@@ -4371,18 +4382,14 @@ function RetirosRider(_ref_rr){var usuario=_ref_rr.usuario;
       return upd;
     });
     setRetiros(nuevo);
-
-    // 2. Sincronizar con Supabase
     if(retiroActual&&retiroActual.id){
       var updateData={};
       if(campo==='piezas')updateData.piezas=parseInt(valor)||0;
       if(campo==='retirado'&&valor===true){updateData.retirado=true;updateData.en_bodega=true;}
       if(campo==='respaldos'&&valor===true)updateData.respaldos=true;
       db.from('retiros').update(updateData).eq('id',retiroActual.id)
-        .then(function(){}).catch(function(){});
+        .then(function(){cargarRetiros(fechaVer);}).catch(function(){});
     }
-
-    // 3. Sumar pago en Ganancias al marcar Retirado
     if(campo==='retirado'&&valor===true&&retiroActual){
       try{
         var keyRider='transpgso_v2_retiros_rider_'+(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');
@@ -4391,29 +4398,156 @@ function RetirosRider(_ref_rr){var usuario=_ref_rr.usuario;
         rd.total=(rd.total||0)+(parseFloat(retiroActual.pagoMensajero)||0);
         localStorage.setItem(keyRider,JSON.stringify(rd));
       }catch(ex){}
-      // Notificar admin
-      try{
-        var notifs=JSON.parse(localStorage.getItem('transpgso_v2_notificaciones')||'[]');
-        notifs.unshift({id:Date.now(),tipo:'retiro_completado',cliente:retiroActual.cliente||'',
-          mensajero:(usuario.nombre||'').replace(/,\s*/g,' '),fecha:new Date().toISOString(),leida:false});
-        localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifs.slice(0,100)));
-      }catch(ex){}
-    }
-
-    // 4. Notificar admin al enviar Respaldos
-    if(campo==='respaldos'&&valor===true&&retiroActual){
-      try{
-        var notifs2=JSON.parse(localStorage.getItem('transpgso_v2_notificaciones')||'[]');
-        notifs2.unshift({id:Date.now(),tipo:'respaldos_retiro',cliente:retiroActual.cliente||'',
-          mensajero:(usuario.nombre||'').replace(/,\s*/g,' '),fecha:new Date().toISOString(),leida:false});
-        localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifs2.slice(0,100)));
-      }catch(ex){}
     }
   }
 
-  var inputNum={width:70,padding:'8px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',
-    background:'rgba(255,255,255,0.08)',color:'#fff',fontFamily:'JetBrains Mono',
-    fontWeight:700,fontSize:16,textAlign:'center'};
+  procesarFotosRespaldo(files){
+    const arr=Array.from(files);
+    if(!arr.length) return;
+    // Comprimir imágenes antes de procesar para mayor velocidad
+    // Leer orientación EXIF para corregir fotos rotadas
+    async function leerOrientacionEXIF(file){
+      return new Promise(res=>{
+        const reader=new FileReader();
+        reader.onload=e=>{
+          const view=new DataView(e.target.result);
+          if(view.getUint16(0,false)!==0xFFD8){res(1);return;}
+          let offset=2;
+          while(offset<view.byteLength){
+            if(view.getUint16(offset,false)===0xFFE1){
+              if(view.getUint32(offset+4,false)!==0x45786966){res(1);return;}
+              const little=view.getUint16(offset+10,false)===0x4949;
+              const tags=view.getUint16(offset+14,little);
+              for(let i=0;i<tags;i++){
+                if(view.getUint16(offset+16+(i*12),little)===0x0112){
+                  res(view.getUint16(offset+24+(i*12),little));return;
+                }
+              }
+              res(1);return;
+            }
+            offset+=2+view.getUint16(offset+2,false);
+          }
+          res(1);
+        };
+        reader.onerror=()=>res(1);
+        reader.readAsArrayBuffer(file.slice(0,65536));
+      });
+    }
+    async function comprimirImagen(file,maxW=1200){
+      return new Promise(async res=>{
+        const orientacion=await leerOrientacionEXIF(file);
+        const img=new Image();
+        const url=URL.createObjectURL(file);
+        img.onload=()=>{
+          let w=img.width,h=img.height;
+          const scale=Math.min(1,maxW/Math.max(w,h));
+          w=Math.round(w*scale);h=Math.round(h*scale);
+          const canvas=document.createElement('canvas');
+          const ctx=canvas.getContext('2d');
+          // Corregir orientación EXIF
+          if(orientacion>=5&&orientacion<=8){canvas.width=h;canvas.height=w;}
+          else{canvas.width=w;canvas.height=h;}
+          ctx.save();
+          if(orientacion===2){ctx.transform(-1,0,0,1,w,0);}
+          else if(orientacion===3){ctx.transform(-1,0,0,-1,w,h);}
+          else if(orientacion===4){ctx.transform(1,0,0,-1,0,h);}
+          else if(orientacion===5){ctx.transform(0,1,1,0,0,0);}
+          else if(orientacion===6){ctx.transform(0,1,-1,0,h,0);}
+          else if(orientacion===7){ctx.transform(0,-1,-1,0,h,w);}
+          else if(orientacion===8){ctx.transform(0,-1,1,0,0,w);}
+          ctx.drawImage(img,0,0,w,h);
+          ctx.restore();
+          URL.revokeObjectURL(url);
+          canvas.toBlob(blob=>{
+            res(blob?new File([blob],file.name,{type:'image/jpeg'}):file);
+          },'image/jpeg',0.78);
+        };
+        img.onerror=()=>{URL.revokeObjectURL(url);res(file);};
+        img.src=url;
+      });
+    }
+    // Crear previews inmediatos sin comprimir (para mostrar rápido)
+    const items=arr.map(f=>({file:f,preview:URL.createObjectURL(f),analizando:false,datos:null,error:null}));
+    setFotosGaleria(items);
+    setFase('galeria');
+    // Comprimir en background (reemplazar file con versión comprimida)
+    Promise.all(arr.map(async(f,i)=>{
+      const compressed=await comprimirImagen(f);
+      setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,file:compressed}:x));
+    })).catch(()=>{});
+  }
+
+  analizarFotosRespaldo(){
+    if(!fotosRespaldo.length) return;
+    setProcesandoGaleria(true);
+    // Obtener snapshot actual para no depender de state stale
+    const pendientes=fotosRespaldo.map((f,i)=>({...f,idx:i})).filter(f=>!f.datos&&!f.error);
+    // Marcar todas como analizando de una vez
+    setFotosGaleria(prev=>prev.map((f,i)=>pendientes.find(p=>p.idx===i)?{...f,analizando:true}:f));
+    // Procesar en lotes de 3 en paralelo con pausa entre lotes (evitar rate limit 429)
+    const LOTE=3;
+    for(let offset=0;offset<pendientes.length;offset+=LOTE){
+      if(offset>0) await new Promise(r=>setTimeout(r,2000)); // 2s pausa entre lotes
+      const lote=pendientes.slice(offset,offset+LOTE);
+      await Promise.all(lote.map(async item=>{
+        try{
+          const b64=await new Promise((res,rej)=>{
+            const r=new FileReader();
+            r.onload=ev=>res(ev.target.result.split(',')[1]);
+            r.onerror=rej;
+            r.readAsDataURL(item.file);
+          });
+          const mediaType=item.file.type||'image/jpeg';
+          const b64r=await rotarImagenSiVertical(b64);const datos=await analizarEtiqueta(b64r,mediaType);
+          // Limpiar código de espacios
+          if(datos?.codigo) datos.codigo=datos.codigo.toString().replace(/[^0-9]/g,'');
+          setFotosGaleria(prev=>prev.map((f,j)=>j===item.idx?{...f,analizando:false,datos,error:datos?._error||null}:f));
+        }catch(e){
+          setFotosGaleria(prev=>prev.map((f,j)=>j===item.idx?{...f,analizando:false,error:e.message}:f));
+        }
+      }));
+    }
+    setProcesandoGaleria(false);
+    toast('✓ Análisis completo — revisa y confirma');
+  }
+
+  async function confirmarRespaldos(){
+    if(!fotosRespaldo.length){toast('⚠ Agrega al menos una foto');return;}
+    if(!retiroSelRespaldo||!retiroSelRespaldo.id){return;}
+    setProcesandoRespaldo(true);
+    try{
+      // Convertir fotos a base64 para guardar
+      var fotosBase64=[];
+      for(var f of fotosRespaldo){
+        if(f.preview) fotosBase64.push(f.preview);
+      }
+      var fotosJson=JSON.stringify(fotosBase64);
+      await db.from('retiros').update({
+        respaldos:true,
+        fotos_respaldo:fotosJson
+      }).eq('id',retiroSelRespaldo.id);
+      // Notificar admin
+      try{
+        var notifs=JSON.parse(localStorage.getItem('transpgso_v2_notificaciones')||'[]');
+        notifs.unshift({id:Date.now(),tipo:'respaldos_retiro',
+          cliente:retiroSelRespaldo.cliente||'',
+          mensajero:(usuario.nombre||'').replace(/,\s*/g,' '),
+          fecha:new Date().toISOString(),leida:false});
+        localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifs.slice(0,100)));
+      }catch(ex){}
+      toast('✓ Respaldos enviados');
+      setFaseRetiro('ver');
+      setFotosRespaldo([]);
+      cargarRetiros(fechaVer);
+    }catch(e){
+      toast('⚠ Error: '+e.message);
+    }
+    setProcesandoRespaldo(false);
+  }
+
+  var inputNum={width:70,padding:'8px',borderRadius:8,
+    border:'1px solid rgba(200,168,75,0.4)',background:'rgba(255,255,255,0.08)',
+    color:'#fff',fontFamily:'JetBrains Mono',fontWeight:700,fontSize:16,textAlign:'center'};
 
   function btnAccion(activo,onClick,labelOff,labelOn){
     return React.createElement('button',{
@@ -4426,7 +4560,67 @@ function RetirosRider(_ref_rr){var usuario=_ref_rr.usuario;
     },activo?'✓ '+labelOn:labelOff);
   }
 
+  // Pantalla de respaldos (galería de fotos)
+  if(faseRetiro==='respaldos') return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif',overflowY:'auto'}},
+    React.createElement('div',{style:{background:'var(--dark)',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'2px solid var(--gold)',flexShrink:0}},
+      React.createElement('div',null,
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:16,color:'var(--gold)',letterSpacing:2}},'📎 RESPALDOS · '+(retiroSelRespaldo?retiroSelRespaldo.cliente:'')),
+        React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)',marginTop:2}},fotosRespaldo.length+' fotos')
+      ),
+      React.createElement('button',{onClick:()=>setFaseRetiro('ver'),style:{background:'none',border:'1px solid rgba(255,255,255,0.2)',borderRadius:8,color:'rgba(255,255,255,0.6)',padding:'8px 14px',cursor:'pointer',fontSize:13}},'✕ Cerrar')
+    ),
+    React.createElement('div',{style:{flex:1,overflowY:'auto',padding:12}},
+      fotosRespaldo.length===0&&React.createElement('div',{style:{textAlign:'center',padding:40,color:'rgba(255,255,255,0.3)'}},
+        React.createElement('div',{style:{fontSize:40,marginBottom:8}},'🖼'),
+        React.createElement('div',{style:{fontSize:13}},'Cargando fotos...')
+      ),
+      fotosRespaldo.map((f,i)=>React.createElement('div',{key:i,style:{display:'flex',flexDirection:'column',gap:0,borderRadius:10,background:'rgba(255,255,255,0.04)',border:'1px solid '+(f.datos?.codigo?'rgba(200,168,75,0.25)':f.error?'rgba(176,48,48,0.3)':'rgba(255,255,255,0.08)'),marginBottom:8,overflow:'hidden'}},
+        // Fila principal
+        React.createElement('div',{style:{display:'flex',gap:12,padding:'10px',alignItems:'flex-start'}},
+          // Miniatura — toca para ampliar
+          React.createElement('img',{src:f.preview,onClick:()=>setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,expanded:!x.expanded}:x)),style:{width:72,height:72,objectFit:'cover',borderRadius:8,flexShrink:0,border:'2px solid '+(f.datos?.codigo?'var(--gold)':f.error?'rgba(176,48,48,0.6)':'rgba(255,255,255,0.1)'),cursor:'zoom-in'}}),
+          React.createElement('div',{style:{flex:1,minWidth:0}},
+            f.analizando&&React.createElement('div',{style:{fontSize:12,color:'var(--gold)',marginBottom:4}},'⏳ Analizando...'),
+            // Código editable
+            f.datos?.codigo&&React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6,marginBottom:4}},
+              f.editandoCodigo
+                ?React.createElement('input',{autoFocus:true,value:f.codigoEdit||f.datos.codigo,onChange:e=>setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,codigoEdit:e.target.value.replace(/[^0-9]/g,'')}:x)),onBlur:()=>setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,editandoCodigo:false,datos:{...x.datos,codigo:x.codigoEdit||x.datos.codigo},codigoEdit:undefined}:x)),onKeyDown:e=>{if(e.key==='Enter')setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,editandoCodigo:false,datos:{...x.datos,codigo:x.codigoEdit||x.datos.codigo},codigoEdit:undefined}:x));},style:{fontFamily:'JetBrains Mono',fontSize:13,color:'var(--gold)',fontWeight:700,background:'rgba(200,168,75,0.1)',border:'1px solid var(--gold)',borderRadius:6,padding:'3px 8px',width:'100%',outline:'none'}})
+                :React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:13,color:'var(--gold)',fontWeight:700,flex:1}},f.datos.codigo),
+              !f.editandoCodigo&&React.createElement('button',{onClick:()=>setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,editandoCodigo:true,codigoEdit:x.datos.codigo}:x)),style:{fontSize:11,padding:'2px 7px',borderRadius:6,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(200,168,75,0.08)',color:'rgba(200,168,75,0.7)',cursor:'pointer',flexShrink:0}},'✎'),
+            // Editar dirección
+            f.datos?.direccion&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:3,display:'flex',alignItems:'center',gap:4}},
+              f.editandoDireccion
+                ?React.createElement('input',{autoFocus:true,value:f.dirEdit??f.datos.direccion,onChange:e=>setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,dirEdit:e.target.value}:x)),onBlur:()=>setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,editandoDireccion:false,datos:{...x.datos,direccion:x.dirEdit??x.datos.direccion},dirEdit:undefined}:x)),onKeyDown:e=>{if(e.key==='Enter')setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,editandoDireccion:false,datos:{...x.datos,direccion:x.dirEdit??x.datos.direccion},dirEdit:undefined}:x));},style:{flex:1,fontSize:11,background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.3)',borderRadius:5,padding:'2px 6px',color:'#fff',outline:'none'}})
+                :React.createElement('span',{style:{flex:1}},f.datos.direccion+(f.datos.comuna?' · '+f.datos.comuna:'')),
+              React.createElement('button',{onClick:()=>setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,editandoDireccion:!x.editandoDireccion,dirEdit:x.datos.direccion}:x)),style:{fontSize:9,padding:'1px 5px',borderRadius:4,border:'1px solid rgba(255,255,255,0.2)',background:'transparent',color:'rgba(255,255,255,0.4)',cursor:'pointer',flexShrink:0}},'✎')
+            )
+            ),
+            f.datos?.destinatario&&React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.8)',marginBottom:2}},f.datos.destinatario),
+            f.datos?.direccion&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)',marginBottom:2}},f.datos.direccion+(f.datos.comuna?' · '+f.datos.comuna:'')),
+            f.error&&React.createElement('div',{style:{fontSize:11,color:'#e88',marginBottom:2}},'⚠ '+f.error),
+            !f.analizando&&!f.datos&&!f.error&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.3)'}},'Pendiente de análisis')
+          ),
+          React.createElement('button',{onClick:()=>setFotosGaleria(prev=>prev.filter((_,j)=>j!==i)),disabled:f.analizando,style:{background:'rgba(176,48,48,0.15)',border:'1px solid rgba(176,48,48,0.3)',borderRadius:6,color:'#e88',cursor:f.analizando?'default':'pointer',fontSize:13,padding:'4px 8px',flexShrink:0,alignSelf:'center',opacity:f.analizando?0.4:1}},'✕')
+        ),
+        // Imagen expandida al tocar la miniatura
+        f.expanded&&React.createElement('div',{style:{padding:'0 10px 10px'}},
+          React.createElement('img',{src:f.preview,onClick:()=>setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,expanded:false}:x)),style:{width:'100%',borderRadius:8,border:'1px solid rgba(200,168,75,0.2)',cursor:'zoom-out',display:'block'}})
+        )
+      ))
+    ),
+    React.createElement('div',{style:{padding:'16px',background:'rgba(0,0,0,0.5)',borderTop:'1px solid rgba(255,255,255,0.08)',flexShrink:0,display:'flex',gap:10}},
+      React.createElement('button',{onClick:()=>{respaldoInputRef.current?.click();},style:{flex:1,padding:'12px',borderRadius:10,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1,cursor:'pointer'}},'🖼 Agregar más'),
+      fotosRespaldo.some(f=>!f.datos&&!f.error&&!f.analizando)
+        ?React.createElement('button',{onClick:confirmarRespaldos,disabled:procesandoRespaldo,style:{flex:2,padding:'12px',borderRadius:10,border:'none',background:procesandoRespaldo?'rgba(255,255,255,0.1)':'linear-gradient(135deg,var(--gold),#a87d2a)',color:procesandoRespaldo?'rgba(255,255,255,0.3)':'var(--dark-deep)',fontFamily:'Bebas Neue',fontSize:16,letterSpacing:2,cursor:procesandoRespaldo?'default':'pointer'}},procesandoRespaldo?'⏳ ANALIZANDO...':'🤖 ANALIZAR')
+        :React.createElement('button',{onClick:cargarGaleriaEnSistema,disabled:procesandoRespaldo||fotosRespaldo.filter(f=>f.datos?.codigo&&!f.error).length===0,style:{flex:2,padding:'12px',borderRadius:10,border:'none',background:fotosRespaldo.filter(f=>f.datos?.codigo&&!f.error).length>0?'linear-gradient(135deg,#2e7d4f,#1a5c34)':'rgba(255,255,255,0.1)',color:fotosRespaldo.filter(f=>f.datos?.codigo&&!f.error).length>0?'#fff':'rgba(255,255,255,0.3)',fontFamily:'Bebas Neue',fontSize:16,letterSpacing:2,cursor:'pointer'}},procesandoRespaldo?'⏳ ENVIANDO...':'✅ ENVIAR RESPALDOS')
+    )
+  );
+
+  // Pantalla principal de retiros
   return React.createElement('div',{style:{minHeight:'100vh',background:'#0a0c07',color:'#fff',fontFamily:'DM Sans,sans-serif',paddingBottom:90}},
+    React.createElement('input',{ref:respaldoInputRef,type:'file',accept:'image/*',multiple:true,
+      style:{display:'none'},
+      onChange:function(e){if(e.target.files&&e.target.files.length)procesarFotosRespaldo(e.target.files);e.target.value='';}}),
     React.createElement('div',{style:{background:'var(--dark)',padding:'14px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'2px solid var(--gold)',position:'sticky',top:0,zIndex:10}},
       React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,color:'var(--gold)',letterSpacing:2}},'🚚 MIS RETIROS'),
       React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center'}},
@@ -4449,14 +4643,18 @@ function RetirosRider(_ref_rr){var usuario=_ref_rr.usuario;
           var pago=parseFloat(r.pagoMensajero)||0;
           return React.createElement('div',{key:r.id||i,
             style:{background:'rgba(255,255,255,0.04)',
-              border:'1px solid '+(r.retirado?'rgba(46,125,79,0.4)':'rgba(200,168,75,0.2)'),
+              border:'1px solid '+(r.respaldos?'rgba(200,168,75,0.4)':r.retirado?'rgba(46,125,79,0.4)':'rgba(200,168,75,0.2)'),
               borderRadius:14,padding:16,marginBottom:12}},
             React.createElement('div',{style:{marginBottom:10}},
-              React.createElement('div',{style:{fontWeight:700,fontSize:16,color:r.retirado?'#4caf50':'var(--gold)',marginBottom:3}},r.cliente||''),
+              React.createElement('div',{style:{fontWeight:700,fontSize:16,
+                color:r.respaldos?'var(--gold)':r.retirado?'#4caf50':'var(--gold)',marginBottom:3}},
+                (r.respaldos?'📎 ':'')+(r.retirado?'✓ ':'')+r.cliente),
               React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.5)'}},'📍 '+(r.direccion||'Sin dirección'))
             ),
             React.createElement('div',{style:{display:'flex',gap:12,alignItems:'center',marginBottom:14,flexWrap:'wrap'}},
-              pago>0?React.createElement('div',{style:{background:'rgba(200,168,75,0.12)',borderRadius:8,padding:'6px 12px',fontFamily:'JetBrains Mono',fontWeight:700,color:'var(--gold)',fontSize:14}},'💰 $'+pago.toLocaleString('es-CL')):null,
+              pago>0?React.createElement('div',{style:{background:'rgba(200,168,75,0.12)',borderRadius:8,
+                padding:'6px 12px',fontFamily:'JetBrains Mono',fontWeight:700,color:'var(--gold)',fontSize:14}},
+                '💰 $'+pago.toLocaleString('es-CL')):null,
               React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8}},
                 React.createElement('span',{style:{fontSize:12,color:'rgba(255,255,255,0.5)'}},'Piezas:'),
                 React.createElement('input',{type:'number',min:0,style:inputNum,
@@ -4466,10 +4664,24 @@ function RetirosRider(_ref_rr){var usuario=_ref_rr.usuario;
             ),
             React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
               btnAccion(!!r.retirado,function(){actualizarRetiro(i,'retirado',true);},'Confirmar Retiro','Retirado'),
-              btnAccion(!!r.enBodega,function(){if(r.retirado)actualizarRetiro(i,'enBodega',true);},'En Bodega','En Bodega'),
-              btnAccion(!!r.respaldos,function(){if(r.retirado&&!r.respaldos)actualizarRetiro(i,'respaldos',true);},'Enviar Respaldos 📎','Respaldos Enviados')
-            ),
-            r.retirado&&!r.respaldos?React.createElement('div',{style:{marginTop:8,fontSize:11,color:'rgba(255,255,255,0.3)',fontStyle:'italic'}},'Marca Respaldos cuando los subas'):null
+              !r.respaldos&&r.retirado?React.createElement('button',{
+                onClick:function(){
+                  setRetiroSelRespaldo(r);
+                  setFotosRespaldo([]);
+                  setFaseRetiro('respaldos');
+                },
+                style:{padding:'8px 14px',borderRadius:8,
+                  border:'2px solid rgba(200,168,75,0.5)',
+                  background:'rgba(200,168,75,0.1)',
+                  color:'var(--gold)',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}
+              },'📎 Enviar Respaldos'):null,
+              r.respaldos?React.createElement('div',{
+                style:{padding:'8px 14px',borderRadius:8,
+                  border:'2px solid rgba(200,168,75,0.4)',
+                  background:'rgba(200,168,75,0.12)',
+                  color:'var(--gold)',fontWeight:700,fontSize:12}
+              },'✓ Respaldos Enviados'):null
+            )
           );
         })
     )
