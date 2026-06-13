@@ -2899,15 +2899,7 @@ function ColectaRider(_ref_cr){
   const _s2=useState('AM'),turno=_s2[0],setTurno=_s2[1];
   const _s3=useState('seleccion'),fase=_s3[0],setFase=_s3[1];
   // Retiros asignados desde planilla admin
-  var _sRetiros=useState([]),retirosNotif=_sRetiros[0],setRetirosNotif=_sRetiros[1];
-  // Cargar retiros asignados
-  useEffect(function(){
-    try{
-      var nombre=(usuario&&usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');
-      var notifs=JSON.parse(localStorage.getItem('transpgso_v2_notif_rider_'+nombre)||'[]');
-      setRetirosNotif(notifs.filter(function(n){return !n.leida;}));
-    }catch(e){}
-  },[]);
+
   function marcarRetirosLeidos(){
     try{
       var nombre=(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');
@@ -3429,121 +3421,37 @@ function ColectaRider(_ref_cr){
   );
 
   if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
-    React.createElement('div', null,
-    retirosNotif.length>0&&React.createElement('div',{style:{margin:'12px 16px 0',background:'rgba(200,168,75,0.12)',border:'2px solid var(--gold)',borderRadius:12,padding:'14px',flexShrink:0}},
-      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}},
-        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:15,letterSpacing:1.5,color:'var(--gold)'}},'🚚 RETIROS ASIGNADOS ('+retirosNotif.length+')'),
-        React.createElement('button',{onClick:marcarRetirosLeidos,style:{padding:'4px 12px',borderRadius:6,border:'none',background:'rgba(200,168,75,0.3)',color:'var(--gold)',cursor:'pointer',fontSize:11,fontWeight:700}},'Cerrar')
+    React.createElement('div',{style:{background:'var(--dark)',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'2px solid var(--gold)',flexShrink:0}},
+      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,color:'var(--gold)',letterSpacing:2}},'📥 COLECTA'),
+      React.createElement('button',{onClick:function(){onClose();},style:{background:'none',border:'1px solid rgba(255,255,255,0.2)',borderRadius:8,color:'rgba(255,255,255,0.4)',padding:'6px 12px',fontSize:12,cursor:'pointer'}},'✕ Cerrar')
+    ),
+    React.createElement('div',{style:{padding:'16px',flexShrink:0}},
+      React.createElement('div',{style:{marginBottom:12,fontSize:12,color:'rgba(255,255,255,0.5)',letterSpacing:1,textTransform:'uppercase'}},'Turno'),
+      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:20}},
+        React.createElement('button',{onClick:function(){setTurno('AM');},style:{flex:1,padding:'10px',borderRadius:8,border:'2px solid '+(turno==='AM'?'var(--gold)':'rgba(255,255,255,0.15)'),background:turno==='AM'?'rgba(200,168,75,0.15)':'transparent',color:turno==='AM'?'var(--gold)':'rgba(255,255,255,0.5)',fontWeight:700,cursor:'pointer',fontSize:14}},'AM'),
+        React.createElement('button',{onClick:function(){setTurno('PM');},style:{flex:1,padding:'10px',borderRadius:8,border:'2px solid '+(turno==='PM'?'var(--gold)':'rgba(255,255,255,0.15)'),background:turno==='PM'?'rgba(200,168,75,0.15)':'transparent',color:turno==='PM'?'var(--gold)':'rgba(255,255,255,0.5)',fontWeight:700,cursor:'pointer',fontSize:14}},'PM')
       ),
-      retirosNotif.map(function(n,ni){
-        return React.createElement('div',{key:n.id||ni,style:{background:'rgba(0,0,0,0.3)',borderRadius:9,padding:'10px 12px',marginBottom:ni<retirosNotif.length-1?8:0,border:'1px solid rgba(200,168,75,0.2)'}},
-          React.createElement('div',{style:{fontWeight:700,color:'#fff',fontSize:13,marginBottom:3}},n.cliente||'Cliente'),
-          React.createElement('div',{style:{color:'rgba(255,255,255,0.6)',fontSize:11,marginBottom:8}},n.direccion||''),
-          n.pago>0?React.createElement('div',{style:{color:'var(--gold)',fontFamily:'JetBrains Mono',fontWeight:700,fontSize:12,marginBottom:8}},'Pago: $'+n.pago.toLocaleString('es-CL')):null,
-          React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
-            React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6}},
-              React.createElement('span',{style:{color:'rgba(255,255,255,0.6)',fontSize:11}},'Piezas:'),
-              React.createElement('input',{type:'number',min:0,
-                style:{width:60,padding:'4px 8px',borderRadius:6,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(255,255,255,0.1)',color:'#fff',fontFamily:'JetBrains Mono',fontWeight:700,fontSize:13,textAlign:'center'},
-                value:n.piezasConfirmadas||'',
-                placeholder:'0',
-                onChange:function(e){
-                  var val=e.target.value;
-                  setRetirosNotif(function(prev){
-                    return prev.map(function(x,xi){return xi===ni?Object.assign({},x,{piezasConfirmadas:val}):x;});
-                  });
-                }
-              })
-            ),
-            React.createElement('button',{
-              disabled:!!n.retiradoConfirmado,
-              onClick:function(){
-                setRetirosNotif(function(prev){
-                  var arr=prev.map(function(x,xi){
-                    if(xi!==ni)return x;
-                    var upd=Object.assign({},x,{retiradoConfirmado:true,enBodega:true});
-                    // Guardar en planilla admin
-                    try{
-                      var fecha=new Date().toISOString().slice(0,10);
-                      var keyDia='transpgso_v2_retiros_dia_'+fecha;
-                      var planilla=JSON.parse(localStorage.getItem(keyDia)||'[]');
-                      var updated=planilla.map(function(r){
-                        if(r.cliente===upd.cliente&&r.mensajero===(usuario.nombre||'').toUpperCase().replace(/,\s*/g,' ')){
-                          return Object.assign({},r,{retirado:true,enBodega:true,piezas:upd.piezasConfirmadas||r.piezas});
-                        }
-                        return r;
-                      });
-                      localStorage.setItem(keyDia,JSON.stringify(updated));
-                      // Actualizar retiros del rider
-                      var keyRider='transpgso_v2_retiros_rider_'+(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');
-                      var rd=JSON.parse(localStorage.getItem(keyRider)||'null')||{retiros:0,piezas:0,tarifa:0,total:0};
-                      rd.retiros=(rd.retiros||0)+1;
-                      rd.total=(rd.total||0)+(upd.pago||0);
-                      localStorage.setItem(keyRider,JSON.stringify(rd));
-                    }catch(ex){}
-                    return upd;
-                  });
-                  try{var nb2=(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');localStorage.setItem('transpgso_v2_notif_rider_'+nb2,JSON.stringify(arr));}catch(ex){}
-                  return arr;
-                });
-              },
-              style:{padding:'5px 12px',borderRadius:7,border:'none',background:n.retiradoConfirmado?'rgba(46,125,79,0.3)':'rgba(200,168,75,0.8)',color:n.retiradoConfirmado?'rgba(255,255,255,0.5)':'#000',cursor:n.retiradoConfirmado?'default':'pointer',fontWeight:700,fontSize:11}
-            },n.retiradoConfirmado?'✓ Retirado':'Confirmar Retiro'),
-            n.retiradoConfirmado?React.createElement('button',{
-              disabled:!!n.respaldosEnviados,
-              onClick:function(){
-                setRetirosNotif(function(prev){
-                  var arr=prev.map(function(x,xi){
-                    if(xi!==ni)return x;
-                    var upd=Object.assign({},x,{respaldosEnviados:true});
-                    // Marcar respaldos en planilla y notificar admin
-                    try{
-                      var fecha=new Date().toISOString().slice(0,10);
-                      var keyDia='transpgso_v2_retiros_dia_'+fecha;
-                      var planilla=JSON.parse(localStorage.getItem(keyDia)||'[]');
-                      var updated=planilla.map(function(r){
-                        if(r.cliente===upd.cliente){return Object.assign({},r,{respaldos:true});}
-                        return r;
-                      });
-                      localStorage.setItem(keyDia,JSON.stringify(updated));
-                      var notifAdmin=JSON.parse(localStorage.getItem('transpgso_v2_notificaciones')||'[]');
-                      notifAdmin.unshift({id:Date.now(),tipo:'respaldos_retiro',cliente:upd.cliente||'',mensajero:(usuario.nombre||'').replace(/,\s*/g,' '),fecha:new Date().toISOString(),leida:false});
-                      localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifAdmin.slice(0,100)));
-                    }catch(ex){}
-                    return upd;
-                  });
-                  try{var nb3=(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');localStorage.setItem('transpgso_v2_notif_rider_'+nb3,JSON.stringify(arr));}catch(ex){}
-                  return arr;
-                });
-              },
-              style:{padding:'5px 12px',borderRadius:7,border:'none',background:n.respaldosEnviados?'rgba(46,125,79,0.3)':'rgba(255,255,255,0.15)',color:n.respaldosEnviados?'rgba(255,255,255,0.5)':'#fff',cursor:n.respaldosEnviados?'default':'pointer',fontWeight:700,fontSize:11}
-            },n.respaldosEnviados?'✓ Respaldos enviados':'📎 Enviar Respaldos'):null
-          )
+      React.createElement('div',{style:{marginBottom:8,fontSize:12,color:'rgba(255,255,255,0.5)',letterSpacing:1,textTransform:'uppercase'}},'Seleccionar Cliente')
+    ),
+    React.createElement('div',{style:{flex:1,overflowY:'auto',padding:'0 16px 16px'}},
+      (clientes||[]).filter(function(c){return c.activo!==false;}).sort(function(a,b){return(a.nombre||'').localeCompare(b.nombre||'');}).map(function(c,i){
+        var isSelected=clienteSel&&(clienteSel.id===c.id||clienteSel.nombre===c.nombre);
+        return React.createElement('div',{key:c.id||i,
+          onClick:function(){setClienteSel(c);},
+          style:{padding:'14px 16px',borderRadius:10,border:'2px solid '+(isSelected?'var(--gold)':'rgba(255,255,255,0.1)'),background:isSelected?'rgba(200,168,75,0.12)':'rgba(255,255,255,0.03)',marginBottom:8,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between'}
+        },
+          React.createElement('span',{style:{fontWeight:isSelected?700:400,color:isSelected?'var(--gold)':'#fff',fontSize:14}},c.nombre||c),
+          isSelected?React.createElement('span',{style:{color:'var(--gold)',fontSize:18}},'✓'):null
         );
       })
-    ),{style:{background:'var(--dark)',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'2px solid var(--gold)',flexShrink:0}},
-      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,color:'var(--gold)',letterSpacing:2}},'📥 COLECTA'),
-      React.createElement('button',{onClick:onClose,style:{background:'none',border:'1px solid rgba(255,255,255,0.2)',borderRadius:8,color:'rgba(255,255,255,0.6)',padding:'8px 14px',cursor:'pointer',fontSize:13}},'✕ Cerrar')
     ),
-    React.createElement('div',{style:{flex:1,overflowY:'auto',padding:20}},
-      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'rgba(255,255,255,0.4)',marginBottom:12}},'TURNO'),
-      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:24}},
-        ['AM','PM'].map(t=>React.createElement('button',{key:t,onClick:()=>setTurno(t),style:{padding:'16px',borderRadius:10,border:'2px solid '+(turno===t?'var(--gold)':'rgba(255,255,255,0.1)'),background:turno===t?'rgba(200,168,75,0.12)':'rgba(255,255,255,0.04)',color:turno===t?'var(--gold)':'rgba(255,255,255,0.5)',fontFamily:'Bebas Neue',fontSize:22,letterSpacing:3,cursor:'pointer'}},t,' ',t==='AM'?'🌅':'🌆'))
-      ),
-      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'rgba(255,255,255,0.4)',marginBottom:12}},'CLIENTE'),
-      clientesActivos.map(c=>React.createElement('div',{key:c.id||c.nombre,onClick:()=>setClienteSel(c),style:{padding:'14px 16px',borderRadius:10,border:'2px solid '+(clienteSel?.nombre===c.nombre?'var(--gold)':'rgba(255,255,255,0.08)'),background:clienteSel?.nombre===c.nombre?'rgba(200,168,75,0.1)':'rgba(255,255,255,0.03)',marginBottom:8,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between'}},
-        React.createElement('div',{style:{fontWeight:700,fontSize:14}},c.nombre||c),
-        clienteSel?.nombre===c.nombre?React.createElement('span',{style:{color:'var(--gold)',fontSize:18}},'✓'):null
-      ))
-    ),
-    React.createElement('div',{style:{padding:'16px',background:'rgba(0,0,0,0.5)',borderTop:'1px solid rgba(255,255,255,0.08)',flexShrink:0}},
-      React.createElement('input',{ref:galeriaInputRef,type:'file',accept:'image/*',multiple:true,style:{display:'none'},onChange:e=>{ if(e.target.files?.length) procesarFotosGaleria(e.target.files); e.target.value=''; }}),
-      React.createElement('div',{style:{display:'flex',gap:10}},
-        React.createElement('button',{onClick:()=>{if(!clienteSel){toast('⚠ Selecciona un cliente');return;}setFase('escaneo');},disabled:!clienteSel,style:{flex:2,padding:'14px',borderRadius:10,border:'none',background:clienteSel?'linear-gradient(135deg,var(--gold),#a87d2a)':'rgba(255,255,255,0.1)',color:clienteSel?'var(--dark-deep)':'rgba(255,255,255,0.3)',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,cursor:clienteSel?'pointer':'default'}},'📷 ESCANEAR'),
-        React.createElement('button',{onClick:()=>{if(!clienteSel){toast('⚠ Selecciona un cliente');return;}galeriaInputRef.current?.click();},disabled:!clienteSel,style:{flex:1,padding:'14px',borderRadius:10,border:'none',background:clienteSel?'rgba(200,168,75,0.15)':'rgba(255,255,255,0.05)',color:clienteSel?'var(--gold)':'rgba(255,255,255,0.2)',fontFamily:'Bebas Neue',fontSize:16,letterSpacing:1,border:'1px solid '+(clienteSel?'rgba(200,168,75,0.4)':'transparent'),cursor:clienteSel?'pointer':'default'}},'🖼 GALERÍA')
-      )
+    clienteSel&&React.createElement('div',{style:{padding:'16px',flexShrink:0,borderTop:'1px solid rgba(255,255,255,0.1)'}},
+      React.createElement('button',{
+        onClick:function(){setFase('escaneo');},
+        style:{width:'100%',padding:'14px',borderRadius:12,border:'none',background:'linear-gradient(135deg,var(--gold),#a87d2a)',color:'var(--dark-deep)',fontWeight:900,fontSize:16,cursor:'pointer',letterSpacing:1}
+      },'✅ CONFIRMAR Y EMPEZAR')
     )
-  );
+  )
 
   if(fase==='escaneo') return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
     React.createElement('div',{style:{background:'var(--dark)',padding:'10px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'2px solid var(--gold)',flexShrink:0}},
