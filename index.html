@@ -1199,7 +1199,7 @@ tbody tr:nth-child(even){background:#FAFAF7;}td{padding:6px 8px;border-bottom:1p
   else alert('No hay datos para exportar.');
 }
 return/*#__PURE__*/React.createElement("div",{className:"manifiesto-modal-overlay",onClick:e=>{if(e.target===e.currentTarget)onClose();}},/*#__PURE__*/React.createElement("div",{className:"manifiesto-modal"},/*#__PURE__*/React.createElement("div",{className:"man-toolbar no-print"},/*#__PURE__*/React.createElement("div",{className:"man-toolbar-title"},"\uD83D\uDCC4 Exportar Manifiesto ",esAdmin&&/*#__PURE__*/React.createElement("span",{style:{fontSize:12,background:"rgba(200,168,75,0.2)",color:"var(--gold)",padding:"2px 10px",borderRadius:10,marginLeft:8,letterSpacing:1}},"\uD83D\uDD10 ADMIN"),/*#__PURE__*/React.createElement("span",{style:{fontSize:10,color:"rgba(255,255,255,0.35)",marginLeft:10,fontFamily:"DM Sans",letterSpacing:0}},"El PDF/Excel no incluye despachadores ni tarifas")),/*#__PURE__*/React.createElement("div",{className:"man-toolbar-actions"},/*#__PURE__*/React.createElement("button",{className:"btn-secondary",style:{color:'rgba(255,255,255,0.6)',borderColor:'rgba(255,255,255,0.15)'},onClick:onClose},"Cerrar"),/*#__PURE__*/React.createElement("button",{onClick:descargarTodosClientes,style:{padding:"8px 16px",borderRadius:8,border:"1px solid var(--gold)",background:"rgba(200,168,75,0.1)",color:"var(--gold)",fontWeight:700,fontSize:12,cursor:"pointer",letterSpacing:"0.5px",whiteSpace:"nowrap"},title:"Genera un PDF separado por cada cliente con un solo click"},"\uD83D\uDCE5 Todos por Cliente"),/*#__PURE__*/React.createElement(ExportBtn,{label:"Exportar",onPDF:exportarPDF,onExcel:()=>{const headers=['#','Seguimiento','Remitente','Estado'];const rows=rowsExport.map((r,i)=>{const est=r['Estatus de Envio']||r.estado||'';const cli=(r['Cliente']||r.cliente||'').toString().trim();const env=String(r['Envio']||'').replace(/^'/,'');return[i+1,env,cli,est];});const sheetName=(clienteFiltro==='TODOS'?'Todos':clienteFiltro).slice(0,28);exportToExcel('Manifiesto_'+sheetName+'_'+(kpi.fecha||new Date().toISOString().slice(0,10)),[{name:sheetName,headers,rows},{name:'Resumen',headers:['Concepto','Valor'],rows:[['Cliente',clienteFiltro==='TODOS'?'Todos':clienteFiltro],['Mensajero',mensajeroFiltro==='TODOS'?'Todos':mensajeroFiltro],['Tipo',tipoManifiesto==='salida'?'Manifiesto de Salida':'Manifiesto de Cierre'],['Fecha',kpi.fecha||''],['Total Envíos',stats.total],['Entregados',stats.entregados],['Reprogramados',stats.reprog],['Cancelados',stats.cancelados],['En Camino',stats.camino],['Pendientes',stats.pendientes],['Indicador %',stats.indicador]]}]);}}))),/*#__PURE__*/React.createElement("div",{className:"man-filter-bar no-print"},/*#__PURE__*/React.createElement("label",null,"Tipo:"),/*#__PURE__*/React.createElement("select",{value:tipoManifiesto,onChange:e=>setTipoManifiesto(e.target.value)},/*#__PURE__*/React.createElement("option",{value:"salida"},"Manifiesto de Salida"),/*#__PURE__*/React.createElement("option",{value:"cierre"},"Manifiesto de Cierre")),/*#__PURE__*/React.createElement("label",null,"Cliente:"),/*#__PURE__*/React.createElement("select",{value:clienteFiltro,onChange:e=>setClienteFiltro(e.target.value)},clientesUnicos.map(c=>/*#__PURE__*/React.createElement("option",{key:c,value:c},c))),/*#__PURE__*/React.createElement("label",null,"Mensajero:"),/*#__PURE__*/React.createElement("select",{value:mensajeroFiltro,onChange:e=>setMensajeroFiltro(e.target.value)},mensajerosUnicos.map(m=>/*#__PURE__*/React.createElement("option",{key:m,value:m},m))),/*#__PURE__*/React.createElement("span",{style:{marginLeft:'auto',fontFamily:'JetBrains Mono',fontSize:11,color:'var(--text-soft)'}},rowsFiltrados.length," env\xEDos")),/*#__PURE__*/React.createElement("div",{className:"man-preview"},/*#__PURE__*/React.createElement("div",{id:"man-doc-preview",className:"man-doc"},/*#__PURE__*/React.createElement("div",{className:"man-header"},/*#__PURE__*/React.createElement("div",{className:"man-header-logo"},/*#__PURE__*/React.createElement("img",{src:LOGO_SRC,alt:"TransPgso"}),/*#__PURE__*/React.createElement("div",{className:"man-header-brand"},/*#__PURE__*/React.createElement("div",{className:"brand-name"},"TRANSPGSO"),/*#__PURE__*/React.createElement("div",{className:"brand-sub"},"Last Mile Delivery"),/*#__PURE__*/React.createElement("div",{style:{marginTop:6}},/*#__PURE__*/React.createElement("span",{className:`man-tipo-badge ${tipoManifiesto}`},tipoManifiesto==='salida'?'Manifiesto de Salida':'Manifiesto de Cierre')))),/*#__PURE__*/React.createElement("div",{className:"man-header-fecha"},/*#__PURE__*/React.createElement("span",{className:"fecha-big"},fechaFormateada),/*#__PURE__*/React.createElement("div",{style:{marginTop:4}},"Cliente: ",/*#__PURE__*/React.createElement("strong",null,clienteFiltro==='TODOS'?'Todos los clientes':clienteFiltro)),mensajeroFiltro!=='TODOS'&&/*#__PURE__*/React.createElement("div",null,"Mensajero: ",/*#__PURE__*/React.createElement("strong",null,mensajeroFiltro)))),/*#__PURE__*/React.createElement("div",{className:"man-body"},/*#__PURE__*/React.createElement("div",{className:"man-table-wrap"},/*#__PURE__*/React.createElement("table",{className:"man-table"},/*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("th",null,"#"),/*#__PURE__*/React.createElement("th",null,"Seguimiento"),/*#__PURE__*/React.createElement("th",null,"Remitente"),/*#__PURE__*/React.createElement("th",null,"Despachador"),/*#__PURE__*/React.createElement("th",null,"Estado"),esAdmin&&/*#__PURE__*/React.createElement("th",null,"Tarifa"))),/*#__PURE__*/React.createElement("tbody",null,rowsFiltrados.length===0&&/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",{colSpan:5,style:{textAlign:'center',padding:'20px',color:'#7a7d6a'}},"Sin datos. Importa el archivo del sistema primero.")),rowsFiltrados.map((r,i)=>{const est=r['Estatus de Envio']||r.estado||'';const cli=r['Cliente']||r.cliente||'';const desp=normalizarNombre(r['Despachador']||r.despachador||'');const env=r['Envio']||r.envio||'—';return/*#__PURE__*/React.createElement("tr",{key:i},/*#__PURE__*/React.createElement("td",{style:{color:'#7a7d6a',fontSize:9}},i+1),/*#__PURE__*/React.createElement("td",{style:{fontFamily:'monospace',fontSize:10,fontWeight:600}},String(env).replace(/^'/,'')),/*#__PURE__*/React.createElement("td",{style:{fontWeight:600}},cli),/*#__PURE__*/React.createElement("td",{style:{color:'#4a4d3a',fontSize:11}},desp.replace(/,\s*/g,' ')),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("span",{className:`man-estado ${estadoClass(est)}`},est||'Pendiente')),esAdmin&&/*#__PURE__*/React.createElement("td",{style:{fontFamily:'monospace',fontSize:10,color:'#4a4d3a'}},r['P/U Delivery']>0?`$${Number(r['P/U Delivery']).toLocaleString('es-CL')}`:''));})))),/*#__PURE__*/React.createElement("div",{className:"man-resumen"},/*#__PURE__*/React.createElement("table",{className:"man-kpi-table"},/*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("th",null,"Clientes"),/*#__PURE__*/React.createElement("th",null,"Q Env\xEDos"),/*#__PURE__*/React.createElement("th",null,"Q Firmas"),/*#__PURE__*/React.createElement("th",null,"Q Reprog."),/*#__PURE__*/React.createElement("th",null,"En Despacho"),/*#__PURE__*/React.createElement("th",null,"Indicador"))),/*#__PURE__*/React.createElement("tbody",null,/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",{style:{fontWeight:700}},clienteFiltro==='TODOS'?'TODOS':clienteFiltro),/*#__PURE__*/React.createElement("td",null,stats.total),/*#__PURE__*/React.createElement("td",null,stats.entregados),/*#__PURE__*/React.createElement("td",null,stats.reprog),/*#__PURE__*/React.createElement("td",null,stats.camino),/*#__PURE__*/React.createElement("td",{className:"man-kpi-indicador"},stats.indicador,"%")))),/*#__PURE__*/React.createElement("div",{className:"man-summary-box"},/*#__PURE__*/React.createElement("div",{className:"sum-header"},"Resumen Operacional"),/*#__PURE__*/React.createElement("table",null,/*#__PURE__*/React.createElement("tbody",null,/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",null,"Piezas recibidas"),/*#__PURE__*/React.createElement("td",null,stats.total)),/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",null,"Piezas entregadas"),/*#__PURE__*/React.createElement("td",{style:{color:'#1a6b3a'}},stats.entregados)),/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",null,"Efectividad"),/*#__PURE__*/React.createElement("td",{style:{color:'#1a6b3a',fontSize:13}},/*#__PURE__*/React.createElement("strong",null,stats.indicador,"%")))))),/*#__PURE__*/React.createElement("div",{className:"man-summary-box"},/*#__PURE__*/React.createElement("div",{className:"sum-header"},"Detalle de Novedades"),/*#__PURE__*/React.createElement("table",null,/*#__PURE__*/React.createElement("tbody",null,/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",null,"Reprogramadas"),/*#__PURE__*/React.createElement("td",{style:{color:'#7a5500'}},stats.reprog)),/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",null,"En despacho"),/*#__PURE__*/React.createElement("td",{style:{color:'#5a4010'}},stats.camino)),/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",null,"Canceladas"),/*#__PURE__*/React.createElement("td",{style:{color:'#8b1a1a'}},stats.cancelados)),/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",null,"Pendiente por Retiro"),/*#__PURE__*/React.createElement("td",null,stats.pendientes))))))),/*#__PURE__*/React.createElement("div",{className:"man-footer"},/*#__PURE__*/React.createElement("span",null,"TransPgso SpA \xB7 Sistema de Gesti\xF3n Operacional"),/*#__PURE__*/React.createElement("span",null,"Generado: ",new Date().toLocaleString('es-CL')),/*#__PURE__*/React.createElement("span",null,"Total env\xEDos: ",stats.total))))));}function ConsumoModal(props){var cm=props.consumoModal,scm=props.setConsumoModal,pl=props.productosLocal,up=props.updatePago;var hoy=new Date().toISOString().slice(0,10);var key='transpgso_v2_cdet_'+cm.nombre.toLowerCase().replace(/[^a-z]/g,'_')+'_'+hoy;var _s1=useState(''),sel=_s1[0],setSel=_s1[1];var _s2=useState(1),cant=_s2[0],setCant=_s2[1];var _s3=useState(function(){try{var r=localStorage.getItem(key);return r?JSON.parse(r):[]}catch(e){return[]}}),items=_s3[0],setItems=_s3[1];var tot=items.reduce(function(a,x){return a+x.total},0);function addItem(){var prod=pl.find(function(p){return p.id===parseInt(sel)});if(!prod)return;var n={id:Date.now(),nombre:prod.nombre,precio:prod.precio,cantidad:cant,total:prod.precio*cant};var ni=[...items,n];setItems(ni);localStorage.setItem(key,JSON.stringify(ni));var t=ni.reduce(function(a,x){return a+x.total},0);up(cm.id,'consumo',t);}function delItem(id){var ni=items.filter(function(x){return x.id!==id});setItems(ni);localStorage.setItem(key,JSON.stringify(ni));var t=ni.reduce(function(a,x){return a+x.total},0);up(cm.id,'consumo',t);}var lista=items.length===0?React.createElement('div',{style:{textAlign:'center',padding:'16px 0',color:'var(--text-soft)',fontSize:13}},'Sin consumos hoy.'):React.createElement('div',{style:{border:'1px solid var(--border)',borderRadius:8,marginBottom:12,overflow:'hidden'}},items.map(function(x,i){return React.createElement('div',{key:x.id,style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 12px',background:i%2===0?'#fff':'var(--cream)',borderBottom:'1px solid var(--border)'}},React.createElement('span',null,x.nombre,' x'+x.cantidad),React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center'}},React.createElement('span',{style:{fontFamily:'JetBrains Mono',fontWeight:700,color:'var(--danger)'}},'$'+x.total.toLocaleString('es-CL')),React.createElement('button',{onClick:function(){delItem(x.id)},style:{padding:'2px 7px',borderRadius:4,border:'none',background:'rgba(176,48,48,0.1)',color:'#b03030',cursor:'pointer'}},'x')));}),React.createElement('div',{style:{display:'flex',justifyContent:'space-between',padding:'10px 12px',background:'rgba(200,168,75,0.08)',fontWeight:700}},React.createElement('span',null,'TOTAL'),React.createElement('span',{style:{fontFamily:'JetBrains Mono',color:'var(--danger)'}},'$'+tot.toLocaleString('es-CL'))));return React.createElement(Modal,{title:'Consumo '+cm.nombre,onClose:function(){scm(null)}},React.createElement('p',{style:{fontSize:12,color:'var(--text-soft)',marginBottom:12}},'Productos consumidos hoy.'),React.createElement('div',{style:{display:'flex',gap:8,marginBottom:14,alignItems:'flex-end',flexWrap:'wrap'}},React.createElement('div',{style:{flex:2}},React.createElement('label',{className:'form-label'},'Producto'),React.createElement('select',{className:'form-input',value:sel,onChange:function(e){setSel(e.target.value)}},React.createElement('option',{value:''},'Seleccionar...'),pl.filter(function(p){return p.activo!==false}).map(function(p){return React.createElement('option',{key:p.id,value:p.id},p.nombre+' $'+p.precio.toLocaleString('es-CL'));}))),React.createElement('div',{style:{width:70}},React.createElement('label',{className:'form-label'},'Cant.'),React.createElement('input',{className:'form-input',type:'number',min:1,value:cant,onChange:function(e){setCant(parseInt(e.target.value)||1)}})),React.createElement('button',{className:'btn-primary',onClick:addItem,style:{padding:'8px 14px'}},'+ Agregar')),lista,React.createElement('div',{className:'modal-actions'},React.createElement('button',{className:'btn-secondary',onClick:function(){scm(null)}},'Cerrar')));}
-function PlanillaRetiros({clientes,mensajeros,retirosDB,setRetirosDB,retiroFecha,setRetiroFecha,toast}){
+function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_pr.mensajeros,retirosDB=_ref_pr.retirosDB,setRetirosDB=_ref_pr.setRetirosDB,retiroFecha=_ref_pr.retiroFecha,setRetiroFecha=_ref_pr.setRetiroFecha,toast=_ref_pr.toast;
   var hoy=new Date().toISOString().slice(0,10);
   var _sv=React.useState('diario'),subVista=_sv[0],setSubVista=_sv[1];
   var TARIFA_MIN=1190;
@@ -1250,6 +1250,28 @@ function PlanillaRetiros({clientes,mensajeros,retirosDB,setRetirosDB,retiroFecha
     var data=cargarRetirosDia(retiroFecha);
     setFilas(data);
     setRetirosDB(data);
+    // También leer desde Supabase para tener datos actualizados del mensajero
+    db.from('retiros').select('*').eq('fecha',retiroFecha)
+      .then(function(res){
+        if(res.data&&res.data.length>0){
+          // Actualizar campos que el mensajero puede haber cambiado
+          setFilas(function(prev){
+            return prev.map(function(fila){
+              var supaRow=res.data.find(function(r){
+                return r.cliente===fila.cliente&&
+                  (r.mensajero||'').replace(/,\s*/g,' ').toUpperCase().trim()===(fila.mensajero||'').replace(/,\s*/g,' ').toUpperCase().trim();
+              });
+              if(!supaRow)return fila;
+              return Object.assign({},fila,{
+                piezas:supaRow.piezas||fila.piezas,
+                retirado:supaRow.retirado||fila.retirado,
+                enBodega:supaRow.en_bodega||fila.enBodega,
+                respaldos:supaRow.respaldos||fila.respaldos
+              });
+            });
+          });
+        }
+      }).catch(function(){});
   },[retiroFecha]);
 
   function actualizarFila(idx,campo,valor){
@@ -2169,7 +2191,7 @@ function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoE
 
 
 function tipoEnvio(p,c){const kg=parseFloat(p)||0;const com=(c||'').toUpperCase();if(com.includes('COLINA'))return'Colina';if(com.includes('PADRE HURTADO')||com.includes('P.HURTADO')||com.includes('HURTADO'))return'P. Hurtado';if(kg>18)return'+18kg';if(kg>10)return'+10kg';return'Normal';}
-function AdminEditarEnvio({envio,onSave}){
+function AdminEditarEnvio(_ref_ae){var envio=_ref_ae.envio,onSave=_ref_ae.onSave;
   const [editDir,setEditDir]=useState(false);
   const [editCom,setEditCom]=useState(false);
   const [dir,setDir]=useState(envio.direccion||'');
@@ -2209,7 +2231,7 @@ function AdminEditarEnvio({envio,onSave}){
     )
   );
 }
-function ColectaAdmin({clientes,mensajeros,toast,esAdmin}){
+function ColectaAdmin(_ref_ca){var clientes=_ref_ca.clientes,mensajeros=_ref_ca.mensajeros,toast=_ref_ca.toast,esAdmin=_ref_ca.esAdmin;
   var hoy=new Date().toISOString().slice(0,10);
   var _t=useState('registro'),subTab=_t[0],setSubTab=_t[1];
   var _f=useState(hoy),filtroFecha=_f[0],setFiltroFecha=_f[1];
@@ -4290,162 +4312,144 @@ var ColectaErrorBoundary = (function(_React$Component) {
   return ColectaErrorBoundary;
 }(React.Component));
 
-function RetirosRider({usuario}){
+function RetirosRider(_ref_rr){var usuario=_ref_rr.usuario;
   var hoy=new Date().toISOString().slice(0,10);
   var _sf=React.useState(hoy),fechaVer=_sf[0],setFechaVer=_sf[1];
   var _sr=React.useState([]),retiros=_sr[0],setRetiros=_sr[1];
+  var _sl=React.useState(false),loading=_sl[0],setLoading=_sl[1];
 
-  React.useEffect(function(){
-    cargarRetiros(fechaVer);
-  },[fechaVer]);
+  React.useEffect(function(){cargarRetiros(fechaVer);},[fechaVer]);
 
   function cargarRetiros(fecha){
+    setLoading(true);
     var nombre=(usuario.nombre||'').replace(/,\s*/g,' ').toUpperCase().trim();
-    // Intentar desde Supabase primero
     db.from('retiros').select('*').eq('fecha',fecha)
       .then(function(res){
+        setLoading(false);
         if(res.data&&res.data.length>0){
-          // Filtrar por nombre del mensajero (normalizando)
-          var dataMia=res.data.filter(function(r){
-            var mnorm=(r.mensajero||'').replace(/,\s*/g,' ').toUpperCase().trim();
-            return mnorm===nombre;
+          var mios=res.data.filter(function(r){
+            return (r.mensajero||'').replace(/,\s*/g,' ').toUpperCase().trim()===nombre;
           });
-          if(dataMia.length===0){setRetiros([]);return;}
-          // Mapear columnas de Supabase a formato local
-          var mapped=dataMia.map(function(r){
-            return {
-              id:r.id,
-              cliente:r.cliente,
-              direccion:r.direccion,
-              mensajero:r.mensajero,
-              confirmado:r.confirmado,
-              piezas:r.piezas,
-              retirado:r.retirado,
-              enBodega:r.en_bodega,
-              respaldos:r.respaldos,
-              pagoMensajero:r.pago_mensajero,
-              cobro:r.cobro,
-              fecha:r.fecha
-            };
-          });
-          setRetiros(mapped);
+          setRetiros(mios.map(function(r){
+            return {id:r.id,cliente:r.cliente,direccion:r.direccion,mensajero:r.mensajero,
+              confirmado:r.confirmado,piezas:r.piezas,retirado:r.retirado,
+              enBodega:r.en_bodega,respaldos:r.respaldos,pagoMensajero:r.pago_mensajero,cobro:r.cobro};
+          }));
         } else {
-          // Fallback localStorage
-          try{
-            var keyDia='transpgso_v2_retiros_dia_'+fecha;
-            var planilla=JSON.parse(localStorage.getItem(keyDia)||'[]');
-            var mios=planilla.filter(function(r){return (r.mensajero||'').toUpperCase().trim()===nombre;});
-            setRetiros(mios);
-          }catch(e){setRetiros([]);}
+          setRetiros([]);
         }
-      }).catch(function(){
-        try{
-          var keyDia='transpgso_v2_retiros_dia_'+fecha;
-          var planilla=JSON.parse(localStorage.getItem(keyDia)||'[]');
-          var nombre2=(usuario.nombre||'').replace(/,\s*/g,' ').toUpperCase().trim();
-          setRetiros(planilla.filter(function(r){return (r.mensajero||'').toUpperCase().trim()===nombre2;}));
-        }catch(e){setRetiros([]);}
-      });
+      }).catch(function(){setLoading(false);setRetiros([]);});
   }
 
   function actualizarRetiro(idx,campo,valor){
-    // 1. Actualizar estado local INMEDIATAMENTE
-    setRetiros(function(prev){
-      return prev.map(function(r,i){
-        if(i!==idx) return r;
-        var upd=Object.assign({},r,{[campo]:valor});
-        if(campo==='retirado'&&valor===true) upd.enBodega=true;
-        return upd;
-      });
-    });
-
-    // 2. Sincronizar con Supabase en segundo plano
+    // 1. Actualizar estado local inmediatamente
     var retiroActual=retiros[idx];
+    var nuevo=retiros.map(function(r,i){
+      if(i!==idx)return r;
+      var upd=Object.assign({},r,{[campo]:valor});
+      if(campo==='retirado'&&valor===true)upd.enBodega=true;
+      return upd;
+    });
+    setRetiros(nuevo);
+
+    // 2. Sincronizar con Supabase
     if(retiroActual&&retiroActual.id){
       var updateData={};
-      if(campo==='piezas') updateData.piezas=parseInt(valor)||0;
-      if(campo==='retirado'&&valor===true){ updateData.retirado=true; updateData.en_bodega=true; }
-      if(campo==='enBodega') updateData.en_bodega=true;
-      if(campo==='respaldos') updateData.respaldos=true;
+      if(campo==='piezas')updateData.piezas=parseInt(valor)||0;
+      if(campo==='retirado'&&valor===true){updateData.retirado=true;updateData.en_bodega=true;}
+      if(campo==='respaldos'&&valor===true)updateData.respaldos=true;
       db.from('retiros').update(updateData).eq('id',retiroActual.id)
         .then(function(){}).catch(function(){});
     }
 
     // 3. Sumar pago en Ganancias al marcar Retirado
-    if(campo==='retirado'&&valor===true){
+    if(campo==='retirado'&&valor===true&&retiroActual){
       try{
         var keyRider='transpgso_v2_retiros_rider_'+(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');
         var rd=JSON.parse(localStorage.getItem(keyRider)||'null')||{retiros:0,total:0};
         rd.retiros=(rd.retiros||0)+1;
-        rd.total=(rd.total||0)+(parseFloat((retiroActual&&retiroActual.pagoMensajero)||0));
+        rd.total=(rd.total||0)+(parseFloat(retiroActual.pagoMensajero)||0);
         localStorage.setItem(keyRider,JSON.stringify(rd));
+      }catch(ex){}
+      // Notificar admin
+      try{
+        var notifs=JSON.parse(localStorage.getItem('transpgso_v2_notificaciones')||'[]');
+        notifs.unshift({id:Date.now(),tipo:'retiro_completado',cliente:retiroActual.cliente||'',
+          mensajero:(usuario.nombre||'').replace(/,\s*/g,' '),fecha:new Date().toISOString(),leida:false});
+        localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifs.slice(0,100)));
       }catch(ex){}
     }
 
-    // 4. Notificar admin al marcar Respaldos
-    if(campo==='respaldos'&&valor===true){
+    // 4. Notificar admin al enviar Respaldos
+    if(campo==='respaldos'&&valor===true&&retiroActual){
       try{
-        var notifAdmin=JSON.parse(localStorage.getItem('transpgso_v2_notificaciones')||'[]');
-        var nombre=(usuario.nombre||'').replace(/,\s*/g,' ');
-        notifAdmin.unshift({id:Date.now(),tipo:'respaldos_retiro',cliente:(retiroActual&&retiroActual.cliente)||'',mensajero:nombre,fecha:new Date().toISOString(),leida:false});
-        localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifAdmin.slice(0,100)));
+        var notifs2=JSON.parse(localStorage.getItem('transpgso_v2_notificaciones')||'[]');
+        notifs2.unshift({id:Date.now(),tipo:'respaldos_retiro',cliente:retiroActual.cliente||'',
+          mensajero:(usuario.nombre||'').replace(/,\s*/g,' '),fecha:new Date().toISOString(),leida:false});
+        localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifs2.slice(0,100)));
       }catch(ex){}
     }
   }
 
-  var inputNum={width:70,padding:'8px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(255,255,255,0.08)',color:'#fff',fontFamily:'JetBrains Mono',fontWeight:700,fontSize:16,textAlign:'center'};
-  var chkBtn=function(checked,onClick,label){
-    return React.createElement('button',{
-      onClick:onClick,
-      style:{padding:'8px 16px',borderRadius:8,border:'2px solid '+(checked?'#2e7d4f':'rgba(255,255,255,0.2)'),background:checked?'rgba(46,125,79,0.2)':'transparent',color:checked?'#4caf50':'rgba(255,255,255,0.5)',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}
-    },checked?'✓ '+label:label);
-  };
+  var inputNum={width:70,padding:'8px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',
+    background:'rgba(255,255,255,0.08)',color:'#fff',fontFamily:'JetBrains Mono',
+    fontWeight:700,fontSize:16,textAlign:'center'};
 
-  return React.createElement('div',{style:{position:'relative',minHeight:'100vh',background:'#0a0c07',color:'#fff',fontFamily:'DM Sans,sans-serif',paddingBottom:90}},
-    // Header
+  function btnAccion(activo,onClick,labelOff,labelOn){
+    return React.createElement('button',{
+      onClick:activo?null:onClick,
+      style:{padding:'8px 14px',borderRadius:8,
+        border:'2px solid '+(activo?'rgba(46,125,79,0.6)':'rgba(255,255,255,0.2)'),
+        background:activo?'rgba(46,125,79,0.2)':'transparent',
+        color:activo?'#4caf50':'rgba(255,255,255,0.6)',
+        fontWeight:700,fontSize:12,cursor:activo?'default':'pointer',whiteSpace:'nowrap'}
+    },activo?'✓ '+labelOn:labelOff);
+  }
+
+  return React.createElement('div',{style:{minHeight:'100vh',background:'#0a0c07',color:'#fff',fontFamily:'DM Sans,sans-serif',paddingBottom:90}},
     React.createElement('div',{style:{background:'var(--dark)',padding:'14px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'2px solid var(--gold)',position:'sticky',top:0,zIndex:10}},
       React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,color:'var(--gold)',letterSpacing:2}},'🚚 MIS RETIROS'),
-      React.createElement('input',{type:'date',value:fechaVer,onChange:function(e){setFechaVer(e.target.value);},style:{padding:'6px 10px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(255,255,255,0.08)',color:'var(--gold)',fontSize:12,fontFamily:'JetBrains Mono'}})
+      React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center'}},
+        React.createElement('button',{onClick:function(){cargarRetiros(fechaVer);},
+          style:{padding:'6px 10px',borderRadius:7,border:'1px solid rgba(200,168,75,0.3)',background:'transparent',color:'var(--gold)',cursor:'pointer',fontSize:13}},'↺'),
+        React.createElement('input',{type:'date',value:fechaVer,
+          onChange:function(e){setFechaVer(e.target.value);},
+          style:{padding:'6px 10px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',
+            background:'rgba(255,255,255,0.08)',color:'var(--gold)',fontSize:12,fontFamily:'JetBrains Mono'}})
+      )
     ),
-
-    // Lista de retiros
     React.createElement('div',{style:{padding:16}},
+      loading?React.createElement('div',{style:{textAlign:'center',padding:40,color:'rgba(255,255,255,0.4)'}},'Cargando...'):
       retiros.length===0
         ?React.createElement('div',{style:{textAlign:'center',padding:'60px 20px',color:'rgba(255,255,255,0.3)'}},
             React.createElement('div',{style:{fontSize:40,marginBottom:12}},'📭'),
             React.createElement('div',{style:{fontSize:14}},'Sin retiros asignados para este día')
           )
         :retiros.map(function(r,i){
-          var pagoNum=parseFloat(r.pagoMensajero)||0;
-          return React.createElement('div',{key:i,style:{background:'rgba(255,255,255,0.04)',border:'1px solid '+(r.retirado?'rgba(46,125,79,0.4)':'rgba(200,168,75,0.2)'),borderRadius:14,padding:16,marginBottom:12}},
-            // Cliente y dirección
-            React.createElement('div',{style:{marginBottom:12}},
-              React.createElement('div',{style:{fontWeight:700,fontSize:16,color:r.retirado?'#4caf50':'var(--gold)',marginBottom:4}},r.cliente||'Cliente'),
+          var pago=parseFloat(r.pagoMensajero)||0;
+          return React.createElement('div',{key:r.id||i,
+            style:{background:'rgba(255,255,255,0.04)',
+              border:'1px solid '+(r.retirado?'rgba(46,125,79,0.4)':'rgba(200,168,75,0.2)'),
+              borderRadius:14,padding:16,marginBottom:12}},
+            React.createElement('div',{style:{marginBottom:10}},
+              React.createElement('div',{style:{fontWeight:700,fontSize:16,color:r.retirado?'#4caf50':'var(--gold)',marginBottom:3}},r.cliente||''),
               React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.5)'}},'📍 '+(r.direccion||'Sin dirección'))
             ),
-            // Pago y piezas
             React.createElement('div',{style:{display:'flex',gap:12,alignItems:'center',marginBottom:14,flexWrap:'wrap'}},
-              pagoNum>0&&React.createElement('div',{style:{background:'rgba(200,168,75,0.12)',borderRadius:8,padding:'6px 12px',fontFamily:'JetBrains Mono',fontWeight:700,color:'var(--gold)',fontSize:14}},'💰 $'+pagoNum.toLocaleString('es-CL')),
+              pago>0?React.createElement('div',{style:{background:'rgba(200,168,75,0.12)',borderRadius:8,padding:'6px 12px',fontFamily:'JetBrains Mono',fontWeight:700,color:'var(--gold)',fontSize:14}},'💰 $'+pago.toLocaleString('es-CL')):null,
               React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8}},
                 React.createElement('span',{style:{fontSize:12,color:'rgba(255,255,255,0.5)'}},'Piezas:'),
-                React.createElement('input',{
-                  type:'number',min:0,
-                  style:inputNum,
-                  value:r.piezas||'',
-                  placeholder:'0',
-                  disabled:!!r.retirado,
-                  onChange:function(e){actualizarRetiro(i,'piezas',e.target.value);}
-                })
+                React.createElement('input',{type:'number',min:0,style:inputNum,
+                  value:r.piezas||'',placeholder:'0',
+                  onChange:function(e){actualizarRetiro(i,'piezas',e.target.value);}})
               )
             ),
-            // Botones de acción
             React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
-              chkBtn(!!r.retirado,function(){if(!r.retirado)actualizarRetiro(i,'retirado',true);},'Retirado ✓'),
-              chkBtn(!!r.enBodega,function(){},'En Bodega'),
-              chkBtn(!!r.respaldos,function(){if(r.retirado&&!r.respaldos)actualizarRetiro(i,'respaldos',true);},'Respaldos 📎')
+              btnAccion(!!r.retirado,function(){actualizarRetiro(i,'retirado',true);},'Confirmar Retiro','Retirado'),
+              btnAccion(!!r.enBodega,function(){if(r.retirado)actualizarRetiro(i,'enBodega',true);},'En Bodega','En Bodega'),
+              btnAccion(!!r.respaldos,function(){if(r.retirado&&!r.respaldos)actualizarRetiro(i,'respaldos',true);},'Enviar Respaldos 📎','Respaldos Enviados')
             ),
-            // Estado
-            r.retirado&&React.createElement('div',{style:{marginTop:10,fontSize:11,color:'rgba(255,255,255,0.3)',fontStyle:'italic'}},r.respaldos?'✓ Respaldos enviados al admin':'Marca Respaldos cuando los subas')
+            r.retirado&&!r.respaldos?React.createElement('div',{style:{marginTop:8,fontSize:11,color:'rgba(255,255,255,0.3)',fontStyle:'italic'}},'Marca Respaldos cuando los subas'):null
           );
         })
     )
