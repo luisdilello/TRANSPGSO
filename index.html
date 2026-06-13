@@ -4302,11 +4302,17 @@ function RetirosRider({usuario}){
   function cargarRetiros(fecha){
     var nombre=(usuario.nombre||'').replace(/,\s*/g,' ').toUpperCase().trim();
     // Intentar desde Supabase primero
-    db.from('retiros').select('*').eq('fecha',fecha).eq('mensajero',nombre)
+    db.from('retiros').select('*').eq('fecha',fecha)
       .then(function(res){
         if(res.data&&res.data.length>0){
+          // Filtrar por nombre del mensajero (normalizando)
+          var dataMia=res.data.filter(function(r){
+            var mnorm=(r.mensajero||'').replace(/,\s*/g,' ').toUpperCase().trim();
+            return mnorm===nombre;
+          });
+          if(dataMia.length===0){setRetiros([]);return;}
           // Mapear columnas de Supabase a formato local
-          var mapped=res.data.map(function(r){
+          var mapped=dataMia.map(function(r){
             return {
               id:r.id,
               cliente:r.cliente,
