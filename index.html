@@ -2948,6 +2948,12 @@ function ColectaRider(_ref_cr){
   const _s3=useState(clientePresel?'escaneo':'seleccion'),fase=_s3[0],setFase=_s3[1];
   // Retiros asignados desde planilla admin
 
+  useEffect(function(){
+    if(clientePresel){
+      setClienteSel(clientePresel);
+      setFase('escaneo');
+    }
+  },[clientePresel]);
   function marcarRetirosLeidos(){
     try{
       var nombre=(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');
@@ -4781,7 +4787,12 @@ function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout;co
     );
     return acc;
   },{seen:new Set(),items:[]}).items;
-})())),riderTab==='retiros'&&/*#__PURE__*/React.createElement(RetirosRider,{usuario:usuario,onColectaRetiro:function(cliente){setClienteRetiroPresel(cliente);setShowColecta(true);setRiderTab('colecta');}}),riderTab==='ganancias'&&/*#__PURE__*/React.createElement(GananciasRider,{usuario:usuario,envios:envios,colectasKey:'colecta_rider_'+usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase()}),showColecta&&/*#__PURE__*/React.createElement(ColectaErrorBoundary,null,React.createElement(ColectaRider,{usuario:usuario,clientes:lsLoad('clientes',[]),toast:toast,clientePresel:clienteRetiroPresel,onClose:function(){setShowColecta(false);setClienteRetiroPresel(null);}})),showAsignacion&&/*#__PURE__*/React.createElement(AsignacionRider,{usuario:usuario,toast:toast,onClose:()=>setShowAsignacion(false),onEnviosUpdate:envioNuevo=>{setEnvios(prev=>{const nuevos=prev.find(e=>e.codigo===envioNuevo.codigo)?prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e):[envioNuevo,...prev];const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,nuevos);return nuevos;});}}),showAjustes&&/*#__PURE__*/React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:9999,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},
+})())),riderTab==='retiros'&&/*#__PURE__*/React.createElement(RetirosRider,{usuario:usuario,onColectaRetiro:function(nombreCliente){
+        var todosClientes=lsLoad('clientes',[]);
+        var clienteObj=todosClientes.find(function(c){return c.nombre===nombreCliente;})||{nombre:nombreCliente};
+        setClienteRetiroPresel(clienteObj);
+        setShowColecta(true);
+      }}),riderTab==='ganancias'&&/*#__PURE__*/React.createElement(GananciasRider,{usuario:usuario,envios:envios,colectasKey:'colecta_rider_'+usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase()}),showColecta&&/*#__PURE__*/React.createElement(ColectaErrorBoundary,null,React.createElement(ColectaRider,{key:clienteRetiroPresel?'retiro-'+(clienteRetiroPresel.nombre||clienteRetiroPresel):'colecta',usuario:usuario,clientes:lsLoad('clientes',[]),toast:toast,clientePresel:clienteRetiroPresel,onClose:function(){setShowColecta(false);setClienteRetiroPresel(null);}})),showAsignacion&&/*#__PURE__*/React.createElement(AsignacionRider,{usuario:usuario,toast:toast,onClose:()=>setShowAsignacion(false),onEnviosUpdate:envioNuevo=>{setEnvios(prev=>{const nuevos=prev.find(e=>e.codigo===envioNuevo.codigo)?prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e):[envioNuevo,...prev];const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,nuevos);return nuevos;});}}),showAjustes&&/*#__PURE__*/React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:9999,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},
   React.createElement('div',{style:{background:'#1a1d14',borderRadius:'20px 20px 0 0',padding:24,border:'1px solid rgba(200,168,75,0.2)',maxHeight:'80vh',overflowY:'auto'}},
     React.createElement('div',{style:{width:40,height:4,background:'rgba(255,255,255,0.2)',borderRadius:2,margin:'0 auto 20px'}},null),
     React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:2,color:'var(--gold)',marginBottom:20}},"⚙ AJUSTES"),
