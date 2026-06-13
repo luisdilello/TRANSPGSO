@@ -1442,7 +1442,7 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
                   ),
                   // Confirmado
                   React.createElement('td',{style:{padding:'4px',textAlign:'center'}},
-                    React.createElement('input',{type:'checkbox',style:chkStyle,checked:!!fila.confirmado,onChange:function(e){if(e.target.checked&&(parseFloat(fila.pagoMensajero)||0)<=0){alert('Ingresa el Pago al Mensajero antes de confirmar.');return;}actualizarFila(idx,'confirmado',e.target.checked);}}
+                    React.createElement('input',{type:'checkbox',style:chkStyle,checked:!!fila.confirmado,onChange:function(e){if(e.target.checked&&(parseFloat(fila.pagoMensajero)||0)<=0){alert('Ingresa el Pago al Mensajero antes de confirmar.');return;}actualizarFila(idx,'confirmado',e.target.checked);}})
                   ),
                   // Piezas
                   React.createElement('td',{style:{padding:'4px 6px',textAlign:'center',width:70}},
@@ -1450,11 +1450,11 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
                   ),
                   // Retirado
                   React.createElement('td',{style:{padding:'4px',textAlign:'center'}},
-                    React.createElement('input',{type:'checkbox',style:chkStyle,checked:!!fila.retirado,readOnly:true,onChange:function(){})
+                    React.createElement('input',{type:'checkbox',style:chkStyle,checked:!!fila.retirado,readOnly:true,onChange:function(){}})
                   ),
                   // En Bodega
                   React.createElement('td',{style:{padding:'4px',textAlign:'center'}},
-                    React.createElement('input',{type:'checkbox',style:chkStyle,checked:!!fila.enBodega,readOnly:true,onChange:function(){})
+                    React.createElement('input',{type:'checkbox',style:chkStyle,checked:!!fila.enBodega,readOnly:true,onChange:function(){}})
                   ),
                   // Respaldos
                   React.createElement('td',{style:{padding:'4px',textAlign:'center'}},
@@ -4400,7 +4400,7 @@ function RetirosRider(_ref_rr){
     }
   }
 
-  procesarFotosRespaldo(files){
+  async function procesarFotosRespaldo(files){
     const arr=Array.from(files);
     if(!arr.length) return;
     // Comprimir imágenes antes de procesar para mayor velocidad
@@ -4476,7 +4476,7 @@ function RetirosRider(_ref_rr){
     })).catch(()=>{});
   }
 
-  analizarFotosRespaldo(){
+  async function analizarFotosRespaldo(){
     if(!fotosRespaldo.length) return;
     setProcesandoGaleria(true);
     // Obtener snapshot actual para no depender de state stale
