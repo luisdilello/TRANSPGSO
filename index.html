@@ -4349,53 +4349,48 @@ function RetirosRider({usuario}){
   }
 
   function actualizarRetiro(idx,campo,valor){
-    // Actualizar en Supabase si el retiro tiene id
+    // 1. Actualizar estado local INMEDIATAMENTE
+    setRetiros(function(prev){
+      return prev.map(function(r,i){
+        if(i!==idx) return r;
+        var upd=Object.assign({},r,{[campo]:valor});
+        if(campo==='retirado'&&valor===true) upd.enBodega=true;
+        return upd;
+      });
+    });
+
+    // 2. Sincronizar con Supabase en segundo plano
     var retiroActual=retiros[idx];
     if(retiroActual&&retiroActual.id){
       var updateData={};
       if(campo==='piezas') updateData.piezas=parseInt(valor)||0;
-      if(campo==='retirado') updateData.retirado=true;
+      if(campo==='retirado'&&valor===true){ updateData.retirado=true; updateData.en_bodega=true; }
       if(campo==='enBodega') updateData.en_bodega=true;
       if(campo==='respaldos') updateData.respaldos=true;
-      db.from('retiros').update(updateData).eq('id',retiroActual.id).then(function(){}).catch(function(){});
+      db.from('retiros').update(updateData).eq('id',retiroActual.id)
+        .then(function(){}).catch(function(){});
     }
-    try{
-      var nombre=(usuario.nombre||'').replace(/,\s*/g,' ').toUpperCase().trim();
-      var keyDia='transpgso_v2_retiros_dia_'+fechaVer;
-      var planilla=JSON.parse(localStorage.getItem(keyDia)||'[]');
-      var updated=planilla.map(function(r){
-        if((r.mensajero||'').toUpperCase().trim()!==nombre)return r;
-        var localIdx=planilla.filter(function(x){
-          return (x.mensajero||'').toUpperCase().trim()===nombre;
-        }).indexOf(r);
-        if(localIdx!==idx)return r;
-        var upd=Object.assign({},r,{[campo]:valor});
-        if(campo==='retirado'&&valor===true){
-          upd.enBodega=true;
-          // Sumar pago en GananciasRider
-          try{
-            var keyRider='transpgso_v2_retiros_rider_'+(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');
-            var rd=JSON.parse(localStorage.getItem(keyRider)||'null')||{retiros:0,total:0};
-            rd.retiros=(rd.retiros||0)+1;
-            rd.total=(rd.total||0)+(parseFloat(r.pagoMensajero)||0);
-            localStorage.setItem(keyRider,JSON.stringify(rd));
-          }catch(ex){}
-        }
-        if(campo==='respaldos'&&valor===true){
-          // Notificar al admin
-          try{
-            var notifAdmin=JSON.parse(localStorage.getItem('transpgso_v2_notificaciones')||'[]');
-            notifAdmin.unshift({id:Date.now(),tipo:'respaldos_retiro',cliente:r.cliente||'',mensajero:nombre,fecha:new Date().toISOString(),leida:false});
-            localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifAdmin.slice(0,100)));
-          }catch(ex){}
-        }
-        return upd;
-      });
-      localStorage.setItem(keyDia,JSON.stringify(updated));
-      setRetiros(updated.filter(function(r){
-        return (r.mensajero||'').toUpperCase().trim()===nombre;
-      }));
-    }catch(e){}
+
+    // 3. Sumar pago en Ganancias al marcar Retirado
+    if(campo==='retirado'&&valor===true){
+      try{
+        var keyRider='transpgso_v2_retiros_rider_'+(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');
+        var rd=JSON.parse(localStorage.getItem(keyRider)||'null')||{retiros:0,total:0};
+        rd.retiros=(rd.retiros||0)+1;
+        rd.total=(rd.total||0)+(parseFloat((retiroActual&&retiroActual.pagoMensajero)||0));
+        localStorage.setItem(keyRider,JSON.stringify(rd));
+      }catch(ex){}
+    }
+
+    // 4. Notificar admin al marcar Respaldos
+    if(campo==='respaldos'&&valor===true){
+      try{
+        var notifAdmin=JSON.parse(localStorage.getItem('transpgso_v2_notificaciones')||'[]');
+        var nombre=(usuario.nombre||'').replace(/,\s*/g,' ');
+        notifAdmin.unshift({id:Date.now(),tipo:'respaldos_retiro',cliente:(retiroActual&&retiroActual.cliente)||'',mensajero:nombre,fecha:new Date().toISOString(),leida:false});
+        localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifAdmin.slice(0,100)));
+      }catch(ex){}
+    }
   }
 
   var inputNum={width:70,padding:'8px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(255,255,255,0.08)',color:'#fff',fontFamily:'JetBrains Mono',fontWeight:700,fontSize:16,textAlign:'center'};
