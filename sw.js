@@ -1,4 +1,4 @@
-const CACHE = 'transpgso-v100';
+const CACHE = 'transpgso-v200';
 self.addEventListener('install', e => {
   self.skipWaiting();
 });
@@ -10,5 +10,7 @@ self.addEventListener('activate', e => {
   );
 });
 self.addEventListener('fetch', e => {
-  e.respondWith(fetch(e.request));
+  e.respondWith(
+    fetch(e.request, {cache: 'no-store'}).catch(() => caches.match(e.request))
+  );
 });
