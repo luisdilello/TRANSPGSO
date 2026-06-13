@@ -1449,11 +1449,11 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
                   ),
                   // Retirado
                   React.createElement('td',{style:{padding:'4px',textAlign:'center'}},
-                    React.createElement('input',{type:'checkbox',style:chkStyle,checked:!!fila.retirado,onChange:function(e){actualizarFila(idx,'retirado',e.target.checked);}})
+                    React.createElement('input',{type:'checkbox',style:chkStyle,checked:!!fila.retirado,readOnly:true,onChange:function(){})
                   ),
                   // En Bodega
                   React.createElement('td',{style:{padding:'4px',textAlign:'center'}},
-                    React.createElement('input',{type:'checkbox',style:chkStyle,checked:!!fila.enBodega,onChange:function(e){actualizarFila(idx,'enBodega',e.target.checked);}})
+                    React.createElement('input',{type:'checkbox',style:chkStyle,checked:!!fila.enBodega,readOnly:true,onChange:function(){})
                   ),
                   // Respaldos
                   React.createElement('td',{style:{padding:'4px',textAlign:'center'}},
@@ -4143,6 +4143,26 @@ function GananciasRider(_ref_gr){
       return d||{retiros:0,piezas:0,tarifa:500,total:0};
     }catch(e){return{retiros:0,piezas:0,tarifa:500,total:0};}
   },[colectasKey]);
+  // Leer retiros desde Supabase para tener el total real
+  const _useRetSupa=React.useState({retiros:0,total:0}),retirosSupa=_useRetSupa[0],setRetirosSupa=_useRetSupa[1];
+  React.useEffect(()=>{
+    const hoy=new Date().toISOString().slice(0,10);
+    const nombre=(usuario.nombre||'').replace(/,\s*/g,' ').toUpperCase().trim();
+    db.from('retiros').select('pago_mensajero,retirado,mensajero').eq('fecha',hoy)
+      .then(res=>{
+        if(res.data){
+          const mios=res.data.filter(r=>(r.mensajero||'').replace(/,\s*/g,' ').toUpperCase().trim()===nombre||true);
+          const retirados=mios.filter(r=>r.retirado);
+          const total=retirados.reduce((a,r)=>a+(parseFloat(r.pago_mensajero)||0),0);
+          setRetirosSupa({retiros:retirados.length,total:total});
+          // Actualizar localStorage para consistencia
+          if(total>0){
+            const key='transpgso_v2_retiros_rider_'+nombre.toLowerCase().replace(/[^a-z]/g,'_');
+            localStorage.setItem(key,JSON.stringify({retiros:retirados.length,total:total,piezas:0,tarifa:0}));
+          }
+        }
+      }).catch(()=>{});
+  },[colectasKey]);
   const colectasRider=React.useMemo(()=>{
     try{
       const key='transpgso_v2_colecta_registros_'+colectasKey?.split('colecta_rider_')[1];
@@ -4185,7 +4205,7 @@ function GananciasRider(_ref_gr){
       if(ex?.monto)setExtraAdmin(ex.monto);
     }catch(e){}
   },[]);
-  const gananciaRetiros=retirosPlanilla.total>0?retirosPlanilla.total:totalRetiros*tarifaRetiro;
+  const gananciaRetiros=retirosSupa.total>0?retirosSupa.total:retirosPlanilla.total>0?retirosPlanilla.total:totalRetiros*tarifaRetiro;
   const gananciaTotal=totalPesos+gananciaRetiros+extraAdmin-consumoAdmin;
 
   const periodos=[
@@ -4243,7 +4263,7 @@ function GananciasRider(_ref_gr){
       React.createElement('div',{style:{background:'rgba(200,168,75,0.08)',border:'1px solid rgba(200,168,75,0.25)',borderRadius:10,padding:14,textAlign:'center'}},
         React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.4)',letterSpacing:1.5,textTransform:'uppercase',marginBottom:6}},'🔄 Retiros'),
         React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:28,color:'var(--gold)',lineHeight:1}},'$'+gananciaRetiros.toLocaleString('es-CL')),
-        React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.3)',marginTop:4}},totalRetiros+' retiro'+(totalRetiros!==1?'s':'')+' · $'+gananciaRetiros.toLocaleString('es-CL'))
+        React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.3)',marginTop:4}},(retirosSupa.retiros>0?retirosSupa.retiros:totalRetiros)+' retiro'+((retirosSupa.retiros>0?retirosSupa.retiros:totalRetiros)!==1?'s':'')+' · $'+gananciaRetiros.toLocaleString('es-CL'))
       )
     ),
     // Grid de stats rápidas
