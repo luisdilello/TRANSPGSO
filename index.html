@@ -3423,33 +3423,25 @@ function ColectaRider(_ref_cr){
   if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
     React.createElement('div',{style:{background:'var(--dark)',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'2px solid var(--gold)',flexShrink:0}},
       React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,color:'var(--gold)',letterSpacing:2}},'📥 COLECTA'),
-      React.createElement('button',{onClick:function(){onClose();},style:{background:'none',border:'1px solid rgba(255,255,255,0.2)',borderRadius:8,color:'rgba(255,255,255,0.4)',padding:'6px 12px',fontSize:12,cursor:'pointer'}},'✕ Cerrar')
+      React.createElement('button',{onClick:onClose,style:{background:'none',border:'1px solid rgba(255,255,255,0.2)',borderRadius:8,color:'rgba(255,255,255,0.6)',padding:'8px 14px',cursor:'pointer',fontSize:13}},'✕ Cerrar')
     ),
-    React.createElement('div',{style:{padding:'16px',flexShrink:0}},
-      React.createElement('div',{style:{marginBottom:12,fontSize:12,color:'rgba(255,255,255,0.5)',letterSpacing:1,textTransform:'uppercase'}},'Turno'),
-      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:20}},
-        React.createElement('button',{onClick:function(){setTurno('AM');},style:{flex:1,padding:'10px',borderRadius:8,border:'2px solid '+(turno==='AM'?'var(--gold)':'rgba(255,255,255,0.15)'),background:turno==='AM'?'rgba(200,168,75,0.15)':'transparent',color:turno==='AM'?'var(--gold)':'rgba(255,255,255,0.5)',fontWeight:700,cursor:'pointer',fontSize:14}},'AM'),
-        React.createElement('button',{onClick:function(){setTurno('PM');},style:{flex:1,padding:'10px',borderRadius:8,border:'2px solid '+(turno==='PM'?'var(--gold)':'rgba(255,255,255,0.15)'),background:turno==='PM'?'rgba(200,168,75,0.15)':'transparent',color:turno==='PM'?'var(--gold)':'rgba(255,255,255,0.5)',fontWeight:700,cursor:'pointer',fontSize:14}},'PM')
+    React.createElement('div',{style:{flex:1,overflowY:'auto',padding:20}},
+      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'rgba(255,255,255,0.4)',marginBottom:12}},'TURNO'),
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:24}},
+        ['AM','PM'].map(t=>React.createElement('button',{key:t,onClick:()=>setTurno(t),style:{padding:'16px',borderRadius:10,border:'2px solid '+(turno===t?'var(--gold)':'rgba(255,255,255,0.1)'),background:turno===t?'rgba(200,168,75,0.12)':'rgba(255,255,255,0.04)',color:turno===t?'var(--gold)':'rgba(255,255,255,0.5)',fontFamily:'Bebas Neue',fontSize:22,letterSpacing:3,cursor:'pointer'}},t,' ',t==='AM'?'🌅':'🌆'))
       ),
-      React.createElement('div',{style:{marginBottom:8,fontSize:12,color:'rgba(255,255,255,0.5)',letterSpacing:1,textTransform:'uppercase'}},'Seleccionar Cliente')
+      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'rgba(255,255,255,0.4)',marginBottom:12}},'CLIENTE'),
+      clientesActivos.map(c=>React.createElement('div',{key:c.id||c.nombre,onClick:()=>setClienteSel(c),style:{padding:'14px 16px',borderRadius:10,border:'2px solid '+(clienteSel?.nombre===c.nombre?'var(--gold)':'rgba(255,255,255,0.08)'),background:clienteSel?.nombre===c.nombre?'rgba(200,168,75,0.1)':'rgba(255,255,255,0.03)',marginBottom:8,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between'}},
+        React.createElement('div',{style:{fontWeight:700,fontSize:14}},c.nombre||c),
+        clienteSel?.nombre===c.nombre?React.createElement('span',{style:{color:'var(--gold)',fontSize:18}},'✓'):null
+      ))
     ),
-    React.createElement('div',{style:{flex:1,overflowY:'auto',padding:'0 16px 16px'}},
-      (clientes||[]).filter(function(c){return c.activo!==false;}).sort(function(a,b){return(a.nombre||'').localeCompare(b.nombre||'');}).map(function(c,i){
-        var isSelected=clienteSel&&(clienteSel.id===c.id||clienteSel.nombre===c.nombre);
-        return React.createElement('div',{key:c.id||i,
-          onClick:function(){setClienteSel(c);},
-          style:{padding:'14px 16px',borderRadius:10,border:'2px solid '+(isSelected?'var(--gold)':'rgba(255,255,255,0.1)'),background:isSelected?'rgba(200,168,75,0.12)':'rgba(255,255,255,0.03)',marginBottom:8,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between'}
-        },
-          React.createElement('span',{style:{fontWeight:isSelected?700:400,color:isSelected?'var(--gold)':'#fff',fontSize:14}},c.nombre||c),
-          isSelected?React.createElement('span',{style:{color:'var(--gold)',fontSize:18}},'✓'):null
-        );
-      })
-    ),
-    clienteSel&&React.createElement('div',{style:{padding:'16px',flexShrink:0,borderTop:'1px solid rgba(255,255,255,0.1)'}},
-      React.createElement('button',{
-        onClick:function(){setFase('escaneo');},
-        style:{width:'100%',padding:'14px',borderRadius:12,border:'none',background:'linear-gradient(135deg,var(--gold),#a87d2a)',color:'var(--dark-deep)',fontWeight:900,fontSize:16,cursor:'pointer',letterSpacing:1}
-      },'✅ CONFIRMAR Y EMPEZAR')
+    React.createElement('div',{style:{padding:'16px',background:'rgba(0,0,0,0.5)',borderTop:'1px solid rgba(255,255,255,0.08)',flexShrink:0}},
+      React.createElement('input',{ref:galeriaInputRef,type:'file',accept:'image/*',multiple:true,style:{display:'none'},onChange:e=>{ if(e.target.files?.length) procesarFotosGaleria(e.target.files); e.target.value=''; }}),
+      React.createElement('div',{style:{display:'flex',gap:10}},
+        React.createElement('button',{onClick:()=>{if(!clienteSel){toast('⚠ Selecciona un cliente');return;}setFase('escaneo');},disabled:!clienteSel,style:{flex:2,padding:'14px',borderRadius:10,border:'none',background:clienteSel?'linear-gradient(135deg,var(--gold),#a87d2a)':'rgba(255,255,255,0.1)',color:clienteSel?'var(--dark-deep)':'rgba(255,255,255,0.3)',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,cursor:clienteSel?'pointer':'default'}},'📷 ESCANEAR'),
+        React.createElement('button',{onClick:()=>{if(!clienteSel){toast('⚠ Selecciona un cliente');return;}galeriaInputRef.current?.click();},disabled:!clienteSel,style:{flex:1,padding:'14px',borderRadius:10,border:'none',background:clienteSel?'rgba(200,168,75,0.15)':'rgba(255,255,255,0.05)',color:clienteSel?'var(--gold)':'rgba(255,255,255,0.2)',fontFamily:'Bebas Neue',fontSize:16,letterSpacing:1,border:'1px solid '+(clienteSel?'rgba(200,168,75,0.4)':'transparent'),cursor:clienteSel?'pointer':'default'}},'🖼 GALERÍA')
+      )
     )
   )
 
