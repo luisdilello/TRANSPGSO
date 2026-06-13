@@ -4268,6 +4268,126 @@ var ColectaErrorBoundary = (function(_React$Component) {
   return ColectaErrorBoundary;
 }(React.Component));
 
+function RetirosRider({usuario}){
+  var hoy=new Date().toISOString().slice(0,10);
+  var _sf=React.useState(hoy),fechaVer=_sf[0],setFechaVer=_sf[1];
+  var _sr=React.useState([]),retiros=_sr[0],setRetiros=_sr[1];
+
+  React.useEffect(function(){
+    cargarRetiros(fechaVer);
+  },[fechaVer]);
+
+  function cargarRetiros(fecha){
+    try{
+      var nombre=(usuario.nombre||'').replace(/,\s*/g,' ').toUpperCase().trim();
+      var keyDia='transpgso_v2_retiros_dia_'+fecha;
+      var planilla=JSON.parse(localStorage.getItem(keyDia)||'[]');
+      var mios=planilla.filter(function(r){
+        return (r.mensajero||'').toUpperCase().trim()===nombre;
+      });
+      setRetiros(mios);
+    }catch(e){setRetiros([]);}
+  }
+
+  function actualizarRetiro(idx,campo,valor){
+    try{
+      var nombre=(usuario.nombre||'').replace(/,\s*/g,' ').toUpperCase().trim();
+      var keyDia='transpgso_v2_retiros_dia_'+fechaVer;
+      var planilla=JSON.parse(localStorage.getItem(keyDia)||'[]');
+      var updated=planilla.map(function(r){
+        if((r.mensajero||'').toUpperCase().trim()!==nombre)return r;
+        var localIdx=planilla.filter(function(x){
+          return (x.mensajero||'').toUpperCase().trim()===nombre;
+        }).indexOf(r);
+        if(localIdx!==idx)return r;
+        var upd=Object.assign({},r,{[campo]:valor});
+        if(campo==='retirado'&&valor===true){
+          upd.enBodega=true;
+          // Sumar pago en GananciasRider
+          try{
+            var keyRider='transpgso_v2_retiros_rider_'+(usuario.nombre||'').toLowerCase().replace(/[^a-z]/g,'_');
+            var rd=JSON.parse(localStorage.getItem(keyRider)||'null')||{retiros:0,total:0};
+            rd.retiros=(rd.retiros||0)+1;
+            rd.total=(rd.total||0)+(parseFloat(r.pagoMensajero)||0);
+            localStorage.setItem(keyRider,JSON.stringify(rd));
+          }catch(ex){}
+        }
+        if(campo==='respaldos'&&valor===true){
+          // Notificar al admin
+          try{
+            var notifAdmin=JSON.parse(localStorage.getItem('transpgso_v2_notificaciones')||'[]');
+            notifAdmin.unshift({id:Date.now(),tipo:'respaldos_retiro',cliente:r.cliente||'',mensajero:nombre,fecha:new Date().toISOString(),leida:false});
+            localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifAdmin.slice(0,100)));
+          }catch(ex){}
+        }
+        return upd;
+      });
+      localStorage.setItem(keyDia,JSON.stringify(updated));
+      setRetiros(updated.filter(function(r){
+        return (r.mensajero||'').toUpperCase().trim()===nombre;
+      }));
+    }catch(e){}
+  }
+
+  var inputNum={width:70,padding:'8px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(255,255,255,0.08)',color:'#fff',fontFamily:'JetBrains Mono',fontWeight:700,fontSize:16,textAlign:'center'};
+  var chkBtn=function(checked,onClick,label){
+    return React.createElement('button',{
+      onClick:onClick,
+      style:{padding:'8px 16px',borderRadius:8,border:'2px solid '+(checked?'#2e7d4f':'rgba(255,255,255,0.2)'),background:checked?'rgba(46,125,79,0.2)':'transparent',color:checked?'#4caf50':'rgba(255,255,255,0.5)',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}
+    },checked?'✓ '+label:label);
+  };
+
+  return React.createElement('div',{style:{position:'relative',minHeight:'100vh',background:'#0a0c07',color:'#fff',fontFamily:'DM Sans,sans-serif',paddingBottom:90}},
+    // Header
+    React.createElement('div',{style:{background:'var(--dark)',padding:'14px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'2px solid var(--gold)',position:'sticky',top:0,zIndex:10}},
+      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,color:'var(--gold)',letterSpacing:2}},'🚚 MIS RETIROS'),
+      React.createElement('input',{type:'date',value:fechaVer,onChange:function(e){setFechaVer(e.target.value);},style:{padding:'6px 10px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(255,255,255,0.08)',color:'var(--gold)',fontSize:12,fontFamily:'JetBrains Mono'}})
+    ),
+
+    // Lista de retiros
+    React.createElement('div',{style:{padding:16}},
+      retiros.length===0
+        ?React.createElement('div',{style:{textAlign:'center',padding:'60px 20px',color:'rgba(255,255,255,0.3)'}},
+            React.createElement('div',{style:{fontSize:40,marginBottom:12}},'📭'),
+            React.createElement('div',{style:{fontSize:14}},'Sin retiros asignados para este día')
+          )
+        :retiros.map(function(r,i){
+          var pagoNum=parseFloat(r.pagoMensajero)||0;
+          return React.createElement('div',{key:i,style:{background:'rgba(255,255,255,0.04)',border:'1px solid '+(r.retirado?'rgba(46,125,79,0.4)':'rgba(200,168,75,0.2)'),borderRadius:14,padding:16,marginBottom:12}},
+            // Cliente y dirección
+            React.createElement('div',{style:{marginBottom:12}},
+              React.createElement('div',{style:{fontWeight:700,fontSize:16,color:r.retirado?'#4caf50':'var(--gold)',marginBottom:4}},r.cliente||'Cliente'),
+              React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.5)'}},'📍 '+(r.direccion||'Sin dirección'))
+            ),
+            // Pago y piezas
+            React.createElement('div',{style:{display:'flex',gap:12,alignItems:'center',marginBottom:14,flexWrap:'wrap'}},
+              pagoNum>0&&React.createElement('div',{style:{background:'rgba(200,168,75,0.12)',borderRadius:8,padding:'6px 12px',fontFamily:'JetBrains Mono',fontWeight:700,color:'var(--gold)',fontSize:14}},'💰 $'+pagoNum.toLocaleString('es-CL')),
+              React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8}},
+                React.createElement('span',{style:{fontSize:12,color:'rgba(255,255,255,0.5)'}},'Piezas:'),
+                React.createElement('input',{
+                  type:'number',min:0,
+                  style:inputNum,
+                  value:r.piezas||'',
+                  placeholder:'0',
+                  disabled:!!r.retirado,
+                  onChange:function(e){actualizarRetiro(i,'piezas',e.target.value);}
+                })
+              )
+            ),
+            // Botones de acción
+            React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
+              chkBtn(!!r.retirado,function(){if(!r.retirado)actualizarRetiro(i,'retirado',true);},'Retirado ✓'),
+              chkBtn(!!r.enBodega,function(){},'En Bodega'),
+              chkBtn(!!r.respaldos,function(){if(r.retirado&&!r.respaldos)actualizarRetiro(i,'respaldos',true);},'Respaldos 📎')
+            ),
+            // Estado
+            r.retirado&&React.createElement('div',{style:{marginTop:10,fontSize:11,color:'rgba(255,255,255,0.3)',fontStyle:'italic'}},r.respaldos?'✓ Respaldos enviados al admin':'Marca Respaldos cuando los subas')
+          );
+        })
+    )
+  );
+}
+
 function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout;const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);};const ESTADOS_RIDER=[{val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#C8A84B',bg:'rgba(200,168,75,0.15)'},{val:'entregado',label:'Entregado',icon:'✅',color:'#2e7d4f',bg:'rgba(46,125,79,0.15)'},{val:'reprogramado',label:'Reprogramado',icon:'📅',color:'#b07d10',bg:'rgba(176,125,16,0.15)'},{val:'cancelado',label:'Cancelado',icon:'❌',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'siniestro',label:'Siniestro',icon:'⚠️',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'pendiente_retiro',label:'Pend. Retiro',icon:'📦',color:'#7a7d6a',bg:'rgba(122,125,106,0.12)'}];async function cargarEnvios(){setLoading(true);try{const nombreRider=usuario.nombre;const primerNombre=nombreRider.split(' ')[0].split(',')[0].trim();const apellido=(nombreRider.split(',')[0]||'').trim();const {data,error}=await db.from('envios').select('*').or(`mensajero.ilike.%${primerNombre}%,mensajero.ilike.%${apellido||primerNombre}%`).order('updated_at',{ascending:false}).limit(500);if(error)throw error;if(data&&data.length>0){
   // Auto en_ruta: asignados → en_ruta
   const asignados=data.filter(e=>e.estado==='asignado');
@@ -4365,7 +4485,7 @@ function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout;co
     );
     return acc;
   },{seen:new Set(),items:[]}).items;
-})())),riderTab==='ganancias'&&/*#__PURE__*/React.createElement(GananciasRider,{usuario:usuario,envios:envios,colectasKey:'colecta_rider_'+usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase()}),showColecta&&/*#__PURE__*/React.createElement(ColectaErrorBoundary,null,React.createElement(ColectaRider,{usuario:usuario,clientes:lsLoad('clientes',[]),toast:toast,onClose:()=>setShowColecta(false)})),showAsignacion&&/*#__PURE__*/React.createElement(AsignacionRider,{usuario:usuario,toast:toast,onClose:()=>setShowAsignacion(false),onEnviosUpdate:envioNuevo=>{setEnvios(prev=>{const nuevos=prev.find(e=>e.codigo===envioNuevo.codigo)?prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e):[envioNuevo,...prev];const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,nuevos);return nuevos;});}}),showAjustes&&/*#__PURE__*/React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:9999,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},
+})())),riderTab==='retiros'&&/*#__PURE__*/React.createElement(RetirosRider,{usuario:usuario}),riderTab==='ganancias'&&/*#__PURE__*/React.createElement(GananciasRider,{usuario:usuario,envios:envios,colectasKey:'colecta_rider_'+usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase()}),showColecta&&/*#__PURE__*/React.createElement(ColectaErrorBoundary,null,React.createElement(ColectaRider,{usuario:usuario,clientes:lsLoad('clientes',[]),toast:toast,onClose:()=>setShowColecta(false)})),showAsignacion&&/*#__PURE__*/React.createElement(AsignacionRider,{usuario:usuario,toast:toast,onClose:()=>setShowAsignacion(false),onEnviosUpdate:envioNuevo=>{setEnvios(prev=>{const nuevos=prev.find(e=>e.codigo===envioNuevo.codigo)?prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e):[envioNuevo,...prev];const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,nuevos);return nuevos;});}}),showAjustes&&/*#__PURE__*/React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:9999,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},
   React.createElement('div',{style:{background:'#1a1d14',borderRadius:'20px 20px 0 0',padding:24,border:'1px solid rgba(200,168,75,0.2)',maxHeight:'80vh',overflowY:'auto'}},
     React.createElement('div',{style:{width:40,height:4,background:'rgba(255,255,255,0.2)',borderRadius:2,margin:'0 auto 20px'}},null),
     React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:2,color:'var(--gold)',marginBottom:20}},"⚙ AJUSTES"),
