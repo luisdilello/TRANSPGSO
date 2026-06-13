@@ -4467,12 +4467,12 @@ function RetirosRider(_ref_rr){
     }
     // Crear previews inmediatos sin comprimir (para mostrar rápido)
     const items=arr.map(f=>({file:f,preview:URL.createObjectURL(f),analizando:false,datos:null,error:null}));
-    setFotosGaleria(items);
-    setFase('galeria');
+    setFotosRespaldo(items);
+    setFaseRetiro('respaldos');
     // Comprimir en background (reemplazar file con versión comprimida)
     Promise.all(arr.map(async(f,i)=>{
       const compressed=await comprimirImagen(f);
-      setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,file:compressed}:x));
+      setFotosRespaldo(prev=>prev.map((x,j)=>j===i?{...x,file:compressed}:x));
     })).catch(()=>{});
   }
 
@@ -4482,7 +4482,7 @@ function RetirosRider(_ref_rr){
     // Obtener snapshot actual para no depender de state stale
     const pendientes=fotosRespaldo.map((f,i)=>({...f,idx:i})).filter(f=>!f.datos&&!f.error);
     // Marcar todas como analizando de una vez
-    setFotosGaleria(prev=>prev.map((f,i)=>pendientes.find(p=>p.idx===i)?{...f,analizando:true}:f));
+    setFotosRespaldo(prev=>prev.map((f,i)=>pendientes.find(p=>p.idx===i)?{...f,analizando:true}:f));
     // Procesar en lotes de 3 en paralelo con pausa entre lotes (evitar rate limit 429)
     const LOTE=3;
     for(let offset=0;offset<pendientes.length;offset+=LOTE){
@@ -4500,9 +4500,9 @@ function RetirosRider(_ref_rr){
           const b64r=await rotarImagenSiVertical(b64);const datos=await analizarEtiqueta(b64r,mediaType);
           // Limpiar código de espacios
           if(datos?.codigo) datos.codigo=datos.codigo.toString().replace(/[^0-9]/g,'');
-          setFotosGaleria(prev=>prev.map((f,j)=>j===item.idx?{...f,analizando:false,datos,error:datos?._error||null}:f));
+          setFotosRespaldo(prev=>prev.map((f,j)=>j===item.idx?{...f,analizando:false,datos,error:datos?._error||null}:f));
         }catch(e){
-          setFotosGaleria(prev=>prev.map((f,j)=>j===item.idx?{...f,analizando:false,error:e.message}:f));
+          setFotosRespaldo(prev=>prev.map((f,j)=>j===item.idx?{...f,analizando:false,error:e.message}:f));
         }
       }));
     }
@@ -4577,21 +4577,21 @@ function RetirosRider(_ref_rr){
         // Fila principal
         React.createElement('div',{style:{display:'flex',gap:12,padding:'10px',alignItems:'flex-start'}},
           // Miniatura — toca para ampliar
-          React.createElement('img',{src:f.preview,onClick:()=>setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,expanded:!x.expanded}:x)),style:{width:72,height:72,objectFit:'cover',borderRadius:8,flexShrink:0,border:'2px solid '+(f.datos?.codigo?'var(--gold)':f.error?'rgba(176,48,48,0.6)':'rgba(255,255,255,0.1)'),cursor:'zoom-in'}}),
+          React.createElement('img',{src:f.preview,onClick:()=>setFotosRespaldo(prev=>prev.map((x,j)=>j===i?{...x,expanded:!x.expanded}:x)),style:{width:72,height:72,objectFit:'cover',borderRadius:8,flexShrink:0,border:'2px solid '+(f.datos?.codigo?'var(--gold)':f.error?'rgba(176,48,48,0.6)':'rgba(255,255,255,0.1)'),cursor:'zoom-in'}}),
           React.createElement('div',{style:{flex:1,minWidth:0}},
             f.analizando&&React.createElement('div',{style:{fontSize:12,color:'var(--gold)',marginBottom:4}},'⏳ Analizando...'),
             // Código editable
             f.datos?.codigo&&React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6,marginBottom:4}},
               f.editandoCodigo
-                ?React.createElement('input',{autoFocus:true,value:f.codigoEdit||f.datos.codigo,onChange:e=>setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,codigoEdit:e.target.value.replace(/[^0-9]/g,'')}:x)),onBlur:()=>setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,editandoCodigo:false,datos:{...x.datos,codigo:x.codigoEdit||x.datos.codigo},codigoEdit:undefined}:x)),onKeyDown:e=>{if(e.key==='Enter')setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,editandoCodigo:false,datos:{...x.datos,codigo:x.codigoEdit||x.datos.codigo},codigoEdit:undefined}:x));},style:{fontFamily:'JetBrains Mono',fontSize:13,color:'var(--gold)',fontWeight:700,background:'rgba(200,168,75,0.1)',border:'1px solid var(--gold)',borderRadius:6,padding:'3px 8px',width:'100%',outline:'none'}})
+                ?React.createElement('input',{autoFocus:true,value:f.codigoEdit||f.datos.codigo,onChange:e=>setFotosRespaldo(prev=>prev.map((x,j)=>j===i?{...x,codigoEdit:e.target.value.replace(/[^0-9]/g,'')}:x)),onBlur:()=>setFotosRespaldo(prev=>prev.map((x,j)=>j===i?{...x,editandoCodigo:false,datos:{...x.datos,codigo:x.codigoEdit||x.datos.codigo},codigoEdit:undefined}:x)),onKeyDown:e=>{if(e.key==='Enter')setFotosRespaldo(prev=>prev.map((x,j)=>j===i?{...x,editandoCodigo:false,datos:{...x.datos,codigo:x.codigoEdit||x.datos.codigo},codigoEdit:undefined}:x));},style:{fontFamily:'JetBrains Mono',fontSize:13,color:'var(--gold)',fontWeight:700,background:'rgba(200,168,75,0.1)',border:'1px solid var(--gold)',borderRadius:6,padding:'3px 8px',width:'100%',outline:'none'}})
                 :React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:13,color:'var(--gold)',fontWeight:700,flex:1}},f.datos.codigo),
-              !f.editandoCodigo&&React.createElement('button',{onClick:()=>setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,editandoCodigo:true,codigoEdit:x.datos.codigo}:x)),style:{fontSize:11,padding:'2px 7px',borderRadius:6,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(200,168,75,0.08)',color:'rgba(200,168,75,0.7)',cursor:'pointer',flexShrink:0}},'✎'),
+              !f.editandoCodigo&&React.createElement('button',{onClick:()=>setFotosRespaldo(prev=>prev.map((x,j)=>j===i?{...x,editandoCodigo:true,codigoEdit:x.datos.codigo}:x)),style:{fontSize:11,padding:'2px 7px',borderRadius:6,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(200,168,75,0.08)',color:'rgba(200,168,75,0.7)',cursor:'pointer',flexShrink:0}},'✎'),
             // Editar dirección
             f.datos?.direccion&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:3,display:'flex',alignItems:'center',gap:4}},
               f.editandoDireccion
-                ?React.createElement('input',{autoFocus:true,value:f.dirEdit??f.datos.direccion,onChange:e=>setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,dirEdit:e.target.value}:x)),onBlur:()=>setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,editandoDireccion:false,datos:{...x.datos,direccion:x.dirEdit??x.datos.direccion},dirEdit:undefined}:x)),onKeyDown:e=>{if(e.key==='Enter')setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,editandoDireccion:false,datos:{...x.datos,direccion:x.dirEdit??x.datos.direccion},dirEdit:undefined}:x));},style:{flex:1,fontSize:11,background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.3)',borderRadius:5,padding:'2px 6px',color:'#fff',outline:'none'}})
+                ?React.createElement('input',{autoFocus:true,value:f.dirEdit??f.datos.direccion,onChange:e=>setFotosRespaldo(prev=>prev.map((x,j)=>j===i?{...x,dirEdit:e.target.value}:x)),onBlur:()=>setFotosRespaldo(prev=>prev.map((x,j)=>j===i?{...x,editandoDireccion:false,datos:{...x.datos,direccion:x.dirEdit??x.datos.direccion},dirEdit:undefined}:x)),onKeyDown:e=>{if(e.key==='Enter')setFotosRespaldo(prev=>prev.map((x,j)=>j===i?{...x,editandoDireccion:false,datos:{...x.datos,direccion:x.dirEdit??x.datos.direccion},dirEdit:undefined}:x));},style:{flex:1,fontSize:11,background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.3)',borderRadius:5,padding:'2px 6px',color:'#fff',outline:'none'}})
                 :React.createElement('span',{style:{flex:1}},f.datos.direccion+(f.datos.comuna?' · '+f.datos.comuna:'')),
-              React.createElement('button',{onClick:()=>setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,editandoDireccion:!x.editandoDireccion,dirEdit:x.datos.direccion}:x)),style:{fontSize:9,padding:'1px 5px',borderRadius:4,border:'1px solid rgba(255,255,255,0.2)',background:'transparent',color:'rgba(255,255,255,0.4)',cursor:'pointer',flexShrink:0}},'✎')
+              React.createElement('button',{onClick:()=>setFotosRespaldo(prev=>prev.map((x,j)=>j===i?{...x,editandoDireccion:!x.editandoDireccion,dirEdit:x.datos.direccion}:x)),style:{fontSize:9,padding:'1px 5px',borderRadius:4,border:'1px solid rgba(255,255,255,0.2)',background:'transparent',color:'rgba(255,255,255,0.4)',cursor:'pointer',flexShrink:0}},'✎')
             )
             ),
             f.datos?.destinatario&&React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.8)',marginBottom:2}},f.datos.destinatario),
@@ -4599,11 +4599,11 @@ function RetirosRider(_ref_rr){
             f.error&&React.createElement('div',{style:{fontSize:11,color:'#e88',marginBottom:2}},'⚠ '+f.error),
             !f.analizando&&!f.datos&&!f.error&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.3)'}},'Pendiente de análisis')
           ),
-          React.createElement('button',{onClick:()=>setFotosGaleria(prev=>prev.filter((_,j)=>j!==i)),disabled:f.analizando,style:{background:'rgba(176,48,48,0.15)',border:'1px solid rgba(176,48,48,0.3)',borderRadius:6,color:'#e88',cursor:f.analizando?'default':'pointer',fontSize:13,padding:'4px 8px',flexShrink:0,alignSelf:'center',opacity:f.analizando?0.4:1}},'✕')
+          React.createElement('button',{onClick:()=>setFotosRespaldo(prev=>prev.filter((_,j)=>j!==i)),disabled:f.analizando,style:{background:'rgba(176,48,48,0.15)',border:'1px solid rgba(176,48,48,0.3)',borderRadius:6,color:'#e88',cursor:f.analizando?'default':'pointer',fontSize:13,padding:'4px 8px',flexShrink:0,alignSelf:'center',opacity:f.analizando?0.4:1}},'✕')
         ),
         // Imagen expandida al tocar la miniatura
         f.expanded&&React.createElement('div',{style:{padding:'0 10px 10px'}},
-          React.createElement('img',{src:f.preview,onClick:()=>setFotosGaleria(prev=>prev.map((x,j)=>j===i?{...x,expanded:false}:x)),style:{width:'100%',borderRadius:8,border:'1px solid rgba(200,168,75,0.2)',cursor:'zoom-out',display:'block'}})
+          React.createElement('img',{src:f.preview,onClick:()=>setFotosRespaldo(prev=>prev.map((x,j)=>j===i?{...x,expanded:false}:x)),style:{width:'100%',borderRadius:8,border:'1px solid rgba(200,168,75,0.2)',cursor:'zoom-out',display:'block'}})
         )
       ))
     ),
