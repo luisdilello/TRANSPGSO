@@ -1213,6 +1213,28 @@ function PlanillaRetiros({clientes,mensajeros,retirosDB,setRetirosDB,retiroFecha
   function guardarRetirosDia(fecha,data){
     try{localStorage.setItem(lsKeyRetiros(fecha),JSON.stringify(data));}catch(e){}
     setRetirosDB(data);
+    // Sincronizar con Supabase los retiros confirmados
+    try{
+      var confirmados=data.filter(function(r){return r.confirmado&&r.mensajero&&r.cliente;});
+      if(confirmados.length>0){
+        confirmados.forEach(function(r){
+          var row={
+            fecha:fecha,
+            cliente:r.cliente||'',
+            direccion:r.direccion||'',
+            mensajero:r.mensajero||'',
+            confirmado:r.confirmado?true:false,
+            piezas:parseInt(r.piezas)||0,
+            retirado:r.retirado?true:false,
+            en_bodega:r.enBodega?true:false,
+            respaldos:r.respaldos?true:false,
+            pago_mensajero:parseFloat(r.pagoMensajero)||0,
+            cobro:parseFloat(r.cobro)||0
+          };
+          db.from('retiros').upsert(row,{onConflict:'fecha,cliente,mensajero'}).then(function(){}).catch(function(){});
+        });
+      }
+    }catch(ex){}
     // También guardar en localStorage general
     try{
       var all=JSON.parse(localStorage.getItem('transpgso_v2_retiros_historial')||'[]');
@@ -4278,18 +4300,59 @@ function RetirosRider({usuario}){
   },[fechaVer]);
 
   function cargarRetiros(fecha){
-    try{
-      var nombre=(usuario.nombre||'').replace(/,\s*/g,' ').toUpperCase().trim();
-      var keyDia='transpgso_v2_retiros_dia_'+fecha;
-      var planilla=JSON.parse(localStorage.getItem(keyDia)||'[]');
-      var mios=planilla.filter(function(r){
-        return (r.mensajero||'').toUpperCase().trim()===nombre;
+    var nombre=(usuario.nombre||'').replace(/,\s*/g,' ').toUpperCase().trim();
+    // Intentar desde Supabase primero
+    db.from('retiros').select('*').eq('fecha',fecha).eq('mensajero',nombre)
+      .then(function(res){
+        if(res.data&&res.data.length>0){
+          // Mapear columnas de Supabase a formato local
+          var mapped=res.data.map(function(r){
+            return {
+              id:r.id,
+              cliente:r.cliente,
+              direccion:r.direccion,
+              mensajero:r.mensajero,
+              confirmado:r.confirmado,
+              piezas:r.piezas,
+              retirado:r.retirado,
+              enBodega:r.en_bodega,
+              respaldos:r.respaldos,
+              pagoMensajero:r.pago_mensajero,
+              cobro:r.cobro,
+              fecha:r.fecha
+            };
+          });
+          setRetiros(mapped);
+        } else {
+          // Fallback localStorage
+          try{
+            var keyDia='transpgso_v2_retiros_dia_'+fecha;
+            var planilla=JSON.parse(localStorage.getItem(keyDia)||'[]');
+            var mios=planilla.filter(function(r){return (r.mensajero||'').toUpperCase().trim()===nombre;});
+            setRetiros(mios);
+          }catch(e){setRetiros([]);}
+        }
+      }).catch(function(){
+        try{
+          var keyDia='transpgso_v2_retiros_dia_'+fecha;
+          var planilla=JSON.parse(localStorage.getItem(keyDia)||'[]');
+          var nombre2=(usuario.nombre||'').replace(/,\s*/g,' ').toUpperCase().trim();
+          setRetiros(planilla.filter(function(r){return (r.mensajero||'').toUpperCase().trim()===nombre2;}));
+        }catch(e){setRetiros([]);}
       });
-      setRetiros(mios);
-    }catch(e){setRetiros([]);}
   }
 
   function actualizarRetiro(idx,campo,valor){
+    // Actualizar en Supabase si el retiro tiene id
+    var retiroActual=retiros[idx];
+    if(retiroActual&&retiroActual.id){
+      var updateData={};
+      if(campo==='piezas') updateData.piezas=parseInt(valor)||0;
+      if(campo==='retirado') updateData.retirado=true;
+      if(campo==='enBodega') updateData.en_bodega=true;
+      if(campo==='respaldos') updateData.respaldos=true;
+      db.from('retiros').update(updateData).eq('id',retiroActual.id).then(function(){}).catch(function(){});
+    }
     try{
       var nombre=(usuario.nombre||'').replace(/,\s*/g,' ').toUpperCase().trim();
       var keyDia='transpgso_v2_retiros_dia_'+fechaVer;
