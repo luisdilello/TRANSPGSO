@@ -4344,6 +4344,7 @@ var ColectaErrorBoundary = (function(_React$Component) {
 
 function RetirosRider(_ref_rr){
   var usuario=_ref_rr.usuario;
+  var onColectaRetiro=_ref_rr.onColectaRetiro||function(){};
   var hoy=new Date().toISOString().slice(0,10);
   var _sf=React.useState(hoy),fechaVer=_sf[0],setFechaVer=_sf[1];
   var _sr=React.useState([]),retiros=_sr[0],setRetiros=_sr[1];
