@@ -2943,9 +2943,15 @@ async function analizarEtiqueta(base64img,mediaType,_retry=0){
 }
 function ColectaRider(_ref_cr){
   let usuario=_ref_cr.usuario,clientes=_ref_cr.clientes,toast=_ref_cr.toast,onClose=_ref_cr.onClose,clientePresel=_ref_cr.clientePresel||null;
-  const _s1=useState(clientePresel),clienteSel=_s1[0],setClienteSel=_s1[1];
+  const _s1=useState(function(){
+    try{
+      var presel=localStorage.getItem('transpgso_colecta_cliente_presel');
+      if(presel){localStorage.removeItem('transpgso_colecta_cliente_presel');return JSON.parse(presel);}
+    }catch(e){}
+    return clientePresel||null;
+  }),clienteSel=_s1[0],setClienteSel=_s1[1];
   const _s2=useState('AM'),turno=_s2[0],setTurno=_s2[1];
-  const _s3=useState(clientePresel?'escaneo':'seleccion'),fase=_s3[0],setFase=_s3[1];
+  const _s3=useState(_preselLS||clientePresel?'escaneo':'seleccion'),fase=_s3[0],setFase=_s3[1];
   // Retiros asignados desde planilla admin
 
   useEffect(function(){
@@ -4791,7 +4797,7 @@ function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout;co
 })())),riderTab==='retiros'&&/*#__PURE__*/React.createElement(RetirosRider,{usuario:usuario,onColectaRetiro:function(nombreCliente){
         var todosClientes=lsLoad('clientes',[]);
         var clienteObj=todosClientes.find(function(c){return c.nombre===nombreCliente;})||{nombre:nombreCliente};
-        setClienteRetiroPresel(clienteObj);
+        try{localStorage.setItem('transpgso_colecta_cliente_presel',JSON.stringify(clienteObj));}catch(e){}
         setShowColecta(true);
       }}),riderTab==='ganancias'&&/*#__PURE__*/React.createElement(GananciasRider,{usuario:usuario,envios:envios,colectasKey:'colecta_rider_'+usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase()}),showColecta&&/*#__PURE__*/React.createElement(ColectaErrorBoundary,null,React.createElement(ColectaRider,{key:clienteRetiroPresel?'retiro-'+(clienteRetiroPresel.nombre||clienteRetiroPresel):'colecta',usuario:usuario,clientes:lsLoad('clientes',[]),toast:toast,clientePresel:clienteRetiroPresel,onClose:function(){setShowColecta(false);setClienteRetiroPresel(null);}})),showAsignacion&&/*#__PURE__*/React.createElement(AsignacionRider,{usuario:usuario,toast:toast,onClose:()=>setShowAsignacion(false),onEnviosUpdate:envioNuevo=>{setEnvios(prev=>{const nuevos=prev.find(e=>e.codigo===envioNuevo.codigo)?prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e):[envioNuevo,...prev];const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,nuevos);return nuevos;});}}),showAjustes&&/*#__PURE__*/React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:9999,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},
   React.createElement('div',{style:{background:'#1a1d14',borderRadius:'20px 20px 0 0',padding:24,border:'1px solid rgba(200,168,75,0.2)',maxHeight:'80vh',overflowY:'auto'}},
