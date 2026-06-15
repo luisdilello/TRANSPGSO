@@ -5751,8 +5751,7 @@ function MapaRutas(props){
       ),
       React.createElement('div',{style:{flex:1,overflowY:'auto',padding:8}},
         mensajeros.length===0
-          ?React.createElement('div',{style:{padding:12,color:'#555',fontSize:'.75rem',textAlign:'center'}},'Agrega mensajeros
-en la pestaña Mensajeros')
+          ?React.createElement('div',{style:{padding:12,color:'#555',fontSize:'.75rem',textAlign:'center'}},'Agrega mensajeros en la pestaña Mensajeros')
           :mensajeros.map(function(m,idx){
             var isAct=activoId===m.id;
             var cnt=Object.values(asig).filter(function(v){return v===m.id;}).length;
