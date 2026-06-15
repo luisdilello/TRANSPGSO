@@ -5962,7 +5962,7 @@ function MapaRutas(props){
     var lib=names.filter(function(n){return !asig[n]&&!NC_M.includes(n);});
     if(lib.length)rows+='<tr style="background:#fff8e8"><td colspan=2><i>Sin asignar</i></td><td style="text-align:center">'+lib.length+'</td><td>-</td><td>0</td></tr>';
     var h='<html><head><meta charset="UTF-8"><style>body{font-family:Arial;background:#FEF8EA;padding:30px;color:#3A3D2E}h1{color:#C8A84B;border-bottom:3px solid #C8A84B;padding-bottom:8px;margin-bottom:16px}table{border-collapse:collapse;width:100%}th{background:#3A3D2E;color:#C8A84B;padding:8px 12px;text-align:left}td{padding:7px 12px;border-bottom:1px solid #e0d8c0}tr:nth-child(even){background:#f5eedc}</style></head><body>'
-      +'<h1>🦅 TransPgso — Mapa de Rutas RM</h1>'
+      +'<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;padding-bottom:12px;border-bottom:3px solid #C8A84B">'+'<img src="'+LOGO_SRC+'" style="width:60px;height:60px;border-radius:8px;">'+'<div><div style="font-size:1.3rem;font-weight:800;color:#C8A84B;letter-spacing:.04em">TRANSPGSO</div>'+'<div style="font-size:.8rem;color:#888">Mapa de Rutas · Región Metropolitana</div></div></div>'
       +'<p style="margin-bottom:14px;color:#666">'+new Date().toLocaleDateString('es-CL',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'</p>'
       +'<table><tr><th>Mensajero</th><th>Comunas</th><th>N°</th><th>Zonas delimitadas</th><th>N°</th></tr>'+rows+'</table>'
       +'</body></html>';
