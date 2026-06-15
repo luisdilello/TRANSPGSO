@@ -5744,7 +5744,21 @@ function MapaRutas(props){
   React.useEffect(function(){activoIdRef.current=activoId;},[activoId]);
   React.useEffect(function(){opRef.current=op;refreshStyles();},[op]);
   React.useEffect(function(){mensajerosRef.current=mensajeros;refreshStyles();},[mensajeros]);
-  React.useEffect(function(){dibujandoRef.current=dibujando;if(!dibujando)limpiarDibujo();},[dibujando]);
+  React.useEffect(function(){
+    dibujandoRef.current=dibujando;
+    if(!dibujando){
+      limpiarDibujo();
+      // Restaurar clickable en comunas
+      if(dataLayerRef.current) dataLayerRef.current.setStyle(function(f){return getStyle(f.getProperty('nombre'));});
+    } else {
+      // Deshabilitar clicks en comunas mientras dibuja
+      if(dataLayerRef.current) dataLayerRef.current.setStyle(function(f){
+        var s=getStyle(f.getProperty('nombre'));
+        s.clickable=false;
+        return s;
+      });
+    }
+  },[dibujando]);
 
   function mColor(m,idx){return m.color||COL_M[idx%COL_M.length];}
 
@@ -5872,9 +5886,10 @@ function MapaRutas(props){
       new ComunaLabel(sLat/coords.length,sLng/coords.length,SH_M[n]||n).setMap(map);
     });
 
-    // CLICK EN MAPA para dibujo
+    // CLICK EN MAPA para dibujo — tiene prioridad sobre data layer
     map.addListener('click',function(e){
       if(!dibujandoRef.current)return;
+      e.stop(); // evitar propagación
       var pt={lat:e.latLng.lat(),lng:e.latLng.lng()};
       drawPointsRef.current.push(pt);
       // Marcador
