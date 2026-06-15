@@ -5814,8 +5814,11 @@ function MapaRutas(props){
 
   // ── Init mapa ───────────────────────────────────────────
   React.useEffect(function(){
-    if(!mapRef.current||mapObj.current)return;
-    if(!window.google||!window.google.maps)return;
+    function tryInit(){
+      if(!mapRef.current||mapObj.current)return;
+      if(!window.google||!window.google.maps){
+        setTimeout(tryInit,200);return;
+      }
 
     var map=new google.maps.Map(mapRef.current,{
       center:{lat:-33.47,lng:-70.65},zoom:11,
@@ -5893,6 +5896,8 @@ function MapaRutas(props){
 
     mapObj.current=map;
     dataLayerRef.current=map.data;
+    }
+    tryInit();
   },[]);
 
   // Botón cerrar polígono (en vez de doble clic que hace zoom)
