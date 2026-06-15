@@ -528,7 +528,7 @@ body { padding-top: env(safe-area-inset-top); }
 .pm-root.tab-retiros .pm-tab-retiros,
 .pm-root.tab-productos .pm-tab-productos { display: block; }
 </style>
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyACoppqoiPeeiXxpE2CBp7R3LYlWZuISd8&libraries=drawing&language=es&region=CL"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyACoppqoiPeeiXxpE2CBp7R3LYlWZuISd8&language=es&region=CL"></script>
 </head>
 <body>
 <div id="root"></div>
@@ -5855,30 +5855,54 @@ function MapaRutas(props){
       new ComunaLabel(sLat/coords.length,sLng/coords.length,SH_M[n]||n).setMap(map);
     });
 
-    // Drawing Manager para zonas
-    var drawMgr=new google.maps.drawing.DrawingManager({
-      drawingMode:null,
-      drawingControl:false,
-      polygonOptions:{
-        fillColor:'#C8A84B',fillOpacity:0.3,
-        strokeColor:'#C8A84B',strokeWeight:2,editable:true
+    // Dibujo manual de polígonos (sin DrawingManager deprecado)
+    var drawPoints=[]; // puntos del polígono en dibujo
+    var drawPolyline=null; // línea de preview
+    var drawMarkers=[]; // marcadores de vértices
+
+    function limpiarDibujo(){
+      if(drawPolyline){drawPolyline.setMap(null);drawPolyline=null;}
+      drawMarkers.forEach(function(m){m.setMap(null);});
+      drawMarkers=[];
+      drawPoints=[];
+    }
+
+    map.addListener('click',function(e){
+      // Solo dibujar si modo es dibujar
+      if(!drawMgrRef.current||!drawMgrRef.current.drawing)return;
+      var pt={lat:e.latLng.lat(),lng:e.latLng.lng()};
+      drawPoints.push(pt);
+
+      // Marcador en el punto
+      var marker=new google.maps.Marker({
+        position:pt,map:map,
+        icon:{path:google.maps.SymbolPath.CIRCLE,scale:5,
+          fillColor:'#C8A84B',fillOpacity:1,strokeColor:'#fff',strokeWeight:1.5}
+      });
+      drawMarkers.push(marker);
+
+      // Preview de línea
+      if(drawPolyline)drawPolyline.setMap(null);
+      if(drawPoints.length>1){
+        drawPolyline=new google.maps.Polyline({
+          path:drawPoints,map:map,
+          strokeColor:'#C8A84B',strokeWeight:2,strokeOpacity:0.9
+        });
       }
     });
-    drawMgr.setMap(map);
 
-    google.maps.event.addListener(drawMgr,'polygoncomplete',function(poly){
-      drawMgr.setDrawingMode(null);
+    map.addListener('dblclick',function(e){
+      if(!drawMgrRef.current||!drawMgrRef.current.drawing)return;
+      if(drawPoints.length<3){alert('Dibuja al menos 3 puntos');return;}
+      var coords=drawPoints.map(function(p){return[p.lng,p.lat];});
+      coords.push(coords[0]);
+      limpiarDibujo();
+      drawMgrRef.current.drawing=false;
       setModo('asignar');
-      // Guardar coordenadas del polígono
-      var coords=poly.getPath().getArray().map(function(latlng){
-        return[latlng.lng(),latlng.lat()];
-      });
-      coords.push(coords[0]); // cerrar polígono
-      poly.setMap(null); // remover temporal
       setPanelZona({coords:coords});
     });
 
-    drawMgrRef.current=drawMgr;
+    drawMgrRef.current={drawing:false, limpiar:limpiarDibujo};
     mapObj.current=map;
     dataLayerRef.current=map.data;
   },[]);
@@ -5887,9 +5911,10 @@ function MapaRutas(props){
   React.useEffect(function(){
     if(!drawMgrRef.current)return;
     if(modo==='dibujar'){
-      drawMgrRef.current.setDrawingMode(google.maps.drawing.OverlayType.POLYGON);
+      drawMgrRef.current.drawing=true;
     }else{
-      drawMgrRef.current.setDrawingMode(null);
+      drawMgrRef.current.drawing=false;
+      if(drawMgrRef.current.limpiar)drawMgrRef.current.limpiar();
     }
   },[modo]);
 
