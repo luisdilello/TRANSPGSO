@@ -3182,7 +3182,7 @@ function ColectaRider(_ref_cr){
     // Crear previews inmediatos sin comprimir (para mostrar rápido)
     const items=arr.map(f=>({file:f,preview:URL.createObjectURL(f),analizando:false,datos:null,error:null}));
     setFotosGaleria(items);
-    setFaseRetiro('respaldos');
+    setFase('galeria');
     // Comprimir en background (reemplazar file con versión comprimida)
     Promise.all(arr.map(async(f,i)=>{
       const compressed=await comprimirImagen(f);
