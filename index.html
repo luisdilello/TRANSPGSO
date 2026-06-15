@@ -4574,7 +4574,7 @@ function RetirosRider(_ref_rr){
 
   // Pantalla de respaldos (galería de fotos)
   if(faseRetiro==='respaldos') return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
-    React.createElement('input',{ref:respaldoInputRef,type:'file',accept:'image/*',multiple:true,capture:'environment',
+    React.createElement('input',{ref:respaldoInputRef,type:'file',accept:'image/*',multiple:true,
       style:{display:'none'},
       onChange:function(e){
         if(!e.target.files||!e.target.files.length) return;
