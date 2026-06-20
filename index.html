@@ -1526,6 +1526,43 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
     )
   );
 }
+// ── HistorialPrestamos helper ──────────────────────────────────────────────
+function HistorialPrestamos(_ref_hp){var nombre=_ref_hp.nombre,db=_ref_hp.db;
+  const [historial,setHistorial]=useState([]);
+  const [cargando,setCargando]=useState(true);
+  useEffect(()=>{
+    if(!nombre)return;
+    async function cargar(){
+      try{
+        const {data}=await db.from('prestamos_mensajeros')
+          .select('*')
+          .ilike('mensajero_nombre',nombre)
+          .order('created_at',{ascending:false})
+          .limit(20);
+        setHistorial(data||[]);
+      }catch(e){setHistorial([]);}
+      setCargando(false);
+    }
+    cargar();
+  },[nombre]);
+  if(cargando)return React.createElement('div',{style:{textAlign:'center',color:'#888',padding:20}},'Cargando historial...');
+  if(!historial.length)return React.createElement('div',{style:{textAlign:'center',color:'#888',padding:20}},'Sin registros anteriores');
+  return React.createElement('div',null,
+    React.createElement('div',{style:{fontSize:11,fontWeight:700,color:'#3A3D2E',marginBottom:8,textTransform:'uppercase'}},'Historial'),
+    historial.map(r=>React.createElement('div',{key:r.id,style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 10px',marginBottom:4,background:'rgba(58,61,46,0.05)',borderRadius:6,fontSize:12}},
+      React.createElement('div',null,
+        React.createElement('div',{style:{fontWeight:600,color:'#3A3D2E'}},r.semana||'Sin semana'),
+        React.createElement('div',{style:{color:'#888',fontSize:11}},r.nota||'')
+      ),
+      React.createElement('div',{style:{textAlign:'right'}},
+        r.monto_prestado>0&&React.createElement('div',{style:{color:'#c0392b',fontWeight:700}},'+$'+r.monto_prestado.toLocaleString('es-CL')),
+        r.monto_descontado>0&&React.createElement('div',{style:{color:'#27ae60',fontWeight:700}},'-$'+r.monto_descontado.toLocaleString('es-CL')),
+        React.createElement('div',{style:{color:'#7f8c8d',fontSize:11}},'Saldo: $'+r.saldo_pendiente.toLocaleString('es-CL'))
+      )
+    ))
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
 function PagosMensajeros(_ref18){let mensajeros=_ref18.mensajeros,mensajerosDia=_ref18.mensajerosDia,esAdmin=_ref18.esAdmin,toast=_ref18.toast,clientes=_ref18.clientes||[];const semanaActual=()=>{const hoy=new Date();const lunes=new Date(hoy);lunes.setDate(hoy.getDate()-((hoy.getDay()+6)%7));const sabado=new Date(lunes);sabado.setDate(lunes.getDate()+5);const fmt=d=>d.toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric'});return`${fmt(lunes)} al ${fmt(sabado)}`;};const _useState34=useState(semanaActual()),semana=_useState34[0],setSemana=_useState34[1];
 const _usePagosTab=useState(()=>window._pagosTab||'pagos'),pagosTab=_usePagosTab[0],setPagosTab=_usePagosTab[1];
 React.useEffect(()=>{window._pagosTab=pagosTab;},[pagosTab]);
@@ -1889,8 +1926,20 @@ useEffect(()=>{
         // Préstamo
         /*#__PURE__*/React.createElement('div',null,
           /*#__PURE__*/React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',letterSpacing:1,textTransform:'uppercase',display:'block',marginBottom:4}},'Préstamo'),
-          /*#__PURE__*/React.createElement('input',{type:'number',value:p.prestamo,onChange:e=>updatePago(p.id,'prestamo',e.target.value),
-            style:{width:'100%',padding:'6px 10px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,background:'#fff',outline:'none',fontFamily:'JetBrains Mono'}})
+          /*#__PURE__*/React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:3}},
+  /*#__PURE__*/React.createElement('input',{type:'number',value:p.prestamo,onChange:e=>updatePago(p.id,'prestamo',e.target.value),
+    style:{width:'100%',padding:'6px 10px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,background:'#fff',outline:'none',fontFamily:'JetBrains Mono'}}),
+  (()=>{
+    const key=p.nombre.toUpperCase().trim();
+    const saldoDB=(prestamosDB[key]?.saldo)||0;
+    if(saldoDB>0) return /*#__PURE__*/React.createElement('div',{
+      title:'Saldo pendiente acumulado de semanas anteriores',
+      style:{fontSize:10,color:'#c0392b',fontWeight:700,padding:'2px 6px',background:'rgba(192,57,43,0.1)',borderRadius:4,textAlign:'center',cursor:'pointer'},
+      onClick:()=>setPrestamosModal(p.nombre)
+    },'📋 Saldo: $'+saldoDB.toLocaleString('es-CL'));
+    return null;
+  })()
+)
         ),
         // Obs
         /*#__PURE__*/React.createElement('div',{style:{gridColumn:'span 2'}},
@@ -1901,7 +1950,17 @@ useEffect(()=>{
         // Comprobante
         /*#__PURE__*/React.createElement('div',{style:{display:'flex',alignItems:'flex-end',gap:8}},
           /*#__PURE__*/React.createElement('button',{onClick:()=>exportarComprobante(p),style:{padding:'7px 14px',borderRadius:8,border:'1px solid var(--border)',background:'var(--cream)',fontSize:12,cursor:'pointer',fontWeight:600}},'🧾 Comprobante'),
-          /*#__PURE__*/React.createElement('button',{onClick:()=>updatePago(p.id,'estado',p.estado==='PAGADO'?'PENDIENTE':'PAGADO'),
+          /*#__PURE__*/React.createElement('button',{onClick:async()=>{
+  const nuevoEstado=p.estado==='PAGADO'?'PENDIENTE':'PAGADO';
+  updatePago(p.id,'estado',nuevoEstado);
+  // Al marcar PAGADO y hay préstamo descontado → guardar en Supabase
+  if(nuevoEstado==='PAGADO'&&p.prestamo>0){
+    const key=p.nombre.toUpperCase().trim();
+    const saldoAnterior=(prestamosDB[key]?.saldo)||p.prestamo;
+    await guardarPrestamo(p.nombre,p.prestamo,saldoAnterior,semana);
+    toast('💾 Préstamo actualizado: saldo restante $'+Math.max(0,saldoAnterior-p.prestamo).toLocaleString('es-CL'));
+  }
+},
             style:{padding:'7px 14px',borderRadius:8,border:'none',background:p.estado==='PAGADO'?'rgba(176,48,48,0.1)':'rgba(46,125,79,0.1)',color:p.estado==='PAGADO'?'#b03030':'#2e7d4f',fontSize:12,cursor:'pointer',fontWeight:700}},
             p.estado==='PAGADO'?'↩ Revertir':'✓ Marcar Pagado')
         )
