@@ -1,10 +1,16 @@
-// v1782066956
-const V = '1782066956';
-self.addEventListener('install', e => { self.skipWaiting(); });
+// v1782067976 - SW deshabilitado
+self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+      .then(() => {
+        // Notificar a todos los clientes que recarguen
+        self.clients.matchAll().then(clients => {
+          clients.forEach(c => c.postMessage('RELOAD'));
+        });
+      })
+  );
 });
-self.addEventListener('fetch', e => {
-  if(e.request.method !== 'GET') return;
-  e.respondWith(fetch(e.request, {cache:'no-store'}).catch(() => new Response('Offline')));
-});
+// No interceptar ningún fetch - dejar pasar todo
