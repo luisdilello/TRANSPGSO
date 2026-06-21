@@ -1787,22 +1787,32 @@ useEffect(()=>{
     </div>
     <table>
       <thead><tr>
-        <th>#</th><th>Mensajero</th><th>Envíos</th><th>Tarifa</th><th>Pago Calc.</th>
-        <th>Ajuste</th><th>IVA/Desc.</th><th>Extra</th><th>Adelanto</th><th>Préstamo</th>
-        <th>Total a Pagar</th><th>Estado</th>
+        <th style="width:36px">#</th>
+        <th style="text-align:left">Mensajero</th>
+        <th>Envíos</th>
+        <th>Pago Calc.</th>
+        <th>🛒 Consumo</th>
+        <th>⭐ Extra</th>
+        <th>Adelanto</th>
+        <th>Préstamo semana</th>
+        <th>Saldo Pend.</th>
+        <th>Total a Pagar</th>
+        <th>Estado</th>
+        <th style="width:36px"></th>
       </tr></thead>
       <tbody>${filas}</tbody>
       <tfoot><tr>
         <td></td><td>TOTALES</td>
         <td style="text-align:center">${totales.envios.toLocaleString('es-CL')}</td>
-        <td></td>
         <td style="text-align:right">$${Math.round(totales.bruto).toLocaleString('es-CL')}</td>
-        <td></td><td></td>
+        <td style="text-align:right">$${Math.round(totales.consumo||0).toLocaleString('es-CL')}</td>
         <td style="text-align:right">${totales.extra>0?'$'+Math.round(totales.extra).toLocaleString('es-CL'):'—'}</td>
         <td style="text-align:right">$${Math.round(totales.adelanto).toLocaleString('es-CL')}</td>
         <td style="text-align:right">$${Math.round(totales.prestamo).toLocaleString('es-CL')}</td>
+        <td></td>
         <td style="text-align:right">$${Math.round(totales.total).toLocaleString('es-CL')}</td>
         <td style="text-align:center">${totales.pendientes} pend. / ${totales.pagados} pag.</td>
+        <td></td>
       </tr></tfoot>
     </table>
     <div style="margin-top:16px;font-size:9px;color:#7a7d6a;text-align:right">Generado: ${new Date().toLocaleString('es-CL')} · TransPgso SpA</div>
@@ -1861,28 +1871,61 @@ useEffect(()=>{
   /*#__PURE__*/React.createElement("th",{style:{width:36,textAlign:'center'}},"#"),
   /*#__PURE__*/React.createElement("th",null,"Mensajero"),
   /*#__PURE__*/React.createElement("th",{style:{textAlign:'center'}},"Envíos"),
-  /*#__PURE__*/React.createElement("th",null,"Pago Bruto"),
-  /*#__PURE__*/React.createElement("th",{style:{color:'var(--danger)'}},"💳 Consumo"),
-  /*#__PURE__*/React.createElement("th",{style:{color:'var(--success)'}},"⭐ Extras"),
-  /*#__PURE__*/React.createElement("th",null,"Total a Pagar"),
+  /*#__PURE__*/React.createElement("th",null,"Pago Calc."),
+  /*#__PURE__*/React.createElement("th",{style:{color:'var(--danger)'}},"🛒 Consumo"),
+  /*#__PURE__*/React.createElement("th",{style:{color:'#2980b9'}},"⭐ Extra"),
+  /*#__PURE__*/React.createElement("th",{style:{color:'#e67e22'}},"Adelanto"),
+  /*#__PURE__*/React.createElement("th",{style:{color:'#c0392b'}},"Préstamo"),
+  /*#__PURE__*/React.createElement("th",{style:{color:'#c0392b'}},"Saldo Pend."),
+  /*#__PURE__*/React.createElement("th",{style:{fontWeight:700}},"Total a Pagar"),
   /*#__PURE__*/React.createElement("th",null,"Estado"),
   /*#__PURE__*/React.createElement("th",{style:{width:40}},""))),/*#__PURE__*/React.createElement("tbody",null,filtrados.map((p,i)=>/*#__PURE__*/React.createElement(React.Fragment,{key:p.id},
   // Fila principal compacta
-  /*#__PURE__*/React.createElement("tr",{style:{background:p.estado==='PAGADO'?'rgba(46,125,79,0.04)':'',cursor:'default'}},
+  /*#__PURE__*/React.createElement("tr",{style:{background:p.estado==='PAGADO'?'rgba(46,125,79,0.06)':'',cursor:'default',borderBottom:'1px solid var(--border)'}},
     /*#__PURE__*/React.createElement("td",{style:{textAlign:'center',fontFamily:'JetBrains Mono',fontSize:11,color:'var(--text-soft)',background:'var(--cream)',fontWeight:700}},i+1),
-    /*#__PURE__*/React.createElement("td",{style:{fontWeight:700}},p.nombre.replace(/,\s*/g,' ')),
+    /*#__PURE__*/React.createElement("td",{style:{fontWeight:700,fontSize:13}},p.nombre.replace(/,\s*/g,' ')),
     /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center'}},p.envios),
-    /*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)'}},"$",Math.round(p.bruto).toLocaleString('es-CL')),
-    /*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--danger)',cursor:'pointer'},onClick:()=>setConsumoModal(p),title:'Clic para editar'},
+    /*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)',fontWeight:600}},"$",Math.round(p.bruto).toLocaleString('es-CL')),
+    /*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--danger)',cursor:'pointer'},onClick:()=>setConsumoModal(p),title:'Clic para editar consumo'},
       "$",Math.round(p.consumo||0).toLocaleString('es-CL'),
       /*#__PURE__*/React.createElement('span',{style:{fontSize:9,marginLeft:3,color:'var(--gold)',opacity:0.7}},'✎')
     ),
-    /*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)',cursor:'pointer'},onClick:()=>setExtrasModal(p),title:'Clic para editar'},
+    /*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'#2980b9',cursor:'pointer'},onClick:()=>setExtrasModal(p),title:'Clic para editar extras'},
       "$",Math.round(p.extra||0).toLocaleString('es-CL'),
       /*#__PURE__*/React.createElement('span',{style:{fontSize:9,marginLeft:3,color:'var(--gold)',opacity:0.7}},'✎')
     ),
-    /*#__PURE__*/React.createElement("td",{className:"mono",style:{fontWeight:700,color:p.totalPagar>=0?'var(--success)':'var(--danger)'}},"$",Math.round(p.totalPagar).toLocaleString('es-CL')),
-    /*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement(Badge,{type:p.estado==='PAGADO'?'active':'paused'},p.estado==='PAGADO'?'● Pagado':'● Pendiente')),
+    /*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'#e67e22'}},
+      p.adelanto>0?"$"+Math.round(p.adelanto).toLocaleString('es-CL'):'—'
+    ),
+    /*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'#c0392b'}},
+      p.prestamo>0?"$"+Math.round(p.prestamo).toLocaleString('es-CL'):'—'
+    ),
+    /*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'#c0392b',fontWeight:600,cursor:'pointer'},
+      onClick:()=>setPrestamosModal(p.nombre),
+      title:'Ver historial de préstamos'
+    },(()=>{
+      const key=p.nombre.toUpperCase().trim();
+      const s=(prestamosDB[key]?.saldo)||0;
+      return s>0?React.createElement('span',{style:{background:'rgba(192,57,43,0.1)',padding:'2px 6px',borderRadius:4}},'$'+Math.round(s).toLocaleString('es-CL')):'—';
+    })()),
+    /*#__PURE__*/React.createElement("td",{className:"mono",style:{fontWeight:700,color:p.totalPagar>=0?'var(--success)':'var(--danger)',fontSize:13}},"$",Math.round(p.totalPagar).toLocaleString('es-CL')),
+    /*#__PURE__*/React.createElement("td",{style:{textAlign:'center'}},
+      /*#__PURE__*/React.createElement('button',{
+        onClick:async()=>{
+          const nuevoEstado=p.estado==='PAGADO'?'PENDIENTE':'PAGADO';
+          updatePago(p.id,'estado',nuevoEstado);
+          if(nuevoEstado==='PAGADO'&&p.prestamo>0){
+            const key=p.nombre.toUpperCase().trim();
+            const saldoAnterior=(prestamosDB[key]?.saldo)||p.prestamo;
+            await guardarPrestamo(p.nombre,p.prestamo,saldoAnterior,semana);
+            toast('💾 Saldo préstamo actualizado: $'+Math.max(0,saldoAnterior-p.prestamo).toLocaleString('es-CL'));
+          }
+        },
+        style:{padding:'4px 10px',borderRadius:6,border:'none',cursor:'pointer',fontSize:11,fontWeight:700,
+          background:p.estado==='PAGADO'?'rgba(46,125,79,0.15)':'rgba(200,168,75,0.15)',
+          color:p.estado==='PAGADO'?'var(--success)':'var(--gold)'}
+      },p.estado==='PAGADO'?'✓ PAGADO':'PENDIENTE')
+    ),
     /*#__PURE__*/React.createElement("td",{style:{textAlign:'center'}},
       /*#__PURE__*/React.createElement('button',{
         onClick:()=>setExpandido(prev=>({...prev,[p.id]:!prev[p.id]})),
@@ -1891,83 +1934,52 @@ useEffect(()=>{
     )
   ),
   // Panel expandible con campos avanzados
-  expandido[p.id]&&/*#__PURE__*/React.createElement("tr",{style:{background:'rgba(200,168,75,0.04)',borderBottom:'2px solid rgba(200,168,75,0.2)'}},
-    /*#__PURE__*/React.createElement("td",{colSpan:9},
-      /*#__PURE__*/React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:12,padding:'12px 16px'}},
-        // Tarifa
+  expandido[p.id]&&/*#__PURE__*/React.createElement("tr",{style:{background:'rgba(200,168,75,0.03)',borderBottom:'2px solid rgba(200,168,75,0.15)'}},
+    /*#__PURE__*/React.createElement("td",{colSpan:12},
+      /*#__PURE__*/React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12,padding:'12px 16px'}},
         /*#__PURE__*/React.createElement('div',null,
-          /*#__PURE__*/React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',letterSpacing:1,textTransform:'uppercase',display:'block',marginBottom:4}},'Tarifa'),
+          /*#__PURE__*/React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',letterSpacing:1,textTransform:'uppercase',display:'block',marginBottom:4}},'Tarifa por envío'),
           /*#__PURE__*/React.createElement('input',{type:'number',value:p.tarifa,onChange:e=>updatePago(p.id,'tarifa',e.target.value),
             style:{width:'100%',padding:'6px 10px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,background:'#fff',outline:'none',fontFamily:'JetBrains Mono'}})
         ),
-        // Ajuste
         /*#__PURE__*/React.createElement('div',null,
-          /*#__PURE__*/React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',letterSpacing:1,textTransform:'uppercase',display:'block',marginBottom:4}},'Ajuste'),
-          /*#__PURE__*/React.createElement('input',{type:'number',value:p.ajuste,onChange:e=>updatePago(p.id,'ajuste',e.target.value),
-            style:{width:'100%',padding:'6px 10px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,background:'#fff',outline:'none',fontFamily:'JetBrains Mono'}})
+          /*#__PURE__*/React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',letterSpacing:1,textTransform:'uppercase',display:'block',marginBottom:4}},'Adelanto ($)'),
+          /*#__PURE__*/React.createElement('input',{type:'number',value:p.adelanto,onChange:e=>updatePago(p.id,'adelanto',e.target.value),
+            style:{width:'100%',padding:'6px 10px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,background:'#fff',outline:'none',fontFamily:'JetBrains Mono',color:'#e67e22'}})
         ),
-        // Tipo IVA
         /*#__PURE__*/React.createElement('div',null,
-          /*#__PURE__*/React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',letterSpacing:1,textTransform:'uppercase',display:'block',marginBottom:4}},'Tipo IVA / Desc.'),
-          /*#__PURE__*/React.createElement('select',{value:p.tipoIVA||'ninguno',onChange:e=>updatePago(p.id,'tipoIVA',e.target.value),
-            style:{width:'100%',padding:'6px 10px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,background:'#fff',outline:'none'}},
-            /*#__PURE__*/React.createElement('option',{value:'ninguno'},'Sin descuento'),
-            /*#__PURE__*/React.createElement('option',{value:'honorarios'},'Honorarios 15.25%'),
-            /*#__PURE__*/React.createElement('option',{value:'factura'},'Factura 19%'),
-            /*#__PURE__*/React.createElement('option',{value:'manual'},'Manual')
+          /*#__PURE__*/React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',letterSpacing:1,textTransform:'uppercase',display:'block',marginBottom:4}},'Descontar préstamo esta semana'),
+          /*#__PURE__*/React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:4}},
+            /*#__PURE__*/React.createElement('input',{type:'number',value:p.prestamo,onChange:e=>updatePago(p.id,'prestamo',e.target.value),
+              style:{width:'100%',padding:'6px 10px',borderRadius:6,border:'1px solid rgba(192,57,43,0.4)',fontSize:12,background:'#fff',outline:'none',fontFamily:'JetBrains Mono',color:'#c0392b'}}),
+            (()=>{
+              const key=p.nombre.toUpperCase().trim();
+              const s=(prestamosDB[key]?.saldo)||0;
+              if(s>0)return React.createElement('div',{
+                style:{fontSize:10,color:'#c0392b',background:'rgba(192,57,43,0.08)',padding:'3px 7px',borderRadius:4,cursor:'pointer'},
+                onClick:()=>setPrestamosModal(p.nombre)
+              },'Saldo: $'+Math.round(s).toLocaleString('es-CL')+' — ver historial');
+              return React.createElement('div',{
+                style:{fontSize:10,color:'#888',cursor:'pointer'},
+                onClick:()=>setPrestamosModal(p.nombre)
+              },'+ Registrar préstamo nuevo');
+            })()
           )
         ),
-        // Adelanto
         /*#__PURE__*/React.createElement('div',null,
-          /*#__PURE__*/React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',letterSpacing:1,textTransform:'uppercase',display:'block',marginBottom:4}},'Adelanto'),
-          /*#__PURE__*/React.createElement('input',{type:'number',value:p.adelanto,onChange:e=>updatePago(p.id,'adelanto',e.target.value),
-            style:{width:'100%',padding:'6px 10px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,background:'#fff',outline:'none',fontFamily:'JetBrains Mono'}})
-        ),
-        // Préstamo
-        /*#__PURE__*/React.createElement('div',null,
-          /*#__PURE__*/React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',letterSpacing:1,textTransform:'uppercase',display:'block',marginBottom:4}},'Préstamo'),
-          /*#__PURE__*/React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:3}},
-  /*#__PURE__*/React.createElement('input',{type:'number',value:p.prestamo,onChange:e=>updatePago(p.id,'prestamo',e.target.value),
-    style:{width:'100%',padding:'6px 10px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,background:'#fff',outline:'none',fontFamily:'JetBrains Mono'}}),
-  (()=>{
-    const key=p.nombre.toUpperCase().trim();
-    const saldoDB=(prestamosDB[key]?.saldo)||0;
-    if(saldoDB>0) return /*#__PURE__*/React.createElement('div',{
-      title:'Saldo pendiente acumulado de semanas anteriores',
-      style:{fontSize:10,color:'#c0392b',fontWeight:700,padding:'2px 6px',background:'rgba(192,57,43,0.1)',borderRadius:4,textAlign:'center',cursor:'pointer'},
-      onClick:()=>setPrestamosModal(p.nombre)
-    },'📋 Saldo: $'+saldoDB.toLocaleString('es-CL'));
-    return null;
-  })()
-)
-        ),
-        // Obs
-        /*#__PURE__*/React.createElement('div',{style:{gridColumn:'span 2'}},
-          /*#__PURE__*/React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',letterSpacing:1,textTransform:'uppercase',display:'block',marginBottom:4}},'Observaciones'),
-          /*#__PURE__*/React.createElement('input',{type:'text',value:p.obs||'',onChange:e=>updatePago(p.id,'obs',e.target.value),placeholder:'Notas...',
+          /*#__PURE__*/React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',letterSpacing:1,textTransform:'uppercase',display:'block',marginBottom:4}},'Observación'),
+          /*#__PURE__*/React.createElement('input',{type:'text',value:p.obs||'',placeholder:'Nota interna...',onChange:e=>updatePago(p.id,'obs',e.target.value),
             style:{width:'100%',padding:'6px 10px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,background:'#fff',outline:'none'}})
         ),
-        // Comprobante
-        /*#__PURE__*/React.createElement('div',{style:{display:'flex',alignItems:'flex-end',gap:8}},
-          /*#__PURE__*/React.createElement('button',{onClick:()=>exportarComprobante(p),style:{padding:'7px 14px',borderRadius:8,border:'1px solid var(--border)',background:'var(--cream)',fontSize:12,cursor:'pointer',fontWeight:600}},'🧾 Comprobante'),
-          /*#__PURE__*/React.createElement('button',{onClick:async()=>{
-  const nuevoEstado=p.estado==='PAGADO'?'PENDIENTE':'PAGADO';
-  updatePago(p.id,'estado',nuevoEstado);
-  // Al marcar PAGADO y hay préstamo descontado → guardar en Supabase
-  if(nuevoEstado==='PAGADO'&&p.prestamo>0){
-    const key=p.nombre.toUpperCase().trim();
-    const saldoAnterior=(prestamosDB[key]?.saldo)||p.prestamo;
-    await guardarPrestamo(p.nombre,p.prestamo,saldoAnterior,semana);
-    toast('💾 Préstamo actualizado: saldo restante $'+Math.max(0,saldoAnterior-p.prestamo).toLocaleString('es-CL'));
-  }
-},
-            style:{padding:'7px 14px',borderRadius:8,border:'none',background:p.estado==='PAGADO'?'rgba(176,48,48,0.1)':'rgba(46,125,79,0.1)',color:p.estado==='PAGADO'?'#b03030':'#2e7d4f',fontSize:12,cursor:'pointer',fontWeight:700}},
-            p.estado==='PAGADO'?'↩ Revertir':'✓ Marcar Pagado')
+        /*#__PURE__*/React.createElement('div',{style:{display:'flex',alignItems:'flex-end'}},
+          /*#__PURE__*/React.createElement('button',{
+            onClick:()=>exportarComprobante(p),
+            style:{width:'100%',padding:'8px',borderRadius:8,border:'1px solid var(--border)',background:'var(--cream)',color:'var(--text-main)',fontSize:11,cursor:'pointer',fontWeight:600}
+          },'🧾 Ver Comprobante')
         )
       )
     )
-  )
-)),filtrados.length===0&&/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",{colSpan:8,className:"empty-state"},"Sin resultados"))))));})(),pagos.length===0&&/*#__PURE__*/React.createElement("div",{className:"info-banner"},"\uD83D\uDCE5 Importa el archivo del d\xEDa primero para generar los pagos autom\xE1ticamente."),/*#__PURE__*/React.createElement("div",{className:"table-wrap"},/*#__PURE__*/React.createElement("table",null,/*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("th",null,"#"),/*#__PURE__*/React.createElement("th",null,"Mensajero"),/*#__PURE__*/React.createElement("th",null,"Env\xEDos"),/*#__PURE__*/React.createElement("th",null,"Tarifa"),/*#__PURE__*/React.createElement("th",null,"Pago Calc."),/*#__PURE__*/React.createElement("th",null,"Ajuste"),/*#__PURE__*/React.createElement("th",null,"Tipo IVA / Desc."),/*#__PURE__*/React.createElement("th",null,"Consumo Local"),/*#__PURE__*/React.createElement("th",null,"Extra"),/*#__PURE__*/React.createElement("th",null,"Adelanto"),/*#__PURE__*/React.createElement("th",null,"Pr\xE9stamo"),/*#__PURE__*/React.createElement("th",{style:{color:'var(--danger)',cursor:'pointer'}},'💳 Consumo'),/*#__PURE__*/React.createElement("th",{style:{color:'var(--success)',cursor:'pointer'}},'⭐ Extras'),/*#__PURE__*/React.createElement("th",null,"Total a Pagar"),/*#__PURE__*/React.createElement("th",null,"Estado"),/*#__PURE__*/React.createElement("th",null,"Obs."),/*#__PURE__*/React.createElement("th",null,"Acciones"))),/*#__PURE__*/React.createElement("tbody",null,pagos.map((p,i)=>/*#__PURE__*/React.createElement("tr",{key:p.id,style:{background:p.estado==='PAGADO'?'rgba(46,125,79,0.04)':''}},/*#__PURE__*/React.createElement("td",{style:{textAlign:'center',fontFamily:'JetBrains Mono',fontSize:11,color:'var(--text-soft)',background:'var(--cream)',fontWeight:700}},i+1),/*#__PURE__*/React.createElement("td",{style:{fontWeight:700,whiteSpace:'nowrap'}},p.nombre.replace(/,\s*/g,' ')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center'}},p.envios),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:72,padding:'4px 6px',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.tarifa,onChange:e=>updatePago(p.id,'tarifa',e.target.value),onFocus:e=>e.target.select()})),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)',fontWeight:600}},"$",Math.round(p.bruto).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:72,padding:'4px 6px',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:6,color:p.ajuste<0?'var(--danger)':p.ajuste>0?'var(--success)':'var(--text)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.ajuste,onChange:e=>updatePago(p.id,'ajuste',e.target.value),onFocus:e=>e.target.select()})),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("div",{style:{display:'flex',flexDirection:'column',gap:3,minWidth:110}},/*#__PURE__*/React.createElement("select",{value:p.tipoIVA||'ninguno',onChange:e=>updatePago(p.id,'tipoIVA',e.target.value),style:{padding:'3px 6px',borderRadius:6,border:'1px solid var(--border)',fontSize:10,fontWeight:700,cursor:'pointer',outline:'none',background:p.tipoIVA==='honorarios'?'rgba(176,125,16,0.1)':p.tipoIVA==='factura'?'rgba(176,48,48,0.08)':'var(--cream)',color:p.tipoIVA==='honorarios'?'var(--warning)':p.tipoIVA==='factura'?'var(--danger)':'var(--text-soft)'}},/*#__PURE__*/React.createElement("option",{value:"ninguno"},"Sin descuento"),/*#__PURE__*/React.createElement("option",{value:"honorarios"},"B.Honorarios 15.25%"),/*#__PURE__*/React.createElement("option",{value:"factura"},"Factura 19%"),/*#__PURE__*/React.createElement("option",{value:"manual"},"Manual")),p.tipoIVA==='manual'?/*#__PURE__*/React.createElement("input",{style:{width:'100%',padding:'3px 6px',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:6,color:'var(--danger)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.iva,onChange:e=>updatePago(p.id,'iva',e.target.value),onFocus:e=>e.target.select()}):p.iva>0&&/*#__PURE__*/React.createElement("span",{style:{fontFamily:'JetBrains Mono',fontSize:11,color:'var(--danger)',textAlign:'right',paddingRight:4}},"-$",Math.round(p.iva).toLocaleString('es-CL')))),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:82,padding:'4px 6px',background:'rgba(176,48,48,0.05)',border:'1px solid rgba(176,48,48,0.25)',borderRadius:6,color:'var(--danger)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.consumo||0,onChange:e=>updatePago(p.id,'consumo',e.target.value),onFocus:e=>e.target.select(),placeholder:"0"})),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:72,padding:'4px 6px',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:6,color:'var(--success)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.extra,onChange:e=>updatePago(p.id,'extra',e.target.value),onFocus:e=>e.target.select()})),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:72,padding:'4px 6px',background:'var(--cream)',border:'1px solid rgba(176,48,48,0.3)',borderRadius:6,color:'var(--danger)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.adelanto,onChange:e=>updatePago(p.id,'adelanto',e.target.value),onFocus:e=>e.target.select()})),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:72,padding:'4px 6px',background:'var(--cream)',border:'1px solid rgba(176,48,48,0.3)',borderRadius:6,color:'var(--danger)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.prestamo,onChange:e=>updatePago(p.id,'prestamo',e.target.value),onFocus:e=>e.target.select()})),/*#__PURE__*/React.createElement("td",{style:{fontFamily:'JetBrains Mono',fontWeight:700,fontSize:12,color:p.totalPagar>=0?'var(--success)':'var(--danger)',whiteSpace:'nowrap'}},"$",Math.round(p.totalPagar).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("select",{value:p.estado,onChange:e=>updatePago(p.id,'estado',e.target.value),style:{padding:'4px 8px',borderRadius:6,border:'1px solid var(--border)',background:p.estado==='PAGADO'?'rgba(46,125,79,0.1)':'rgba(176,48,48,0.06)',color:p.estado==='PAGADO'?'var(--success)':'var(--danger)',fontWeight:700,fontSize:11,cursor:'pointer',outline:'none'}},/*#__PURE__*/React.createElement("option",{value:"PENDIENTE"},"PENDIENTE"),/*#__PURE__*/React.createElement("option",{value:"PAGADO"},"PAGADO"))),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:100,padding:'4px 6px',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontSize:11,outline:'none'},placeholder:"Nota...",value:p.obs,onChange:e=>updatePago(p.id,'obs',e.target.value)})),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("button",{className:"action-btn btn-edit",onClick:()=>exportarComprobante(p),title:"Exportar comprobante"},"\uD83D\uDCC4")))),/*#__PURE__*/React.createElement("tr",{className:"totales-row"},/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:1}},"TOTALES"),/*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',fontWeight:700}},totales.envios.toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)',fontWeight:700}},"$",Math.round(totales.bruto).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)'}},"$",Math.round(totales.extra).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--danger)'}},"$",Math.round(totales.adelanto).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--danger)'}},"$",Math.round(totales.prestamo).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--danger)'}},"$",Math.round(totales.consumo).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)',fontWeight:700,fontSize:13}},"$",Math.round(totales.total).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{colSpan:3,style:{color:'var(--text-soft)',fontSize:12}},totales.pagados," pag. / ",totales.pendientes," pend.")))))),
+  ))),filtrados.length===0&&/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",{colSpan:8,className:"empty-state"},"Sin resultados"))))));})(),pagos.length===0&&/*#__PURE__*/React.createElement("div",{className:"info-banner"},"\uD83D\uDCE5 Importa el archivo del d\xEDa primero para generar los pagos autom\xE1ticamente."),/*#__PURE__*/React.createElement("div",{className:"table-wrap"},/*#__PURE__*/React.createElement("table",null,/*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("th",null,"#"),/*#__PURE__*/React.createElement("th",null,"Mensajero"),/*#__PURE__*/React.createElement("th",null,"Env\xEDos"),/*#__PURE__*/React.createElement("th",null,"Tarifa"),/*#__PURE__*/React.createElement("th",null,"Pago Calc."),/*#__PURE__*/React.createElement("th",null,"Ajuste"),/*#__PURE__*/React.createElement("th",null,"Tipo IVA / Desc."),/*#__PURE__*/React.createElement("th",null,"Consumo Local"),/*#__PURE__*/React.createElement("th",null,"Extra"),/*#__PURE__*/React.createElement("th",null,"Adelanto"),/*#__PURE__*/React.createElement("th",null,"Pr\xE9stamo"),/*#__PURE__*/React.createElement("th",{style:{color:'var(--danger)',cursor:'pointer'}},'💳 Consumo'),/*#__PURE__*/React.createElement("th",{style:{color:'var(--success)',cursor:'pointer'}},'⭐ Extras'),/*#__PURE__*/React.createElement("th",null,"Total a Pagar"),/*#__PURE__*/React.createElement("th",null,"Estado"),/*#__PURE__*/React.createElement("th",null,"Obs."),/*#__PURE__*/React.createElement("th",null,"Acciones"))),/*#__PURE__*/React.createElement("tbody",null,pagos.map((p,i)=>/*#__PURE__*/React.createElement("tr",{key:p.id,style:{background:p.estado==='PAGADO'?'rgba(46,125,79,0.04)':''}},/*#__PURE__*/React.createElement("td",{style:{textAlign:'center',fontFamily:'JetBrains Mono',fontSize:11,color:'var(--text-soft)',background:'var(--cream)',fontWeight:700}},i+1),/*#__PURE__*/React.createElement("td",{style:{fontWeight:700,whiteSpace:'nowrap'}},p.nombre.replace(/,\s*/g,' ')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center'}},p.envios),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:72,padding:'4px 6px',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.tarifa,onChange:e=>updatePago(p.id,'tarifa',e.target.value),onFocus:e=>e.target.select()})),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)',fontWeight:600}},"$",Math.round(p.bruto).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:72,padding:'4px 6px',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:6,color:p.ajuste<0?'var(--danger)':p.ajuste>0?'var(--success)':'var(--text)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.ajuste,onChange:e=>updatePago(p.id,'ajuste',e.target.value),onFocus:e=>e.target.select()})),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("div",{style:{display:'flex',flexDirection:'column',gap:3,minWidth:110}},/*#__PURE__*/React.createElement("select",{value:p.tipoIVA||'ninguno',onChange:e=>updatePago(p.id,'tipoIVA',e.target.value),style:{padding:'3px 6px',borderRadius:6,border:'1px solid var(--border)',fontSize:10,fontWeight:700,cursor:'pointer',outline:'none',background:p.tipoIVA==='honorarios'?'rgba(176,125,16,0.1)':p.tipoIVA==='factura'?'rgba(176,48,48,0.08)':'var(--cream)',color:p.tipoIVA==='honorarios'?'var(--warning)':p.tipoIVA==='factura'?'var(--danger)':'var(--text-soft)'}},/*#__PURE__*/React.createElement("option",{value:"ninguno"},"Sin descuento"),/*#__PURE__*/React.createElement("option",{value:"honorarios"},"B.Honorarios 15.25%"),/*#__PURE__*/React.createElement("option",{value:"factura"},"Factura 19%"),/*#__PURE__*/React.createElement("option",{value:"manual"},"Manual")),p.tipoIVA==='manual'?/*#__PURE__*/React.createElement("input",{style:{width:'100%',padding:'3px 6px',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:6,color:'var(--danger)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.iva,onChange:e=>updatePago(p.id,'iva',e.target.value),onFocus:e=>e.target.select()}):p.iva>0&&/*#__PURE__*/React.createElement("span",{style:{fontFamily:'JetBrains Mono',fontSize:11,color:'var(--danger)',textAlign:'right',paddingRight:4}},"-$",Math.round(p.iva).toLocaleString('es-CL')))),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:82,padding:'4px 6px',background:'rgba(176,48,48,0.05)',border:'1px solid rgba(176,48,48,0.25)',borderRadius:6,color:'var(--danger)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.consumo||0,onChange:e=>updatePago(p.id,'consumo',e.target.value),onFocus:e=>e.target.select(),placeholder:"0"})),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:72,padding:'4px 6px',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:6,color:'var(--success)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.extra,onChange:e=>updatePago(p.id,'extra',e.target.value),onFocus:e=>e.target.select()})),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:72,padding:'4px 6px',background:'var(--cream)',border:'1px solid rgba(176,48,48,0.3)',borderRadius:6,color:'var(--danger)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.adelanto,onChange:e=>updatePago(p.id,'adelanto',e.target.value),onFocus:e=>e.target.select()})),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:72,padding:'4px 6px',background:'var(--cream)',border:'1px solid rgba(176,48,48,0.3)',borderRadius:6,color:'var(--danger)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.prestamo,onChange:e=>updatePago(p.id,'prestamo',e.target.value),onFocus:e=>e.target.select()})),/*#__PURE__*/React.createElement("td",{style:{fontFamily:'JetBrains Mono',fontWeight:700,fontSize:12,color:p.totalPagar>=0?'var(--success)':'var(--danger)',whiteSpace:'nowrap'}},"$",Math.round(p.totalPagar).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("select",{value:p.estado,onChange:e=>updatePago(p.id,'estado',e.target.value),style:{padding:'4px 8px',borderRadius:6,border:'1px solid var(--border)',background:p.estado==='PAGADO'?'rgba(46,125,79,0.1)':'rgba(176,48,48,0.06)',color:p.estado==='PAGADO'?'var(--success)':'var(--danger)',fontWeight:700,fontSize:11,cursor:'pointer',outline:'none'}},/*#__PURE__*/React.createElement("option",{value:"PENDIENTE"},"PENDIENTE"),/*#__PURE__*/React.createElement("option",{value:"PAGADO"},"PAGADO"))),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:100,padding:'4px 6px',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontSize:11,outline:'none'},placeholder:"Nota...",value:p.obs,onChange:e=>updatePago(p.id,'obs',e.target.value)})),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("button",{className:"action-btn btn-edit",onClick:()=>exportarComprobante(p),title:"Exportar comprobante"},"\uD83D\uDCC4")))),/*#__PURE__*/React.createElement("tr",{className:"totales-row"},/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:1}},"TOTALES"),/*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',fontWeight:700}},totales.envios.toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)',fontWeight:700}},"$",Math.round(totales.bruto).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)'}},"$",Math.round(totales.extra).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--danger)'}},"$",Math.round(totales.adelanto).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--danger)'}},"$",Math.round(totales.prestamo).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--danger)'}},"$",Math.round(totales.consumo).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)',fontWeight:700,fontSize:13}},"$",Math.round(totales.total).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{colSpan:3,style:{color:'var(--text-soft)',fontSize:12}},totales.pagados," pag. / ",totales.pendientes," pend.")))))),
   /*#__PURE__*/React.createElement("div",{className:"pm-tab-retiros"},
   /*#__PURE__*/React.createElement(PlanillaRetiros,{clientes:clientes,mensajeros:mensajeros,retirosDB:retirosDB,setRetirosDB:setRetirosDB,retiroFecha:retiroFecha,setRetiroFecha:setRetiroFecha,toast:toast})
 ),
