@@ -70,7 +70,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--text);
 .nav-btn.active{color:var(--gold);border-bottom-color:var(--gold);}
 
 /* MAIN */
-.main{padding:28px 32px;padding-bottom:max(28px,calc(env(safe-area-inset-bottom) + 16px));}
+.main{padding:20px 24px;padding-bottom:max(20px,calc(env(safe-area-inset-bottom) + 16px));overflow-y:auto;height:calc(100vh - 60px);}
 
 /* STAT CARDS */
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px;}
@@ -1870,7 +1870,7 @@ useEffect(()=>{
                     <td style="text-align:right">$${Math.round(totalFiltrado).toLocaleString('es-CL')}</td>
                     <td></td></tr></tfoot></table>
                     <script>window.onload=()=>{window.print()}<\/script>
-                    </body></html>`);win.document.close();},onExcel:()=>{const headers=['#','Mensajero','Envíos','Pago Bruto',...(pagosFiltro==='consumo'?['Consumo Local']:[]),...(pagosFiltro==='extra'?['Extra/Bono']:[]),'Total a Pagar','Estado'];const rows=filtrados.map((p,i)=>[i+1,p.nombre.replace(/,\s*/g,' '),p.envios,Math.round(p.bruto),...(pagosFiltro==='consumo'?[Math.round(p.consumo||0)]:[]),...(pagosFiltro==='extra'?[Math.round(p.extra||0)]:[]),Math.round(p.totalPagar),p.estado]);exportToExcel(titulos[pagosFiltro].replace(/\s/g,'_')+'_'+semana.replace(/\s/g,'_'),[{name:titulos[pagosFiltro].slice(0,31),headers,rows}]);}}),/*#__PURE__*/React.createElement("button",{className:"btn-secondary",onClick:()=>setPagosFiltro(null)},"\u2715 Cerrar"))),/*#__PURE__*/React.createElement("div",{className:"table-wrap",style:{maxHeight:360,overflowY:'auto'}},/*#__PURE__*/React.createElement("table",null,/*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,
+                    </body></html>`);win.document.close();},onExcel:()=>{const headers=['#','Mensajero','Envíos','Pago Bruto',...(pagosFiltro==='consumo'?['Consumo Local']:[]),...(pagosFiltro==='extra'?['Extra/Bono']:[]),'Total a Pagar','Estado'];const rows=filtrados.map((p,i)=>[i+1,p.nombre.replace(/,\s*/g,' '),p.envios,Math.round(p.bruto),...(pagosFiltro==='consumo'?[Math.round(p.consumo||0)]:[]),...(pagosFiltro==='extra'?[Math.round(p.extra||0)]:[]),Math.round(p.totalPagar),p.estado]);exportToExcel(titulos[pagosFiltro].replace(/\s/g,'_')+'_'+semana.replace(/\s/g,'_'),[{name:titulos[pagosFiltro].slice(0,31),headers,rows}]);}}),/*#__PURE__*/React.createElement("button",{className:"btn-secondary",onClick:()=>setPagosFiltro(null)},"\u2715 Cerrar"))),/*#__PURE__*/React.createElement("div",{className:"table-wrap",style:{maxHeight:'calc(100vh - 380px)',overflowY:'auto'}},/*#__PURE__*/React.createElement("table",null,/*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,
   /*#__PURE__*/React.createElement("th",{style:{width:36,textAlign:'center'}},"#"),
   /*#__PURE__*/React.createElement("th",null,"Mensajero"),
   /*#__PURE__*/React.createElement("th",{style:{textAlign:'center'}},"Envíos"),
