@@ -599,7 +599,7 @@ body { padding-top: env(safe-area-inset-top); }
 </script>
 
 <script>
-/* v1782078924 */
+/* v1782095664 */
 window.addEventListener("DOMContentLoaded",function(){
 const SUPA_URL='https://tiambblslqdloeqdbhrs.supabase.co';const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpYW1iYmxzbHFkbG9lcWRiaHJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzODEzNzIsImV4cCI6MjA5NDk1NzM3Mn0.LYu6YsoIfzW3sApLnYvDh0GPDizOhjDSLtZQyrGH4nU';const db=supabase.createClient(SUPA_URL,SUPA_KEY);async function sbUpsert(tabla,data){try{const _await$db$from$upsert=await db.from(tabla).upsert(data),error=_await$db$from$upsert.error;if(error)console.warn('Supabase upsert error:',error.message);return!error;}catch(e){console.warn('Supabase offline:',e.message);return false;}}async function sbSelect(tabla,filtros){if(filtros===void 0){filtros={};}try{let q=db.from(tabla).select('*');Object.entries(filtros).forEach(_ref=>{let k=_ref[0],v=_ref[1];q=q.eq(k,v);});const _await$q=await q,data=_await$q.data,error=_await$q.error;if(error)throw error;return data||[];}catch(e){console.warn('Supabase select error:',e.message);return null;}}async function sbLogin(email,clave){try{const _await$db$from$select=await db.from('usuarios').select('*').eq('email',email).eq('clave',clave).eq('activo',true).single(),data=_await$db$from$select.data,error=_await$db$from$select.error;if(error||!data)return null;return data;}catch(e){return null;}}async function sbInsertEnvio(envio){try{const _await$db$from$insert=await db.from('envios').insert({codigo:envio.codigo,cliente:envio.cliente,destinatario:envio.destinatario,telefono:envio.telefono,direccion:envio.direccion,comuna:envio.comuna,referencia:envio.referencia||'',fecha:envio.fecha,estado:envio.estado||'sin_asignar',mensajero:envio.mensajero||'',monto:envio.monto||0,en_un_cambio:envio.enUnCambio||false,nota:envio.nota||'',fuente:envio.fuente||'propio'}).select().single(),data=_await$db$from$insert.data,error=_await$db$from$insert.error;if(error)console.warn('Insert envio error:',error.message);return data;}catch(e){return null;}}async function sbUpdateEstado(codigo,estado,nota,usuario){try{const ts=new Date().toISOString();await db.from('envios').update({estado,mensajero:usuario&&estado!=='sin_asignar'?usuario:undefined,updated_at:ts}).eq('codigo',codigo);await db.from('historial_envios').insert({envio_id:null,codigo_envio:codigo,estado,nota:nota||'',usuario:usuario||'Sistema',fecha:ts});}catch(e){console.warn('Update estado error:',e.message);}}const _React=React,useState=_React.useState,useEffect=_React.useEffect,useMemo=_React.useMemo,useRef=_React.useRef;const INIT_CLIENTES=[{id:1,nombre:'MR SHENG',activo:true,tarifa:1600,pagaIVA:false,obs:'Valor ÚNICO S/IVA. Mínimo diario 200 pcs.',rut:'',direccion:'',contacto:'',tarifa10kg:3200,tarifa18kg:12800,tarifaColina:2600,tarifaPH:2600},{id:2,nombre:'YAFA LTDA',activo:true,tarifa:2300,pagaIVA:true,obs:''},{id:3,nombre:'ALMA BONSAI',activo:true,tarifa:2500,pagaIVA:false,obs:'No suele enviar paquetería grande ni PH y Colina'},{id:4,nombre:'ANDES (COLINA)',activo:true,tarifa:2101,pagaIVA:true,obs:'Tarifada por cantidad, precio fijo en Colina y PH'},{id:5,nombre:'DMT',activo:true,tarifa:2261,pagaIVA:false,obs:'No suele enviar paquetería grande'},{id:6,nombre:'HUANG SPA',activo:true,tarifa:1849,pagaIVA:true,obs:'No envía paquetería de Colina y PH'},{id:7,nombre:'IAITECH',activo:true,tarifa:1765,pagaIVA:true,obs:'Suele enviar paquetería pesada o grande'},{id:8,nombre:'QUE COMPRARAS',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:9,nombre:'MARDA',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:10,nombre:'ILAHUI',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:11,nombre:'MEDICALAB',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:12,nombre:'HOME ELECTRO',activo:true,tarifa:2521,pagaIVA:true,obs:''},{id:13,nombre:'SHOP HEY',activo:false,tarifa:2101,pagaIVA:true,obs:''},{id:14,nombre:'MALL SANHOO',activo:true,tarifa:2101,pagaIVA:false,obs:''},{id:15,nombre:'HUANG XIUDAN',activo:true,tarifa:2380,pagaIVA:false,obs:''},{id:16,nombre:'PUMA',activo:true,tarifa:1933,pagaIVA:true,obs:'No envía paquetería de Colina y PH'},{id:17,nombre:'DON TANG',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:18,nombre:'DENTAL ALAMEDA',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:19,nombre:'IMPORTADORA VINI',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:20,nombre:'MAX BELLEZA',activo:true,tarifa:2101,pagaIVA:false,obs:''},{id:21,nombre:'GALVORA',activo:true,tarifa:2300,pagaIVA:true,obs:''},{id:22,nombre:'MAKA',activo:false,tarifa:1891,pagaIVA:true,obs:'Cliente con retiro complicado'},{id:23,nombre:'WEIHOME',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:24,nombre:'NEXO',activo:true,tarifa:2101,pagaIVA:true,obs:'El cliente viene a dejar la paquetería'},{id:25,nombre:'POWERSUPPS',activo:true,tarifa:2500,pagaIVA:false,obs:''},{id:26,nombre:'SUPER XIYU',activo:true,tarifa:1950,pagaIVA:true,obs:''},{id:27,nombre:'PLAZA LILA',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:28,nombre:'ROMERO',activo:false,tarifa:1849,pagaIVA:true,obs:''},{id:29,nombre:'YEAH',activo:false,tarifa:2101,pagaIVA:true,obs:''},{id:30,nombre:'MODA Y MARKET',activo:false,tarifa:2101,pagaIVA:true,obs:''},{id:31,nombre:'NUEVA SHENGA',activo:false,tarifa:2101,pagaIVA:true,obs:''}];const INIT_MENSAJEROS=[{id:1,nombre:'ALEX, ARAUJO',activo:true,tarifa:1200},{id:2,nombre:'ANGEL, OSUNA',activo:true,tarifa:1200},{id:3,nombre:'ANGEL CARPIO',activo:true,tarifa:1200},{id:4,nombre:'EDBEL, MORILLO',activo:true,tarifa:1000},{id:5,nombre:'ELIS, CHANGAROTE',activo:true,tarifa:1200},{id:6,nombre:'EXPRESS',activo:true,tarifa:1200},{id:7,nombre:'EXPRESSCOLINA,',activo:true,tarifa:1200},{id:8,nombre:'FERNANDOCHECK',activo:false,tarifa:1200},{id:9,nombre:'FIDEL, REVERON',activo:true,tarifa:1800},{id:10,nombre:'GERARDO NAHUELPAN',activo:true,tarifa:1200},{id:11,nombre:'GUSTAVO, ROMAN',activo:true,tarifa:1200},{id:12,nombre:'HILDEMARO CABRILES',activo:true,tarifa:1200},{id:13,nombre:'JYF',activo:true,tarifa:1200},{id:14,nombre:'JONATHAN, RAMIREZ',activo:true,tarifa:1300},{id:15,nombre:'JORGE, GATICA',activo:true,tarifa:1300},{id:16,nombre:'MARCOS, GIOVACCHINI',activo:true,tarifa:1000},{id:17,nombre:'MARCOS, FUENTEALBA',activo:true,tarifa:1200},{id:18,nombre:'MARTIN, GATICA',activo:true,tarifa:1300},{id:19,nombre:'MATIAS, PARRA',activo:true,tarifa:1200},{id:20,nombre:'RONALD, GARCIA',activo:true,tarifa:1200},{id:21,nombre:'YULFER, JIMENEZ',activo:true,tarifa:1200},{id:22,nombre:'JONJAIRO, CANTILLO',activo:true,tarifa:1200},{id:23,nombre:'JUAN, BARTOLI',activo:true,tarifa:1400},{id:24,nombre:'JAVIER, CASTRO',activo:true,tarifa:1200},{id:25,nombre:'VICTOR, PEREZ',activo:true,tarifa:1000},{id:26,nombre:'MATIAS, MORA',activo:true,tarifa:1000},{id:27,nombre:'DAVID, MOLINA',activo:true,tarifa:1300},{id:28,nombre:'HERNAN, MELEAN',activo:true,tarifa:1200},{id:29,nombre:'ALEJANDRO, PADRINO',activo:true,tarifa:1200},{id:30,nombre:'JF LOGISTIC,',activo:true,tarifa:2300},{id:31,nombre:'PBCLIS EXPRESS,',activo:true,tarifa:0},{id:32,nombre:'MARTIN, PALMA',activo:true,tarifa:1300},{id:33,nombre:'LEONARDO, ESTUPIAÑAN',activo:true,tarifa:1200},{id:34,nombre:'DANIELA, TOLEDO',activo:true,tarifa:1200}];const pct=v=>isNaN(v)||!isFinite(v)?'—':(v*100).toFixed(1)+'%';const barColor=v=>v>=0.95?'#2e7d4f':v>=0.85?'#C8A84B':'#b03030';const badgeKpi=v=>v>=0.95?'green':v>=0.85?'amber':'red';const fmt=n=>typeof n==='number'?n.toLocaleString('es-CL'):'—';const today=()=>new Date().toLocaleDateString('es-CL',{weekday:'long',year:'numeric',month:'long',day:'numeric'});function normalizarNombre(raw){if(!raw)return'';return raw.toString().trim().replace(/,\s*/g,' ').replace(/\s+/g,' ').toUpperCase();}function parsearFecha(raw){try{if(!raw)return'';if(raw instanceof Date){if(isNaN(raw.getTime()))return'';return raw.toISOString().slice(0,10);}if(typeof raw==='number'){const d=new Date(Math.round((raw-25569)*86400*1000));if(isNaN(d.getTime()))return'';return d.toISOString().slice(0,10);}const s=raw.toString().trim();if(!s)return'';const d=new Date(s);if(!isNaN(d.getTime()))return d.toISOString().slice(0,10);const m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);if(m){const d2=new Date(`${m[3].length===2?'20'+m[3]:m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`);if(!isNaN(d2.getTime()))return d2.toISOString().slice(0,10);}return'';}catch(e){return'';}}function parsearEstatus(est){const e=(est||'').toString().toLowerCase();if(e.includes('entregado'))return'entregado';if(e.includes('cancelado'))return'cancelado';if(e.includes('reprogramado')||e.includes('reprog'))return'reprogramado';if(e.includes('camino'))return'camino';return'pendiente';}function procesarImport(rows){const map={};let fechaGlobal='';rows.forEach(r=>{const desp=normalizarNombre(r['Despachador']);const cli=(r['Cliente']||'').toString().trim().toUpperCase();const est=parsearEstatus(r['Estatus de Envio']);const fecha=parsearFecha(r['Fecha Envio']);if(fecha&&!fechaGlobal)fechaGlobal=fecha;if(!desp)return;if(!map[desp])map[desp]={nombre:desp,total:0,entregados:0,enCamino:0,reprogram:0,cancelados:0,pendientes:0,fecha:fecha||fechaGlobal,clientes:{}};map[desp].total++;if(est==='entregado')map[desp].entregados++;else if(est==='cancelado')map[desp].cancelados++;else if(est==='reprogramado')map[desp].reprogram++;else if(est==='camino')map[desp].enCamino++;else map[desp].pendientes++;if(cli){if(!map[desp].clientes[cli])map[desp].clientes[cli]=0;map[desp].clientes[cli]++;}});return{data:Object.values(map),fecha:fechaGlobal};}function KpiBar(_ref2){let value=_ref2.value;const pv=Math.min(Math.max(isFinite(value)?value:0,0),1);return/*#__PURE__*/React.createElement("div",{className:"kpi-bar"},/*#__PURE__*/React.createElement("div",{className:"bar-track"},/*#__PURE__*/React.createElement("div",{className:"bar-fill",style:{width:pv*100+'%',background:barColor(pv)}})),/*#__PURE__*/React.createElement("span",{className:"bar-pct"},pct(value)));}function Badge(_ref3){let type=_ref3.type,children=_ref3.children;return/*#__PURE__*/React.createElement("span",{className:`badge ${type}`},children);}function Toast(_ref4){let msg=_ref4.msg,onClose=_ref4.onClose;useEffect(()=>{const t=setTimeout(onClose,2800);return()=>clearTimeout(t);},[]);return/*#__PURE__*/React.createElement("div",{className:"toast"},"\u2713 ",msg);}function Modal(_ref5){let title=_ref5.title,sub=_ref5.sub,onClose=_ref5.onClose,wide=_ref5.wide,children=_ref5.children;return/*#__PURE__*/React.createElement("div",{className:"modal-overlay",onClick:e=>{if(e.target===e.currentTarget)onClose();}},/*#__PURE__*/React.createElement("div",{className:`modal${wide?' modal-wide':''}`},/*#__PURE__*/React.createElement("div",{className:"modal-title"},title),sub&&/*#__PURE__*/React.createElement("div",{className:"modal-sub"},sub),children));}function ImportarExcel(_ref6){let mensajeros=_ref6.mensajeros,setMensajeros=_ref6.setMensajeros,setMensajerosDia=_ref6.setMensajerosDia,setKpi=_ref6.setKpi,toast=_ref6.toast;const _useState=useState(false),drag=_useState[0],setDrag=_useState[1];const _useState2=useState(null),preview=_useState2[0],setPreview=_useState2[1];const _useState3=useState(null),editPreview=_useState3[0],setEditPreview=_useState3[1];const _useState4=useState(false),importado=_useState4[0],setImportado=_useState4[1];const _useState5=useState(null),error=_useState5[0],setError=_useState5[1];const _useState6=useState([]),importedRows=_useState6[0],setImportedRows=_useState6[1];const fileRef=useRef();function leerArchivo(file){if(!file)return;const ext=file.name.split('.').pop().toLowerCase();if(ext==='htm'||ext==='html'){const r2=new FileReader();r2.onload=ev=>{try{const parser=new DOMParser();const doc=parser.parseFromString(ev.target.result,'text/html');const table=doc.querySelector('table');if(!table){setError('No se encontró tabla en el archivo HTM.');return;}const filas=Array.from(table.querySelectorAll('tr'));const headers=Array.from(filas[0].querySelectorAll('th,td')).map(c=>c.textContent.replace(/[ \t\n\r]+/g,' ').trim());const rows2=filas.slice(1).map(tr=>{const cells=Array.from(tr.querySelectorAll('td')).map(c=>c.textContent.replace(/[ \t\n\r]+/g,' ').trim());const obj={};headers.forEach((h,i)=>{obj[h]=cells[i]||'';});return obj;}).filter(r=>Object.values(r).some(v=>v));procesarFilasImport(rows2);}catch(err){setError('Error leyendo HTM: '+err.message);}};r2.readAsText(file,'windows-1252');return;}const reader=new FileReader();reader.onload=e=>{try{let wb;try{wb=XLSX.read(e.target.result,{type:'array',cellDates:true,raw:false});}catch(e1){try{wb=XLSX.read(e.target.result,{type:'array'});}catch(e2){// Check if it's a frameset XLS
 const txt=new TextDecoder().decode(e.target.result.slice(0,500));if(txt.includes('frameset')||txt.includes('shLink')){throw new Error('Este archivo Excel usa formato de carpeta. Ábrelo en Excel y guárdalo como .xlsx (Archivo → Guardar como → Excel Workbook .xlsx), luego súbelo aquí.');}throw new Error('Formato no soportado. Guarda el archivo como .xlsx desde Excel e inténtalo de nuevo.');}}const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});if(!rows.length){setError('El archivo está vacío o no tiene datos.');return;}// Normalizar nombres de columnas — aceptar variaciones
@@ -1004,7 +1004,162 @@ return React.createElement('div',{style:{position:'fixed',inset:0,background:'rg
     )
   )
 );}
-function GestionMensajeros(_ref15){let mensajeros=_ref15.mensajeros,setMensajeros=_ref15.setMensajeros,mensajerosDia=_ref15.mensajerosDia,toast=_ref15.toast,esAdmin=_ref15.esAdmin;const _useState25=useState(''),search=_useState25[0],setSearch=_useState25[1];const _useState26=useState('todos'),filtro=_useState26[0],setFiltro=_useState26[1];const _useState27=useState(null),modal=_useState27[0],setModal=_useState27[1];const _useState28=useState({nombre:'',tarifa:1800}),form=_useState28[0],setForm=_useState28[1];const _useState29=useState(null),confirmDel=_useState29[0],setConfirmDel=_useState29[1];const _usDocM=useState(null),docsMensajero=_usDocM[0],setDocsMensajero=_usDocM[1];const filtrados=mensajeros.filter(m=>m.nombre.toLowerCase().includes(search.toLowerCase())&&(filtro==='todos'||filtro==='activos'&&m.activo||filtro==='pausados'&&!m.activo));const normNombre=n=>n.toUpperCase().replace(/,\s*/g,' ').replace(/\s+/g,' ').trim();const statsMap={};mensajerosDia.forEach(m=>{if(m.total>0)statsMap[normNombre(m.nombre)]={ef:m.entregados/m.total,total:m.total,entregados:m.entregados};});function toggleEstado(id){const m=mensajeros.find(x=>x.id===id);setMensajeros(prev=>prev.map(x=>x.id===id?{...x,activo:!x.activo}:x));toast(`${m.nombre} ${m.activo?'pausado':'activado'}`);}function save(){if(!form.nombre.trim())return;if(modal==='add'){const nid=Math.max(...mensajeros.map(m=>m.id))+1;setMensajeros(prev=>[...prev,{id:nid,nombre:form.nombre.trim().toUpperCase(),activo:true,tarifa:+form.tarifa}]);toast('Mensajero agregado');}else{setMensajeros(prev=>prev.map(m=>m.id===modal?{...m,nombre:form.nombre.toUpperCase(),tarifa:+form.tarifa}:m));toast('Mensajero actualizado');}setModal(null);}function del(id){setMensajeros(prev=>prev.filter(m=>m.id!==id));toast('Mensajero eliminado');setConfirmDel(null);}return/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{className:"section-head"},/*#__PURE__*/React.createElement("div",{className:"section-title"},"Gesti\xF3n ",/*#__PURE__*/React.createElement("span",null,"Mensajeros")),/*#__PURE__*/React.createElement("button",{className:"btn-add",onClick:()=>{setForm({nombre:'',tarifa:1800});setModal('add');}},"+ Nuevo")),/*#__PURE__*/React.createElement("div",{className:"stats-grid",style:{marginBottom:20}},[{label:'Total',val:mensajeros.length,cls:''},{label:'Activos',val:mensajeros.filter(m=>m.activo).length,cls:'green'},{label:'Pausados',val:mensajeros.filter(m=>!m.activo).length,cls:'red'}].map(s=>/*#__PURE__*/React.createElement("div",{key:s.label,className:"stat-card"},/*#__PURE__*/React.createElement("div",{className:"stat-label"},s.label),/*#__PURE__*/React.createElement("div",{className:`stat-value ${s.cls}`},s.val)))),/*#__PURE__*/React.createElement("div",{className:"toolbar"},/*#__PURE__*/React.createElement("input",{className:"search-box",placeholder:"Buscar mensajero...",value:search,onChange:e=>setSearch(e.target.value)}),['todos','activos','pausados'].map(f=>/*#__PURE__*/React.createElement("button",{key:f,className:`filter-btn ${filtro===f?'active':''}`,onClick:()=>setFiltro(f)},f.charAt(0).toUpperCase()+f.slice(1)))),/*#__PURE__*/React.createElement("div",{className:"table-wrap"},/*#__PURE__*/React.createElement("table",null,/*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("th",null,"Mensajero"),esAdmin&&/*#__PURE__*/React.createElement("th",null,"Tarifa"),/*#__PURE__*/React.createElement("th",null,"Hoy: Total"),/*#__PURE__*/React.createElement("th",null,"Hoy: Entregas"),/*#__PURE__*/React.createElement("th",null,"Efectividad"),/*#__PURE__*/React.createElement("th",null,"Estado"),/*#__PURE__*/React.createElement("th",null,"Acciones"))),/*#__PURE__*/React.createElement("tbody",null,filtrados.map(m=>{const s=statsMap[normNombre(m.nombre)];return/*#__PURE__*/React.createElement("tr",{key:m.id,className:m.activo?'':'paused'},/*#__PURE__*/React.createElement("td",{style:{fontWeight:600}},m.nombre,),esAdmin&&/*#__PURE__*/React.createElement("td",{className:"mono"},"$",fmt(m.tarifa)),/*#__PURE__*/React.createElement("td",{className:"mono"},s?s.total:'—'),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)'}},s?s.entregados:'—'),/*#__PURE__*/React.createElement("td",null,s?/*#__PURE__*/React.createElement(KpiBar,{value:s.ef}):/*#__PURE__*/React.createElement("span",{style:{color:'var(--text-soft)',fontSize:12}},"Sin datos")),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement(Badge,{type:m.activo?'active':'paused'},m.activo?'● Activo':'● Pausado')),/*#__PURE__*/React.createElement("td",{style:{display:'flex',gap:5}},/*#__PURE__*/React.createElement("button",{className:"action-btn btn-edit",onClick:()=>{setForm({nombre:m.nombre,tarifa:m.tarifa});setModal(m.id);}},"Editar"),/*#__PURE__*/React.createElement("button",{style:{padding:'4px 10px',borderRadius:6,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',cursor:'pointer',fontSize:11,fontWeight:700},onClick:()=>setDocsMensajero(m)},"\uD83D\uDCC1 Docs"),/*#__PURE__*/React.createElement("button",{className:`action-btn ${m.activo?'btn-pause':'btn-resume'}`,onClick:()=>toggleEstado(m.id)},m.activo?'Pausar':'Activar'),/*#__PURE__*/React.createElement("button",{className:"action-btn btn-delete",onClick:()=>setConfirmDel(m.id)},"\u2715")));}),filtrados.length===0&&/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",{colSpan:7,className:"empty-state"},"Sin resultados"))))),modal&&/*#__PURE__*/React.createElement(Modal,{title:modal==='add'?'Nuevo Mensajero':'Editar Mensajero',onClose:()=>setModal(null)},/*#__PURE__*/React.createElement("div",{className:"form-group"},/*#__PURE__*/React.createElement("label",{className:"form-label"},"Nombre"),/*#__PURE__*/React.createElement("input",{className:"form-input",value:form.nombre,onChange:e=>setForm(f=>({...f,nombre:e.target.value})),autoFocus:true})),esAdmin&&/*#__PURE__*/React.createElement("div",{className:"form-group"},/*#__PURE__*/React.createElement("label",{className:"form-label"},"Tarifa por Entrega ($)"),/*#__PURE__*/React.createElement("input",{className:"form-input",type:"number",min:"0",value:form.tarifa,onChange:e=>setForm(f=>({...f,tarifa:e.target.value}))})),/*#__PURE__*/React.createElement("div",{className:"modal-actions"},/*#__PURE__*/React.createElement("button",{className:"btn-secondary",onClick:()=>setModal(null)},"Cancelar"),/*#__PURE__*/React.createElement("button",{className:"btn-primary",onClick:save},modal==='add'?'Agregar':'Guardar'))),confirmDel&&/*#__PURE__*/React.createElement(Modal,{title:"\xBFEliminar mensajero?",onClose:()=>setConfirmDel(null)},/*#__PURE__*/React.createElement("p",{style:{fontSize:13,color:'var(--text-mid)',marginBottom:24}},"Esta acci\xF3n no se puede deshacer. \xBFConfirmas eliminar este mensajero del sistema?"),/*#__PURE__*/React.createElement("div",{className:"modal-actions"},/*#__PURE__*/React.createElement("button",{className:"btn-secondary",onClick:()=>setConfirmDel(null)},"Cancelar"),/*#__PURE__*/React.createElement("button",{className:"btn-primary",style:{background:'var(--danger)',borderColor:'var(--danger)',color:'#fff'},onClick:()=>del(confirmDel)},"Eliminar"))),docsMensajero&&/*#__PURE__*/React.createElement(DocumentosMensajero,{mensajero:docsMensajero,toast:toast,onClose:()=>setDocsMensajero(null)}));}function ManifiestoExport(_ref16){var _window$_importedRows;let mensajerosDia=_ref16.mensajerosDia,clientes=_ref16.clientes,kpi=_ref16.kpi,onClose=_ref16.onClose,esAdmin=_ref16.esAdmin;const _useState30=useState('TODOS'),clienteFiltro=_useState30[0],setClienteFiltro=_useState30[1];const _useState31=useState('cierre'),tipoManifiesto=_useState31[0],setTipoManifiesto=_useState31[1];const _useState32=useState('TODOS'),mensajeroFiltro=_useState32[0],setMensajeroFiltro=_useState32[1];const rawRows=useMemo(()=>{const rows=[];mensajerosDia.forEach(m=>{const base={despachador:m.nombre};for(let i=0;i<m.entregados;i++)rows.push({...base,estado:'Entregado',cliente:m.clientePrincipal||''});for(let i=0;i<(m.reprogram||0);i++)rows.push({...base,estado:'ReProgramado',cliente:m.clientePrincipal||''});for(let i=0;i<(m.cancelados||0);i++)rows.push({...base,estado:'Cancelado',cliente:m.clientePrincipal||''});for(let i=0;i<(m.enCamino||0);i++)rows.push({...base,estado:'En Camino',cliente:m.clientePrincipal||''});for(let i=0;i<(m.pendientes||0);i++)rows.push({...base,estado:'Pendiente por Retiro',cliente:m.clientePrincipal||''});});return rows;},[mensajerosDia]);const _useState33=useState([]),supabaseRows=_useState33[0],setSupabaseRows=_useState33[1];useEffect(()=>{// Cargar envíos del día desde Supabase
+
+function PestanasMensajero(_ref_pm){
+  var form=_ref_pm.form,setForm=_ref_pm.setForm,modal=_ref_pm.modal;
+  var esAdmin=_ref_pm.esAdmin,save=_ref_pm.save,onClose=_ref_pm.onClose;
+  var db=_ref_pm.db,toast=_ref_pm.toast,comunasRM=_ref_pm.comunasRM;
+
+  var _tab=React.useState('datos');var tabActiva=_tab[0];var setTabActiva=_tab[1];
+  var _tar=React.useState({});var tarifas=_tar[0];var setTarifas=_tar[1];
+  var _carg=React.useState(false);var cargando=_carg[0];var setCargando=_carg[1];
+  var _guar=React.useState(false);var guardando=_guar[0];var setGuardando=_guar[1];
+  var _bus=React.useState('');var busqueda=_bus[0];var setBusqueda=_bus[1];
+
+  // Cargar tarifas al abrir modal de edición
+  React.useEffect(function(){
+    if(modal==='add'||!form.nombre)return;
+    setCargando(true);
+    db.from('tarifas_comunas')
+      .select('*')
+      .ilike('mensajero_nombre',form.nombre)
+      .then(function(r){
+        var mapa={};
+        (r.data||[]).forEach(function(t){mapa[t.comuna]=t.tarifa;});
+        setTarifas(mapa);
+        setCargando(false);
+      });
+  },[form.nombre,modal]);
+
+  async function guardarTarifas(){
+    if(!form.nombre)return;
+    setGuardando(true);
+    var ops=Object.keys(tarifas).map(function(comuna){
+      return{mensajero_nombre:form.nombre.toUpperCase().trim(),
+        comuna:comuna,tarifa:+tarifas[comuna]||0,
+        updated_at:new Date().toISOString()};
+    });
+    if(ops.length>0){
+      await db.from('tarifas_comunas').upsert(ops,{onConflict:'mensajero_nombre,comuna'});
+    }
+    setGuardando(false);
+    toast('✓ Tarifas guardadas');
+    save();
+  }
+
+  var comunasFiltradas=comunasRM.filter(function(c){
+    return !busqueda||c.toLowerCase().includes(busqueda.toLowerCase());
+  });
+
+  var tarBase=+form.tarifa||1200;
+
+  return React.createElement('div',null,
+    // Pestañas
+    React.createElement('div',{style:{display:'flex',gap:0,marginBottom:16,borderBottom:'2px solid var(--border)'}},
+      ['datos','tarifas'].map(function(t){
+        var labels={datos:'📋 Datos',tarifas:'🗺 Tarifas por Comuna'};
+        return React.createElement('button',{
+          key:t,
+          onClick:function(){setTabActiva(t);},
+          style:{padding:'8px 18px',border:'none',background:'transparent',cursor:'pointer',
+            fontWeight:tabActiva===t?700:400,fontSize:13,
+            color:tabActiva===t?'var(--gold)':'var(--text-soft)',
+            borderBottom:tabActiva===t?'2px solid var(--gold)':'2px solid transparent',
+            marginBottom:-2}
+        },labels[t]);
+      })
+    ),
+
+    // ── TAB DATOS ──
+    tabActiva==='datos'&&React.createElement('div',null,
+      React.createElement('div',{className:'form-group'},
+        React.createElement('label',{className:'form-label'},'Nombre'),
+        React.createElement('input',{className:'form-input',value:form.nombre,autoFocus:true,
+          onChange:function(e){setForm(function(f){return Object.assign({},f,{nombre:e.target.value});});}})
+      ),
+      esAdmin&&React.createElement('div',{className:'form-group'},
+        React.createElement('label',{className:'form-label'},'Tarifa base por entrega ($)'),
+        React.createElement('input',{className:'form-input',type:'number',min:'0',value:form.tarifa,
+          onChange:function(e){setForm(function(f){return Object.assign({},f,{tarifa:e.target.value});})}})
+      ),
+      React.createElement('div',{className:'modal-actions'},
+        React.createElement('button',{className:'btn-secondary',onClick:onClose},'Cancelar'),
+        React.createElement('button',{className:'btn-primary',onClick:modal==='add'?save:function(){setTabActiva('tarifas');}}
+          ,modal==='add'?'Agregar':'Siguiente →')
+      )
+    ),
+
+    // ── TAB TARIFAS ──
+    tabActiva==='tarifas'&&React.createElement('div',null,
+      React.createElement('div',{style:{marginBottom:12,display:'flex',gap:8,alignItems:'center'}},
+        React.createElement('input',{
+          className:'form-input',placeholder:'Buscar comuna...',value:busqueda,
+          onChange:function(e){setBusqueda(e.target.value);},
+          style:{flex:1,fontSize:12}
+        }),
+        React.createElement('span',{style:{fontSize:11,color:'var(--text-soft)',whiteSpace:'nowrap'}},
+          'Base: $'+tarBase.toLocaleString('es-CL')
+        )
+      ),
+      cargando&&React.createElement('div',{style:{textAlign:'center',padding:20,color:'var(--text-soft)'}},'Cargando...'),
+      !cargando&&React.createElement('div',{style:{maxHeight:380,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8}},
+        React.createElement('table',{style:{width:'100%',borderCollapse:'collapse'}},
+          React.createElement('thead',null,
+            React.createElement('tr',{style:{background:'var(--dark)',position:'sticky',top:0,zIndex:1}},
+              React.createElement('th',{style:{padding:'8px 12px',textAlign:'left',fontSize:11,color:'var(--gold)',fontFamily:'Bebas Neue',letterSpacing:1}},'COMUNA'),
+              React.createElement('th',{style:{padding:'8px 12px',textAlign:'center',fontSize:11,color:'var(--gold)',fontFamily:'Bebas Neue',letterSpacing:1}},'TARIFA ($)'),
+              React.createElement('th',{style:{padding:'8px 12px',textAlign:'center',fontSize:11,color:'var(--text-soft)',fontFamily:'Bebas Neue',letterSpacing:1}},'DIFERENCIA')
+            )
+          ),
+          React.createElement('tbody',null,
+            comunasFiltradas.map(function(comuna,i){
+              var tarComuna=tarifas[comuna]!==undefined?tarifas[comuna]:tarBase;
+              var diff=tarComuna-tarBase;
+              return React.createElement('tr',{key:comuna,
+                style:{background:i%2===0?'#fff':'var(--cream)',borderBottom:'1px solid var(--border)'}},
+                React.createElement('td',{style:{padding:'6px 12px',fontSize:12,fontWeight:500}},comuna),
+                React.createElement('td',{style:{padding:'4px 8px',textAlign:'center'}},
+                  React.createElement('input',{
+                    type:'number',min:'0',value:tarComuna,
+                    onChange:function(e){
+                      var v=+e.target.value;
+                      setTarifas(function(prev){var n=Object.assign({},prev);n[comuna]=v;return n;});
+                    },
+                    onFocus:function(e){e.target.select();},
+                    style:{width:90,padding:'4px 6px',border:'1px solid var(--border)',borderRadius:5,
+                      textAlign:'right',fontSize:12,fontFamily:'JetBrains Mono',
+                      background:diff>0?'rgba(46,125,79,0.06)':diff<0?'rgba(192,57,43,0.06)':'#fff',
+                      outline:'none'}
+                  })
+                ),
+                React.createElement('td',{style:{padding:'6px 8px',textAlign:'center',fontSize:11,
+                  color:diff>0?'var(--success)':diff<0?'var(--danger)':'var(--text-soft)',fontWeight:diff!==0?700:400}},
+                  diff>0?'+$'+diff.toLocaleString('es-CL'):diff<0?'-$'+Math.abs(diff).toLocaleString('es-CL'):'—'
+                )
+              );
+            })
+          )
+        )
+      ),
+      React.createElement('div',{className:'modal-actions',style:{marginTop:12}},
+        React.createElement('button',{className:'btn-secondary',onClick:function(){setTabActiva('datos');}},'← Datos'),
+        React.createElement('button',{className:'btn-secondary',onClick:onClose},'Cancelar'),
+        React.createElement('button',{
+          className:'btn-primary',onClick:guardarTarifas,
+          disabled:guardando,style:{opacity:guardando?0.7:1}
+        },guardando?'Guardando...':'💾 Guardar todo')
+      )
+    )
+  );
+}
+
+var COMUNAS_RM_LIST=["BUIN", "CALERA DE TANGO", "CERRILLOS", "CERRO NAVIA", "COLINA", "CONCHALI", "EL BOSQUE", "EL MONTE", "ESTACION CENTRAL", "HUECHURABA", "INDEPENDENCIA", "ISLA DE MAIPO", "LA CISTERNA", "LA FLORIDA", "LA GRANJA", "LA PINTANA", "LA REINA", "LAMPA", "LAS CONDES", "LO BARNECHEA", "LO ESPEJO", "LO PRADO", "MACUL", "MAIPU", "MARIA PINTO", "MELIPILLA", "PADRE HURTADO", "PAINE", "PEDRO AGUIRRE CERDA", "PENAFLOR", "PENALOLEN", "PIRQUE", "PROVIDENCIA", "PUDAHUEL", "PUENTE ALTO", "QUILICURA", "QUINTA NORMAL", "RECOLETA", "RENCA", "SAN BERNARDO", "SAN JOAQUIN", "SAN JOSE DE MAIPO", "SAN MIGUEL", "SAN PEDRO", "SAN RAMON", "SANTIAGO", "TALAGANTE", "TIL TIL", "VITACURA", "NUNOA", "EL ARRAYAN", "CURACAVI"];
+function GestionMensajeros(_ref15){let mensajeros=_ref15.mensajeros,setMensajeros=_ref15.setMensajeros,mensajerosDia=_ref15.mensajerosDia,toast=_ref15.toast,esAdmin=_ref15.esAdmin;const _useState25=useState(''),search=_useState25[0],setSearch=_useState25[1];const _useState26=useState('todos'),filtro=_useState26[0],setFiltro=_useState26[1];const _useState27=useState(null),modal=_useState27[0],setModal=_useState27[1];const _useState28=useState({nombre:'',tarifa:1800}),form=_useState28[0],setForm=_useState28[1];const _useState29=useState(null),confirmDel=_useState29[0],setConfirmDel=_useState29[1];const _usDocM=useState(null),docsMensajero=_usDocM[0],setDocsMensajero=_usDocM[1];const filtrados=mensajeros.filter(m=>m.nombre.toLowerCase().includes(search.toLowerCase())&&(filtro==='todos'||filtro==='activos'&&m.activo||filtro==='pausados'&&!m.activo));const normNombre=n=>n.toUpperCase().replace(/,\s*/g,' ').replace(/\s+/g,' ').trim();const statsMap={};mensajerosDia.forEach(m=>{if(m.total>0)statsMap[normNombre(m.nombre)]={ef:m.entregados/m.total,total:m.total,entregados:m.entregados};});function toggleEstado(id){const m=mensajeros.find(x=>x.id===id);setMensajeros(prev=>prev.map(x=>x.id===id?{...x,activo:!x.activo}:x));toast(`${m.nombre} ${m.activo?'pausado':'activado'}`);}function save(){if(!form.nombre.trim())return;if(modal==='add'){const nid=Math.max(...mensajeros.map(m=>m.id))+1;setMensajeros(prev=>[...prev,{id:nid,nombre:form.nombre.trim().toUpperCase(),activo:true,tarifa:+form.tarifa}]);toast('Mensajero agregado');}else{setMensajeros(prev=>prev.map(m=>m.id===modal?{...m,nombre:form.nombre.toUpperCase(),tarifa:+form.tarifa}:m));toast('Mensajero actualizado');}setModal(null);}function del(id){setMensajeros(prev=>prev.filter(m=>m.id!==id));toast('Mensajero eliminado');setConfirmDel(null);}return/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{className:"section-head"},/*#__PURE__*/React.createElement("div",{className:"section-title"},"Gesti\xF3n ",/*#__PURE__*/React.createElement("span",null,"Mensajeros")),/*#__PURE__*/React.createElement("button",{className:"btn-add",onClick:()=>{setForm({nombre:'',tarifa:1800});setModal('add');}},"+ Nuevo")),/*#__PURE__*/React.createElement("div",{className:"stats-grid",style:{marginBottom:20}},[{label:'Total',val:mensajeros.length,cls:''},{label:'Activos',val:mensajeros.filter(m=>m.activo).length,cls:'green'},{label:'Pausados',val:mensajeros.filter(m=>!m.activo).length,cls:'red'}].map(s=>/*#__PURE__*/React.createElement("div",{key:s.label,className:"stat-card"},/*#__PURE__*/React.createElement("div",{className:"stat-label"},s.label),/*#__PURE__*/React.createElement("div",{className:`stat-value ${s.cls}`},s.val)))),/*#__PURE__*/React.createElement("div",{className:"toolbar"},/*#__PURE__*/React.createElement("input",{className:"search-box",placeholder:"Buscar mensajero...",value:search,onChange:e=>setSearch(e.target.value)}),['todos','activos','pausados'].map(f=>/*#__PURE__*/React.createElement("button",{key:f,className:`filter-btn ${filtro===f?'active':''}`,onClick:()=>setFiltro(f)},f.charAt(0).toUpperCase()+f.slice(1)))),/*#__PURE__*/React.createElement("div",{className:"table-wrap"},/*#__PURE__*/React.createElement("table",null,/*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("th",null,"Mensajero"),esAdmin&&/*#__PURE__*/React.createElement("th",null,"Tarifa"),/*#__PURE__*/React.createElement("th",null,"Hoy: Total"),/*#__PURE__*/React.createElement("th",null,"Hoy: Entregas"),/*#__PURE__*/React.createElement("th",null,"Efectividad"),/*#__PURE__*/React.createElement("th",null,"Estado"),/*#__PURE__*/React.createElement("th",null,"Acciones"))),/*#__PURE__*/React.createElement("tbody",null,filtrados.map(m=>{const s=statsMap[normNombre(m.nombre)];return/*#__PURE__*/React.createElement("tr",{key:m.id,className:m.activo?'':'paused'},/*#__PURE__*/React.createElement("td",{style:{fontWeight:600}},m.nombre,),esAdmin&&/*#__PURE__*/React.createElement("td",{className:"mono"},"$",fmt(m.tarifa)),/*#__PURE__*/React.createElement("td",{className:"mono"},s?s.total:'—'),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)'}},s?s.entregados:'—'),/*#__PURE__*/React.createElement("td",null,s?/*#__PURE__*/React.createElement(KpiBar,{value:s.ef}):/*#__PURE__*/React.createElement("span",{style:{color:'var(--text-soft)',fontSize:12}},"Sin datos")),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement(Badge,{type:m.activo?'active':'paused'},m.activo?'● Activo':'● Pausado')),/*#__PURE__*/React.createElement("td",{style:{display:'flex',gap:5}},/*#__PURE__*/React.createElement("button",{className:"action-btn btn-edit",onClick:()=>{setForm({nombre:m.nombre,tarifa:m.tarifa});setModal(m.id);}},"Editar"),/*#__PURE__*/React.createElement("button",{style:{padding:'4px 10px',borderRadius:6,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',cursor:'pointer',fontSize:11,fontWeight:700},onClick:()=>setDocsMensajero(m)},"\uD83D\uDCC1 Docs"),/*#__PURE__*/React.createElement("button",{className:`action-btn ${m.activo?'btn-pause':'btn-resume'}`,onClick:()=>toggleEstado(m.id)},m.activo?'Pausar':'Activar'),/*#__PURE__*/React.createElement("button",{className:"action-btn btn-delete",onClick:()=>setConfirmDel(m.id)},"\u2715")));}),filtrados.length===0&&/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",{colSpan:7,className:"empty-state"},"Sin resultados"))))),modal&&/*#__PURE__*/React.createElement(Modal,{title:modal==='add'?'Nuevo Mensajero':'Editar Mensajero',onClose:()=>setModal(null)},
+  /*#__PURE__*/React.createElement(PestanasMensajero,{
+    form:form,setForm:setForm,modal:modal,esAdmin:esAdmin,
+    save:save,onClose:()=>setModal(null),db:db,toast:toast,
+    comunasRM:COMUNAS_RM_LIST
+  })),confirmDel&&/*#__PURE__*/React.createElement(Modal,{title:"\xBFEliminar mensajero?",onClose:()=>setConfirmDel(null)},/*#__PURE__*/React.createElement("p",{style:{fontSize:13,color:'var(--text-mid)',marginBottom:24}},"Esta acci\xF3n no se puede deshacer. \xBFConfirmas eliminar este mensajero del sistema?"),/*#__PURE__*/React.createElement("div",{className:"modal-actions"},/*#__PURE__*/React.createElement("button",{className:"btn-secondary",onClick:()=>setConfirmDel(null)},"Cancelar"),/*#__PURE__*/React.createElement("button",{className:"btn-primary",style:{background:'var(--danger)',borderColor:'var(--danger)',color:'#fff'},onClick:()=>del(confirmDel)},"Eliminar"))),docsMensajero&&/*#__PURE__*/React.createElement(DocumentosMensajero,{mensajero:docsMensajero,toast:toast,onClose:()=>setDocsMensajero(null)}));}function ManifiestoExport(_ref16){var _window$_importedRows;let mensajerosDia=_ref16.mensajerosDia,clientes=_ref16.clientes,kpi=_ref16.kpi,onClose=_ref16.onClose,esAdmin=_ref16.esAdmin;const _useState30=useState('TODOS'),clienteFiltro=_useState30[0],setClienteFiltro=_useState30[1];const _useState31=useState('cierre'),tipoManifiesto=_useState31[0],setTipoManifiesto=_useState31[1];const _useState32=useState('TODOS'),mensajeroFiltro=_useState32[0],setMensajeroFiltro=_useState32[1];const rawRows=useMemo(()=>{const rows=[];mensajerosDia.forEach(m=>{const base={despachador:m.nombre};for(let i=0;i<m.entregados;i++)rows.push({...base,estado:'Entregado',cliente:m.clientePrincipal||''});for(let i=0;i<(m.reprogram||0);i++)rows.push({...base,estado:'ReProgramado',cliente:m.clientePrincipal||''});for(let i=0;i<(m.cancelados||0);i++)rows.push({...base,estado:'Cancelado',cliente:m.clientePrincipal||''});for(let i=0;i<(m.enCamino||0);i++)rows.push({...base,estado:'En Camino',cliente:m.clientePrincipal||''});for(let i=0;i<(m.pendientes||0);i++)rows.push({...base,estado:'Pendiente por Retiro',cliente:m.clientePrincipal||''});});return rows;},[mensajerosDia]);const _useState33=useState([]),supabaseRows=_useState33[0],setSupabaseRows=_useState33[1];useEffect(()=>{// Cargar envíos del día desde Supabase
 const hoy=kpi.fecha||new Date().toISOString().slice(0,10);db.from('envios').select('*').gte('fecha',hoy).lte('fecha',hoy).then(_ref17=>{let data=_ref17.data;if(data&&data.length>0){setSupabaseRows(data.map(e=>({'Envio':e.codigo,'Cliente':e.cliente||'','Despachador':e.mensajero||'','Destinatario':e.destinatario||'','Telefono':e.telefono||'','Direccion':e.direccion||'','Comuna':e.comuna||'','Fecha Envio':e.fecha||'','Estatus de Envio':e.estado||'','Monto':e.monto||0})));}}).catch(()=>{});},[kpi.fecha]);// Prioridad: importedRows > supabase > KPI calculado
 const rows=(_window$_importedRows=window._importedRows)!=null&&_window$_importedRows.length?window._importedRows:supabaseRows.length?supabaseRows:rawRows;const clientesUnicos=useMemo(()=>{const set=new Set(rows.map(r=>(r['Cliente']||r.cliente||'').toString().trim().toUpperCase()).filter(Boolean));return['TODOS',...Array.from(set).sort()];},[rows]);const mensajerosUnicos=useMemo(()=>{const set=new Set(rows.map(r=>(r['Despachador']||r.despachador||'').toString().trim().toUpperCase()).filter(Boolean));return['TODOS',...Array.from(set).sort()];},[rows]);const rowsFiltrados=useMemo(()=>{return rows.filter(r=>{const cli=(r['Cliente']||r.cliente||'').toString().trim().toUpperCase();const desp=(r['Despachador']||r.despachador||'').toString().trim().toUpperCase();const matchCli=clienteFiltro==='TODOS'||cli===clienteFiltro;const matchDesp=mensajeroFiltro==='TODOS'||desp===mensajeroFiltro;return matchCli&&matchDesp;});},[rows,clienteFiltro,mensajeroFiltro]);const esRetiro=r=>(r['Estatus de Envio']||r.estado||'').toString().toLowerCase().includes('retiro');const rowsExport=useMemo(()=>rowsFiltrados.filter(r=>!esRetiro(r)),[rowsFiltrados]);const stats=useMemo(()=>{const entregados=rowsExport.filter(r=>(r['Estatus de Envio']||r.estado||'').toString().toLowerCase().includes('entregado')).length;const reprog=rowsExport.filter(r=>(r['Estatus de Envio']||r.estado||'').toString().toLowerCase().includes('reprog')).length;const cancelados=rowsExport.filter(r=>(r['Estatus de Envio']||r.estado||'').toString().toLowerCase().includes('cancelado')).length;const camino=rowsExport.filter(r=>(r['Estatus de Envio']||r.estado||'').toString().toLowerCase().includes('camino')).length;const pendientes=rowsFiltrados.filter(r=>esRetiro(r)).length;const total=rowsExport.length;const indicador=total>0?Math.round(entregados/total*100):0;return{total,entregados,reprog,cancelados,camino,pendientes,indicador};},[rowsExport,rowsFiltrados]);function estadoClass(est){const e=(est||'').toLowerCase();if(e.includes('entregado'))return'entregado';if(e.includes('cancelado'))return'cancelado';if(e.includes('reprog'))return'reprogramado';if(e.includes('camino'))return'camino';return'pendiente';}const fechaFormateada=new Date().toLocaleDateString('es-CL',{weekday:'long',year:'numeric',month:'long',day:'numeric'});function exportarPDF(){var _document$querySelect4;const logoSrc=((_document$querySelect4=document.querySelector('.logo-img'))==null?void 0:_document$querySelect4.src)||'';const printWin=window.open('','_blank','width=900,height=700');const filas=rowsExport.map((r,i)=>{const est=r['Estatus de Envio']||r.estado||'';const cli=(r['Cliente']||r.cliente||'').toString().trim();const env=String(r['Envio']||'').replace(/^'/,'');const ec=est.toLowerCase().includes('entregado')?'entregado':est.toLowerCase().includes('cancelado')?'cancelado':est.toLowerCase().includes('reprog')?'reprogramado':est.toLowerCase().includes('camino')?'camino':'pendiente';return`<tr style="background:${i%2===0?'#fff':'#fdf9f2'}">
         <td style="text-align:center;color:#7a7d6a;font-size:9px">${i+1}</td>
@@ -1801,8 +1956,49 @@ useEffect(()=>{
       });
     });
 
+    // Cargar tarifas por comuna de todos los mensajeros
+    var mensajerosList=pagos.map(function(p){return p.nombre.toUpperCase().trim();});
+    var rTar=await db.from('tarifas_comunas')
+      .select('mensajero_nombre,comuna,tarifa')
+      .in('mensajero_nombre',mensajerosList);
+    var tarifasComunaMap={};
+    (rTar.data||[]).forEach(function(t){
+      var key=t.mensajero_nombre.toUpperCase().trim();
+      if(!tarifasComunaMap[key])tarifasComunaMap[key]={};
+      tarifasComunaMap[key][t.comuna.toUpperCase().trim()]=t.tarifa;
+    });
+
+    // Construir conteo detallado por mensajero y comuna
+    var conteoDetalle={};
+    data.forEach(function(e){
+      var n=(e.mensajero||'').replace(/,\s*/g,' ').toUpperCase().trim();
+      var c=(e.comuna||'').toUpperCase().trim();
+      if(!n||n==='SIN ASIGNAR')return;
+      if(!conteoDetalle[n])conteoDetalle[n]={};
+      if(!conteoDetalle[n][c])conteoDetalle[n][c]=0;
+      conteoDetalle[n][c]++;
+    });
+
+    // Actualizar pagos con cálculo por tarifa de comuna
+    setPagos(function(prev){
+      return prev.map(function(p){
+        var key=p.nombre.replace(/,\s*/g,' ').toUpperCase().trim();
+        var enviosPorComuna=conteoDetalle[key]||{};
+        var totalEnvios=Object.values(enviosPorComuna).reduce(function(a,b){return a+b;},0);
+        var tarsCom=tarifasComunaMap[key]||{};
+        // Calcular bruto usando tarifa específica por comuna
+        var bruto=Object.keys(enviosPorComuna).reduce(function(sum,com){
+          var tar=tarsCom[com]!==undefined?tarsCom[com]:(p.tarifa||1200);
+          return sum+(enviosPorComuna[com]*tar);
+        },0);
+        if(totalEnvios===0){bruto=0;}
+        var totalBruto=bruto+(p.ajuste||0)-(p.iva||0);
+        var totalPagar=totalBruto+(p.extra||0)-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0);
+        return Object.assign({},p,{envios:totalEnvios,bruto:bruto,totalBruto:totalBruto,totalPagar:totalPagar});
+      });
+    });
     var total=Object.values(conteo).reduce(function(a,b){return a+b;},0);
-    toast('✓ '+total+' envíos calculados del '+fechaInicio+' al '+fechaFin);
+    toast('✓ '+total+' envíos calculados con tarifas por comuna');
   }catch(e){
     console.error('calcularEnviosSemana error:',e);
     toast('⚠ Error: '+e.message);
