@@ -3982,7 +3982,18 @@ async function analizarEtiqueta(base64img,mediaType,_retry=0){
     const text=(data.content||[]).map(b=>b.text||'').join('').trim();
     const clean=text.replace(/```json|```/g,'').trim();
     let parsed;
-    try{ parsed=JSON.parse(clean); }catch(e){ return{_error:'No se pudo leer la etiqueta: '+clean.slice(0,80)}; }
+    try{ parsed=JSON.parse(clean); }catch(e){
+      // Intentar extraer datos parciales del texto libre
+      var parcial={_parcial:true};
+      var mCod=clean.match(/([0-9]{10,15})/);if(mCod)parcial.codigo=mCod[1];
+      clean.split('\n').forEach(function(ln){var t=ln.replace(/["{}]/g,'').trim();var ki=t.indexOf(':');if(ki<1)return;var k=t.slice(0,ki).toLowerCase().trim();var v=t.slice(ki+1).trim();
+        if(v.length>2){if(k.indexOf('destinatario')>=0||k.indexOf('nombre')>=0){if(!parcial.destinatario)parcial.destinatario=v;}
+          if(k.indexOf('direccion')>=0){if(!parcial.direccion)parcial.direccion=v;}
+          if(k==='comuna'||k==='"comuna"'){if(!parcial.comuna)parcial.comuna=v;}
+        }});
+      if(Object.keys(parcial).length>1) return parcial;
+      return{_error:'No se pudo leer la etiqueta',_raw:clean.slice(0,120)};
+    }
     // Limpiar código: para Flex solo dígitos; para manual preservar alfanumérico
     if(parsed.codigo){
       if(parsed.tipo==='manual'){
@@ -4645,7 +4656,9 @@ function ColectaRider(_ref_cr){
           const b64r=await rotarImagenSiVertical(b64);const datos=await analizarEtiqueta(b64r,mediaType);
           // Limpiar código de espacios
           if(datos?.codigo) datos.codigo=datos.codigo.toString().replace(/[^0-9]/g,'');
-          setFotosGaleria(prev=>prev.map((f,j)=>j===item.idx?{...f,analizando:false,datos,error:datos?._error||null}:f));
+          // Si hay _error pero también datos parciales, no bloquear como error
+          var esErrorTotal=datos?._error&&!datos?.codigo&&!datos?.destinatario&&!datos?.direccion;
+          setFotosGaleria(prev=>prev.map((f,j)=>j===item.idx?{...f,analizando:false,datos,error:esErrorTotal?(datos?._error||null):null}:f));
         }catch(e){
           setFotosGaleria(prev=>prev.map((f,j)=>j===item.idx?{...f,analizando:false,error:e.message}:f));
         }
@@ -4657,8 +4670,9 @@ function ColectaRider(_ref_cr){
 
   async function cargarGaleriaEnSistema(){
     const clienteNombre=clienteSel?.nombre||clienteSel||'Sin cliente';
-    const conCodigo=fotosGaleria.filter(f=>f.datos?.codigo&&!f.error&&f.datos?.tipo!=='manual');
-    const manuales=fotosGaleria.filter(f=>f.datos&&!f.error&&(f.datos?.tipo==='manual'||(!f.datos?.codigo&&(f.datos?.destinatario||f.datos?.direccion))));
+    // Incluir paquetes aunque tengan error parcial, si tienen al menos código o datos básicos
+    const conCodigo=fotosGaleria.filter(f=>f.datos?.codigo&&f.datos?.tipo!=='manual');
+    const manuales=fotosGaleria.filter(f=>f.datos&&(f.datos?.tipo==='manual'||(!f.datos?.codigo&&(f.datos?.destinatario||f.datos?.direccion))));
     if(conCodigo.length===0&&manuales.length===0){ toast('⚠ No hay paquetes para cargar'); return; }
     setProcesandoGaleria(true);
     const inserts=conCodigo.map(f=>{
