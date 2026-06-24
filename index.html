@@ -4722,6 +4722,7 @@ function ColectaRider(_ref_cr){
   async function cargarGaleriaEnSistema(){
     const clienteNombre=clienteSel?.nombre||clienteSel||'Sin cliente';
     // Incluir paquetes aunque tengan error parcial, si tienen al menos código o datos básicos
+    alert('fotosGaleria: '+fotosGaleria.length+' | datos[0]: '+JSON.stringify(fotosGaleria[0]&&fotosGaleria[0].datos).slice(0,100));
     const conCodigo=fotosGaleria.filter(f=>f.datos?.codigo&&f.datos?.tipo!=='manual');
     const manuales=fotosGaleria.filter(f=>f.datos&&(f.datos?.tipo==='manual'||(!f.datos?.codigo&&(f.datos?.destinatario||f.datos?.direccion))));
     if(conCodigo.length===0&&manuales.length===0){ toast('⚠ No hay paquetes para cargar'); return; }
