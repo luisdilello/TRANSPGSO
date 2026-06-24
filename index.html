@@ -4467,6 +4467,7 @@ function ColectaRider(_ref_cr){
   const _s8=useState(false),guardando=_s8[0],setGuardando=_s8[1];
   const _s8b=useState(null),fotoAnalisis=_s8b[0],setFotoAnalisis=_s8b[1]; // {codigo,base64,mediaType,analizando,datos}
   const _s8c=useState([]),fotosGaleria=_s8c[0],setFotosGaleria=_s8c[1]; // [{file,preview,analizando,datos,error}]
+  var fotosGaleriaRef=useRef([]);
   const _s8d=useState(false),procesandoGaleria=_s8d[0],setProcesandoGaleria=_s8d[1];
   const galeriaInputRef=useRef();
   const fotoRef=useRef();
@@ -4674,6 +4675,7 @@ function ColectaRider(_ref_cr){
     }
     // Crear previews inmediatos sin comprimir (para mostrar rápido)
     const items=arr.map(f=>({file:f,preview:URL.createObjectURL(f),analizando:false,datos:null,error:null}));
+    fotosGaleriaRef.current=items;
     setFotosGaleria(items);
     setFase('galeria');
     // Comprimir en background (reemplazar file con versión comprimida)
@@ -4709,7 +4711,7 @@ function ColectaRider(_ref_cr){
           if(datos?.codigo) datos.codigo=datos.codigo.toString().replace(/[^0-9]/g,'');
           // Si hay _error pero también datos parciales, no bloquear como error
           var esErrorTotal=datos?._error&&!datos?.codigo&&!datos?.destinatario&&!datos?.direccion;
-          setFotosGaleria(prev=>prev.map((f,j)=>j===item.idx?{...f,analizando:false,datos,error:esErrorTotal?(datos?._error||null):null}:f));
+          setFotosGaleria(function(prev){var updated=prev.map(function(f,j){return j===item.idx?Object.assign({},f,{analizando:false,datos:datos,error:esErrorTotal?(datos&&datos._error||null):null}):f;});fotosGaleriaRef.current=updated;return updated;});
         }catch(e){
           setFotosGaleria(prev=>prev.map((f,j)=>j===item.idx?{...f,analizando:false,error:e.message}:f));
         }
@@ -4722,9 +4724,9 @@ function ColectaRider(_ref_cr){
   async function cargarGaleriaEnSistema(){
     const clienteNombre=clienteSel?.nombre||clienteSel||'Sin cliente';
     // Incluir paquetes aunque tengan error parcial, si tienen al menos código o datos básicos
-    alert('fotosGaleria: '+fotosGaleria.length+' | datos[0]: '+JSON.stringify(fotosGaleria[0]&&fotosGaleria[0].datos).slice(0,100));
-    const conCodigo=fotosGaleria.filter(f=>f.datos?.codigo&&f.datos?.tipo!=='manual');
-    const manuales=fotosGaleria.filter(f=>f.datos&&(f.datos?.tipo==='manual'||(!f.datos?.codigo&&(f.datos?.destinatario||f.datos?.direccion))));
+    var galeriaActual=fotosGaleriaRef.current.length>0?fotosGaleriaRef.current:fotosGaleria;
+    const conCodigo=galeriaActual.filter(f=>f.datos&&f.datos.codigo&&f.datos.tipo!=='manual');
+    const manuales=galeriaActual.filter(f=>f.datos&&(f.datos.tipo==='manual'||(!f.datos.codigo&&(f.datos.destinatario||f.datos.direccion))));
     if(conCodigo.length===0&&manuales.length===0){ toast('⚠ No hay paquetes para cargar'); return; }
     setProcesandoGaleria(true);
     const inserts=conCodigo.map(f=>{
@@ -4748,7 +4750,6 @@ function ColectaRider(_ref_cr){
     });
     try{
       const {error}=await db.from('envios').upsert(inserts,{onConflict:'codigo',ignoreDuplicates:false});
-      alert('SUPABASE:\n'+(error?'❌ ERROR: '+error.message:'✅ OK - '+inserts.length+' registros')+'\nCódigo[0]: '+(inserts[0]&&inserts[0].codigo||'VACIO')+'\nCliente: '+(inserts[0]&&inserts[0].cliente||'VACIO')+'\nEstado: '+(inserts[0]&&inserts[0].estado||'VACIO'));
       // Guardar foto como base64 directamente en la tabla envios (sin Storage)
       let fotasSubidas=0;
       let errFotos=[];
