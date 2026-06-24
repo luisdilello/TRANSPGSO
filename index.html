@@ -5737,6 +5737,7 @@ function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout;co
     // Traer todos los envios no terminados y filtrar por nombre en JS
     const {data:todos,error}=await db.from('envios').select('*,historial:historial_envios(estado,fecha)').not('estado','in','("entregado","cancelado","siniestro")').order('fecha',{ascending:false}).limit(2000);
     if(error)throw error;
+alert('TODOS: '+(todos?todos.length:0)+' | ERROR: '+(error?error.message:'ninguno')+' | RIDER: '+nombreRider);
     const data=todos?todos.filter(function(e){
       const m=(e.mensajero||'').toUpperCase().replace(/,/g,' ').replace(/\s+/g,' ').trim();
       return m.includes(primerNombre)||m.includes(apellido)||(apellido&&primerNombre&&m===nombreRider);
