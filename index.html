@@ -4145,13 +4145,32 @@ function RetiroMasivoRider(_ref_rm){
     var fecha=new Date().toISOString().slice(0,10);
     var inserts=paquetes.filter(function(p){return p.estado!=='error';}).map(function(p){
       var d=p.datosIA||{};
+      // Usar datos editados si existen, sino los de IA
+      var destinatario=p.editDest!=null?p.editDest:(d.destinatario||'');
+      var direccion=p.editDir!=null?p.editDir:(d.direccion||'');
+      var comuna=p.editComuna!=null?p.editComuna:(d.comuna||'');
+      // Comprimir foto para Supabase (max 300KB base64)
+      var fotoB64=null;
+      if(p.foto){
+        try{
+          var img=new Image();
+          img.src=p.foto;
+          var cv=document.createElement('canvas');
+          var MAX=800;
+          var sc=Math.min(1,MAX/Math.max(img.naturalWidth||800,img.naturalHeight||600));
+          cv.width=Math.round((img.naturalWidth||800)*sc);
+          cv.height=Math.round((img.naturalHeight||600)*sc);
+          cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+          fotoB64=cv.toDataURL('image/jpeg',0.7);
+        }catch(e){fotoB64=p.foto;}
+      }
       return{
         codigo:p.codigo,
         cliente:clienteNombre,
-        destinatario:d.destinatario||'',
-        direccion:d.direccion||'',
+        destinatario:destinatario,
+        direccion:direccion,
         telefono:d.telefono||'',
-        comuna:d.comuna||'',
+        comuna:comuna,
         referencia:d.referencia||'',
         fecha:fecha,
         estado:'en_bodega',
@@ -4160,7 +4179,7 @@ function RetiroMasivoRider(_ref_rm){
         en_un_cambio:false,
         nota:'Retiro masivo - '+usuario.nombre,
         fuente:'retiro_masivo',
-        foto_etiqueta:p.foto||null
+        foto_etiqueta:fotoB64
       };
     });
     var ok=0,err=0;
