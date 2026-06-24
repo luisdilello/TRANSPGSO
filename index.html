@@ -5735,7 +5735,7 @@ function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout;co
     const partes=nombreRider.split(' ');
     const primerNombre=partes[0];
     const apellido=partes[1]||partes[0];
-    const {data,error}=await db.from('envios').select('*,historial:historial_envios(estado,fecha)').or(`mensajero.ilike.%${primerNombre}%,mensajero.ilike.%${apellido||primerNombre}%`).order('fecha',{ascending:false}).limit(1000);if(error)throw error;if(data&&data.length>0){
+    const {data,error}=await db.from('envios').select('*').or(`mensajero.ilike.%${primerNombre}%,mensajero.ilike.%${apellido||primerNombre}%`).order('fecha',{ascending:false}).limit(1000);if(error)throw error;if(data&&data.length>0){
   // Auto en_ruta: asignados → en_ruta
   const asignados=data.filter(e=>e.estado==='asignado');
   let dataFinal=data;
