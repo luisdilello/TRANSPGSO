@@ -5193,7 +5193,7 @@ function GananciasRider(_ref_gr){
     }catch(e){return{retiros:0,piezas:0,tarifa:500,total:0};}
   },[colectasKey]);
   // Leer retiros desde Supabase para tener el total real
-  const _useRetSupa=React.useState({retiros:0,total:0}),retirosSupa=_useRetSupa[0],setRetirosSupa=_useRetSupa[1];
+  const _useRetSupa=React.useState({retiros:0,total:0,loaded:false}),retirosSupa=_useRetSupa[0],setRetirosSupa=_useRetSupa[1];
   React.useEffect(()=>{
     const hoy=new Date().toISOString().slice(0,10);
     const nombre=(usuario.nombre||'').replace(/,\s*/g,' ').toUpperCase().trim();
@@ -5203,10 +5203,11 @@ function GananciasRider(_ref_gr){
           const mios=res.data.filter(r=>(r.mensajero||'').replace(/,\s*/g,' ').toUpperCase().trim()===nombre);
           const retirados=mios.filter(r=>r.retirado);
           const total=retirados.reduce((a,r)=>a+(parseFloat(r.pago_mensajero)||0),0);
-          setRetirosSupa({retiros:retirados.length,total:total});
-
+          setRetirosSupa({retiros:retirados.length,total:total,loaded:true});
+        }else{
+          setRetirosSupa({retiros:0,total:0,loaded:true});
         }
-      }).catch(()=>{});
+      }).catch(()=>{setRetirosSupa({retiros:0,total:0,loaded:true});});
   },[colectasKey]);
   const colectasRider=React.useMemo(()=>{
     try{
@@ -5250,7 +5251,7 @@ function GananciasRider(_ref_gr){
       if(ex?.monto)setExtraAdmin(ex.monto);
     }catch(e){}
   },[]);
-  const gananciaRetiros=retirosSupa.total>0?retirosSupa.total:retirosPlanilla.total>0?retirosPlanilla.total:totalRetiros*tarifaRetiro;
+  const gananciaRetiros=retirosSupa.loaded?retirosSupa.total:retirosPlanilla.total>0?retirosPlanilla.total:0;
   const gananciaTotal=totalPesos+gananciaRetiros+extraAdmin-consumoAdmin;
 
   const periodos=[
