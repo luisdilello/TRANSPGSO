@@ -2953,11 +2953,33 @@ function tipoEnvio(p,c){const kg=parseFloat(p)||0;const com=(c||'').toUpperCase(
 function AdminEditarEnvio(_ref_ae){var envio=_ref_ae.envio,onSave=_ref_ae.onSave;
   const [editDir,setEditDir]=useState(false);
   const [editCom,setEditCom]=useState(false);
+  const [editCod,setEditCod]=useState(false);
   const [dir,setDir]=useState(envio.direccion||'');
   const [com,setCom]=useState(envio.comuna||'');
+  const [cod,setCod]=useState(envio.codigo||'');
   const comunas=['Santiago','Providencia','Las Condes','Ñuñoa','Vitacura','La Florida','Maipú','Pudahuel','Quilicura','Recoleta','Independencia','San Miguel','Lo Barnechea','Peñalolén','Macul','La Reina','Cerrillos','El Bosque','La Granja','La Pintana','Lo Espejo','Lo Prado','Pedro Aguirre Cerda','Renca','San Joaquín','San Ramón','Cerro Navia','Conchalí','Estación Central','Huechuraba','Padre Hurtado','Colina'];
   return/*#__PURE__*/React.createElement('div',{className:'panel',style:{marginTop:16}},
     /*#__PURE__*/React.createElement('div',{className:'panel-title'},'✏ Editar Campos del Envío'),
+    /*#__PURE__*/React.createElement('div',{className:'form-group'},
+      /*#__PURE__*/React.createElement('label',{className:'form-label'},'Código de Envío'),
+      editCod
+        ?/*#__PURE__*/React.createElement('div',{style:{display:'flex',gap:8}},
+            /*#__PURE__*/React.createElement('input',{className:'form-input',value:cod,onChange:function(e){setCod(e.target.value.trim());},autoFocus:true,style:{fontFamily:'JetBrains Mono',fontWeight:700,letterSpacing:1}}),
+            /*#__PURE__*/React.createElement('button',{className:'btn-primary',onClick:async function(){
+              if(!cod||cod===envio.codigo){setEditCod(false);return;}
+              try{
+                await db.from('envios').update({codigo:cod}).eq('codigo',envio.codigo);
+                onSave('codigo',cod);
+                setEditCod(false);
+              }catch(e){alert('Error: '+e.message);}
+            }},'✓'),
+            /*#__PURE__*/React.createElement('button',{className:'btn-secondary',onClick:function(){setCod(envio.codigo||'');setEditCod(false);}},'✕')
+          )
+        :/*#__PURE__*/React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 12px',background:'var(--cream)',borderRadius:7,border:'1px solid var(--border)'}},
+            /*#__PURE__*/React.createElement('span',{style:{fontSize:13,fontFamily:'JetBrains Mono',fontWeight:700,color:'var(--dark)'}},envio.codigo||'—'),
+            /*#__PURE__*/React.createElement('button',{className:'btn-secondary',style:{padding:'4px 10px',fontSize:11},onClick:function(){setCod(envio.codigo||'');setEditCod(true);}},'✎ Editar')
+          )
+    ),
     /*#__PURE__*/React.createElement('div',{className:'form-row'},
       /*#__PURE__*/React.createElement('div',{className:'form-group'},
         /*#__PURE__*/React.createElement('label',{className:'form-label'},'Dirección'),
