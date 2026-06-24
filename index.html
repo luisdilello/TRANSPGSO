@@ -4030,6 +4030,7 @@ function RetiroMasivoRider(_ref_rm){
   var _s6=useState(false),linternaOn=_s6[0],setLinternaOn=_s6[1];
   var _s7=useState(''),manualCode=_s7[0],setManualCode=_s7[1];
   var _s8=useState(false),showManual=_s8[0],setShowManual=_s8[1];
+  var _s9=useState('idle'),scanEstado=_s9[0],setScanEstado=_s9[1]; // idle | alineando | capturando
   var videoRef=useRef();
   var canvasRef=useRef();
   var scannerRef=useRef(null);
@@ -4125,15 +4126,17 @@ function RetiroMasivoRider(_ref_rm){
       return;
     }
     codigosRef.current.add(codigo);
-    // Sonido inmediato: código detectado
     playSound('scan');
-    setLastScan({codigo,esperandoFoto:true});
-    // Pausa 600ms para que el paquete se estabilice antes de la foto
+    setLastScan({codigo:codigo,esperandoFoto:true});
+    setScanEstado('alineando');
+    // Pausa 1.2s para que el operador vea el cuadro verde y estabilice
     setTimeout(function(){
+      setScanEstado('capturando');
+      setTimeout(function(){
       var foto=capturarFoto();
-      // Sonido de cámara al tomar la foto
       if(foto) playSound('foto');
       else playSound('success');
+      setScanEstado('idle');
       var paquete={codigo:codigo,estado:'escaneado',ts:new Date().toISOString(),foto:foto,datosIA:null,analizandoIA:!!foto};
       setPaquetes(function(prev){return[paquete,...prev];});
       setLastScan({codigo:codigo,nuevo:true});
@@ -4155,7 +4158,8 @@ function RetiroMasivoRider(_ref_rm){
         });});
       });
     }
-    },600); // fin setTimeout foto
+      },80);
+    },1200);
   }
 
   function procesarManual(){
@@ -4275,13 +4279,36 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
     ),
     // Video
     React.createElement('video',{ref:videoRef,autoPlay:true,playsInline:true,muted:true,style:{width:'100%',height:'100%',objectFit:'cover'}}),
-    // Overlay con mira
+    // Overlay con mira dinámica
     React.createElement('div',{style:{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',pointerEvents:'none'}},
-      React.createElement('div',{style:{width:260,height:160,position:'relative'}},
-        React.createElement('div',{style:{position:'absolute',top:0,left:0,width:24,height:24,borderTop:'3px solid var(--gold)',borderLeft:'3px solid var(--gold)',borderRadius:'4px 0 0 0'}}),
-        React.createElement('div',{style:{position:'absolute',top:0,right:0,width:24,height:24,borderTop:'3px solid var(--gold)',borderRight:'3px solid var(--gold)',borderRadius:'0 4px 0 0'}}),
-        React.createElement('div',{style:{position:'absolute',bottom:0,left:0,width:24,height:24,borderBottom:'3px solid var(--gold)',borderLeft:'3px solid var(--gold)',borderRadius:'0 0 0 4px'}}),
-        React.createElement('div',{style:{position:'absolute',bottom:0,right:0,width:24,height:24,borderBottom:'3px solid var(--gold)',borderRight:'3px solid var(--gold)',borderRadius:'0 0 4px 0'}})
+      React.createElement('div',{style:{width:280,height:180,position:'relative',transition:'all 0.2s'}},
+        // Esquinas de la mira - cambian color según estado
+        ['topleft','topright','bottomleft','bottomright'].map(function(pos){
+          var isTop=pos.includes('top'),isLeft=pos.includes('left');
+          var color=scanEstado==='alineando'?'#f0c040':scanEstado==='capturando'?'#4caf84':'rgba(200,168,75,0.8)';
+          var size=scanEstado!=='idle'?30:24;
+          return React.createElement('div',{key:pos,style:{
+            position:'absolute',
+            top:isTop?0:'auto',bottom:isTop?'auto':0,
+            left:isLeft?0:'auto',right:isLeft?'auto':0,
+            width:size,height:size,
+            borderTop:isTop?'3px solid '+color:'none',
+            borderBottom:isTop?'none':'3px solid '+color,
+            borderLeft:isLeft?'3px solid '+color:'none',
+            borderRight:isLeft?'none':'3px solid '+color,
+            borderRadius:pos==='topleft'?'4px 0 0 0':pos==='topright'?'0 4px 0 0':pos==='bottomleft'?'0 0 0 4px':'0 0 4px 0',
+            transition:'all 0.15s'
+          }});
+        }),
+        // Línea de scan animada cuando está en idle
+        scanEstado==='idle'&&React.createElement('div',{style:{position:'absolute',top:'50%',left:4,right:4,height:2,background:'rgba(200,168,75,0.4)',borderRadius:1}}),
+        // Texto de instrucción
+        React.createElement('div',{style:{
+          position:'absolute',bottom:-28,left:0,right:0,textAlign:'center',
+          fontSize:11,fontWeight:700,letterSpacing:1.5,
+          color:scanEstado==='alineando'?'#f0c040':scanEstado==='capturando'?'#4caf84':'rgba(255,255,255,0.4)',
+          transition:'color 0.2s'
+        }},scanEstado==='alineando'?'⏳ MANTÉN QUIETO...':scanEstado==='capturando'?'📸 TOMANDO FOTO':'APUNTA AL CÓDIGO')
       )
     ),
     // Último scan
