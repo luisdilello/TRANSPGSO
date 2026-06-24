@@ -4448,12 +4448,7 @@ function ColectaRider(_ref_cr){
     return clientePresel||null;
   }),clienteSel=_s1[0],setClienteSel=_s1[1];
   const _s2=useState('AM'),turno=_s2[0],setTurno=_s2[1];
-  // Si hay fotos guardadas del sessionStorage, ir directo a galeria
-  useEffect(function(){
-    if(fotosGaleriaRef.current&&fotosGaleriaRef.current.length>0&&fase==='seleccion'){
-      setFase('galeria');
-    }
-  },[]);
+
   // fase y fotosGaleria vienen de props globales de RiderApp (ver arriba)
   // Retiros asignados desde planilla admin
 
@@ -4689,7 +4684,6 @@ function ColectaRider(_ref_cr){
     const items=arr.map(f=>({file:f,preview:URL.createObjectURL(f),analizando:false,datos:null,error:null}));
     fotosGaleriaRef.current=items;
     setFotosGaleria(items);
-    try{sessionStorage.setItem('transpgso_fotos_galeria',JSON.stringify(items.map(function(f){return{analizando:false,datos:null,error:null,preview:f.preview};})));}catch(e){}
     setFase('galeria');
     // Comprimir en background (reemplazar file con versión comprimida)
     Promise.all(arr.map(async(f,i)=>{
@@ -4724,7 +4718,7 @@ function ColectaRider(_ref_cr){
           if(datos?.codigo) datos.codigo=datos.codigo.toString().replace(/[^0-9]/g,'');
           // Si hay _error pero también datos parciales, no bloquear como error
           var esErrorTotal=datos?._error&&!datos?.codigo&&!datos?.destinatario&&!datos?.direccion;
-          setFotosGaleria(function(prev){var updated=prev.map(function(f,j){return j===item.idx?Object.assign({},f,{analizando:false,datos:datos,error:esErrorTotal?(datos&&datos._error||null):null}):f;});fotosGaleriaRef.current=updated;try{sessionStorage.setItem('transpgso_fotos_galeria',JSON.stringify(updated.map(function(u){return{analizando:u.analizando,datos:u.datos,error:u.error,preview:u.preview};})));}catch(e){} return updated;});
+          setFotosGaleria(function(prev){var updated=prev.map(function(f,j){return j===item.idx?Object.assign({},f,{analizando:false,datos:datos,error:esErrorTotal?(datos&&datos._error||null):null}):f;});fotosGaleriaRef.current=updated;return updated;});
         }catch(e){
           setFotosGaleria(prev=>prev.map((f,j)=>j===item.idx?{...f,analizando:false,error:e.message}:f));
         }
@@ -4735,16 +4729,12 @@ function ColectaRider(_ref_cr){
   }
 
   async function cargarGaleriaEnSistema(){
+    toast('Cargando... fotos:'+fotosGaleria.length+' fase:'+fase);
     const clienteNombre=clienteSel?.nombre||clienteSel||'Sin cliente';
     // Incluir paquetes aunque tengan error parcial, si tienen al menos código o datos básicos
     var galeriaActual=fotosGaleriaRef.current.length>0?fotosGaleriaRef.current:fotosGaleria;
-    if(galeriaActual.length===0){
-      try{
-        var ss=sessionStorage.getItem('transpgso_fotos_galeria');
-        if(ss) galeriaActual=JSON.parse(ss);
-      }catch(e){}
-    }
-    alert('INICIO CARGA:\nref:'+fotosGaleriaRef.current.length+'\nstate:'+fotosGaleria.length+'\nactual:'+galeriaActual.length+(galeriaActual[0]?'\ndatos0:'+JSON.stringify(galeriaActual[0].datos).slice(0,100):'\n(vacío)'));
+
+
     const conCodigo=galeriaActual.filter(f=>f.datos&&f.datos.codigo&&f.datos.tipo!=='manual');
     const manuales=galeriaActual.filter(f=>f.datos&&(f.datos.tipo==='manual'||(!f.datos.codigo&&(f.datos.destinatario||f.datos.direccion))));
     if(conCodigo.length===0&&manuales.length===0){ toast('⚠ No hay paquetes para cargar'); return; }
