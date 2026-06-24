@@ -4735,6 +4735,15 @@ function AsignacionRider(_ref_ar){
     try{
       const {data}=await db.from('envios').select('*').in('codigo',codigos);
       if(data) data.forEach(r=>{ encontrados[r.codigo]=r; });
+      // Si no encontró alguno, buscar por ilike (código puede tener formato diferente)
+      for(const cod of codigos){
+        if(!encontrados[cod]){
+          try{
+            const {data:d2}=await db.from('envios').select('*').ilike('codigo','%'+cod+'%').limit(1);
+            if(d2&&d2.length>0){encontrados[cod]=d2[0];}
+          }catch(e2){}
+        }
+      }
     }catch(e){}
     // Actualizar los que existen
     for(const cod of codigos){
