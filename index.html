@@ -4677,6 +4677,7 @@ function ColectaRider(_ref_cr){
     const items=arr.map(f=>({file:f,preview:URL.createObjectURL(f),analizando:false,datos:null,error:null}));
     fotosGaleriaRef.current=items;
     setFotosGaleria(items);
+    try{sessionStorage.setItem('transpgso_fotos_galeria',JSON.stringify(items.map(function(f){return{analizando:false,datos:null,error:null,preview:f.preview};})));}catch(e){}
     setFase('galeria');
     // Comprimir en background (reemplazar file con versión comprimida)
     Promise.all(arr.map(async(f,i)=>{
@@ -4711,7 +4712,7 @@ function ColectaRider(_ref_cr){
           if(datos?.codigo) datos.codigo=datos.codigo.toString().replace(/[^0-9]/g,'');
           // Si hay _error pero también datos parciales, no bloquear como error
           var esErrorTotal=datos?._error&&!datos?.codigo&&!datos?.destinatario&&!datos?.direccion;
-          setFotosGaleria(function(prev){var updated=prev.map(function(f,j){return j===item.idx?Object.assign({},f,{analizando:false,datos:datos,error:esErrorTotal?(datos&&datos._error||null):null}):f;});fotosGaleriaRef.current=updated;return updated;});
+          setFotosGaleria(function(prev){var updated=prev.map(function(f,j){return j===item.idx?Object.assign({},f,{analizando:false,datos:datos,error:esErrorTotal?(datos&&datos._error||null):null}):f;});fotosGaleriaRef.current=updated;try{sessionStorage.setItem('transpgso_fotos_galeria',JSON.stringify(updated.map(function(u){return{analizando:u.analizando,datos:u.datos,error:u.error,preview:u.preview};})));}catch(e){} return updated;});
         }catch(e){
           setFotosGaleria(prev=>prev.map((f,j)=>j===item.idx?{...f,analizando:false,error:e.message}:f));
         }
@@ -4725,6 +4726,12 @@ function ColectaRider(_ref_cr){
     const clienteNombre=clienteSel?.nombre||clienteSel||'Sin cliente';
     // Incluir paquetes aunque tengan error parcial, si tienen al menos código o datos básicos
     var galeriaActual=fotosGaleriaRef.current.length>0?fotosGaleriaRef.current:fotosGaleria;
+    if(galeriaActual.length===0){
+      try{
+        var ss=sessionStorage.getItem('transpgso_fotos_galeria');
+        if(ss) galeriaActual=JSON.parse(ss);
+      }catch(e){}
+    }
     const conCodigo=galeriaActual.filter(f=>f.datos&&f.datos.codigo&&f.datos.tipo!=='manual');
     const manuales=galeriaActual.filter(f=>f.datos&&(f.datos.tipo==='manual'||(!f.datos.codigo&&(f.datos.destinatario||f.datos.direccion))));
     if(conCodigo.length===0&&manuales.length===0){ toast('⚠ No hay paquetes para cargar'); return; }
