@@ -4444,6 +4444,12 @@ function ColectaRider(_ref_cr){
     return clientePresel||null;
   }),clienteSel=_s1[0],setClienteSel=_s1[1];
   const _s2=useState('AM'),turno=_s2[0],setTurno=_s2[1];
+  // Si hay fotos guardadas del sessionStorage, ir directo a galeria
+  useEffect(function(){
+    if(fotosGaleriaRef.current&&fotosGaleriaRef.current.length>0&&fase==='seleccion'){
+      setFase('galeria');
+    }
+  },[]);
   const _s3=useState('seleccion'),fase=_s3[0],setFase=_s3[1];
   // Retiros asignados desde planilla admin
 
@@ -4466,8 +4472,15 @@ function ColectaRider(_ref_cr){
   const _s7=useState('camara'),modoInput=_s7[0],setModoInput=_s7[1];
   const _s8=useState(false),guardando=_s8[0],setGuardando=_s8[1];
   const _s8b=useState(null),fotoAnalisis=_s8b[0],setFotoAnalisis=_s8b[1]; // {codigo,base64,mediaType,analizando,datos}
-  const _s8c=useState([]),fotosGaleria=_s8c[0],setFotosGaleria=_s8c[1]; // [{file,preview,analizando,datos,error}]
-  var fotosGaleriaRef=useRef([]);
+  const _s8c=useState(function(){
+    // Recuperar del sessionStorage si existe (sobrevive re-mount)
+    try{
+      var ss=sessionStorage.getItem('transpgso_fotos_galeria');
+      if(ss){var parsed=JSON.parse(ss);if(parsed&&parsed.length>0)return parsed;}
+    }catch(e){}
+    return [];
+  }),fotosGaleria=_s8c[0],setFotosGaleria=_s8c[1]; // [{file,preview,analizando,datos,error}]
+  var fotosGaleriaRef=useRef(fotosGaleria);
   const _s8d=useState(false),procesandoGaleria=_s8d[0],setProcesandoGaleria=_s8d[1];
   const galeriaInputRef=useRef();
   const fotoRef=useRef();
