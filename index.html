@@ -605,15 +605,15 @@ input:-webkit-autofill:focus {
       if(el){ el.style.opacity='0'; el.style.transition='opacity 0.4s'; setTimeout(function(){ el.remove(); },400); }
     },200);
   };
-  // Service Worker con versión 1782253148
+  // Service Worker con versión 1782323207
   if('serviceWorker' in navigator){
-    var SW_VERSION = '1782253148';
+    var SW_VERSION = '1782323207';
     var STORED_VERSION = localStorage.getItem('sw_version');
     
     // Registrar el SW
-    navigator.serviceWorker.register('/TRANSPGSO/sw.js?v=1782253148', {updateViaCache: 'none'})
+    navigator.serviceWorker.register('/TRANSPGSO/sw.js?v=1782323207', {updateViaCache: 'none'})
       .then(function(reg){
-        console.log('SW registrado v1782253148');
+        console.log('SW registrado v1782323207');
         
         // Si es versión nueva, activar inmediatamente
         if(reg.waiting){
@@ -4436,10 +4436,6 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
 
 function ColectaRider(_ref_cr){
   let usuario=_ref_cr.usuario,clientes=_ref_cr.clientes,toast=_ref_cr.toast,onClose=_ref_cr.onClose,clientePresel=_ref_cr.clientePresel||null;
-  var fotosGaleriaGlobal=_ref_cr.fotosGaleriaGlobal||[];
-  var setFotosGaleriaGlobal=_ref_cr.setFotosGaleriaGlobal||function(){};
-  var faseGaleriaGlobal=_ref_cr.faseGaleriaGlobal||'seleccion';
-  var setFaseGaleriaGlobal=_ref_cr.setFaseGaleriaGlobal||function(){};
   const _s1=useState(function(){
     try{
       var presel=localStorage.getItem('transpgso_colecta_cliente_presel');
@@ -4449,12 +4445,9 @@ function ColectaRider(_ref_cr){
   }),clienteSel=_s1[0],setClienteSel=_s1[1];
   const _s2=useState('AM'),turno=_s2[0],setTurno=_s2[1];
 
-  // Aliases locales para el código existente
-  var fase=faseGaleriaGlobal;
-  var setFase=setFaseGaleriaGlobal;
-  var fotosGaleria=fotosGaleriaGlobal;
-  var setFotosGaleria=setFotosGaleriaGlobal;
-  var fotosGaleriaRef=useRef(fotosGaleriaGlobal);
+  const _s8c=useState([]),fotosGaleria=_s8c[0],setFotosGaleria=_s8c[1];
+  var fotosGaleriaRef=useRef([]);
+  const _s3=useState('seleccion'),fase=_s3[0],setFase=_s3[1];
   // Retiros asignados desde planilla admin
 
   
@@ -4731,7 +4724,6 @@ function ColectaRider(_ref_cr){
   }
 
   async function cargarGaleriaEnSistema(){
-    toast('Cargando... fotos:'+fotosGaleria.length+' fase:'+fase);
     const clienteNombre=clienteSel?.nombre||clienteSel||'Sin cliente';
     // Incluir paquetes aunque tengan error parcial, si tienen al menos código o datos básicos
     var galeriaActual=fotosGaleriaRef.current.length>0?fotosGaleriaRef.current:fotosGaleria;
@@ -6214,7 +6206,7 @@ function RetirosRider(_ref_rr){
   );
 }
 
-function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout;const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87bp=useState(null),clienteRetiroPresel=_useState87bp[0],setClienteRetiroPresel=_useState87bp[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const _useState87g=useState(false),showExpressScan=_useState87g[0],setShowExpressScan=_useState87g[1];const _useState87i=useState([]),fotosGaleriaGlobal=_useState87i[0],setFotosGaleriaGlobal=_useState87i[1];const _useState87j=useState('seleccion'),faseGaleriaGlobal=_useState87j[0],setFaseGaleriaGlobal=_useState87j[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);};useEffect(function(){var prev=document.body.style.background;var prevHtml=document.documentElement.style.background;document.body.style.background='#1a1d13';document.documentElement.style.background='#1a1d13';return function(){document.body.style.background=prev;document.documentElement.style.background=prevHtml;};},[]);const ESTADOS_RIDER=[{val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#C8A84B',bg:'rgba(200,168,75,0.15)'},{val:'entregado',label:'Entregado',icon:'✅',color:'#2e7d4f',bg:'rgba(46,125,79,0.15)'},{val:'reprogramado',label:'Reprogramado',icon:'📅',color:'#b07d10',bg:'rgba(176,125,16,0.15)'},{val:'cancelado',label:'Cancelado',icon:'❌',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'siniestro',label:'Siniestro',icon:'⚠️',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'pendiente_retiro',label:'Pend. Retiro',icon:'📦',color:'#7a7d6a',bg:'rgba(122,125,106,0.12)'}];async function cargarEnvios(){setLoading(true);try{const nombreRider=normNombre(usuario.nombre);
+function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout;const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87bp=useState(null),clienteRetiroPresel=_useState87bp[0],setClienteRetiroPresel=_useState87bp[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const _useState87g=useState(false),showExpressScan=_useState87g[0],setShowExpressScan=_useState87g[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);};useEffect(function(){var prev=document.body.style.background;var prevHtml=document.documentElement.style.background;document.body.style.background='#1a1d13';document.documentElement.style.background='#1a1d13';return function(){document.body.style.background=prev;document.documentElement.style.background=prevHtml;};},[]);const ESTADOS_RIDER=[{val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#C8A84B',bg:'rgba(200,168,75,0.15)'},{val:'entregado',label:'Entregado',icon:'✅',color:'#2e7d4f',bg:'rgba(46,125,79,0.15)'},{val:'reprogramado',label:'Reprogramado',icon:'📅',color:'#b07d10',bg:'rgba(176,125,16,0.15)'},{val:'cancelado',label:'Cancelado',icon:'❌',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'siniestro',label:'Siniestro',icon:'⚠️',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'pendiente_retiro',label:'Pend. Retiro',icon:'📦',color:'#7a7d6a',bg:'rgba(122,125,106,0.12)'}];async function cargarEnvios(){setLoading(true);try{const nombreRider=normNombre(usuario.nombre);
     const partes=nombreRider.split(' ');
     const primerNombre=partes[0];
     const apellido=partes[1]||partes[0];
@@ -6322,7 +6314,7 @@ function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout;co
     );
     return acc;
   },{seen:new Set(),items:[]}).items;
-})())),riderTab==='retiros'&&/*#__PURE__*/React.createElement(RetirosRider,{usuario:usuario,onColectaRetiro:function(){setShowColecta(true);}}),riderTab==='ganancias'&&/*#__PURE__*/React.createElement(GananciasRider,{usuario:usuario,envios:envios,colectasKey:'colecta_rider_'+usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase()}),showColecta&&/*#__PURE__*/React.createElement(ColectaErrorBoundary,null,React.createElement(ColectaRider,{key:'colecta-fixed',usuario:usuario,clientes:lsLoad('clientes',[]),toast:toast,clientePresel:clienteRetiroPresel,fotosGaleriaGlobal:fotosGaleriaGlobal,setFotosGaleriaGlobal:setFotosGaleriaGlobal,faseGaleriaGlobal:faseGaleriaGlobal,setFaseGaleriaGlobal:setFaseGaleriaGlobal,onClose:function(){
+})())),riderTab==='retiros'&&/*#__PURE__*/React.createElement(RetirosRider,{usuario:usuario,onColectaRetiro:function(){setShowColecta(true);}}),riderTab==='ganancias'&&/*#__PURE__*/React.createElement(GananciasRider,{usuario:usuario,envios:envios,colectasKey:'colecta_rider_'+usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase()}),showColecta&&/*#__PURE__*/React.createElement(ColectaErrorBoundary,null,React.createElement(ColectaRider,{key:'colecta-fixed',usuario:usuario,clientes:lsLoad('clientes',[]),toast:toast,clientePresel:clienteRetiroPresel,onClose:function(){
           setShowColecta(false);
           setClienteRetiroPresel(null);
           if(riderTab==='colecta') setRiderTab('retiros');
