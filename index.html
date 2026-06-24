@@ -5749,13 +5749,9 @@ function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout;co
   setEnvios(dataFinal);
   lsSave('rider_envios_'+primerNombre.toLowerCase(),dataFinal);
 }else{
-  // Sin datos en Supabase → usar caché local
-  const cached=lsLoad('rider_envios_'+primerNombre.toLowerCase(),null);
-  if(cached&&cached.length>0){setEnvios(cached);}
-  else{
-    const local=lsLoad('gestion_envios',[]);
-    setEnvios(local.filter(e=>e.mensajero&&e.mensajero.toLowerCase().includes(primerNombre.toLowerCase())));
-  }
+  // Supabase respondió con éxito pero 0 envíos → limpiar caché y mostrar vacío
+  lsSave('rider_envios_'+primerNombre.toLowerCase(),[]);
+  setEnvios([]);
 }}catch(e){const primerNombre2=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();const cached=lsLoad('rider_envios_'+primerNombre2,null);if(cached&&cached.length>0){setEnvios(cached);}else{const local=lsLoad('gestion_envios',[]);setEnvios(local.filter(e=>e.mensajero&&e.mensajero.toLowerCase().includes(primerNombre2)));}}finally{setLoading(false);}}useEffect(()=>{
   cargarEnvios();
   // Recargar cada 2 minutos para mantener datos frescos
