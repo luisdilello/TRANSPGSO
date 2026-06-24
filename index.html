@@ -4180,7 +4180,6 @@ function RetiroMasivoRider(_ref_rm){
   }
 
   // FASE SELECCIÓN CLIENTE
-  if(showRetiroMasivo) return React.createElement(RetiroMasivoRider,{usuario:usuario,clientes:clientes,toast:toast,onClose:function(){setShowRetiroMasivo(false);setFase('seleccion');}});
 if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
     React.createElement('div',{style:{background:'var(--dark)',padding:'16px',paddingTop:'max(16px,env(safe-area-inset-top))',borderBottom:'2px solid var(--gold)',display:'flex',alignItems:'center',justifyContent:'space-between'}},
       React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,color:'var(--gold)',letterSpacing:2}},'🚛 RETIRO MASIVO'),
@@ -4848,7 +4847,8 @@ function ColectaRider(_ref_cr){
     )
   );
 
-  if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
+  if(showRetiroMasivo) return React.createElement(RetiroMasivoRider,{usuario:usuario,clientes:clientes,toast:toast,onClose:function(){setShowRetiroMasivo(false);}});
+if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
     React.createElement('div',{style:{background:'var(--dark)',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'2px solid var(--gold)',flexShrink:0}},
       React.createElement('div',null,React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,color:'var(--gold)',letterSpacing:2}},'📥 COLECTA'),React.createElement('button',{onClick:function(){setShowRetiroMasivo(true);},style:{fontSize:10,padding:'3px 10px',borderRadius:20,border:'1px solid rgba(200,168,75,0.5)',background:'rgba(200,168,75,0.1)',color:'var(--gold)',cursor:'pointer',fontWeight:700,letterSpacing:1,marginTop:4,display:'block'}},'🚛 RETIRO MASIVO')),
       React.createElement('button',{onClick:onClose,style:{background:'none',border:'1px solid rgba(255,255,255,0.2)',borderRadius:8,color:'rgba(255,255,255,0.6)',padding:'8px 14px',cursor:'pointer',fontSize:13}},'✕ Cerrar')
