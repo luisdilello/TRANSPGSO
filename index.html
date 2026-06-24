@@ -3857,6 +3857,15 @@ function playSound(type){try{
     osc(196,'sine',0.52,0.5,0.12);      // Sol3 cuerpo
     osc(392,'sine',0,0.25,0.1,-8);
     osc(523,'sine',0.18,0.28,0.1,6);
+  } else if(type==='scan'){
+    // Beep corto agudo — "detectado, espera foto"
+    osc(1200,'sine',0,0.08,0.25);
+    osc(1400,'sine',0.06,0.1,0.18);
+  } else if(type==='foto'){
+    // Clic de cámara — foto tomada
+    osc(800,'sine',0,0.04,0.3);
+    osc(1000,'sine',0.03,0.06,0.2);
+    osc(600,'sine',0.07,0.08,0.15);
   } else if(type==='error'){
     // Doble golpe grave descendente — inconfundible, no molesto
     osc(220,'sawtooth',0,0.18,0.3);     // La3 golpe 1
@@ -4112,16 +4121,25 @@ function RetiroMasivoRider(_ref_rm){
     if(codigosRef.current.has(codigo)){
       playSound('error');
       setLastScan({codigo,duplicado:true});
+      setTimeout(function(){setLastScan(null);},1500);
       return;
     }
     codigosRef.current.add(codigo);
-    playSound('success');
-    var foto=capturarFoto();
-    var paquete={codigo,estado:'escaneado',ts:new Date().toISOString(),foto,datosIA:null,analizandoIA:!!foto};
-    setPaquetes(function(prev){return[paquete,...prev];});
-    setLastScan({codigo,nuevo:true});
-    // Analizar foto con IA en background
-    if(foto){
+    // Sonido inmediato: código detectado
+    playSound('scan');
+    setLastScan({codigo,esperandoFoto:true});
+    // Pausa 600ms para que el paquete se estabilice antes de la foto
+    setTimeout(function(){
+      var foto=capturarFoto();
+      // Sonido de cámara al tomar la foto
+      if(foto) playSound('foto');
+      else playSound('success');
+      var paquete={codigo:codigo,estado:'escaneado',ts:new Date().toISOString(),foto:foto,datosIA:null,analizandoIA:!!foto};
+      setPaquetes(function(prev){return[paquete,...prev];});
+      setLastScan({codigo:codigo,nuevo:true});
+      setTimeout(function(){setLastScan(null);},1200);
+      // Analizar foto con IA en background
+      if(foto){
       var b64=foto.split(',')[1];
       rotarImagenSiVertical(b64).then(function(b64r){
         return analizarEtiqueta(b64r,'image/jpeg');
@@ -4137,6 +4155,7 @@ function RetiroMasivoRider(_ref_rm){
         });});
       });
     }
+    },600); // fin setTimeout foto
   }
 
   function procesarManual(){
@@ -4267,8 +4286,8 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
     ),
     // Último scan
     lastScan&&React.createElement('div',{style:{position:'absolute',bottom:120,left:0,right:0,display:'flex',justifyContent:'center',pointerEvents:'none'}},
-      React.createElement('div',{style:{background:lastScan.duplicado?'rgba(176,48,48,0.9)':'rgba(46,125,79,0.9)',padding:'10px 24px',borderRadius:20,fontSize:13,fontWeight:700,fontFamily:'JetBrains Mono',letterSpacing:1}},
-        lastScan.duplicado?'⚠ DUPLICADO: '+lastScan.codigo:'✓ '+lastScan.codigo
+      React.createElement('div',{style:{background:lastScan.duplicado?'rgba(176,48,48,0.9)':lastScan.esperandoFoto?'rgba(200,168,75,0.9)':'rgba(46,125,79,0.9)',padding:'10px 24px',borderRadius:20,fontSize:13,fontWeight:700,fontFamily:'JetBrains Mono',letterSpacing:1,transition:'background 0.3s'}},
+        lastScan.duplicado?'⚠ DUPLICADO: '+lastScan.codigo:lastScan.esperandoFoto?'📸 '+lastScan.codigo+'...':'✓ '+lastScan.codigo
       )
     ),
     // Bottom bar
