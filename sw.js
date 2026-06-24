@@ -1,9 +1,8 @@
-// TransPgso SW v1782323207 - AUTO-UPDATE
-const APP_VERSION = '1782323207';
+// TransPgso SW v1782273444 - FUERZA NO CACHE
+const APP_VERSION = '1782273444';
 
 self.addEventListener('install', e => {
   console.log('SW v' + APP_VERSION + ' instalando');
-  // Tomar control inmediatamente sin esperar
   e.waitUntil(self.skipWaiting());
 });
 
@@ -12,21 +11,19 @@ self.addEventListener('activate', e => {
   e.waitUntil(
     Promise.all([
       // Borrar TODOS los caches
-      caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))),
-      // Tomar control de todos los clientes
+      caches.keys().then(keys => Promise.all(keys.map(k => {
+        console.log('Borrando cache:', k);
+        return caches.delete(k);
+      }))),
       self.clients.claim()
-    ]).then(() => {
-      // Notificar a todos los clientes que recarguen
-      return self.clients.matchAll({type: 'window'}).then(clients => {
-        clients.forEach(client => client.postMessage({type: 'SW_UPDATED', version: APP_VERSION}));
-      });
-    })
+    ])
   );
 });
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   
+  // Para index.html y raíz: SIEMPRE desde red, nunca caché
   const esIndex = url.pathname.endsWith('/') || 
                   url.pathname.endsWith('/TRANSPGSO/') ||
                   url.pathname.endsWith('index.html') ||
@@ -34,24 +31,37 @@ self.addEventListener('fetch', e => {
   
   if(esIndex) {
     e.respondWith(
-      fetch(e.request.url.split('?')[0] + '?_v=' + APP_VERSION, {
+      fetch(e.request.url.split('?')[0] + '?_nocache=' + APP_VERSION, {
         cache: 'no-store',
-        headers: {'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache'}
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
       }).catch(() => fetch(e.request, {cache: 'no-store'}))
     );
     return;
   }
   
+  // Para sw.js: siempre desde red
   if(url.pathname.endsWith('sw.js')) {
     e.respondWith(fetch(e.request, {cache: 'no-store'}));
     return;
   }
   
+  // Para todo lo demás: red primero, sin caché
   e.respondWith(
-    fetch(e.request, {cache: 'no-store'}).catch(() => caches.match(e.request))
+    fetch(e.request, {cache: 'no-store'}).catch(() => 
+      caches.match(e.request)
+    )
   );
 });
 
+// Responder a mensajes del cliente
 self.addEventListener('message', e => {
-  if(e.data === 'SKIP_WAITING') self.skipWaiting();
+  if(e.data === 'GET_VERSION') {
+    e.ports[0].postMessage(APP_VERSION);
+  }
+  if(e.data === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
