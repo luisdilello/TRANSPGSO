@@ -4449,7 +4449,12 @@ function ColectaRider(_ref_cr){
   }),clienteSel=_s1[0],setClienteSel=_s1[1];
   const _s2=useState('AM'),turno=_s2[0],setTurno=_s2[1];
 
-  // fase y fotosGaleria vienen de props globales de RiderApp (ver arriba)
+  // Aliases locales para el código existente
+  var fase=faseGaleriaGlobal;
+  var setFase=setFaseGaleriaGlobal;
+  var fotosGaleria=fotosGaleriaGlobal;
+  var setFotosGaleria=setFotosGaleriaGlobal;
+  var fotosGaleriaRef=useRef(fotosGaleriaGlobal);
   // Retiros asignados desde planilla admin
 
   
@@ -4471,10 +4476,7 @@ function ColectaRider(_ref_cr){
   const _s7=useState('camara'),modoInput=_s7[0],setModoInput=_s7[1];
   const _s8=useState(false),guardando=_s8[0],setGuardando=_s8[1];
   const _s8b=useState(null),fotoAnalisis=_s8b[0],setFotoAnalisis=_s8b[1]; // {codigo,base64,mediaType,analizando,datos}
-  // Usar estado global de RiderApp para que persista entre re-mounts
-  var fotosGaleria=fotosGaleriaGlobal;
-  var setFotosGaleria=setFotosGaleriaGlobal;
-  var fotosGaleriaRef=useRef(fotosGaleriaGlobal);
+
   const _s8d=useState(false),procesandoGaleria=_s8d[0],setProcesandoGaleria=_s8d[1];
   const galeriaInputRef=useRef();
   const fotoRef=useRef();
