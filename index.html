@@ -4732,9 +4732,7 @@ function ColectaRider(_ref_cr){
         if(ss) galeriaActual=JSON.parse(ss);
       }catch(e){}
     }
-    var dbgInfo='ref:'+fotosGaleriaRef.current.length+' state:'+fotosGaleria.length+' ss:'+(sessionStorage.getItem('transpgso_fotos_galeria')?JSON.parse(sessionStorage.getItem('transpgso_fotos_galeria')).length:'null')+' actual:'+galeriaActual.length;
-    if(galeriaActual.length>0) dbgInfo+=' datos0:'+JSON.stringify(galeriaActual[0].datos).slice(0,80);
-    alert(dbgInfo);
+    alert('INICIO CARGA:\nref:'+fotosGaleriaRef.current.length+'\nstate:'+fotosGaleria.length+'\nactual:'+galeriaActual.length+(galeriaActual[0]?'\ndatos0:'+JSON.stringify(galeriaActual[0].datos).slice(0,100):'\n(vacío)'));
     const conCodigo=galeriaActual.filter(f=>f.datos&&f.datos.codigo&&f.datos.tipo!=='manual');
     const manuales=galeriaActual.filter(f=>f.datos&&(f.datos.tipo==='manual'||(!f.datos.codigo&&(f.datos.destinatario||f.datos.direccion))));
     if(conCodigo.length===0&&manuales.length===0){ toast('⚠ No hay paquetes para cargar'); return; }
