@@ -4746,9 +4746,8 @@ function ColectaRider(_ref_cr){
       };
     });
     try{
-      const {error}=await db.from('envios').insert(inserts);
-      // Si hay error de duplicado, continuar igual para subir las fotos
-      if(error&&!error.message.includes('duplicate')&&!error.code?.includes('23505')) throw error;
+      const {error}=await db.from('envios').upsert(inserts,{onConflict:'codigo',ignoreDuplicates:false});
+      if(error) console.warn('Upsert warning:',error.message);
       // Guardar foto como base64 directamente en la tabla envios (sin Storage)
       let fotasSubidas=0;
       let errFotos=[];
@@ -4807,7 +4806,8 @@ function ColectaRider(_ref_cr){
       }
       const total=conCodigo.length+manuales.length;
       toast('✓ '+total+' paquetes cargados'+(manuales.length>0?' · '+manuales.length+' manuales pendientes':'')+(fotasSubidas>0?' · '+fotasSubidas+' fotos':''));
-      setFotosGaleria([]);
+      setFotosGaleria(prev=>{prev.forEach(f=>{try{if(f.preview&&f.preview.startsWith('blob:'))URL.revokeObjectURL(f.preview);}catch(e){}});return[];});
+      setClienteSel(null);
       setFase('seleccion');
     }catch(e){ toast('⚠ Error al guardar: '+e.message); }
     setProcesandoGaleria(false);
