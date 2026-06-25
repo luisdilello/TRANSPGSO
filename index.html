@@ -6224,7 +6224,7 @@ useEffect(function(){
     watchId=navigator.geolocation.watchPosition(function(pos){
       lastPos={lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy};
       enviarUbicacion(lastPos.lat,lastPos.lng,lastPos.accuracy);
-    },{enableHighAccuracy:true,maximumAge:30000,timeout:15000});
+    },function(err){console.warn('GPS error:',err.message);},{enableHighAccuracy:true,maximumAge:30000,timeout:15000});
     intervalId=setInterval(function(){
       if(lastPos) enviarUbicacion(lastPos.lat,lastPos.lng,lastPos.accuracy);
     },30000);
