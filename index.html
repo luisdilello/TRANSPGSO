@@ -4214,8 +4214,27 @@ function RetiroMasivoRider(_ref_rm){
     for(var i=0;i<inserts.length;i+=LOTE){
       var lote=inserts.slice(i,i+LOTE);
       try{
-        var res=await db.from('envios').upsert(lote,{onConflict:'codigo',ignoreDuplicates:false});
-        if(res.error){err+=lote.length;alert('SUPABASE ERROR:\n'+res.error.message+'\ncode: '+res.error.code+'\ndetails: '+res.error.details);}else{ok+=lote.length;}
+        // Insertar uno por uno para aislar errores
+        for(var j=0;j<lote.length;j++){
+          try{
+            var r=await db.from('envios').upsert({
+              codigo:lote[j].codigo,
+              cliente:lote[j].cliente,
+              destinatario:lote[j].destinatario||'',
+              direccion:lote[j].direccion||'',
+              telefono:lote[j].telefono||'',
+              comuna:lote[j].comuna||'',
+              fecha:lote[j].fecha,
+              estado:lote[j].estado,
+              mensajero:lote[j].mensajero,
+              monto:0,
+              en_un_cambio:false,
+              nota:lote[j].nota,
+              fuente:lote[j].fuente
+            },{onConflict:'codigo'});
+            if(r.error){err++;}else{ok++;}
+          }catch(e2){err++;}
+        }
       }catch(e){err+=lote.length;}
     }
     // Subir fotos en background sin bloquear
