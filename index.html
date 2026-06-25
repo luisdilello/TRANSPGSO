@@ -6240,7 +6240,7 @@ useEffect(function(){
     const primerNombre=partes[0];
     const apellido=partes[1]||partes[0];
     // Traer todos los no-terminados y filtrar por nombre en JS para evitar bugs del .or() en Supabase
-    const {data:todos,error}=await db.from('envios').select('*').not('estado','in','("entregado","cancelado","siniestro")').gte('fecha',new Date(Date.now()-30*24*60*60*1000).toISOString().slice(0,10)).order('fecha',{ascending:false}).limit(2000);
+    const {data:todos,error}=await db.from('envios').select('*').or('estado.eq.en_bodega,estado.eq.en_ruta,estado.eq.asignado,estado.eq.sin_asignar,estado.eq.reprogramado,estado.eq.pendiente_retiro,estado.eq.pendiente_completar').order('fecha',{ascending:false}).limit(500);
     if(error)throw error;
     const data=todos?todos.filter(function(e){
       const m=(e.mensajero||'').toUpperCase().replace(/,/g,' ').replace(/\s+/g,' ').trim();
