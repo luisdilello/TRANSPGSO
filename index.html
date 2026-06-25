@@ -3424,7 +3424,7 @@ const _useState71d=useState(''),clientePDF=_useState71d[0],setClientePDF=_useSta
 const _useState71e=useState(null),pdfPreview=_useState71e[0],setPdfPreview=_useState71e[1];
 const _useState71f=useState(false),procesandoPDF=_useState71f[0],setProcesandoPDF=_useState71f[1];
 const _useState71g=useState(''),progresoPDF=_useState71g[0],setProgresoPDF=_useState71g[1];
-const pdfRef=useRef();const PAGE_SIZE=50;const fileRef=useRef();useEffect(()=>{lsSave('gestion_envios',envios);},[envios]);useEffect(()=>{sincronizarDesdeSupabase();},[]);async function sincronizarDesdeSupabase(){setSincronizando(true);try{const _await$db$from$select2=await db.from('envios').select('*').order('updated_at',{ascending:false}),data=_await$db$from$select2.data,error=_await$db$from$select2.error;if(error)throw error;if(data&&data.length>0){setEnvios(prev=>{const mapaLocal={};prev.forEach(e=>{mapaLocal[e.codigo]=e;});const merged=data.map(sb=>{var _mapaLocal$sb$codigo,_mapaLocal$sb$codigo2;return{id:((_mapaLocal$sb$codigo=mapaLocal[sb.codigo])==null?void 0:_mapaLocal$sb$codigo.id)||sb.id,codigo:sb.codigo,cliente:sb.cliente||'',destinatario:sb.destinatario||'',telefono:sb.telefono||'',direccion:sb.direccion||'',comuna:sb.comuna||'',referencia:sb.referencia||'',fecha:sb.fecha||new Date().toISOString().slice(0,10),estado:sb.estado||'sin_asignar',mensajero:sb.mensajero||'',monto:sb.monto||0,enUnCambio:sb.en_un_cambio||false,nota:sb.nota||'',fuente:sb.fuente||'propio',peso:sb.peso||null,valor_siniestro:sb.valor_siniestro||null,historial:((_mapaLocal$sb$codigo2=mapaLocal[sb.codigo])==null?void 0:_mapaLocal$sb$codigo2.historial)||[{fecha:sb.created_at,estado:sb.estado,nota:'Desde Supabase'}]};});const codigosSupabase=new Set(data.map(e=>e.codigo));const eliminados=new Set(lsLoad('envios_eliminados',[]));const soloLocal=prev.filter(e=>!codigosSupabase.has(e.codigo)&&!eliminados.has(e.codigo));const mergedFiltrado=merged.filter(e=>!eliminados.has(e.codigo));return[...mergedFiltrado,...soloLocal];});toast(`✓ Sincronizado: ${data.length} envíos desde la nube`);}else{toast('Sin datos en Supabase todavía');}}catch(e){toast('⚠ Error de sincronización: '+e.message);}setSincronizando(false);}useEffect(()=>{const channel=db.channel('admin-envios').on('postgres_changes',{event:'UPDATE',schema:'public',table:'envios'},payload=>{const sb=payload.new;setEnvios(prev=>prev.map(e=>{if(e.codigo!==sb.codigo)return e;return{...e,estado:sb.estado,mensajero:sb.mensajero||e.mensajero,nota:sb.nota||e.nota,historial:[...e.historial,{fecha:new Date().toISOString(),estado:sb.estado,nota:'Actualizado por Rider'}]};}));}).subscribe();return()=>{db.removeChannel(channel);};},[]);const mensajerosActivos=mensajeros.filter(m=>m.activo);const clientesActivos=clientes.filter(c=>c.activo);function importarExcelSistema(file){const reader=new FileReader();reader.onload=e=>{try{let wb;try{wb=XLSX.read(e.target.result,{type:'array',cellDates:true});}catch(e1){wb=XLSX.read(e.target.result,{type:'array'});}const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});if(!rows.length){toast('⚠ Archivo vacío');return;}const nuevos=rows.map((r,i)=>{const codigo=String(r['Envio']||r['Código']||r['codigo']||'').replace(/^'/,'').trim();const est=parseEstadoSistema(r['Estatus de Envio']||r['Estado']||'');return{id:Date.now()+i,codigo:codigo||'IMP-'+String(i+1).padStart(6,'0'),cliente:(r['Cliente']||'').toString().trim().toUpperCase(),despachador:(r['Despachador']||'').toString().trim(),destinatario:(r['Destinatario']||'').toString().trim(),telefono:(r['Telefono']||r['Teléfono']||'').toString().trim(),direccion:(r['Direccion']||r['Dirección']||'').toString().trim(),comuna:(r['Comuna']||'').toString().trim(),fecha:(r['Fecha Envio']||r['Fecha']||new Date().toISOString().slice(0,10)).toString().slice(0,10),estado:est,mensajero:normalizarNombre(r['Despachador']||''),monto:parseFloat(String(r['Cobrar/Monto']||0).replace(/[^0-9.]/g,''))||0,nota:(r['Nota']||'').toString().trim(),fuente:'sistema',historial:[{fecha:new Date().toISOString(),estado:est,nota:'Importado desde sistema'}]};}).filter(e=>e.codigo);const syncToSupabase=async enviosNuevos=>{for(const e of enviosNuevos.slice(0,200)){try{await db.from('envios').upsert({codigo:e.codigo,cliente:e.cliente||'',destinatario:e.destinatario||'',telefono:e.telefono||'',direccion:e.direccion||'',comuna:e.comuna||'',referencia:e.referencia||'',fecha:e.fecha||new Date().toISOString().slice(0,10),estado:e.estado||'sin_asignar',mensajero:e.mensajero||'',monto:e.monto||0,en_un_cambio:e.enUnCambio||false,nota:e.nota||'',fuente:e.fuente||'sistema'},{onConflict:'codigo'});}catch(err){}}};setEnvios(prev=>{
+const pdfRef=useRef();const PAGE_SIZE=50;const fileRef=useRef();useEffect(()=>{lsSave('gestion_envios',envios);},[envios]);useEffect(()=>{sincronizarDesdeSupabase();},[]);async function sincronizarDesdeSupabase(){setSincronizando(true);try{const _await$db$from$select2=await db.from('envios').select('codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,fuente,peso,valor_siniestro,updated_at,created_at').gte('fecha',new Date(Date.now()-60*24*60*60*1000).toISOString().slice(0,10)).order('updated_at',{ascending:false}).limit(5000),data=_await$db$from$select2.data,error=_await$db$from$select2.error;if(error)throw error;if(data&&data.length>0){setEnvios(prev=>{const mapaLocal={};prev.forEach(e=>{mapaLocal[e.codigo]=e;});const merged=data.map(sb=>{var _mapaLocal$sb$codigo,_mapaLocal$sb$codigo2;return{id:((_mapaLocal$sb$codigo=mapaLocal[sb.codigo])==null?void 0:_mapaLocal$sb$codigo.id)||sb.id,codigo:sb.codigo,cliente:sb.cliente||'',destinatario:sb.destinatario||'',telefono:sb.telefono||'',direccion:sb.direccion||'',comuna:sb.comuna||'',referencia:sb.referencia||'',fecha:sb.fecha||new Date().toISOString().slice(0,10),estado:sb.estado||'sin_asignar',mensajero:sb.mensajero||'',monto:sb.monto||0,enUnCambio:sb.en_un_cambio||false,nota:sb.nota||'',fuente:sb.fuente||'propio',peso:sb.peso||null,valor_siniestro:sb.valor_siniestro||null,historial:((_mapaLocal$sb$codigo2=mapaLocal[sb.codigo])==null?void 0:_mapaLocal$sb$codigo2.historial)||[{fecha:sb.created_at,estado:sb.estado,nota:'Desde Supabase'}]};});const codigosSupabase=new Set(data.map(e=>e.codigo));const eliminados=new Set(lsLoad('envios_eliminados',[]));const soloLocal=prev.filter(e=>!codigosSupabase.has(e.codigo)&&!eliminados.has(e.codigo));const mergedFiltrado=merged.filter(e=>!eliminados.has(e.codigo));return[...mergedFiltrado,...soloLocal];});toast(`✓ Sincronizado: ${data.length} envíos desde la nube`);}else{toast('Sin datos en Supabase todavía');}}catch(e){toast('⚠ Error de sincronización: '+e.message);}setSincronizando(false);}useEffect(()=>{const channel=db.channel('admin-envios').on('postgres_changes',{event:'UPDATE',schema:'public',table:'envios'},payload=>{const sb=payload.new;setEnvios(prev=>prev.map(e=>{if(e.codigo!==sb.codigo)return e;return{...e,estado:sb.estado,mensajero:sb.mensajero||e.mensajero,nota:sb.nota||e.nota,historial:[...e.historial,{fecha:new Date().toISOString(),estado:sb.estado,nota:'Actualizado por Rider'}]};}));}).subscribe();return()=>{db.removeChannel(channel);};},[]);const mensajerosActivos=mensajeros.filter(m=>m.activo);const clientesActivos=clientes.filter(c=>c.activo);function importarExcelSistema(file){const reader=new FileReader();reader.onload=e=>{try{let wb;try{wb=XLSX.read(e.target.result,{type:'array',cellDates:true});}catch(e1){wb=XLSX.read(e.target.result,{type:'array'});}const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});if(!rows.length){toast('⚠ Archivo vacío');return;}const nuevos=rows.map((r,i)=>{const codigo=String(r['Envio']||r['Código']||r['codigo']||'').replace(/^'/,'').trim();const est=parseEstadoSistema(r['Estatus de Envio']||r['Estado']||'');return{id:Date.now()+i,codigo:codigo||'IMP-'+String(i+1).padStart(6,'0'),cliente:(r['Cliente']||'').toString().trim().toUpperCase(),despachador:(r['Despachador']||'').toString().trim(),destinatario:(r['Destinatario']||'').toString().trim(),telefono:(r['Telefono']||r['Teléfono']||'').toString().trim(),direccion:(r['Direccion']||r['Dirección']||'').toString().trim(),comuna:(r['Comuna']||'').toString().trim(),fecha:(r['Fecha Envio']||r['Fecha']||new Date().toISOString().slice(0,10)).toString().slice(0,10),estado:est,mensajero:normalizarNombre(r['Despachador']||''),monto:parseFloat(String(r['Cobrar/Monto']||0).replace(/[^0-9.]/g,''))||0,nota:(r['Nota']||'').toString().trim(),fuente:'sistema',historial:[{fecha:new Date().toISOString(),estado:est,nota:'Importado desde sistema'}]};}).filter(e=>e.codigo);const syncToSupabase=async enviosNuevos=>{for(const e of enviosNuevos.slice(0,200)){try{await db.from('envios').upsert({codigo:e.codigo,cliente:e.cliente||'',destinatario:e.destinatario||'',telefono:e.telefono||'',direccion:e.direccion||'',comuna:e.comuna||'',referencia:e.referencia||'',fecha:e.fecha||new Date().toISOString().slice(0,10),estado:e.estado||'sin_asignar',mensajero:e.mensajero||'',monto:e.monto||0,en_un_cambio:e.enUnCambio||false,nota:e.nota||'',fuente:e.fuente||'sistema'},{onConflict:'codigo'});}catch(err){}}};setEnvios(prev=>{
   const mapaExist={};
   prev.forEach(e=>{mapaExist[e.codigo]=e;});
   // Para cada envío del Excel: si existe → actualizar solo estado/datos; si no → crear
@@ -6202,14 +6202,45 @@ function RetirosRider(_ref_rr){
   );
 }
 
-function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout;const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87bp=useState(null),clienteRetiroPresel=_useState87bp[0],setClienteRetiroPresel=_useState87bp[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);};useEffect(function(){var prev=document.body.style.background;var prevHtml=document.documentElement.style.background;document.body.style.background='#1a1d13';document.documentElement.style.background='#1a1d13';return function(){document.body.style.background=prev;document.documentElement.style.background=prevHtml;};},[]);const ESTADOS_RIDER=[{val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#C8A84B',bg:'rgba(200,168,75,0.15)'},{val:'entregado',label:'Entregado',icon:'✅',color:'#2e7d4f',bg:'rgba(46,125,79,0.15)'},{val:'reprogramado',label:'Reprogramado',icon:'📅',color:'#b07d10',bg:'rgba(176,125,16,0.15)'},{val:'cancelado',label:'Cancelado',icon:'❌',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'siniestro',label:'Siniestro',icon:'⚠️',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'pendiente_retiro',label:'Pend. Retiro',icon:'📦',color:'#7a7d6a',bg:'rgba(122,125,106,0.12)'}];async function cargarEnvios(){setLoading(true);try{const nombreRider=normNombre(usuario.nombre);
+function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout;const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87bp=useState(null),clienteRetiroPresel=_useState87bp[0],setClienteRetiroPresel=_useState87bp[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);};useEffect(function(){var prev=document.body.style.background;var prevHtml=document.documentElement.style.background;document.body.style.background='#1a1d13';document.documentElement.style.background='#1a1d13';return function(){document.body.style.background=prev;document.documentElement.style.background=prevHtml;};},[]);
+// GPS Tracking - actualizar ubicación cada 30 segundos
+useEffect(function(){
+  var watchId=null;
+  var intervalId=null;
+  var lastPos=null;
+  function enviarUbicacion(lat,lng,accuracy){
+    try{
+      db.from('ubicaciones_mensajeros').upsert({
+        mensajero:usuario.nombre,
+        lat:lat,
+        lng:lng,
+        accuracy:accuracy,
+        updated_at:new Date().toISOString(),
+        activo:true
+      },{onConflict:'mensajero'}).then(function(){}).catch(function(){});
+    }catch(e){}
+  }
+  if(navigator.geolocation){
+    watchId=navigator.geolocation.watchPosition(function(pos){
+      lastPos={lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy};
+      enviarUbicacion(lastPos.lat,lastPos.lng,lastPos.accuracy);
+    },{enableHighAccuracy:true,maximumAge:30000,timeout:15000});
+    intervalId=setInterval(function(){
+      if(lastPos) enviarUbicacion(lastPos.lat,lastPos.lng,lastPos.accuracy);
+    },30000);
+  }
+  return function(){
+    if(watchId!==null) navigator.geolocation.clearWatch(watchId);
+    if(intervalId) clearInterval(intervalId);
+    // Marcar como inactivo al salir
+    try{db.from('ubicaciones_mensajeros').update({activo:false}).eq('mensajero',usuario.nombre).then(function(){}).catch(function(){});}catch(e){}
+  };
+},[]);const ESTADOS_RIDER=[{val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#C8A84B',bg:'rgba(200,168,75,0.15)'},{val:'entregado',label:'Entregado',icon:'✅',color:'#2e7d4f',bg:'rgba(46,125,79,0.15)'},{val:'reprogramado',label:'Reprogramado',icon:'📅',color:'#b07d10',bg:'rgba(176,125,16,0.15)'},{val:'cancelado',label:'Cancelado',icon:'❌',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'siniestro',label:'Siniestro',icon:'⚠️',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'pendiente_retiro',label:'Pend. Retiro',icon:'📦',color:'#7a7d6a',bg:'rgba(122,125,106,0.12)'}];async function cargarEnvios(){setLoading(true);try{const nombreRider=normNombre(usuario.nombre);
     const partes=nombreRider.split(' ');
     const primerNombre=partes[0];
     const apellido=partes[1]||partes[0];
     // Traer todos los no-terminados y filtrar por nombre en JS para evitar bugs del .or() en Supabase
-    const {data:todos,error}=await db.from('envios').select('*')
-      .not('estado','in','("entregado","cancelado","siniestro")')
-      .order('fecha',{ascending:false}).limit(3000);
+    const {data:todos,error}=await db.from('envios').select('*').not('estado','in','("entregado","cancelado","siniestro")').gte('fecha',new Date(Date.now()-30*24*60*60*1000).toISOString().slice(0,10)).order('fecha',{ascending:false}).limit(2000);
     if(error)throw error;
     const data=todos?todos.filter(function(e){
       const m=(e.mensajero||'').toUpperCase().replace(/,/g,' ').replace(/\s+/g,' ').trim();
@@ -7344,6 +7375,22 @@ function MapaRutas(props){
   var mensajeros=props.mensajeros||[];
   var toastFn=props.toast;
 
+  var _tab=React.useState('rutas');var mapaTab=_tab[0];var setMapaTab=_tab[1];
+  var _track=React.useState([]);var ubicaciones=_track[0];var setUbicaciones=_track[1];
+
+  // Cargar ubicaciones en tiempo real
+  React.useEffect(function(){
+    function cargarUbicaciones(){
+      db.from('ubicaciones_mensajeros').select('*').eq('activo',true).then(function(res){
+        if(res.data) setUbicaciones(res.data);
+      }).catch(function(){});
+    }
+    cargarUbicaciones();
+    var canal=db.channel('ubicaciones-live').on('postgres_changes',{event:'*',schema:'public',table:'ubicaciones_mensajeros'},function(){cargarUbicaciones();}).subscribe();
+    var iv=setInterval(cargarUbicaciones,30000);
+    return function(){db.removeChannel(canal);clearInterval(iv);};
+  },[]);
+
   var _a=React.useState({});var asig=_a[0];var setAsig=_a[1];
   var _b=React.useState(null);var activoId=_b[0];var setActivoId=_b[1];
   var _c=React.useState(null);var panelComuna=_c[0];var setPanelComuna=_c[1];
@@ -7594,8 +7641,37 @@ function MapaRutas(props){
   var activoM=mensajeros.find(function(m){return m.id===activoId;});
   var totalAsig=Object.keys(asig).length;
 
-  return React.createElement('div',{style:{display:'flex',height:'calc(100vh - 110px)',minHeight:500}},
-
+  return React.createElement('div',{style:{display:'flex',flexDirection:'column',height:'calc(100vh - 110px)',minHeight:500}},
+  // Tabs Rutas / Tracking
+  React.createElement('div',{style:{display:'flex',gap:4,padding:'8px 12px',background:'#22241a',borderBottom:'2px solid #3A3D2E',flexShrink:0}},
+    React.createElement('button',{onClick:function(){setMapaTab('rutas');},style:{padding:'6px 18px',borderRadius:8,border:'none',background:mapaTab==='rutas'?'var(--gold)':'rgba(255,255,255,0.06)',color:mapaTab==='rutas'?'#1a1d13':'rgba(255,255,255,0.5)',fontWeight:700,cursor:'pointer',fontSize:12,letterSpacing:1}},'🗺 RUTAS'),
+    React.createElement('button',{onClick:function(){setMapaTab('tracking');},style:{padding:'6px 18px',borderRadius:8,border:'none',background:mapaTab==='tracking'?'#2e7d4f':'rgba(255,255,255,0.06)',color:mapaTab==='tracking'?'#fff':'rgba(255,255,255,0.5)',fontWeight:700,cursor:'pointer',fontSize:12,letterSpacing:1}},
+      React.createElement('span',{style:{display:'inline-block',width:8,height:8,borderRadius:'50%',background:ubicaciones.length>0?'#4caf84':'rgba(255,255,255,0.3)',marginRight:6,animation:ubicaciones.length>0?'pulse 2s infinite':'none'}}),
+      '📍 TRACKING ('+ubicaciones.length+')')
+  ),
+  mapaTab==='tracking'&&React.createElement('div',{style:{flex:1,overflow:'auto',background:'#1a1d13',padding:16}},
+    ubicaciones.length===0
+      ?React.createElement('div',{style:{textAlign:'center',color:'rgba(255,255,255,0.3)',marginTop:60,fontSize:14}},'Sin mensajeros activos con GPS')
+      :React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8}},
+        ubicaciones.map(function(u){
+          var mins=Math.round((Date.now()-new Date(u.updated_at).getTime())/60000);
+          var color=mins<5?'#4caf84':mins<15?'#C8A84B':'#e57373';
+          return React.createElement('div',{key:u.mensajero,style:{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:10,padding:'12px 16px',display:'flex',alignItems:'center',gap:12}},
+            React.createElement('div',{style:{width:40,height:40,borderRadius:'50%',background:'rgba(200,168,75,0.15)',border:'2px solid var(--gold)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}},'🏍'),
+            React.createElement('div',{style:{flex:1}},
+              React.createElement('div',{style:{fontWeight:700,color:'#fff',fontSize:13}},u.mensajero),
+              React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)',marginTop:2}},'📍 '+u.lat.toFixed(5)+', '+u.lng.toFixed(5)),
+              React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.3)',marginTop:1}},'Precisión: ~'+Math.round(u.accuracy||0)+'m')
+            ),
+            React.createElement('div',{style:{textAlign:'right'}},
+              React.createElement('div',{style:{fontSize:11,fontWeight:700,color:color}},mins===0?'Ahora':mins+'min'),
+              React.createElement('a',{href:'https://maps.google.com/?q='+u.lat+','+u.lng,target:'_blank',style:{fontSize:10,color:'var(--gold)',textDecoration:'none',marginTop:4,display:'block'}},'Ver en Maps →')
+            )
+          );
+        })
+      )
+  ),
+  mapaTab==='rutas'&&React.createElement('div',{style:{display:'flex',flex:1,overflow:'hidden'}},
     // ── SIDEBAR ──────────────────────────────────────────
     React.createElement('div',{style:{width:225,flexShrink:0,background:'#22241a',borderRight:'2px solid #3A3D2E',display:'flex',flexDirection:'column',overflow:'hidden'}},
 
@@ -7788,6 +7864,7 @@ function MapaRutas(props){
         })
       )
     )
+  )  // cierra wrapper rutas
   );
 }
 </script>
