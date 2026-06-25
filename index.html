@@ -4215,7 +4215,7 @@ function RetiroMasivoRider(_ref_rm){
       var lote=inserts.slice(i,i+LOTE);
       try{
         var res=await db.from('envios').upsert(lote,{onConflict:'codigo',ignoreDuplicates:false});
-        if(res.error){err+=lote.length;}else{ok+=lote.length;}
+        if(res.error){err+=lote.length;toast('Error: '+res.error.message+' code:'+res.error.code);}else{ok+=lote.length;}
       }catch(e){err+=lote.length;}
     }
     // Subir fotos en background sin bloquear
