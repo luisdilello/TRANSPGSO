@@ -6238,7 +6238,21 @@ useEffect(function(){
     const primerNombre=partes[0];
     const apellido=partes[1]||partes[0];
     // Traer todos los no-terminados y filtrar por nombre en JS para evitar bugs del .or() en Supabase
-    const {data,error}=await db.from('envios').select('codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,fuente,peso,updated_at').or('estado.eq.en_ruta,estado.eq.asignado,estado.eq.reprogramado,estado.eq.pendiente_retiro').ilike('mensajero','%'+primerNombre+'%').order('fecha',{ascending:false}).limit(500);
+    const hoy=new Date().toISOString().slice(0,10);
+    // Pendientes: siempre visibles | Entregados/cancelados: solo hoy
+    const [resPend,resHoy]=await Promise.all([
+      db.from('envios').select('codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,fuente,peso,updated_at')
+        .or('estado.eq.en_ruta,estado.eq.asignado,estado.eq.reprogramado,estado.eq.pendiente_retiro')
+        .ilike('mensajero','%'+primerNombre+'%').order('fecha',{ascending:false}).limit(500),
+      db.from('envios').select('codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,fuente,peso,updated_at')
+        .eq('fecha',hoy).ilike('mensajero','%'+primerNombre+'%').order('fecha',{ascending:false}).limit(500)
+    ]);
+    const error=resPend.error||resHoy.error;
+    // Combinar sin duplicados
+    const mapaEnvios={};
+    (resPend.data||[]).forEach(function(e){mapaEnvios[e.codigo]=e;});
+    (resHoy.data||[]).forEach(function(e){mapaEnvios[e.codigo]=e;});
+    const data=Object.values(mapaEnvios);
     if(error)throw error;
     if(data&&data.length>0){
   // Auto en_ruta: asignados → en_ruta
