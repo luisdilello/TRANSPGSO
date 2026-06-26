@@ -7373,6 +7373,7 @@ function MapaRutas(props){
   var markersEnviosRef=React.useRef([]);
   var markersMensajerosRef=React.useRef({});
   var geocoderRef=React.useRef(null);
+  var _ml=React.useState(false);var mapaListo=_ml[0];var setMapaListo=_ml[1];
 
   var _tab=React.useState('rutas');var mapaTab=_tab[0];var setMapaTab=_tab[1];
   var _track=React.useState([]);var ubicaciones=_track[0];var setUbicaciones=_track[1];
@@ -7394,7 +7395,7 @@ function MapaRutas(props){
 
   // ── Pins de envíos en el mapa ─────────────────────────────
   React.useEffect(function(){
-    if(!mapObj.current||!geocoderRef.current) return;
+    if(!mapaListo||!mapObj.current||!geocoderRef.current) return;
     var map=mapObj.current;
     var geocoder=geocoderRef.current;
 
@@ -7452,11 +7453,11 @@ function MapaRutas(props){
         });
       },i*150); // 150ms entre cada geocodificación
     });
-  },[envios,mapObj.current]);
+  },[envios,mapaListo]);
 
   // ── Mensajeros en tiempo real en el mapa ──────────────────
   React.useEffect(function(){
-    if(!mapObj.current) return;
+    if(!mapaListo||!mapObj.current) return;
     var map=mapObj.current;
 
     ubicaciones.forEach(function(u){
@@ -7512,7 +7513,7 @@ function MapaRutas(props){
       var activo=ubicaciones.find(function(u){return u.mensajero===nombre;});
       if(!activo) markersMensajerosRef.current[nombre].marker.setMap(null);
     });
-  },[ubicaciones,mapObj.current]);
+  },[ubicaciones,mapaListo]);
   var _b=React.useState(null);var activoId=_b[0];var setActivoId=_b[1];
   var _c=React.useState(null);var panelComuna=_c[0];var setPanelComuna=_c[1];
   var _d=React.useState(0.40);var op=_d[0];var setOp=_d[1];
@@ -7647,6 +7648,7 @@ function MapaRutas(props){
     // Inicializar geocoder
     geocoderRef.current = new google.maps.Geocoder();
     mapObj.current = map;
+    setMapaListo(true);
 
     // Capa comunas
     map.data.addGeoJson(RM_GJ);
