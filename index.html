@@ -7392,6 +7392,7 @@ function MapaRutas(props){
   var db=props.db;
   var envios=props.envios||[];
   var markersEnviosRef=React.useRef({}); // {codigo: marker}
+  var pinFiltroAnteriorRef=React.useRef(null);
   function colorEstado(estado){
     if(estado==='entregado') return '#2e7d4f';        // verde
     if(estado==='cancelado'||estado==='siniestro') return '#b03030'; // rojo
@@ -7430,17 +7431,21 @@ function MapaRutas(props){
     var map=mapObj.current;
     var geocoder=geocoderRef.current;
 
-    // Limpiar markers anteriores
-    Object.keys(markersEnviosRef.current).forEach(function(k){markersEnviosRef.current[k].setMap(null);});
-    markersEnviosRef.current={};
-
-    if(!pinsVisible){Object.keys(markersEnviosRef.current).forEach(function(k){markersEnviosRef.current[k].setMap(null);});return;}
-    // Si ya hay markers guardados, solo mostrarlos de nuevo sin re-geocodificar
-    if(Object.keys(markersEnviosRef.current).length>0){
+    // Ocultar sin borrar ref
+    if(!pinsVisible){
+      Object.keys(markersEnviosRef.current).forEach(function(k){markersEnviosRef.current[k].setMap(null);});
+      return;
+    }
+    // Si el filtro no cambió y ya hay markers, solo mostrarlos
+    if(pinFiltroAnteriorRef.current===pinFiltro&&Object.keys(markersEnviosRef.current).length>0){
       var map=mapObj.current;
       Object.keys(markersEnviosRef.current).forEach(function(k){markersEnviosRef.current[k].setMap(map);});
       return;
     }
+    // Filtro cambió - limpiar y re-geocodificar
+    Object.keys(markersEnviosRef.current).forEach(function(k){markersEnviosRef.current[k].setMap(null);});
+    markersEnviosRef.current={};
+    pinFiltroAnteriorRef.current=pinFiltro;
     var hoy=new Date().toISOString().slice(0,10);
     var conDir=envios.filter(function(e){return e.direccion&&e.comuna;});
     var enviosPin;
