@@ -1,5 +1,5 @@
-// TransPgso SW v1782486143
-const APP_VERSION = '1782486143';
+// TransPgso SW v1782505101
+const APP_VERSION = '1782505101';
 self.addEventListener('install', e => { e.waitUntil(self.skipWaiting()); });
 self.addEventListener('activate', e => {
   e.waitUntil(Promise.all([caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))),self.clients.claim()]));
@@ -11,6 +11,4 @@ self.addEventListener('fetch', e => {
   if(url.pathname.endsWith('sw.js')) { e.respondWith(fetch(e.request,{cache:'no-store'})); return; }
   e.respondWith(fetch(e.request,{cache:'no-store'}).catch(()=>caches.match(e.request)));
 });
-self.addEventListener('message', e => {
-  if(e.data==='SKIP_WAITING') self.skipWaiting();
-});
+self.addEventListener('message', e => { if(e.data==='SKIP_WAITING') self.skipWaiting(); });
