@@ -7386,10 +7386,13 @@ function MapaRutas(props){
   var envios=props.envios||[];
   var markersEnviosRef=React.useRef({}); // {codigo: marker}
   function colorEstado(estado){
-    if(estado==='entregado') return '#2e7d4f';
-    if(estado==='cancelado'||estado==='siniestro') return '#b03030';
-    if(estado==='en_ruta') return '#1976d2';
-    return '#C8A84B';
+    if(estado==='entregado') return '#2e7d4f';        // verde
+    if(estado==='cancelado'||estado==='siniestro') return '#b03030'; // rojo
+    if(estado==='en_ruta') return '#1976d2';           // azul
+    if(estado==='reprogramado') return '#9c27b0';      // morado
+    if(estado==='pendiente_retiro') return '#e65100';  // naranja
+    if(estado==='en_bodega') return '#546e7a';         // gris azulado
+    return '#C8A84B';                                  // dorado (asignado/sin asignar)
   }
   var markersMensajerosRef=React.useRef({});
   var geocoderRef=React.useRef(null);
