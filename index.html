@@ -7431,21 +7431,9 @@ function MapaRutas(props){
     var map=mapObj.current;
     var geocoder=geocoderRef.current;
 
-    // Ocultar sin borrar ref
-    if(!pinsVisible){
-      Object.keys(markersEnviosRef.current).forEach(function(k){markersEnviosRef.current[k].setMap(null);});
-      return;
-    }
-    // Si el filtro no cambió y ya hay markers, solo mostrarlos
-    if(pinFiltroAnteriorRef.current===pinFiltro&&Object.keys(markersEnviosRef.current).length>0){
-      var map=mapObj.current;
-      Object.keys(markersEnviosRef.current).forEach(function(k){markersEnviosRef.current[k].setMap(map);});
-      return;
-    }
-    // Filtro cambió - limpiar y re-geocodificar
+    // Limpiar markers anteriores y re-geocodificar
     Object.keys(markersEnviosRef.current).forEach(function(k){markersEnviosRef.current[k].setMap(null);});
     markersEnviosRef.current={};
-    pinFiltroAnteriorRef.current=pinFiltro;
     var hoy=new Date().toISOString().slice(0,10);
     var conDir=envios.filter(function(e){return e.direccion&&e.comuna;});
     var enviosPin;
@@ -7515,7 +7503,16 @@ function MapaRutas(props){
         });
       },i*200); // 200ms entre cada geocodificación para evitar límite
     });
-  },[mapaListo,pinFiltro,pinsVisible]); // Solo re-geocodifica al cambiar filtro
+  },[mapaListo,pinFiltro]); // Solo re-geocodifica al cambiar filtro
+
+  // Toggle visibilidad pins - useEffect separado para no re-geocodificar
+  React.useEffect(function(){
+    if(!mapaListo||!mapObj.current) return;
+    var map=mapObj.current;
+    Object.keys(markersEnviosRef.current).forEach(function(k){
+      markersEnviosRef.current[k].setMap(pinsVisible?map:null);
+    });
+  },[pinsVisible,mapaListo]);
 
   // Actualizar color de markers existentes cuando cambia estado (sin re-geocodificar)
   React.useEffect(function(){
