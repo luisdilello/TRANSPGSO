@@ -7434,7 +7434,7 @@ function MapaRutas(props){
     Object.keys(markersEnviosRef.current).forEach(function(k){markersEnviosRef.current[k].setMap(null);});
     markersEnviosRef.current={};
 
-    if(!pinsVisible){markersEnviosRef.current.forEach(function(m){m.setMap(null);});markersEnviosRef.current=[];return;}
+    if(!pinsVisible){Object.keys(markersEnviosRef.current).forEach(function(k){markersEnviosRef.current[k].setMap(null);});markersEnviosRef.current={};return;}
     var hoy=new Date().toISOString().slice(0,10);
     var conDir=envios.filter(function(e){return e.direccion&&e.comuna;});
     var enviosPin;
