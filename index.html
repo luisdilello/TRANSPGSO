@@ -7384,7 +7384,13 @@ function MapaRutas(props){
   var toastFn=props.toast;
   var db=props.db;
   var envios=props.envios||[];
-  var markersEnviosRef=React.useRef([]);
+  var markersEnviosRef=React.useRef({}); // {codigo: marker}
+  function colorEstado(estado){
+    if(estado==='entregado') return '#2e7d4f';
+    if(estado==='cancelado'||estado==='siniestro') return '#b03030';
+    if(estado==='en_ruta') return '#1976d2';
+    return '#C8A84B';
+  }
   var markersMensajerosRef=React.useRef({});
   var geocoderRef=React.useRef(null);
   var _ml=React.useState(false);var mapaListo=_ml[0];var setMapaListo=_ml[1];
@@ -7416,8 +7422,8 @@ function MapaRutas(props){
     var geocoder=geocoderRef.current;
 
     // Limpiar markers anteriores
-    markersEnviosRef.current.forEach(function(m){m.setMap(null);});
-    markersEnviosRef.current=[];
+    Object.values(markersEnviosRef.current).forEach(function(m){m.setMap(null);});
+    markersEnviosRef.current={};
 
     if(!pinsVisible){markersEnviosRef.current.forEach(function(m){m.setMap(null);});markersEnviosRef.current=[];return;}
     var hoy=new Date().toISOString().slice(0,10);
@@ -7433,8 +7439,8 @@ function MapaRutas(props){
     enviosPin=enviosPin.slice(0,2000);
     console.log('Pins:',enviosPin.length,'filtro:',pinFiltro);
 
-    // Colores por estado
-    function colorEstado(estado){
+    // colorEstado definida en scope externo
+    function colorEstadoLocal(estado){
       if(estado==='entregado') return '#2e7d4f';
       if(estado==='cancelado'||estado==='siniestro') return '#b03030';
       if(estado==='en_ruta') return '#1976d2';
@@ -7459,7 +7465,7 @@ function MapaRutas(props){
           if(status!=='OK') console.warn('Geocoder error:',status,'para:',addr);
           if(status==='OK'&&results[0]){
             var pos=results[0].geometry.location;
-            var color=colorEstado(e.estado);
+            var color=colorEstadoLocal(e.estado);
             var marker=new google.maps.Marker({
               position:pos,
               map:map,
@@ -7484,12 +7490,30 @@ function MapaRutas(props){
                 '</div>'
             });
             marker.addListener('click',function(){iw.open(map,marker);});
-            markersEnviosRef.current.push(marker);
+            markersEnviosRef.current[e.codigo]=marker;
           }
         });
       },i*200); // 200ms entre cada geocodificación para evitar límite
     });
-  },[envios,mapaListo,pinFiltro,pinsVisible]);
+  },[mapaListo,pinFiltro,pinsVisible]); // Solo re-geocodifica al cambiar filtro
+
+  // Actualizar color de markers existentes cuando cambia estado (sin re-geocodificar)
+  React.useEffect(function(){
+    if(!mapaListo) return;
+    envios.forEach(function(e){
+      var marker=markersEnviosRef.current[e.codigo];
+      if(!marker) return;
+      var color=colorEstado(e.estado);
+      marker.setIcon({
+        path:google.maps.SymbolPath.CIRCLE,
+        scale:7,
+        fillColor:color,
+        fillOpacity:0.9,
+        strokeColor:'#fff',
+        strokeWeight:1.5
+      });
+    });
+  },[envios,mapaListo]);
 
   // ── Mensajeros en tiempo real en el mapa ──────────────────
   React.useEffect(function(){
