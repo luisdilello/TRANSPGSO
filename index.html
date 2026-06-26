@@ -7403,9 +7403,12 @@ function MapaRutas(props){
     markersEnviosRef.current.forEach(function(m){m.setMap(null);});
     markersEnviosRef.current=[];
 
-    // Solo envíos del día de hoy con dirección
+    // Envíos con dirección válida - priorizar hoy, luego recientes
     var hoy=new Date().toISOString().slice(0,10);
-    var enviosHoy=envios.filter(function(e){return e.fecha===hoy&&e.direccion&&e.comuna;});
+    var conDir=envios.filter(function(e){return e.direccion&&e.comuna&&e.estado!=='cancelado'&&e.estado!=='siniestro';});
+    var enviosHoy=conDir.filter(function(e){return e.fecha===hoy;});
+    if(enviosHoy.length===0) enviosHoy=conDir.slice(0,150); // fallback: mostrar los más recientes
+    console.log('Pins a geocodificar:',enviosHoy.length,'de',conDir.length,'con dirección');
 
     // Colores por estado
     function colorEstado(estado){
@@ -7430,6 +7433,7 @@ function MapaRutas(props){
         var calleCorta=numIdx>0?partsDir.slice(0,numIdx+1).join(' '):partsDir.slice(0,3).join(' ');
         var addr=calleCorta+', '+com+', Santiago, Chile';
         geocoder.geocode({address:addr,region:'CL'},function(results,status){
+          if(status!=='OK') console.warn('Geocoder error:',status,'para:',addr);
           if(status==='OK'&&results[0]){
             var pos=results[0].geometry.location;
             var color=colorEstado(e.estado);
