@@ -7393,6 +7393,8 @@ function MapaRutas(props){
   var envios=props.envios||[];
   var markersEnviosRef=React.useRef({}); // {codigo: marker}
   var pinFiltroAnteriorRef=React.useRef(null);
+  var pinsVisibleRef=React.useRef(true);
+  React.useEffect(function(){pinsVisibleRef.current=pinsVisible;},[pinsVisible]);
   function colorEstado(estado){
     if(estado==='entregado') return '#2e7d4f';        // verde
     if(estado==='cancelado'||estado==='siniestro') return '#b03030'; // rojo
@@ -7431,6 +7433,8 @@ function MapaRutas(props){
     var map=mapObj.current;
     var geocoder=geocoderRef.current;
 
+    // No geocodificar si está oculto
+    if(!pinsVisibleRef.current) return;
     // Limpiar markers anteriores y re-geocodificar
     Object.keys(markersEnviosRef.current).forEach(function(k){markersEnviosRef.current[k].setMap(null);});
     markersEnviosRef.current={};
