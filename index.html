@@ -3959,13 +3959,11 @@ async function rotarImagenSiVertical(base64img){
 }
 async function analizarEtiqueta(base64img,mediaType,_retry=0){
   try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    const resp=await fetch('https://transpgso-ai.luisdilellopadrino.workers.dev',{
       method:'POST',
       headers:{
         'Content-Type':'application/json',
-        'x-api-key':['sk-ant-api03-Qg30KyL','FoPsYNyk7XihP4zXguo1','w9WRUjikmzYMlEKFonpd','tTO1c21Q5kXOOkIKl4oadU_0ZBDwBK5cXVJnKkQ-dEEgMQAA'].join(''),
-        'anthropic-version':'2023-06-01',
-        'anthropic-dangerous-direct-browser-access':'true'
+        'Content-Type':'application/json'
       },
       body:JSON.stringify({
         model:'claude-haiku-4-5-20251001',
