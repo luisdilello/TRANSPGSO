@@ -7434,7 +7434,13 @@ function MapaRutas(props){
     Object.keys(markersEnviosRef.current).forEach(function(k){markersEnviosRef.current[k].setMap(null);});
     markersEnviosRef.current={};
 
-    if(!pinsVisible){Object.keys(markersEnviosRef.current).forEach(function(k){markersEnviosRef.current[k].setMap(null);});markersEnviosRef.current={};return;}
+    if(!pinsVisible){Object.keys(markersEnviosRef.current).forEach(function(k){markersEnviosRef.current[k].setMap(null);});return;}
+    // Si ya hay markers guardados, solo mostrarlos de nuevo sin re-geocodificar
+    if(Object.keys(markersEnviosRef.current).length>0){
+      var map=mapObj.current;
+      Object.keys(markersEnviosRef.current).forEach(function(k){markersEnviosRef.current[k].setMap(map);});
+      return;
+    }
     var hoy=new Date().toISOString().slice(0,10);
     var conDir=envios.filter(function(e){return e.direccion&&e.comuna;});
     var enviosPin;
