@@ -7394,6 +7394,8 @@ function MapaRutas(props){
   var markersEnviosRef=React.useRef({}); // {codigo: marker}
   var pinFiltroAnteriorRef=React.useRef(null);
   var pinsVisibleRef=React.useRef(true);
+  var geocodTimeoutsRef=React.useRef([]);
+  var geocodSessionRef=React.useRef(0);
   React.useEffect(function(){pinsVisibleRef.current=pinsVisible;},[pinsVisible]);
   function colorEstado(estado){
     if(estado==='entregado') return '#2e7d4f';        // verde
@@ -7433,6 +7435,11 @@ function MapaRutas(props){
     var map=mapObj.current;
     var geocoder=geocoderRef.current;
 
+    // Cancelar geocodificaciones pendientes e invalidar callbacks en curso
+    geocodTimeoutsRef.current.forEach(function(t){clearTimeout(t);});
+    geocodTimeoutsRef.current=[];
+    geocodSessionRef.current++;
+    var thisSession=geocodSessionRef.current;
     // No geocodificar si está oculto
     if(!pinsVisibleRef.current) return;
     // Limpiar markers anteriores y re-geocodificar
@@ -7462,7 +7469,7 @@ function MapaRutas(props){
     // Geocodificar en lotes de 5 con delay para no exceder límite
     var batch=enviosPin;
     batch.forEach(function(e,i){
-      setTimeout(function(){
+      var _tid=setTimeout(function(){
         // Limpiar dirección para mejor geocodificación
         var dir=(e.direccion||'').trim();
         var com=(e.comuna||'').trim();
@@ -7473,7 +7480,9 @@ function MapaRutas(props){
         var numIdx=partsDir.findIndex(function(p){return /^\d+$/.test(p);});
         var calleCorta=numIdx>0?partsDir.slice(0,numIdx+1).join(' '):partsDir.slice(0,3).join(' ');
         var addr=calleCorta+', '+com+', Santiago, Chile';
+        var capturedSession=thisSession;
         geocoder.geocode({address:addr,region:'CL'},function(results,status){
+          if(geocodSessionRef.current!==capturedSession) return; // sesión cancelada
           if(status!=='OK') console.warn('Geocoder error:',status,'para:',addr);
           if(status==='OK'&&results[0]){
             var pos=results[0].geometry.location;
@@ -7505,6 +7514,7 @@ function MapaRutas(props){
             markersEnviosRef.current[e.codigo]=marker;
           }
         });
+      geocodTimeoutsRef.current.push(_tid);
       },i*200); // 200ms entre cada geocodificación para evitar límite
     });
   },[mapaListo,pinFiltro]); // Solo re-geocodifica al cambiar filtro
@@ -7512,6 +7522,12 @@ function MapaRutas(props){
   // Toggle visibilidad pins - useEffect separado para no re-geocodificar
   React.useEffect(function(){
     if(!mapaListo||!mapObj.current) return;
+    if(!pinsVisible){
+      // Cancelar geocodificaciones en curso e invalidar callbacks pendientes
+      geocodTimeoutsRef.current.forEach(function(t){clearTimeout(t);});
+      geocodTimeoutsRef.current=[];
+      geocodSessionRef.current++;
+    }
     var map=mapObj.current;
     Object.keys(markersEnviosRef.current).forEach(function(k){
       markersEnviosRef.current[k].setMap(pinsVisible?map:null);
