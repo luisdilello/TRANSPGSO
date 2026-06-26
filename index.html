@@ -7431,7 +7431,7 @@ function MapaRutas(props){
     var geocoder=geocoderRef.current;
 
     // Limpiar markers anteriores
-    Object.values(markersEnviosRef.current).forEach(function(m){m.setMap(null);});
+    Object.keys(markersEnviosRef.current).forEach(function(k){markersEnviosRef.current[k].setMap(null);});
     markersEnviosRef.current={};
 
     if(!pinsVisible){markersEnviosRef.current.forEach(function(m){m.setMap(null);});markersEnviosRef.current=[];return;}
