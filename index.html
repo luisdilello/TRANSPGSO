@@ -7374,6 +7374,8 @@ function MapaRutas(props){
   var markersMensajerosRef=React.useRef({});
   var geocoderRef=React.useRef(null);
   var _ml=React.useState(false);var mapaListo=_ml[0];var setMapaListo=_ml[1];
+  var _pf=React.useState('hoy');var pinFiltro=_pf[0];var setPinFiltro=_pf[1];
+  var _ps=React.useState(true);var pinsVisible=_ps[0];var setPinsVisible=_ps[1];
 
   var _tab=React.useState('rutas');var mapaTab=_tab[0];var setMapaTab=_tab[1];
   var _track=React.useState([]);var ubicaciones=_track[0];var setUbicaciones=_track[1];
@@ -7403,12 +7405,19 @@ function MapaRutas(props){
     markersEnviosRef.current.forEach(function(m){m.setMap(null);});
     markersEnviosRef.current=[];
 
-    // Envíos con dirección válida - priorizar hoy, luego recientes
+    if(!pinsVisible){markersEnviosRef.current.forEach(function(m){m.setMap(null);});markersEnviosRef.current=[];return;}
     var hoy=new Date().toISOString().slice(0,10);
-    var conDir=envios.filter(function(e){return e.direccion&&e.comuna&&e.estado!=='cancelado'&&e.estado!=='siniestro';});
-    var enviosHoy=conDir.filter(function(e){return e.fecha===hoy;});
-    if(enviosHoy.length===0) enviosHoy=conDir.slice(0,150); // fallback: mostrar los más recientes
-    console.log('Pins a geocodificar:',enviosHoy.length,'de',conDir.length,'con dirección');
+    var conDir=envios.filter(function(e){return e.direccion&&e.comuna;});
+    var enviosPin;
+    if(pinFiltro==='hoy'){
+      enviosPin=conDir.filter(function(e){return e.fecha===hoy;});
+    }else if(pinFiltro==='pendientes'){
+      enviosPin=conDir.filter(function(e){return e.estado!=='entregado'&&e.estado!=='cancelado'&&e.estado!=='siniestro';});
+    }else{
+      enviosPin=conDir;
+    }
+    enviosPin=enviosPin.slice(0,2000);
+    console.log('Pins:',enviosPin.length,'filtro:',pinFiltro);
 
     // Colores por estado
     function colorEstado(estado){
@@ -7419,7 +7428,7 @@ function MapaRutas(props){
     }
 
     // Geocodificar en lotes de 5 con delay para no exceder límite
-    var batch=enviosHoy.slice(0,200); // max 200 pins
+    var batch=enviosPin;
     batch.forEach(function(e,i){
       setTimeout(function(){
         // Limpiar dirección para mejor geocodificación
@@ -7466,7 +7475,7 @@ function MapaRutas(props){
         });
       },i*200); // 200ms entre cada geocodificación para evitar límite
     });
-  },[envios,mapaListo]);
+  },[envios,mapaListo,pinFiltro,pinsVisible]);
 
   // ── Mensajeros en tiempo real en el mapa ──────────────────
   React.useEffect(function(){
@@ -7847,7 +7856,28 @@ function MapaRutas(props){
         })
       )
   ),
-  mapaTab==='rutas'&&React.createElement('div',{style:{display:'flex',flex:1,overflow:'hidden'}},
+  mapaTab==='rutas'&&React.createElement('div',{style:{display:'flex',flexDirection:'column',flex:1,overflow:'hidden'}},
+    // Barra de filtros de pins
+    React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',background:'#1a1d13',borderBottom:'1px solid #3A3D2E',flexShrink:0,flexWrap:'wrap'}},
+      React.createElement('span',{style:{fontSize:11,color:'rgba(200,168,75,0.7)',letterSpacing:1,fontWeight:700}},'📍 PINS:'),
+      ['hoy','pendientes','todos'].map(function(f){
+        return React.createElement('button',{key:f,onClick:function(){setPinFiltro(f);},
+          style:{padding:'4px 12px',borderRadius:6,border:'1px solid '+(pinFiltro===f?'var(--gold)':'rgba(255,255,255,0.1)'),
+          background:pinFiltro===f?'rgba(200,168,75,0.15)':'transparent',
+          color:pinFiltro===f?'var(--gold)':'rgba(255,255,255,0.4)',
+          cursor:'pointer',fontSize:11,fontWeight:pinFiltro===f?700:400,transition:'all 0.15s'}},
+          f==='hoy'?'📅 Hoy':f==='pendientes'?'⏳ Pendientes':'🗂 Todos');
+      }),
+      React.createElement('div',{style:{width:1,height:16,background:'rgba(255,255,255,0.1)',margin:'0 4px'}}),
+      React.createElement('button',{onClick:function(){setPinsVisible(function(v){return !v;});},
+        style:{padding:'4px 12px',borderRadius:6,border:'1px solid '+(pinsVisible?'rgba(200,168,75,0.4)':'rgba(255,255,255,0.1)'),
+        background:pinsVisible?'rgba(200,168,75,0.1)':'transparent',
+        color:pinsVisible?'var(--gold)':'rgba(255,255,255,0.3)',cursor:'pointer',fontSize:11}},
+        pinsVisible?'👁 Ocultar pins':'👁 Mostrar pins'),
+      React.createElement('span',{style:{fontSize:10,color:'rgba(255,255,255,0.25)',marginLeft:'auto'}},
+        envios.filter(function(e){return e.direccion&&e.comuna;}).length,' con dirección')
+    ),
+    React.createElement('div',{style:{display:'flex',flex:1,overflow:'hidden'}},
     // ── SIDEBAR ──────────────────────────────────────────
     React.createElement('div',{style:{width:225,flexShrink:0,background:'#22241a',borderRight:'2px solid #3A3D2E',display:'flex',flexDirection:'column',overflow:'hidden'}},
 
@@ -8040,7 +8070,7 @@ function MapaRutas(props){
         })
       )
     )
-  )  // cierra wrapper rutas
+  ))  // cierra inner flex + wrapper rutas
   );
 }
 </script>
