@@ -1,5 +1,5 @@
-// TransPgso SW v1782440547 - FUERZA NO CACHE
-const APP_VERSION = '1782440547';
+// TransPgso SW v1782480448 - FUERZA NO CACHE
+const APP_VERSION = '1782480448';
 
 self.addEventListener('install', e => {
   console.log('SW v' + APP_VERSION + ' instalando');
