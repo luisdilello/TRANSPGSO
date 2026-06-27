@@ -1,12 +1,11 @@
-// TransPgso SW v1782531162
-const APP_VERSION = '1782531162';
+// TransPgso SW v1782532601
+const APP_VERSION = '1782532601';
 self.addEventListener('install', e => { e.waitUntil(self.skipWaiting()); });
 self.addEventListener('activate', e => {
   e.waitUntil(Promise.all([caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))),self.clients.claim()]));
 });
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  // Solo interceptar requests al mismo origen (GitHub Pages)
   if(url.origin !== self.location.origin) return;
   const esIndex = url.pathname.endsWith('/') || url.pathname.endsWith('/TRANSPGSO/') || url.pathname.endsWith('index.html') || url.pathname.endsWith('TRANSPGSO');
   if(esIndex) {
