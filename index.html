@@ -760,8 +760,6 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
   const filtrados=todos.filter(e=>enPeriodo(e));
   const total=filtrados.length;
   const porEstado={
-    sin_asignar:filtrados.filter(e=>e.estado==='sin_asignar').length,
-    asignado:filtrados.filter(e=>e.estado==='asignado').length,
     en_bodega:filtrados.filter(e=>e.estado==='en_bodega').length,
     en_ruta:filtrados.filter(e=>e.estado==='en_ruta').length,
     entregado:filtrados.filter(e=>e.estado==='entregado').length,
@@ -781,8 +779,8 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
   filtrados.filter(e=>e.mensajero).forEach(e=>{const m=e.mensajero.replace(/,\s*/g,' ');if(!porMen[m])porMen[m]={nombre:m,total:0,entregado:0};porMen[m].total++;if(e.estado==='entregado')porMen[m].entregado++;});
   const top5=Object.values(porMen).sort((a,b)=>b.total-a.total).slice(0,5);
   // ── COLORES ───────────────────────────────────────────────────
-  const ESTADO_COLORS={en_bodega:'#1a6b8a',en_ruta:'#C8A84B',entregado:'#2e7d4f',reprogramado:'#9c27b0',cancelado:'#b03030',siniestro:'#e65100',sin_asignar:'#7a7d6a',asignado:'#b07d10',pendiente_retiro:'#7a7d6a',pendiente_completar:'#c85a00'};
-  const ESTADO_LABELS={sin_asignar:'Sin Asignar',asignado:'Asignado',en_bodega:'En Bodega',en_ruta:'En Ruta',entregado:'Entregado',reprogramado:'Reprogramado',pendiente_retiro:'Pend. Retiro',cancelado:'Cancelado'};
+  const ESTADO_COLORS={en_bodega:'#1a6b8a',en_ruta:'#C8A84B',entregado:'#2e7d4f',reprogramado:'#9c27b0',cancelado:'#b03030',siniestro:'#e65100'};
+  const ESTADO_LABELS={en_bodega:'En Bodega',en_ruta:'En Ruta',entregado:'Entregado',reprogramado:'Reprogramado',cancelado:'Cancelado',siniestro:'Siniestro'};
   const periodos=[{val:'hoy',label:'Hoy'},{val:'semana',label:'Esta semana'},{val:'mes',label:'Mes'},{val:'todos',label:'Todo'},{val:'rango',label:'Rango'}];
   return React.createElement('div',null,
     // ── SELECTOR PERÍODO ──
@@ -811,7 +809,7 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
         React.createElement('div',{className:'panel-title'},'📊 Efectividad del período'),
         [
           {label:'Efectividad Total',val:ef,sub:'entregados / total'},
-          {label:'Efectividad Operativa',val:efOp,sub:'excluye sin_asignar'},
+          {label:'Efectividad Operativa',val:efOp,sub:'excluye en_bodega / en_ruta'},
         ].map(k=>React.createElement('div',{key:k.label,style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}},
           React.createElement('div',null,
             React.createElement('div',{style:{fontSize:13,fontWeight:600,color:'var(--text)'}},k.label),

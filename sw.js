@@ -1,5 +1,5 @@
-// TransPgso SW v1782539056
-const APP_VERSION = '1782539056';
+// TransPgso SW v1782539323
+const APP_VERSION = '1782539323';
 self.addEventListener('install', e => { e.waitUntil(self.skipWaiting()); });
 self.addEventListener('activate', e => {
   e.waitUntil(Promise.all([caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))),self.clients.claim()]));
