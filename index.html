@@ -6377,14 +6377,16 @@ useEffect(function(){
     React.createElement('div',{style:{marginBottom:12}},
       React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)',letterSpacing:1.5,textTransform:'uppercase',marginBottom:10}},'Datos locales'),
       React.createElement('button',{onClick:()=>{
+        if(!window.confirm('¿Limpiar todos los datos locales? (ganancias, retiros, envíos guardados)'))return;
         const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();
-        lsSave('rider_envios_'+primerN,[]);
+        // Borrar TODOS los datos locales del rider
+        Object.keys(localStorage).filter(k=>k.startsWith('transpgso_v2_')).forEach(k=>localStorage.removeItem(k));
         setEnvios([]);
-        setRiderToast('✓ Caché limpiada — recargando desde servidor...');
-        setTimeout(()=>cargarEnvios(),800);
+        setRiderToast('✓ Datos limpiados — recargando...');
+        setTimeout(()=>{cargarEnvios();},800);
         setShowAjustes(false);
       },style:{width:'100%',padding:'14px',borderRadius:10,border:'1.5px solid rgba(200,168,75,0.4)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',fontFamily:'Bebas Neue',fontSize:15,letterSpacing:1,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginBottom:10}},
-        '🗑 Borrar caché local',React.createElement('span',{style:{fontSize:11,fontWeight:400,opacity:0.6,fontFamily:'DM Sans',letterSpacing:0}},'· Recarga desde servidor')
+        '🗑 Limpiar todos mis datos',React.createElement('span',{style:{fontSize:11,fontWeight:400,opacity:0.6,fontFamily:'DM Sans',letterSpacing:0}},'· Ganancias, retiros y caché')
       ),
       React.createElement('button',{onClick:()=>{
         if(!window.confirm('¿Cerrar sesión?'))return;
