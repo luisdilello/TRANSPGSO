@@ -6334,7 +6334,24 @@ useEffect(function(){
           e.comuna&&React.createElement('span',{style:{background:'rgba(200,168,75,0.12)',color:'var(--gold)',padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:700}},e.comuna),
           e.monto>0&&React.createElement('span',{style:{background:'rgba(176,48,48,0.15)',color:'#e88',padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:700}},'💵 COD $'+e.monto.toLocaleString('es-CL')),
           e.telefono&&React.createElement('span',{style:{fontSize:11,color:'rgba(255,255,255,0.4)'}},'📞 '+e.telefono),
-          // Botón entrega masiva para grupos
+          // Botón entrega masiva: solo si es grupo Y tienen dirección real
+          esGrupo&&e.direccion&&e.direccion!=='—'&&React.createElement('button',{
+            onClick:async ev=>{
+              ev.stopPropagation();
+              if(!window.confirm('¿Confirmar entrega de '+grupo.length+' paquetes en '+e.direccion+'?\n\nAsegúrate de haber tomado las fotos correspondientes.'))return;
+              const ts=new Date().toISOString();
+              for(const ge of grupo){
+                try{
+                  await db.from('envios').update({estado:'entregado',updated_at:ts}).eq('codigo',ge.codigo);
+                  sbUpdateEstado(ge.codigo,'entregado','Entrega masiva - misma dirección',usuario.nombre);
+                }catch(err){}
+              }
+              setEnvios(prev=>prev.map(ge=>grupo.find(g=>g.codigo===ge.codigo)?{...ge,estado:'entregado',historial:[...(ge.historial||[]),{fecha:ts,estado:'entregado',nota:'Entrega masiva - misma dirección',usuario:usuario.nombre}]}:ge));
+              playSound('success');
+              toast('✅ '+grupo.length+' paquetes entregados · '+e.direccion);
+            },
+            style:{marginLeft:'auto',padding:'6px 14px',borderRadius:8,border:'none',background:'linear-gradient(135deg,#2e7d4f,#1a5c38)',color:'#fff',fontFamily:'Bebas Neue',fontSize:13,letterSpacing:1,cursor:'pointer'}
+          },'✅ Entregar todos')
         )
       )
     );
