@@ -3854,14 +3854,13 @@ function playSound(type){try{
     o.start(now+start); o.stop(now+start+dur+0.05);
   }
   if(type==='success'){
-    // Acorde dorado: do-mi-sol con shimmer — elegante, corto
-    osc(523,'sine',0,0.5,0.28);       // Do5 - fundamental
-    osc(659,'sine',0,0.5,0.20);       // Mi5 - tercera
-    osc(784,'sine',0,0.45,0.14);      // Sol5 - quinta
-    osc(1047,'triangle',0.05,0.35,0.09); // Do6 - brillo
-    // Shimmer sutil
-    osc(523,'sine',0,0.5,0.06,7);     // ligero detune para riqueza
-    osc(659,'sine',0,0.5,0.05,-5);
+    // Acorde potente DO-MI-SOL-DO — afirmativo y claro
+    osc(523,'triangle',0,0.6,0.5);      // Do5
+    osc(659,'triangle',0,0.6,0.4);      // Mi5
+    osc(784,'triangle',0,0.55,0.35);    // Sol5
+    osc(1047,'sine',0.05,0.45,0.25);    // Do6 brillo
+    osc(262,'sine',0,0.6,0.3);          // Do4 cuerpo bajo
+    osc(523,'sine',0,0.6,0.1,8);        // detune riqueza
   } else if(type==='ruta'){
     // Fanfarria ascendente — 4 notas, dramática y potente
     osc(392,'triangle',0,0.25,0.3);     // Sol4
@@ -3883,14 +3882,17 @@ function playSound(type){try{
     osc(1000,'sine',0.03,0.06,0.2);
     osc(600,'sine',0.07,0.08,0.15);
   } else if(type==='error'){
-    // Doble golpe grave descendente — inconfundible, no molesto
-    osc(220,'sawtooth',0,0.18,0.3);     // La3 golpe 1
-    osc(110,'sine',0,0.18,0.15);        // La2 grave 1
-    osc(185,'sawtooth',0.22,0.22,0.3);  // Fa#3 golpe 2 (más bajo)
-    osc(92,'sine',0.22,0.22,0.15);      // Fa#2 grave 2
-    // Distorsión controlada
-    osc(220,'square',0,0.08,0.08);
-    osc(185,'square',0.22,0.08,0.08);
+    // Buzz fuerte de rechazo — tres pulsos descendentes
+    osc(180,'sawtooth',0,0.15,0.6);
+    osc(150,'sawtooth',0,0.15,0.4);
+    osc(160,'square',0,0.10,0.3);
+    osc(140,'sawtooth',0.18,0.15,0.6);
+    osc(120,'sawtooth',0.18,0.15,0.4);
+    osc(130,'square',0.18,0.10,0.3);
+    osc(100,'sawtooth',0.36,0.20,0.6);
+    osc(80,'sine',0.36,0.20,0.4);
+    // Vibración del dispositivo
+    try{if(navigator.vibrate)navigator.vibrate([80,40,80,40,120]);}catch(ve){}
   }
 }catch(e){}}// ── FLUJO DE ESTADOS Y REGLAS ─────────────────────────────────────
 const ESTADO_FLUJO={
@@ -4294,17 +4296,19 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
         // Esquinas de la mira - cambian color según estado
         ['topleft','topright','bottomleft','bottomright'].map(function(pos){
           var isTop=pos.includes('top'),isLeft=pos.includes('left');
-          var color=scanEstado==='alineando'?'#f0c040':scanEstado==='capturando'?'#4caf84':'rgba(200,168,75,0.8)';
-          var size=scanEstado!=='idle'?30:24;
+          var color=scanEstado==='alineando'?'#ffdd00':scanEstado==='capturando'?'#00ff88':'rgba(200,168,75,0.9)';
+          var glow=scanEstado==='alineando'?'0 0 12px #ffdd00':scanEstado==='capturando'?'0 0 16px #00ff88':'none';
+          var size=scanEstado!=='idle'?36:28;
           return React.createElement('div',{key:pos,style:{
             position:'absolute',
             top:isTop?0:'auto',bottom:isTop?'auto':0,
             left:isLeft?0:'auto',right:isLeft?'auto':0,
             width:size,height:size,
-            borderTop:isTop?'3px solid '+color:'none',
-            borderBottom:isTop?'none':'3px solid '+color,
-            borderLeft:isLeft?'3px solid '+color:'none',
-            borderRight:isLeft?'none':'3px solid '+color,
+            borderTop:isTop?'4px solid '+color:'none',
+            borderBottom:isTop?'none':'4px solid '+color,
+            borderLeft:isLeft?'4px solid '+color:'none',
+            borderRight:isLeft?'none':'4px solid '+color,
+            boxShadow:glow,
             borderRadius:pos==='topleft'?'4px 0 0 0':pos==='topright'?'0 4px 0 0':pos==='bottomleft'?'0 0 0 4px':'0 0 4px 0',
             transition:'all 0.15s'
           }});
@@ -4315,15 +4319,15 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
         React.createElement('div',{style:{
           position:'absolute',bottom:-28,left:0,right:0,textAlign:'center',
           fontSize:11,fontWeight:700,letterSpacing:1.5,
-          color:scanEstado==='alineando'?'#f0c040':scanEstado==='capturando'?'#4caf84':'rgba(255,255,255,0.4)',
+          color:scanEstado==='alineando'?'#ffdd00':scanEstado==='capturando'?'#00ff88':'rgba(255,255,255,0.5)',
           transition:'color 0.2s'
-        }},scanEstado==='alineando'?'⏳ MANTÉN QUIETO...':scanEstado==='capturando'?'📸 TOMANDO FOTO':'APUNTA AL CÓDIGO')
+        }},scanEstado==='alineando'?'⚡ MANTÉN QUIETO...':scanEstado==='capturando'?'📸 CAPTURANDO...':'▶ APUNTA AL CÓDIGO QR')
       )
     ),
     // Último scan
     lastScan&&React.createElement('div',{style:{position:'absolute',bottom:120,left:0,right:0,display:'flex',justifyContent:'center',pointerEvents:'none'}},
-      React.createElement('div',{style:{background:lastScan.duplicado?'rgba(176,48,48,0.9)':lastScan.esperandoFoto?'rgba(200,168,75,0.9)':'rgba(46,125,79,0.9)',padding:'10px 24px',borderRadius:20,fontSize:13,fontWeight:700,fontFamily:'JetBrains Mono',letterSpacing:1,transition:'background 0.3s'}},
-        lastScan.duplicado?'⚠ DUPLICADO: '+lastScan.codigo:lastScan.esperandoFoto?'📸 '+lastScan.codigo+'...':'✓ '+lastScan.codigo
+      React.createElement('div',{style:{background:lastScan.duplicado?'rgba(200,0,0,0.95)':lastScan.esperandoFoto?'rgba(200,168,75,0.95)':'rgba(0,180,80,0.95)',padding:'14px 28px',borderRadius:24,fontSize:15,fontWeight:800,fontFamily:'JetBrains Mono',letterSpacing:1.5,boxShadow:lastScan.duplicado?'0 0 20px rgba(255,0,0,0.6)':lastScan.esperandoFoto?'0 0 20px rgba(200,168,75,0.6)':'0 0 20px rgba(0,255,100,0.5)',border:lastScan.duplicado?'2px solid #ff4444':lastScan.esperandoFoto?'2px solid var(--gold)':'2px solid #00ff88',transition:'all 0.2s'}},
+        lastScan.duplicado?'🚫 YA ESCANEADO':lastScan.esperandoFoto?'📸 '+lastScan.codigo+'...':'✅ '+lastScan.codigo
       )
     ),
     // Bottom bar
