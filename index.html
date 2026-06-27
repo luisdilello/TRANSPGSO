@@ -6249,7 +6249,7 @@ useEffect(function(){
     // Pendientes: siempre visibles | Entregados/cancelados: solo hoy
     const [resPend,resHoy]=await Promise.all([
       db.from('envios').select('codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,fuente,peso,updated_at')
-        .or('estado.eq.en_ruta,estado.eq.reprogramado,estado.eq.en_bodega')
+        .or('estado.eq.en_ruta,estado.eq.reprogramado')
         .ilike('mensajero','%'+primerNombre+'%').order('fecha',{ascending:false}).limit(500),
       db.from('envios').select('codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,fuente,peso,updated_at')
         .eq('fecha',hoy).ilike('mensajero','%'+primerNombre+'%').order('fecha',{ascending:false}).limit(500)
