@@ -7494,6 +7494,7 @@ function MapaRutas(props){
   },[dibujando]);
 
   function mColor(m,idx){return m.color||COL_M[idx%COL_M.length];}
+function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);return r?parseInt(r[1],16)+','+parseInt(r[2],16)+','+parseInt(r[3],16):'200,168,75';}
 
   function getStyle(nombre){
     var esNC=NC_M.includes(nombre);
@@ -7790,32 +7791,34 @@ function MapaRutas(props){
       ),
 
       // Lista mensajeros
-      React.createElement('div',{style:{flex:1,overflowY:'auto',padding:'6px 8px'}},
-        cargando&&React.createElement('div',{style:{padding:10,color:'#C8A84B',fontSize:'.72rem',textAlign:'center'}},'⏳ Cargando...'),
-        React.createElement('div',{style:{fontSize:'.6rem',color:'#666',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:5,padding:'0 2px'}},'Mensajeros'),
+      React.createElement('div',{style:{flex:1,overflowY:'auto',padding:'8px 10px'}},
+        cargando&&React.createElement('div',{style:{padding:10,color:'var(--gold)',fontSize:11,textAlign:'center',letterSpacing:2,fontFamily:'Bebas Neue'}},'Cargando...'),
+        React.createElement('div',{style:{fontSize:9,color:'rgba(200,168,75,0.5)',textTransform:'uppercase',letterSpacing:3,marginBottom:8,fontFamily:'Bebas Neue',fontSize:11,borderBottom:'1px solid rgba(200,168,75,0.1)',paddingBottom:6}},'Mensajeros activos'),
         mensajeros.length===0
-          ?React.createElement('div',{style:{padding:10,color:'#555',fontSize:'.75rem',textAlign:'center'}},'Sin mensajeros registrados')
-          :mensajeros.map(function(m,idx){
+          ?React.createElement('div',{style:{padding:10,color:'rgba(255,255,255,0.3)',fontSize:11,textAlign:'center'}},'Sin mensajeros')
+          :mensajeros.filter(function(m){return m.activo!==false;}).map(function(m,idx){
             var isAct=activoId===m.id;
             var cnt=Object.values(asig).filter(function(v){return v===m.id;}).length;
             var zCnt=zonas.filter(function(z){return z.mensajero_id===m.id;}).length;
             var mc=mColor(m,idx);
             return React.createElement('div',{key:m.id,
               onClick:function(){if(!dibujando){setActivoId(isAct?null:m.id);setPanelComuna(null);}},
-              style:{display:'flex',alignItems:'center',gap:7,padding:'5px 7px',borderRadius:6,cursor:'pointer',marginBottom:2,
-                border:isAct?'1px solid #C8A84B':'1px solid transparent',
-                background:isAct?'#3a3d2e':'transparent'}
+              style:{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:10,cursor:'pointer',marginBottom:4,
+                border:isAct?'1px solid '+mc:'1px solid rgba(255,255,255,0.04)',
+                background:isAct?'rgba('+hexToRgb(mc)+',0.12)':'rgba(255,255,255,0.02)',
+                boxShadow:isAct?'0 0 12px rgba('+hexToRgb(mc)+',0.25),inset 0 1px 0 rgba(255,255,255,0.05)':'none',
+                transition:'all 0.2s'}
             },
-              React.createElement('div',{style:{width:10,height:10,borderRadius:'50%',background:mc,flexShrink:0}}),
-              React.createElement('span',{style:{flex:1,fontSize:'.77rem',fontWeight:500,color:'#FEF8EA',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},m.nombre),
-              cnt>0&&React.createElement('span',{style:{fontSize:'.58rem',color:'#C8A84B',background:'rgba(200,168,75,.15)',padding:'1px 4px',borderRadius:8}},cnt+'c'),
-              zCnt>0&&React.createElement('span',{style:{fontSize:'.58rem',color:'#F39C12',background:'rgba(243,156,18,.12)',padding:'1px 4px',borderRadius:8,marginLeft:2}},zCnt+'z')
+              React.createElement('div',{style:{width:10,height:10,borderRadius:'50%',background:mc,flexShrink:0,boxShadow:'0 0 6px '+mc}}),
+              React.createElement('span',{style:{flex:1,fontSize:11,fontWeight:isAct?700:500,color:isAct?'#fff':'rgba(255,255,255,0.7)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:0.5}},m.nombre),
+              cnt>0&&React.createElement('span',{style:{fontSize:9,color:mc,background:'rgba('+hexToRgb(mc)+',0.15)',border:'1px solid rgba('+hexToRgb(mc)+',0.3)',padding:'2px 6px',borderRadius:10,fontFamily:'JetBrains Mono',fontWeight:700}},cnt),
+              zCnt>0&&React.createElement('span',{style:{fontSize:9,color:'#F39C12',background:'rgba(243,156,18,0.12)',border:'1px solid rgba(243,156,18,0.25)',padding:'2px 6px',borderRadius:10,fontFamily:'JetBrains Mono'}},zCnt+'z')
             );
           }),
 
         // Zonas guardadas
         zonas.length>0&&React.createElement(React.Fragment,null,
-          React.createElement('div',{style:{fontSize:'.6rem',color:'#F39C12',textTransform:'uppercase',letterSpacing:'.08em',marginTop:10,marginBottom:5,padding:'0 2px'}},'Zonas delimitadas'),
+          React.createElement('div',{style:{fontSize:9,color:'rgba(243,156,18,0.6)',textTransform:'uppercase',letterSpacing:3,marginTop:12,marginBottom:6,fontFamily:'Bebas Neue',fontSize:11,borderBottom:'1px solid rgba(243,156,18,0.15)',paddingBottom:4}},'Zonas delimitadas'),
           zonas.map(function(zona){
             var m=mensajeros.find(function(x){return x.id===zona.mensajero_id;});
             return React.createElement('div',{key:zona.id,style:{display:'flex',alignItems:'center',gap:5,marginBottom:3,padding:'3px 4px',borderRadius:4,background:'rgba(243,156,18,.05)'}},
@@ -7838,17 +7841,16 @@ function MapaRutas(props){
           onChange:function(e){setOp(+e.target.value/100);}
         }),
         React.createElement('button',{onClick:exportarMapa,
-          style:{width:'100%',background:'transparent',border:'1px solid #3A3D2E',color:'#b0a87a',padding:'5px',borderRadius:5,fontSize:'.68rem',cursor:'pointer',marginBottom:4}
+          style:{width:'100%',background:'linear-gradient(145deg,#2b2e20,#222518)',border:'1px solid rgba(200,168,75,0.25)',color:'var(--gold)',padding:'8px',borderRadius:8,fontSize:10,cursor:'pointer',marginBottom:6,fontFamily:'Bebas Neue',letterSpacing:2,boxShadow:'2px 2px 6px rgba(0,0,0,0.3)'}
         },'Exportar rutas'),
         React.createElement('button',{
           onClick:function(){
             if(!confirm('¿Limpiar asignaciones de comunas?'))return;
-            // Limpiar en Supabase
             Object.keys(asig).forEach(function(c){guardarAsignacion(c,null);});
             setAsig({});setActivoId(null);
           },
-          style:{width:'100%',background:'transparent',border:'1px solid #5a2020',color:'#ff8a80',padding:'5px',borderRadius:5,fontSize:'.68rem',cursor:'pointer'}
-        },'🗑 Limpiar comunas')
+          style:{width:'100%',background:'linear-gradient(145deg,rgba(176,48,48,0.15),rgba(176,48,48,0.08))',border:'1px solid rgba(176,48,48,0.3)',color:'#ff8a80',padding:'8px',borderRadius:8,fontSize:10,cursor:'pointer',fontFamily:'Bebas Neue',letterSpacing:2,boxShadow:'2px 2px 6px rgba(0,0,0,0.3)'}
+        },'Limpiar comunas')
       )
     ),
 
@@ -7931,13 +7933,23 @@ function MapaRutas(props){
 
       // Leyenda
       mensajeros.length>0&&React.createElement('div',{style:{position:'absolute',bottom:30,right:10,
-        background:'rgba(34,36,26,.95)',border:'1px solid #3A3D2E',borderRadius:8,
-        padding:'8px 12px',fontSize:'.68rem',zIndex:100,maxWidth:160}},
-        React.createElement('div',{style:{color:'#C8A84B',fontWeight:700,textTransform:'uppercase',fontSize:'.62rem',marginBottom:6}},'Referencia'),
-        mensajeros.slice(0,10).map(function(m,i){
-          return React.createElement('div',{key:m.id,style:{display:'flex',alignItems:'center',gap:5,marginBottom:3,color:'#d0c8a0'}},
-            React.createElement('div',{style:{width:9,height:9,borderRadius:'50%',background:mColor(m,i),flexShrink:0}}),
-            React.createElement('span',{style:{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:'.68rem'}},m.nombre)
+        background:'linear-gradient(145deg,rgba(26,29,19,0.97),rgba(34,36,26,0.97))',
+        border:'1px solid rgba(200,168,75,0.25)',borderRadius:12,
+        padding:'12px 14px',zIndex:100,maxWidth:180,
+        boxShadow:'8px 8px 24px rgba(0,0,0,0.5),-2px -2px 8px rgba(255,255,255,0.03)',
+        backdropFilter:'blur(10px)'}},
+        React.createElement('div',{style:{
+          color:'var(--gold)',fontFamily:'Bebas Neue',fontSize:12,letterSpacing:3,
+          marginBottom:10,borderBottom:'1px solid rgba(200,168,75,0.15)',paddingBottom:6,
+          textShadow:'0 0 8px rgba(200,168,75,0.4)'
+        }},'Referencia'),
+        mensajeros.filter(function(m){return m.activo!==false;}).slice(0,10).map(function(m,i){
+          var mc=mColor(m,i);
+          return React.createElement('div',{key:m.id,style:{display:'flex',alignItems:'center',gap:7,marginBottom:5}},
+            React.createElement('div',{style:{width:10,height:10,borderRadius:'50%',background:mc,flexShrink:0,
+              boxShadow:'0 0 6px '+mc+',0 0 12px rgba('+hexToRgb(mc)+',0.3)'}}),
+            React.createElement('span',{style:{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
+              fontSize:10,color:'rgba(255,255,255,0.75)',letterSpacing:0.5}},m.nombre)
           );
         })
       )
