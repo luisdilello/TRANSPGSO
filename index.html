@@ -2855,7 +2855,7 @@ function ImportarPDFColecta(_ref_ipdf){
             }
             if(codigo&&codigo.length>=8)envios.push({
               id:Date.now()+i,codigo,cliente:clientePDF,destinatario,direccion,referencia,comuna,
-              fecha,estado:'en_bodega',mensajero:'',monto:0,nota:referencia||'',
+              fecha:new Date().toISOString().slice(0,10),estado:'en_bodega',mensajero:'',monto:0,nota:referencia||'',
               fuente:'flex',telefono:'',
               historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:'Importado desde PDF Flex'}]
             });
