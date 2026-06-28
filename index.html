@@ -4836,7 +4836,8 @@ function ColectaRider(_ref_cr){
           fecha:new Date().toISOString().slice(0,10),
           monto:0,
           en_un_cambio:false,
-          nota:'Colecta '+turno+' - '+usuario.nombre+(d.destinatario?' · '+d.destinatario:'')
+          nota:'Colecta '+turno+' - '+usuario.nombre+(d.destinatario?' · '+d.destinatario:''),
+          foto_etiqueta:p.foto||null
         });
       }
     }
@@ -4850,6 +4851,7 @@ function ColectaRider(_ref_cr){
         if(dActual.direccion) updateFields.direccion=dActual.direccion;
         if(dActual.telefono) updateFields.telefono=dActual.telefono;
         if(dActual.comuna) updateFields.comuna=dActual.comuna;
+        if(pActual?.foto) updateFields.foto_etiqueta=pActual.foto;
         await db.from('envios').update(updateFields).eq('codigo',cod);
         ok++;
       }catch(e){ err++; }
