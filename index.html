@@ -7732,21 +7732,27 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
   React.createElement('div',{style:{display:'flex',flexDirection:'column',flex:1,overflow:'hidden',visibility:mapaTab==='rutas'?'visible':'hidden',position:mapaTab==='rutas'?'relative':'absolute',pointerEvents:mapaTab==='rutas'?'auto':'none'}},
     // Barra de filtros de pins
     React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,padding:'10px 14px',background:'linear-gradient(135deg,#2b2e20,#222518)',borderBottom:'1px solid rgba(200,168,75,0.2)',flexShrink:0,flexWrap:'wrap',boxShadow:'0 2px 8px rgba(0,0,0,0.2)'}},
-      React.createElement('span',{style:{fontSize:10,color:'rgba(200,168,75,0.8)',letterSpacing:2,fontWeight:700,fontFamily:'Bebas Neue',fontSize:12}},'PINS:'),
+      React.createElement('span',{style:{fontSize:13,color:'var(--gold)',letterSpacing:3,fontFamily:'Bebas Neue',textShadow:'0 0 8px rgba(200,168,75,0.4)'}},'PINS'),
       ['hoy','pendientes','todos'].map(function(f){
+        var isAct=pinFiltro===f;
         return React.createElement('button',{key:f,onClick:function(){setPinFiltro(f);},
-          style:{padding:'4px 12px',borderRadius:6,border:'1px solid '+(pinFiltro===f?'var(--gold)':'rgba(255,255,255,0.1)'),
-          background:pinFiltro===f?'rgba(200,168,75,0.15)':'transparent',
-          color:pinFiltro===f?'var(--gold)':'rgba(255,255,255,0.4)',
-          cursor:'pointer',fontSize:11,fontWeight:pinFiltro===f?700:400,transition:'all 0.15s'}},
-          f==='hoy'?'Hoy':f==='pendientes'?'Pendientes':'Todos');
+          style:{padding:'5px 14px',borderRadius:8,
+          border:'1px solid '+(isAct?'var(--gold)':'rgba(255,255,255,0.08)'),
+          background:isAct?'linear-gradient(145deg,#d4b050,#C8A84B,#a87d2a)':'rgba(255,255,255,0.03)',
+          color:isAct?'#1a1d13':'rgba(255,255,255,0.4)',
+          cursor:'pointer',fontSize:11,fontFamily:'Bebas Neue',letterSpacing:1.5,
+          boxShadow:isAct?'3px 3px 8px rgba(200,168,75,0.3)':'none',
+          transition:'all 0.2s'}},
+          f==='hoy'?'HOY':f==='pendientes'?'PENDIENTES':'TODOS');
       }),
-      React.createElement('div',{style:{width:1,height:16,background:'rgba(255,255,255,0.1)',margin:'0 4px'}}),
+      React.createElement('div',{style:{width:1,height:16,background:'rgba(255,255,255,0.08)',margin:'0 2px'}}),
       React.createElement('button',{onClick:function(){setPinsVisible(function(v){return !v;});},
-        style:{padding:'4px 12px',borderRadius:6,border:'1px solid '+(pinsVisible?'rgba(200,168,75,0.4)':'rgba(255,255,255,0.1)'),
-        background:pinsVisible?'rgba(200,168,75,0.1)':'transparent',
-        color:pinsVisible?'var(--gold)':'rgba(255,255,255,0.3)',cursor:'pointer',fontSize:11}},
-        pinsVisible?'Ocultar pins':'Mostrar pins'),
+        style:{padding:'5px 14px',borderRadius:8,
+        border:'1px solid '+(pinsVisible?'rgba(200,168,75,0.3)':'rgba(255,255,255,0.08)'),
+        background:pinsVisible?'rgba(200,168,75,0.08)':'rgba(255,255,255,0.03)',
+        color:pinsVisible?'var(--gold)':'rgba(255,255,255,0.3)',cursor:'pointer',
+        fontSize:11,fontFamily:'Bebas Neue',letterSpacing:1.5,transition:'all 0.2s'}},
+        pinsVisible?'OCULTAR':'MOSTRAR'),
       React.createElement('span',{style:{fontSize:10,color:'rgba(255,255,255,0.25)',marginLeft:'auto'}},
         envios.filter(function(e){return e.direccion&&e.comuna;}).length,' con dirección')
     ),
@@ -7754,40 +7760,47 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
     // ── SIDEBAR ──────────────────────────────────────────
     React.createElement('div',{style:{width:225,flexShrink:0,background:'linear-gradient(180deg,#2b2e20,#1e2118)',borderRight:'2px solid rgba(200,168,75,0.2)',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'4px 0 12px rgba(0,0,0,0.3)'}},
 
-      React.createElement('div',{style:{padding:'12px 14px',fontSize:10,textTransform:'uppercase',letterSpacing:3,color:'var(--gold)',borderBottom:'1px solid rgba(200,168,75,0.15)',fontWeight:700,fontFamily:'Bebas Neue',fontSize:13,background:'rgba(200,168,75,0.05)',textShadow:'0 0 8px rgba(200,168,75,0.3)'}},'Mapa de Rutas'),
+      React.createElement('div',{style:{padding:'14px 16px',textTransform:'uppercase',letterSpacing:4,color:'var(--gold)',borderBottom:'1px solid rgba(200,168,75,0.2)',fontFamily:'Bebas Neue',fontSize:18,background:'linear-gradient(135deg,rgba(200,168,75,0.08),transparent)',textShadow:'0 0 14px rgba(200,168,75,0.5)',boxShadow:'inset 0 -1px 0 rgba(200,168,75,0.1)'}},'⬡ Mapa de Rutas'),
 
       // Stats
-      React.createElement('div',{style:{display:'flex',gap:5,padding:'7px 8px',borderBottom:'1px solid #3A3D2E'}},
+      React.createElement('div',{style:{display:'flex',gap:6,padding:'10px 10px',borderBottom:'1px solid rgba(200,168,75,0.15)'}},
         [['Comunas',totalAsig],['Zonas',zonas.length],['Libres',52-totalAsig]].map(function(item){
           return React.createElement('div',{key:item[0],style:{flex:1,textAlign:'center',background:'linear-gradient(145deg,rgba(200,168,75,0.12),rgba(200,168,75,0.06))',border:'1px solid rgba(200,168,75,0.2)',borderRadius:8,padding:'6px 2px',boxShadow:'2px 2px 4px rgba(0,0,0,0.2)'}},
-            React.createElement('div',{style:{fontSize:16,fontWeight:800,fontFamily:'Bebas Neue',background:'linear-gradient(135deg,#C8A84B,#e0c060)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}},item[1]),
-            React.createElement('div',{style:{fontSize:8,color:'rgba(200,168,75,0.5)',textTransform:'uppercase',letterSpacing:1}},item[0])
+            React.createElement('div',{style:{fontSize:28,fontFamily:'Bebas Neue',background:'linear-gradient(135deg,#C8A84B,#e0c060,#fff8e0)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text',lineHeight:1,filter:'drop-shadow(0 0 4px rgba(200,168,75,0.4))'}},item[1]),
+            React.createElement('div',{style:{fontSize:9,color:'rgba(200,168,75,0.6)',textTransform:'uppercase',letterSpacing:2,marginTop:3,fontFamily:'Bebas Neue'}},item[0])
           );
         })
       ),
 
       // Hint
-      React.createElement('div',{style:{padding:'6px 10px',fontSize:'.66rem',lineHeight:1.4,borderBottom:'1px solid #3A3D2E',
-        color:dibujando?'#F39C12':activoM?'#5DBB5D':'#888',
-        background:dibujando?'rgba(243,156,18,.1)':activoM?'rgba(93,187,93,.08)':'transparent'}},
-        dibujando?'Dibujando — clic para agregar puntos':
-        activoM?'✅ Clic en cualquier comuna → '+activoM.nombre:'Selecciona un mensajero'
+      React.createElement('div',{style:{padding:'8px 12px',fontSize:11,lineHeight:1.5,borderBottom:'1px solid rgba(200,168,75,0.1)',
+        color:dibujando?'#F39C12':activoM?'#4caf84':'rgba(200,168,75,0.4)',
+        background:dibujando?'rgba(243,156,18,0.08)':activoM?'rgba(76,175,132,0.06)':'transparent',
+        fontFamily:dibujando||activoM?'Bebas Neue':'DM Sans',
+        letterSpacing:dibujando||activoM?1.5:0,
+        fontSize:dibujando||activoM?12:11}},
+        dibujando?'◎ DIBUJANDO — TOCA PARA AGREGAR PUNTOS':
+        activoM?'◉ '+activoM.nombre+' — TOCA UNA COMUNA':'◌ Selecciona un mensajero'
       ),
 
       // Botón dibujar
-      React.createElement('div',{style:{padding:'7px 8px',borderBottom:'1px solid #3A3D2E',display:'flex',flexDirection:'column',gap:5}},
+      React.createElement('div',{style:{padding:'10px 10px',borderBottom:'1px solid rgba(200,168,75,0.15)',display:'flex',flexDirection:'column',gap:6}},
         React.createElement('button',{
           onClick:function(){setDibujando(!dibujando);setActivoId(null);setPanelComuna(null);},
-          style:{width:'100%',padding:'7px',borderRadius:6,border:'none',fontWeight:700,fontSize:'.75rem',cursor:'pointer',
-            background:dibujando?'rgba(243,156,18,.2)':'rgba(200,168,75,.15)',
-            color:dibujando?'#F39C12':'#C8A84B',
-            outline:dibujando?'1px solid #F39C12':'1px solid rgba(200,168,75,.4)'}
-        },dibujando?'✋ Cancelar dibujo':'Dibujar zona'),
+          style:{width:'100%',padding:'11px',borderRadius:10,border:'none',fontWeight:700,fontSize:13,cursor:'pointer',
+            fontFamily:'Bebas Neue',letterSpacing:2,transition:'all 0.2s',
+            background:dibujando?'linear-gradient(145deg,rgba(243,156,18,0.2),rgba(243,156,18,0.08))':'linear-gradient(145deg,#d4b050,#C8A84B,#a87d2a)',
+            color:dibujando?'#F39C12':'#1a1d13',
+            boxShadow:dibujando?'0 0 12px rgba(243,156,18,0.25),inset 0 1px 0 rgba(255,255,255,0.05)':'4px 4px 10px rgba(200,168,75,0.35),-2px -2px 6px rgba(0,0,0,0.2),inset 0 1px 0 rgba(255,255,255,0.25)',
+            outline:dibujando?'1px solid rgba(243,156,18,0.4)':'none'}
+        },dibujando?'✕ CANCELAR DIBUJO':'⬡ DIBUJAR ZONA'),
         dibujando&&React.createElement('button',{
           onClick:cerrarPoligono,
-          style:{width:'100%',padding:'6px',borderRadius:6,border:'none',fontWeight:700,fontSize:'.72rem',cursor:'pointer',
-            background:'#C8A84B',color:'#1a1c0f'}
-        },'✓ Cerrar y guardar zona')
+          style:{width:'100%',padding:'9px',borderRadius:10,border:'1px solid rgba(76,175,132,0.4)',fontWeight:700,fontSize:12,cursor:'pointer',
+            fontFamily:'Bebas Neue',letterSpacing:2,
+            background:'linear-gradient(145deg,#359960,#2e7d4f)',color:'#fff',
+            boxShadow:'3px 3px 8px rgba(46,125,79,0.35),inset 0 1px 0 rgba(255,255,255,0.2)'}
+        },'✓ CERRAR Y GUARDAR')
       ),
 
       // Lista mensajeros
