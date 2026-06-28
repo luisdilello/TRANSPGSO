@@ -2984,6 +2984,8 @@ async function guardarColecta(){
       React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}},
         btnSub('lector','Lector/Scanner'),
         btnSub('historial','Historial'),
+        btnSub('excel','Importar Excel'),
+        btnSub('pdf','Importar PDF'),
         React.createElement('input',{type:'date',value:filtroFecha,onChange:function(e){setFiltroFecha(e.target.value);},style:{padding:'6px 12px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}}),
         React.createElement('select',{value:filtroCliente,onChange:function(e){setFiltroCliente(e.target.value);},style:{padding:'6px 12px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}},
           React.createElement('option',{value:'todos'},'Todos los clientes'),
@@ -3160,6 +3162,45 @@ async function guardarColecta(){
         React.createElement('div',{style:{fontSize:14,fontWeight:600,marginBottom:6}},'Listo para escanear'),
         React.createElement('div',{style:{fontSize:12}},'El cursor está en el campo de escaneo. Usa tu lector o escribe el código.')
       )
+    ),
+    subTab==='excel'&&/*#__PURE__*/React.createElement('div',{className:'panel',style:{maxWidth:700}},
+      /*#__PURE__*/React.createElement('div',{className:'panel-title'},'Importar Excel de Envíos'),
+      /*#__PURE__*/React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginBottom:16}},'Sube el archivo CARGA_PGSO o tu propio Excel. Los envíos se agregan al sistema automáticamente.'),
+      /*#__PURE__*/React.createElement('div',{
+        onDragOver:function(e){e.preventDefault();},
+        onClick:function(){var i=document.getElementById('colecta-excel-inp');if(i)i.click();},
+        style:{border:'2px dashed rgba(200,168,75,0.4)',borderRadius:14,padding:'40px 20px',textAlign:'center',cursor:'pointer',
+          background:'linear-gradient(145deg,rgba(200,168,75,0.05),rgba(200,168,75,0.1))',
+          boxShadow:'inset 2px 2px 8px rgba(43,46,32,0.06)',transition:'all 0.2s'}
+      },
+        /*#__PURE__*/React.createElement('div',{style:{fontSize:40,marginBottom:12}},'⬇'),
+        /*#__PURE__*/React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:2,color:'var(--dark)',marginBottom:6}},'Arrastra tu Excel aquí'),
+        /*#__PURE__*/React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)'}},'o haz clic · Acepta .xlsx, .xls')
+      ),
+      /*#__PURE__*/React.createElement('input',{id:'colecta-excel-inp',type:'file',accept:'.xlsx,.xls,.htm,.html',style:{display:'none'},
+        onChange:function(e){var f=e.target.files[0];if(!f)return;var name=f.name.toLowerCase();
+          if(name.includes('carga_pgso')||name.includes('carga_p'))toast('Procesando archivo del sistema...');
+          else toast('Procesando archivo propio...');
+          e.target.value='';toast('Usa Gestión de Envíos para procesar este archivo');
+        }
+      })
+    ),
+    subTab==='pdf'&&/*#__PURE__*/React.createElement('div',{className:'panel',style:{maxWidth:700}},
+      /*#__PURE__*/React.createElement('div',{className:'panel-title'},'Importar PDF Flex'),
+      /*#__PURE__*/React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginBottom:16}},'Sube el PDF de MercadoLibre Flex. El sistema extrae automáticamente los envíos.'),
+      /*#__PURE__*/React.createElement('div',{
+        onClick:function(){var i=document.getElementById('colecta-pdf-inp');if(i)i.click();},
+        style:{border:'2px dashed rgba(200,168,75,0.4)',borderRadius:14,padding:'40px 20px',textAlign:'center',cursor:'pointer',
+          background:'linear-gradient(145deg,rgba(200,168,75,0.05),rgba(200,168,75,0.1))',
+          boxShadow:'inset 2px 2px 8px rgba(43,46,32,0.06)',transition:'all 0.2s'}
+      },
+        /*#__PURE__*/React.createElement('div',{style:{fontSize:40,marginBottom:12}},'⎙'),
+        /*#__PURE__*/React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:2,color:'var(--dark)',marginBottom:6}},'Arrastra tu PDF aquí'),
+        /*#__PURE__*/React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)'}},'o haz clic · Solo PDFs de MercadoLibre Flex')
+      ),
+      /*#__PURE__*/React.createElement('input',{id:'colecta-pdf-inp',type:'file',accept:'application/pdf',style:{display:'none'},
+        onChange:function(e){var f=e.target.files[0];if(!f)return;toast('Procesando PDF...');e.target.value='';}
+      })
     ),
     subTab==='historial'&&React.createElement('div',null,
       loading?React.createElement('div',{className:'empty-state'},'Cargando...'):
@@ -3465,7 +3506,8 @@ async function cambiarEstado(ids,nuevoEstado,nota){if(nota===void 0){nota='';}co
       const matchQ=!q||(esMultiple
         ?qTerms.some(t=>e.codigo.toLowerCase()===t||e.codigo.toLowerCase().includes(t))
         :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q));const matchEst=filtroEst==='todos'||e.estado===filtroEst;const matchCli=filtroCli==='todos'||e.cliente===filtroCli;const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;return matchQ&&matchEst&&matchCli&&matchMen;});},[envios,search,filtroEst,filtroCli,filtroMen]);const totalPags=Math.max(1,Math.ceil(filtrados.length/PAGE_SIZE));const paginado=filtrados.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);const stats=useMemo(()=>{const s={};ESTADOS_ENVIO.forEach(est=>{s[est.val]=envios.filter(e=>e.estado===est.val).length;});return s;},[envios]);function toggleSelect(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function toggleAll(){const todosIds=new Set(filtrados.map(e=>e.id));if(selected.size===filtrados.length&&filtrados.every(e=>selected.has(e.id)))setSelected(new Set());else setSelected(todosIds);}const fmtFecha=f=>{try{return new Date(f+'T12:00:00').toLocaleDateString('es-CL');}catch(e){return f;}};return/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{className:"section-head",style:{flexWrap:'wrap',gap:10}},/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:12}},/*#__PURE__*/React.createElement("div",{className:"section-title"},"Gesti\xF3n de ",/*#__PURE__*/React.createElement("span",null,"Env\xEDos")),/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:6,background:'rgba(46,125,79,0.1)',border:'1px solid rgba(46,125,79,0.2)',borderRadius:20,padding:'4px 10px'}},/*#__PURE__*/React.createElement("div",{style:{width:8,height:8,borderRadius:'50%',background:'#2e7d4f',animation:'pulse 2s infinite'}}),/*#__PURE__*/React.createElement("span",{style:{fontSize:10,color:'#2e7d4f',fontWeight:700,letterSpacing:1}},"TIEMPO REAL"))),/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:8,flexWrap:'wrap'}},/*#__PURE__*/React.createElement("button",{onClick:sincronizarDesdeSupabase,disabled:sincronizando,className:'btn-futurista btn-f-dark',style:{display:'flex',alignItems:'center',gap:6,opacity:sincronizando?0.7:1}},sincronizando?'↺ Sincronizando...':'↺ Sincronizar Riders'),
-  (()=>{const listaNegraCount=lsLoad('envios_eliminados',[]).length;return/*#__PURE__*/React.createElement("button",{onClick:()=>setShowListaNegra(v=>!v),style:{padding:'8px 14px',borderRadius:8,border:'1px solid '+(listaNegraCount>0?'rgba(176,48,48,0.8)':'rgba(100,100,100,0.4)'),background:showListaNegra?'rgba(176,48,48,0.25)':(listaNegraCount>0?'rgba(176,48,48,0.15)':'rgba(80,80,80,0.12)'),color:'#ffffff',cursor:'pointer',fontWeight:700,fontSize:12,display:'flex',alignItems:'center',gap:6}},"⊘ Lista negra",(listaNegraCount>0&&/*#__PURE__*/React.createElement("span",{style:{background:'rgba(176,48,48,0.3)',borderRadius:10,padding:'1px 7px',fontSize:11}},listaNegraCount)));})(),/*#__PURE__*/React.createElement("button",{onClick:()=>fileRef.current.click(),className:'btn-futurista btn-f-ghost',style:{display:'flex',alignItems:'center',gap:6}},"⬇ Importar Excel"),/*#__PURE__*/React.createElement("input",{ref:fileRef,type:"file",accept:".xlsx,.xls,.htm,.html",style:{display:'none'},onChange:e=>{const f=e.target.files[0];if(!f)return;const name=f.name.toLowerCase();if(name.includes('carga_pgso')||name.includes('carga_p'))importarExcelSistema(f);else importarExcelPropio(f);e.target.value='';}}),/*#__PURE__*/React.createElement("button",{onClick:()=>setShowPDFModal(true),className:'btn-futurista btn-f-ghost'},"⎙ PDF Flex"),/*#__PURE__*/React.createElement("input",{ref:pdfRef,type:"file",accept:"application/pdf",style:{display:'none'},onChange:e=>{const f=e.target.files[0];if(!f)return;importarPDF(f,clientePDF);e.target.value='';}})  ,/*#__PURE__*/React.createElement("button",{onClick:()=>setSubTab('nuevo'),className:'btn-futurista btn-f-gold'},"+ Nuevo Env\xEDo"))),showPDFModal&&/*#__PURE__*/React.createElement(Modal,{title:'📄 Importar PDF Flex',onClose:()=>{setShowPDFModal(false);setPdfPreview(null);setClientePDF('');}},
+  (()=>{const listaNegraCount=lsLoad('envios_eliminados',[]).length;return/*#__PURE__*/React.createElement("button",{onClick:()=>setShowListaNegra(v=>!v),style:{padding:'8px 14px',borderRadius:8,border:'1px solid '+(listaNegraCount>0?'rgba(176,48,48,0.8)':'rgba(100,100,100,0.4)'),background:showListaNegra?'rgba(176,48,48,0.25)':(listaNegraCount>0?'rgba(176,48,48,0.15)':'rgba(80,80,80,0.12)'),color:'#ffffff',cursor:'pointer',fontWeight:700,fontSize:12,display:'flex',alignItems:'center',gap:6}},"⊘ Lista negra",(listaNegraCount>0&&/*#__PURE__*/React.createElement("span",{style:{background:'rgba(176,48,48,0.3)',borderRadius:10,padding:'1px 7px',fontSize:11}},listaNegraCount)));})(),/*#__PURE__*/React.createElement("input",{ref:fileRef,type:"file",accept:".xlsx,.xls,.htm,.html",style:{display:'none'},onChange:e=>{const f=e.target.files[0];if(!f)return;const name=f.name.toLowerCase();if(name.includes('carga_pgso')||name.includes('carga_p'))importarExcelSistema(f);else importarExcelPropio(f);e.target.value='';}}),
+/*#__PURE__*/React.createElement("input",{ref:pdfRef,type:"file",accept:"application/pdf",style:{display:'none'},onChange:e=>{const f=e.target.files[0];if(!f)return;importarPDF(f,clientePDF);e.target.value='';}})  ,/*#__PURE__*/React.createElement("button",{onClick:()=>setSubTab('nuevo'),className:'btn-futurista btn-f-gold'},"+ Nuevo Env\xEDo"))),showPDFModal&&/*#__PURE__*/React.createElement(Modal,{title:'📄 Importar PDF Flex',onClose:()=>{setShowPDFModal(false);setPdfPreview(null);setClientePDF('');}},
   !pdfPreview&&/*#__PURE__*/React.createElement('div',null,
     /*#__PURE__*/React.createElement('div',{className:'form-group'},
       /*#__PURE__*/React.createElement('label',{className:'form-label'},'1. Selecciona el cliente al que corresponde este PDF'),
@@ -6493,16 +6535,38 @@ fotos.filter(Boolean).length>0&&React.createElement("div",{style:{display:'grid'
 
     // Modal detalle envío
     detalle&&React.createElement(Modal,{title:'Envío '+detalle.codigo,onClose:function(){setDetalle(null);}},
+      // Cambiar cliente
+      React.createElement('div',{style:{background:'linear-gradient(145deg,rgba(200,168,75,0.08),rgba(200,168,75,0.04))',border:'1px solid rgba(200,168,75,0.25)',borderRadius:10,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',gap:12}},
+        React.createElement('div',{style:{flex:1}},
+          React.createElement('div',{style:{fontSize:9,color:'rgba(200,168,75,0.7)',letterSpacing:2,textTransform:'uppercase',fontFamily:'Bebas Neue',marginBottom:4}},'Cliente'),
+          React.createElement('select',{
+            value:detalle.cliente||'',
+            onChange:async function(e){
+              var nuevoCliente=e.target.value;
+              setDetalle(function(prev){return{...prev,cliente:nuevoCliente};});
+              setEnvios(function(prev){return prev.map(function(env){return env.codigo===detalle.codigo?{...env,cliente:nuevoCliente}:env;});});
+              await db.from('envios').update({cliente:nuevoCliente}).eq('codigo',detalle.codigo);
+              toast('✓ Cliente actualizado a '+nuevoCliente);
+            },
+            style:{width:'100%',padding:'8px 12px',borderRadius:8,border:'1px solid rgba(200,168,75,0.3)',background:'linear-gradient(145deg,#fff,#fdf6e8)',color:'var(--dark)',fontSize:13,fontWeight:700,fontFamily:'DM Sans',outline:'none',cursor:'pointer'}
+          },
+            React.createElement('option',{value:''},'— Sin cliente —'),
+            clientes.filter(function(c){return c.activo;}).map(function(c){
+              return React.createElement('option',{key:c.id,value:c.nombre},c.nombre);
+            })
+          )
+        ),
+        React.createElement('div',{style:{fontSize:10,color:'rgba(200,168,75,0.5)',textAlign:'right',maxWidth:120,lineHeight:1.4}},'Cambia el cliente asignado a este envío')
+      ),
       React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}},
         [['Código',detalle.codigo],['Destinatario',detalle.destinatario],['Dirección',detalle.direccion],['Comuna',detalle.comuna],['Teléfono',detalle.telefono],['Fecha',detalle.fecha],['Estado',(estadoInfo?estadoInfo(detalle.estado):{label:detalle.estado}).label]].map(function(x){
-          return React.createElement('div',{key:x[0],style:{padding:'8px 12px',background:'var(--cream)',borderRadius:7,border:'1px solid var(--border)'}},
-            React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)',letterSpacing:1.5,textTransform:'uppercase',marginBottom:3}},x[0]),
+          return React.createElement('div',{key:x[0],style:{padding:'8px 12px',background:'linear-gradient(145deg,#fff,#fdf6e8)',borderRadius:8,border:'1px solid rgba(200,168,75,0.1)',boxShadow:'2px 2px 4px rgba(43,46,32,0.06)'}},
+            React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)',letterSpacing:1.5,textTransform:'uppercase',marginBottom:3,fontFamily:'Bebas Neue',fontSize:10}},''+x[0]),
             React.createElement('div',{style:{fontSize:13,fontWeight:600,color:'var(--dark)'}},x[1]||'—')
           );
         })
       ),
       detalle.nota&&React.createElement('div',{className:'obs-box',style:{marginBottom:16}},'',detalle.nota),
-      // Fotos de entrega (solo lectura)
       React.createElement(FotosEntregaConRecarga,{codigo:detalle.codigo,fotoEtiquetaInicial:detalle.foto_etiqueta}),
       React.createElement('div',{className:'modal-actions'},
         React.createElement('button',{className:'btn-secondary',onClick:function(){setDetalle(null);}},'Cerrar')
