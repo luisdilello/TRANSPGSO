@@ -94,15 +94,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--text);
 
 /* STAT CARDS 3D */
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px;}
-.stat-card{background:linear-gradient(145deg,#ffffff,#f0e8d0);border:1px solid rgba(200,168,75,0.2);border-radius:14px;padding:20px;box-shadow:6px 6px 12px rgba(43,46,32,0.14),-3px -3px 8px rgba(255,255,255,0.9),inset 0 1px 0 rgba(255,255,255,0.8);transition:all 0.25s ease;position:relative;overflow:hidden;}
-.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:14px 14px 0 0;background:linear-gradient(90deg,var(--gold),var(--gold-light));}
-.stat-card:hover{transform:translateY(-4px);box-shadow:10px 14px 20px rgba(43,46,32,0.18),-3px -3px 8px rgba(255,255,255,0.9),inset 0 1px 0 rgba(255,255,255,0.8);}
-.stat-label{font-size:10px;color:var(--text-soft);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;}
-.stat-value{font-family:'Bebas Neue';font-size:42px;background:linear-gradient(135deg,#2b2e20,#4a4d3a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;filter:drop-shadow(1px 2px 1px rgba(43,46,32,0.2));}
+.stat-card{background:linear-gradient(145deg,#ffffff,#f5eedc);border:1px solid rgba(200,168,75,0.18);border-radius:16px;padding:22px 20px 18px;box-shadow:8px 8px 16px rgba(43,46,32,0.12),-4px -4px 10px rgba(255,255,255,0.95),inset 0 1px 0 rgba(255,255,255,0.9);transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);position:relative;overflow:hidden;cursor:default;}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;border-radius:16px 16px 0 0;}
+.stat-card::after{content:'';position:absolute;bottom:-20px;right:-20px;width:80px;height:80px;border-radius:50%;opacity:0.06;background:var(--card-accent,#C8A84B);}
+.stat-card:hover{transform:perspective(800px) rotateX(-2deg) translateY(-6px);box-shadow:12px 18px 28px rgba(43,46,32,0.18),-4px -4px 10px rgba(255,255,255,0.95);}
+.stat-label{font-size:9px;color:var(--text-soft);letter-spacing:3px;text-transform:uppercase;margin-bottom:12px;font-weight:700;}
+.stat-value{font-family:'Bebas Neue';font-size:64px;line-height:1;filter:drop-shadow(2px 3px 2px rgba(43,46,32,0.15));}
 .stat-value.gold{background:linear-gradient(135deg,#C8A84B,#e0c060,#a87d2a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
-.stat-value.green{background:linear-gradient(135deg,#2e7d4f,#44b876);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
-.stat-value.red{background:linear-gradient(135deg,#b03030,#e05050);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
-.stat-sub{font-size:11px;color:var(--text-soft);margin-top:6px;font-family:'JetBrains Mono';}
+.stat-value.green{background:linear-gradient(135deg,#2e7d4f,#44b876,#1a5c38);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.stat-value.red{background:linear-gradient(135deg,#b03030,#e05050,#8a1a1a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.stat-value.teal{background:linear-gradient(135deg,#1a6b8a,#2899c4,#0d4a6b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.stat-value.purple{background:linear-gradient(135deg,#9c27b0,#ce93d8,#6a1a7a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.stat-value.orange{background:linear-gradient(135deg,#e65100,#ff8c42,#b03a00);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.stat-sub{font-size:11px;color:var(--text-soft);margin-top:8px;font-family:'JetBrains Mono';letter-spacing:0.5px;}
+.panel{background:linear-gradient(145deg,#ffffff,#fdf6e8);border:1px solid rgba(200,168,75,0.15);border-top:3px solid var(--gold);border-radius:14px;padding:22px;box-shadow:6px 6px 14px rgba(43,46,32,0.1),-2px -2px 8px rgba(255,255,255,0.9);}
+.panel-title{font-family:'Bebas Neue';font-size:18px;color:var(--dark-deep);letter-spacing:2px;margin-bottom:18px;background:linear-gradient(135deg,#2b2e20,#4a4d3a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
 
 /* SECTION */
 .section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
@@ -506,11 +512,14 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
     ),
     // ── KPI CARDS ESTADO ──
     React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12,marginBottom:20}},
-      Object.entries(porEstado).map(([est,cnt])=>React.createElement('div',{key:est,className:'stat-card',style:{borderTop:`3px solid ${ESTADO_COLORS[est]}`,cursor:'default'}},
+      Object.entries(porEstado).map(([est,cnt])=>{
+        var valClass=est==='en_bodega'?'teal':est==='en_ruta'?'gold':est==='entregado'?'green':est==='reprogramado'?'purple':est==='cancelado'?'red':'orange';
+        var accentColor=ESTADO_COLORS[est];
+        return React.createElement('div',{key:est,className:'stat-card',style:{'--card-accent':accentColor,borderTop:`4px solid ${accentColor}`}},
         React.createElement('div',{className:'stat-label'},ESTADO_LABELS[est]),
-        React.createElement('div',{className:'stat-value',style:{color:ESTADO_COLORS[est],fontSize:28}},cnt.toLocaleString('es-CL')),
+        React.createElement('div',{className:`stat-value ${valClass}`},cnt.toLocaleString('es-CL')),
         React.createElement('div',{className:'stat-sub'},total>0?(cnt/total*100).toFixed(1)+'%':'—')
-      ))
+      );})
     ),
     // ── EFECTIVIDAD ──
     React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:20}},
