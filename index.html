@@ -7637,11 +7637,11 @@ function MapaRutas(props){
 
   return React.createElement('div',{style:{display:'flex',flexDirection:'column',height:'calc(100vh - 110px)',minHeight:500}},
   // Tabs Rutas / Tracking
-  React.createElement('div',{style:{display:'flex',gap:4,padding:'8px 12px',background:'#22241a',borderBottom:'2px solid #3A3D2E',flexShrink:0}},
-    React.createElement('button',{onClick:function(){setMapaTab('rutas');},style:{padding:'6px 18px',borderRadius:8,border:'none',background:mapaTab==='rutas'?'var(--gold)':'rgba(255,255,255,0.06)',color:mapaTab==='rutas'?'#1a1d13':'rgba(255,255,255,0.5)',fontWeight:700,cursor:'pointer',fontSize:12,letterSpacing:1}},'RUTAS'),
-    React.createElement('button',{onClick:function(){setMapaTab('tracking');},style:{padding:'6px 18px',borderRadius:8,border:'none',background:mapaTab==='tracking'?'#2e7d4f':'rgba(255,255,255,0.06)',color:mapaTab==='tracking'?'#fff':'rgba(255,255,255,0.5)',fontWeight:700,cursor:'pointer',fontSize:12,letterSpacing:1}},
-      React.createElement('span',{style:{display:'inline-block',width:8,height:8,borderRadius:'50%',background:ubicaciones.length>0?'#4caf84':'rgba(255,255,255,0.3)',marginRight:6,animation:ubicaciones.length>0?'pulse 2s infinite':'none'}}),
-      '📍 TRACKING ('+ubicaciones.length+')')
+  React.createElement('div',{style:{display:'flex',gap:6,padding:'10px 16px',background:'linear-gradient(135deg,#2b2e20,#1a1d13)',borderBottom:'2px solid rgba(200,168,75,0.3)',flexShrink:0,boxShadow:'0 2px 8px rgba(0,0,0,0.3)'}},
+    React.createElement('button',{onClick:function(){setMapaTab('rutas');},style:{padding:'8px 20px',borderRadius:8,border:'1px solid '+(mapaTab==='rutas'?'var(--gold)':'rgba(255,255,255,0.08)'),background:mapaTab==='rutas'?'linear-gradient(145deg,#d4b050,#C8A84B,#a87d2a)':'rgba(255,255,255,0.04)',color:mapaTab==='rutas'?'#1a1d13':'rgba(255,255,255,0.4)',fontWeight:700,cursor:'pointer',fontSize:11,letterSpacing:1.5,fontFamily:'Bebas Neue',boxShadow:mapaTab==='rutas'?'3px 3px 8px rgba(200,168,75,0.3)':'none',transition:'all 0.2s'}},'RUTAS'),
+    React.createElement('button',{onClick:function(){setMapaTab('tracking');},style:{padding:'8px 20px',borderRadius:8,border:'1px solid '+(mapaTab==='tracking'?'#2e7d4f':'rgba(255,255,255,0.08)'),background:mapaTab==='tracking'?'linear-gradient(145deg,#359960,#2e7d4f)':'rgba(255,255,255,0.04)',color:mapaTab==='tracking'?'#fff':'rgba(255,255,255,0.4)',fontWeight:700,cursor:'pointer',fontSize:11,letterSpacing:1.5,fontFamily:'Bebas Neue',display:'flex',alignItems:'center',gap:6,boxShadow:mapaTab==='tracking'?'3px 3px 8px rgba(46,125,79,0.3)':'none',transition:'all 0.2s'}},
+      React.createElement('span',{style:{display:'inline-block',width:8,height:8,borderRadius:'50%',background:ubicaciones.length>0?'#4caf84':'rgba(255,255,255,0.3)',boxShadow:ubicaciones.length>0?'0 0 6px #4caf84':'none',animation:ubicaciones.length>0?'pulse 2s infinite':'none'}}),
+      'TRACKING ('+ubicaciones.length+')')
   ),
   React.createElement('div',{style:{flex:1,overflow:'auto',background:'#1a1d13',padding:16,display:mapaTab==='tracking'?'block':'none'}},
     ubicaciones.length===0
@@ -7650,11 +7650,11 @@ function MapaRutas(props){
         ubicaciones.map(function(u){
           var mins=Math.round((Date.now()-new Date(u.updated_at).getTime())/60000);
           var color=mins<5?'#4caf84':mins<15?'#C8A84B':'#e57373';
-          return React.createElement('div',{key:u.mensajero,style:{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:10,padding:'12px 16px',display:'flex',alignItems:'center',gap:12}},
-            React.createElement('div',{style:{width:40,height:40,borderRadius:'50%',background:'rgba(200,168,75,0.15)',border:'2px solid var(--gold)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}},'🏍'),
+          return React.createElement('div',{key:u.mensajero,style:{background:'linear-gradient(145deg,#252820,#1e2118)',border:'1px solid rgba(200,168,75,0.15)',borderRadius:12,padding:'14px 16px',display:'flex',alignItems:'center',gap:12,boxShadow:'3px 3px 8px rgba(0,0,0,0.3),-1px -1px 4px rgba(255,255,255,0.03)',transition:'all 0.2s'}},
+            React.createElement('div',{style:{width:42,height:42,borderRadius:'50%',background:'linear-gradient(145deg,rgba(200,168,75,0.2),rgba(200,168,75,0.08))',border:'2px solid var(--gold)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0,boxShadow:'0 0 8px rgba(200,168,75,0.2)'}},'◉'),
             React.createElement('div',{style:{flex:1}},
               React.createElement('div',{style:{fontWeight:700,color:'#fff',fontSize:13}},u.mensajero),
-              React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)',marginTop:2}},'📍 '+u.lat.toFixed(5)+', '+u.lng.toFixed(5)),
+              React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)',marginTop:2}},u.lat.toFixed(5)+', '+u.lng.toFixed(5)),
               React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.3)',marginTop:1}},'Precisión: ~'+Math.round(u.accuracy||0)+'m')
             ),
             React.createElement('div',{style:{textAlign:'right'}},
@@ -7667,37 +7667,37 @@ function MapaRutas(props){
   ),
   React.createElement('div',{style:{display:'flex',flexDirection:'column',flex:1,overflow:'hidden',visibility:mapaTab==='rutas'?'visible':'hidden',position:mapaTab==='rutas'?'relative':'absolute',pointerEvents:mapaTab==='rutas'?'auto':'none'}},
     // Barra de filtros de pins
-    React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',background:'#1a1d13',borderBottom:'1px solid #3A3D2E',flexShrink:0,flexWrap:'wrap'}},
-      React.createElement('span',{style:{fontSize:11,color:'rgba(200,168,75,0.7)',letterSpacing:1,fontWeight:700}},'📍 PINS:'),
+    React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,padding:'10px 14px',background:'linear-gradient(135deg,#2b2e20,#222518)',borderBottom:'1px solid rgba(200,168,75,0.2)',flexShrink:0,flexWrap:'wrap',boxShadow:'0 2px 8px rgba(0,0,0,0.2)'}},
+      React.createElement('span',{style:{fontSize:10,color:'rgba(200,168,75,0.8)',letterSpacing:2,fontWeight:700,fontFamily:'Bebas Neue',fontSize:12}},'PINS:'),
       ['hoy','pendientes','todos'].map(function(f){
         return React.createElement('button',{key:f,onClick:function(){setPinFiltro(f);},
           style:{padding:'4px 12px',borderRadius:6,border:'1px solid '+(pinFiltro===f?'var(--gold)':'rgba(255,255,255,0.1)'),
           background:pinFiltro===f?'rgba(200,168,75,0.15)':'transparent',
           color:pinFiltro===f?'var(--gold)':'rgba(255,255,255,0.4)',
           cursor:'pointer',fontSize:11,fontWeight:pinFiltro===f?700:400,transition:'all 0.15s'}},
-          f==='hoy'?'Hoy':f==='pendientes'?'⏳ Pendientes':'🗂 Todos');
+          f==='hoy'?'Hoy':f==='pendientes'?'Pendientes':'Todos');
       }),
       React.createElement('div',{style:{width:1,height:16,background:'rgba(255,255,255,0.1)',margin:'0 4px'}}),
       React.createElement('button',{onClick:function(){setPinsVisible(function(v){return !v;});},
         style:{padding:'4px 12px',borderRadius:6,border:'1px solid '+(pinsVisible?'rgba(200,168,75,0.4)':'rgba(255,255,255,0.1)'),
         background:pinsVisible?'rgba(200,168,75,0.1)':'transparent',
         color:pinsVisible?'var(--gold)':'rgba(255,255,255,0.3)',cursor:'pointer',fontSize:11}},
-        pinsVisible?'👁 Ocultar pins':'👁 Mostrar pins'),
+        pinsVisible?'Ocultar pins':'Mostrar pins'),
       React.createElement('span',{style:{fontSize:10,color:'rgba(255,255,255,0.25)',marginLeft:'auto'}},
         envios.filter(function(e){return e.direccion&&e.comuna;}).length,' con dirección')
     ),
     React.createElement('div',{style:{display:'flex',flex:1,overflow:'hidden'}},
     // ── SIDEBAR ──────────────────────────────────────────
-    React.createElement('div',{style:{width:225,flexShrink:0,background:'#22241a',borderRight:'2px solid #3A3D2E',display:'flex',flexDirection:'column',overflow:'hidden'}},
+    React.createElement('div',{style:{width:225,flexShrink:0,background:'linear-gradient(180deg,#2b2e20,#1e2118)',borderRight:'2px solid rgba(200,168,75,0.2)',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'4px 0 12px rgba(0,0,0,0.3)'}},
 
-      React.createElement('div',{style:{padding:'10px 12px',fontSize:'.68rem',textTransform:'uppercase',letterSpacing:'.1em',color:'#C8A84B',borderBottom:'1px solid #3A3D2E',fontWeight:700}},'Mapa de Rutas'),
+      React.createElement('div',{style:{padding:'12px 14px',fontSize:10,textTransform:'uppercase',letterSpacing:3,color:'var(--gold)',borderBottom:'1px solid rgba(200,168,75,0.15)',fontWeight:700,fontFamily:'Bebas Neue',fontSize:13,background:'rgba(200,168,75,0.05)',textShadow:'0 0 8px rgba(200,168,75,0.3)'}},'Mapa de Rutas'),
 
       // Stats
       React.createElement('div',{style:{display:'flex',gap:5,padding:'7px 8px',borderBottom:'1px solid #3A3D2E'}},
         [['Comunas',totalAsig],['Zonas',zonas.length],['Libres',52-totalAsig]].map(function(item){
-          return React.createElement('div',{key:item[0],style:{flex:1,textAlign:'center',background:'rgba(200,168,75,.1)',borderRadius:5,padding:'4px 0'}},
-            React.createElement('div',{style:{fontSize:'.95rem',fontWeight:800,color:'#C8A84B'}},item[1]),
-            React.createElement('div',{style:{fontSize:'.55rem',color:'#b0a87a',textTransform:'uppercase'}},item[0])
+          return React.createElement('div',{key:item[0],style:{flex:1,textAlign:'center',background:'linear-gradient(145deg,rgba(200,168,75,0.12),rgba(200,168,75,0.06))',border:'1px solid rgba(200,168,75,0.2)',borderRadius:8,padding:'6px 2px',boxShadow:'2px 2px 4px rgba(0,0,0,0.2)'}},
+            React.createElement('div',{style:{fontSize:16,fontWeight:800,fontFamily:'Bebas Neue',background:'linear-gradient(135deg,#C8A84B,#e0c060)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}},item[1]),
+            React.createElement('div',{style:{fontSize:8,color:'rgba(200,168,75,0.5)',textTransform:'uppercase',letterSpacing:1}},item[0])
           );
         })
       ),
