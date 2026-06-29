@@ -2868,8 +2868,29 @@ function ImportarPDFColecta(_ref_ipdf){
         var envios=await parsearPDF(arch.file);
         // Subir a Supabase
         for(var bi=0;bi<envios.length;bi+=BATCH){
-          var lote=envios.slice(bi,bi+BATCH).map(function(env){return{codigo:env.codigo,cliente:env.cliente,destinatario:env.destinatario,telefono:env.telefono,direccion:env.direccion,comuna:env.comuna,referencia:env.referencia||'',fecha:env.fecha,estado:env.estado,mensajero:env.mensajero,monto:env.monto,en_un_cambio:false,nota:env.nota,fuente:env.fuente,foto_etiqueta:env.foto_etiqueta||null};});
-          try{await db.from('envios').upsert(lote,{onConflict:'codigo'});}catch(ue){}
+          // Verificar cuáles ya existen
+          var codigos=envios.slice(bi,bi+BATCH).map(function(env){return env.codigo;});
+          var existentes=new Set();
+          try{var _ex=await db.from('envios').select('codigo').in('codigo',codigos);if(_ex.data)_ex.data.forEach(function(r){existentes.add(r.codigo);});}catch(e){}
+          // Insertar nuevos
+          var nuevos=envios.slice(bi,bi+BATCH).filter(function(env){return!existentes.has(env.codigo);}).map(function(env){return{codigo:env.codigo,cliente:env.cliente,destinatario:env.destinatario,telefono:env.telefono,direccion:env.direccion,comuna:env.comuna,referencia:env.referencia||'',fecha:env.fecha,estado:env.estado,mensajero:env.mensajero,monto:env.monto,en_un_cambio:false,nota:env.nota,fuente:env.fuente,foto_etiqueta:env.foto_etiqueta||null};});
+          if(nuevos.length>0){try{await db.from('envios').insert(nuevos);}catch(ue){}}
+          // Actualizar existentes solo campos vacíos
+          var existentesArr=envios.slice(bi,bi+BATCH).filter(function(env){return existentes.has(env.codigo);});
+          for(var ei=0;ei<existentesArr.length;ei++){
+            var env=existentesArr[ei];
+            try{
+              var _cur=await db.from('envios').select('comuna,destinatario,direccion,foto_etiqueta').eq('codigo',env.codigo).single();
+              if(_cur.data){
+                var upd={};
+                if(!_cur.data.comuna&&env.comuna)upd.comuna=env.comuna;
+                if(!_cur.data.destinatario&&env.destinatario)upd.destinatario=env.destinatario;
+                if(!_cur.data.direccion&&env.direccion)upd.direccion=env.direccion;
+                if(!_cur.data.foto_etiqueta&&env.foto_etiqueta)upd.foto_etiqueta=env.foto_etiqueta;
+                if(Object.keys(upd).length>0)await db.from('envios').update(upd).eq('codigo',env.codigo);
+              }
+            }catch(ue){}
+          }
         }
         totalEnvios+=envios.length;
         var capturedAi=ai;var capturedTotal=envios.length;
