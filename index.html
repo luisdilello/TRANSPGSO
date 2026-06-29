@@ -2860,12 +2860,24 @@ function ImportarPDFColecta(_ref_ipdf){
                 if(esMayus&&c.length>3&&!NO_COMUNA.test(c)&&!/^\d/.test(c)){comuna=c;break;}
               }
             }
-            if(codigo&&codigo.length>=8)envios.push({
-              id:Date.now()+i,codigo,cliente:clientePDF,destinatario,direccion,referencia,comuna,
-              fecha:new Date().toISOString().slice(0,10),estado:'en_bodega',mensajero:'',monto:0,nota:referencia||'',
-              fuente:'flex',telefono:'',
-              historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:'Importado desde PDF Flex'}]
-            });
+            if(codigo&&codigo.length>=8){
+              // Renderizar página como foto de etiqueta
+              var foto_etiqueta=null;
+              try{
+                var vp=page.getViewport({scale:1.5});
+                var cv=document.createElement('canvas');
+                cv.width=vp.width;cv.height=vp.height;
+                await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+                foto_etiqueta=cv.toDataURL('image/jpeg',0.72);
+                cv.width=0;cv.height=0;
+              }catch(re){}
+              envios.push({
+                id:Date.now()+i,codigo,cliente:clientePDF,destinatario,direccion,referencia,comuna,
+                fecha:new Date().toISOString().slice(0,10),estado:'en_bodega',mensajero:'',monto:0,nota:referencia||'',
+                fuente:'flex',telefono:'',foto_etiqueta,
+                historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:'Importado desde PDF Flex'}]
+              });
+            }
           }catch(pe){}
         }
         if(!envios.length){toast('⚠ No se encontraron envíos');setProcesando(false);setProgreso('');return;}
@@ -2877,7 +2889,7 @@ function ImportarPDFColecta(_ref_ipdf){
             telefono:env.telefono,direccion:env.direccion,comuna:env.comuna,
             referencia:env.referencia||'',fecha:env.fecha,estado:env.estado,
             mensajero:env.mensajero,monto:env.monto,en_un_cambio:false,
-            nota:env.nota,fuente:env.fuente
+            nota:env.nota,fuente:env.fuente,foto_etiqueta:env.foto_etiqueta||null
           };});
           try{await db.from('envios').upsert(lote,{onConflict:'codigo'});}catch(ue){}
         }
