@@ -392,9 +392,9 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
     var STORED_VERSION = localStorage.getItem('sw_version');
     
     // Registrar el SW
-    navigator.serviceWorker.register('/TRANSPGSO/sw.js?v=1782744557&t=1782744557', {updateViaCache: 'none'})
+    navigator.serviceWorker.register('/TRANSPGSO/sw.js?v=1782745212&t=1782745212', {updateViaCache: 'none'})
       .then(function(reg){
-        console.log('SW registrado v1782744557');
+        console.log('SW registrado v1782745212');
         
         // Si es versión nueva, activar inmediatamente
         if(reg.waiting){
@@ -5656,15 +5656,17 @@ function GananciasRider(_ref_gr){
 
   useEffect(()=>{
     function cargarTarifa(){
-      const nombre=(usuario.nombre||'').replace(/,\s*/g,' ').trim().toUpperCase();
+      const nombre=(usuario.nombre||'').replace(/,\s*/g,' ').replace(/\s+/g,' ').trim().toUpperCase();
       const primerNombre=nombre.split(' ')[0];
-      // Siempre cargar de Supabase — fuente de verdad para tarifa actualizada
-      db.from('mensajeros').select('tarifa,nombre').eq('activo',true).then(({data})=>{
+      // Cargar todos los mensajeros de Supabase y buscar por nombre
+      db.from('mensajeros').select('tarifa,nombre').then(({data})=>{
+        console.log('[cargarTarifa] nombre rider:',nombre,'primerNombre:',primerNombre,'total mensajeros:',data&&data.length);
         if(data){
           const match=data.find(m=>{
-            const mn=(m.nombre||'').replace(/,\s*/g,' ').trim().toUpperCase();
-            return mn===nombre||mn.startsWith(primerNombre)||nombre.startsWith(mn.split(' ')[0]);
+            const mn=(m.nombre||'').replace(/,\s*/g,' ').replace(/\s+/g,' ').trim().toUpperCase();
+            return mn===nombre||mn.split(' ')[0]===primerNombre;
           });
+          console.log('[cargarTarifa] match:',match);
           if(match&&match.tarifa) setTarifa(match.tarifa);
         }
       }).catch(()=>{
