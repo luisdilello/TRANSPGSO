@@ -2806,105 +2806,86 @@ function ImportarPDFColecta(_ref_ipdf){
   var _s1=useState(''),clientePDF=_s1[0],setClientePDF=_s1[1];
   var _s2=useState(''),progreso=_s2[0],setProgreso=_s2[1];
   var _s3=useState(false),procesando=_s3[0],setProcesando=_s3[1];
-  var _s4=useState(null),preview=_s4[0],setPreview=_s4[1];
+  var _s4=useState([]),archivos=_s4[0],setArchivos=_s4[1]; // lista de {nombre, file, estado, total}
+  var _s5=useState(null),resultado=_s5[0],setResultado=_s5[1];
   var clientesActivos=clientes.filter(function(c){return c.activo;});
   var fileRef=useRef();
 
-  async function procesarPDF(file){
-    if(!file)return;
-    if(!clientePDF){toast('⚠ Selecciona un cliente primero');return;}
-    setProcesando(true);setProgreso('Leyendo PDF...');setPreview(null);
-    var reader=new FileReader();
-    reader.onload=async function(e){
+  function agregarArchivos(files){
+    var arr=Array.from(files).filter(function(f){return f.type==='application/pdf';});
+    setArchivos(function(prev){
+      var existentes=new Set(prev.map(function(a){return a.nombre;}));
+      var nuevos=arr.filter(function(f){return !existentes.has(f.name);}).map(function(f){return{nombre:f.name,file:f,estado:'pendiente',total:0};});
+      return[...prev,...nuevos];
+    });
+  }
+
+  async function parsearPDF(file){
+    var meses={ENE:'01',FEB:'02',MAR:'03',ABR:'04',MAY:'05',JUN:'06',JUL:'07',AGO:'08',SEP:'09',OCT:'10',NOV:'11',DIC:'12'};
+    var NO_COMUNA=/^(RESIDENCIAL|FLEX|ANILLO|DISTRIBUIDOR|PUNTO|Pack|Venta|Envio|Avenida|Recorta|Color|Unidad|Led)/i;
+    var arrayBuffer=await new Promise(function(res,rej){var r=new FileReader();r.onload=function(e){res(e.target.result);};r.onerror=rej;r.readAsArrayBuffer(file);});
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    var pdfDoc=await window.pdfjsLib.getDocument({data:arrayBuffer}).promise;
+    var totalPags=pdfDoc.numPages;
+    var envios=[];
+    for(var i=1;i<=totalPags;i++){
       try{
-        var arrayBuffer=e.target.result;
-        if(!window.pdfjsLib)throw new Error('pdf.js no cargado');
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-        var pdfDoc=await window.pdfjsLib.getDocument({data:arrayBuffer}).promise;
-        var totalPags=pdfDoc.numPages;
-        setProgreso('PDF cargado · '+totalPags+' páginas · Extrayendo...');
-        var envios=[];
-        var meses={ENE:'01',FEB:'02',MAR:'03',ABR:'04',MAY:'05',JUN:'06',JUL:'07',AGO:'08',SEP:'09',OCT:'10',NOV:'11',DIC:'12'};
-        var NO_COMUNA=/^(RESIDENCIAL|FLEX|ANILLO|DISTRIBUIDOR|PUNTO|Pack|Venta|Envio|Avenida|Recorta|Color|Unidad|Led)/i;
-        for(var i=1;i<=totalPags;i++){
-          if(i%10===0)setProgreso('Procesando página '+i+'/'+totalPags+'...');
-          try{
-            var page=await pdfDoc.getPage(i);
-            var tc=await page.getTextContent();
-            var lineas=[],lastY=-1,linea='';
-            tc.items.forEach(function(it){
-              var y=Math.round(it.transform[5]);
-              if(lastY!==-1&&Math.abs(y-lastY)>3){lineas.push(linea.trim());linea='';}
-              linea+=it.str;lastY=y;
-            });
-            if(linea.trim())lineas.push(linea.trim());
-            var codigo='',destinatario='',direccion='',referencia='',comuna='',fecha=new Date().toISOString().slice(0,10),flexIdx=-1;
-            lineas.forEach(function(l,idx){
-              var mCod=l.match(/Envio[:\s]+(\d[\d\s]{5,})/i);
-              if(mCod&&!codigo)codigo=mCod[1].replace(/\s+/g,'');
-              var mFecha=l.match(/(\d{2})\s+(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC)/i);
-              if(mFecha)fecha=new Date().getFullYear()+'-'+(meses[mFecha[2].toUpperCase()]||'01')+'-'+mFecha[1];
-              if(/FLEX/i.test(l)&&/\d{2}\s+(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC)/i.test(l))flexIdx=idx;
-              var mDir=l.match(/^Direcci[oó]n[:\s]+(.+)/i);
-              if(mDir&&!direccion)direccion=mDir[1].trim();
-              var mRef=l.match(/^Referencia[:\s]+(.+)/i);
-              if(mRef){var rv=mRef[1].replace(/^Referencia[:\s]*/i,'').trim();if(rv)referencia=referencia?referencia+' '+rv:rv;}
-              var mDest=l.match(/^Destinatario[:\s]+(.+)/i);
-              if(mDest&&!destinatario)destinatario=mDest[1].replace(/\([^)]*\)/g,'').trim();
-            });
-            if(flexIdx>=0&&!comuna){
-              for(var ci=flexIdx+1;ci<lineas.length&&ci<flexIdx+8;ci++){
-                var c=lineas[ci]?lineas[ci].trim():'';
-                if(!c)continue;
-                var esMayus=c===c.toUpperCase()&&/[A-ZÁÉÍÓÚÑ]/.test(c);
-                if(esMayus&&c.length>3&&!NO_COMUNA.test(c)&&!/^\d/.test(c)){comuna=c;break;}
-              }
-            }
-            if(codigo&&codigo.length>=8){
-              // Renderizar página como foto de etiqueta
-              var foto_etiqueta=null;
-              try{
-                var vp=page.getViewport({scale:1.5});
-                var cv=document.createElement('canvas');
-                cv.width=vp.width;cv.height=vp.height;
-                await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
-                foto_etiqueta=cv.toDataURL('image/jpeg',0.72);
-                cv.width=0;cv.height=0;
-              }catch(re){}
-              envios.push({
-                id:Date.now()+i,codigo,cliente:clientePDF,destinatario,direccion,referencia,comuna,
-                fecha:new Date().toISOString().slice(0,10),estado:'en_bodega',mensajero:'',monto:0,nota:referencia||'',
-                fuente:'flex',telefono:'',foto_etiqueta,
-                historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:'Importado desde PDF Flex'}]
-              });
-            }
-          }catch(pe){}
+        var page=await pdfDoc.getPage(i);
+        var tc=await page.getTextContent();
+        var lineas=[],lastY=-1,linea='';
+        tc.items.forEach(function(it){var y=Math.round(it.transform[5]);if(lastY!==-1&&Math.abs(y-lastY)>3){lineas.push(linea.trim());linea='';}linea+=it.str;lastY=y;});
+        if(linea.trim())lineas.push(linea.trim());
+        var codigo='',destinatario='',direccion='',referencia='',comuna='',flexIdx=-1;
+        lineas.forEach(function(l,idx){
+          var mCod=l.match(/Envio[:\s]+(\d[\d\s]{5,})/i);if(mCod&&!codigo)codigo=mCod[1].replace(/\s+/g,'');
+          if(/FLEX/i.test(l)&&/\d{2}\s+(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC)/i.test(l))flexIdx=idx;
+          var mDir=l.match(/^Direcci[oó]n[:\s]+(.+)/i);if(mDir&&!direccion)direccion=mDir[1].trim();
+          var mRef=l.match(/^Referencia[:\s]+(.+)/i);if(mRef){var rv=mRef[1].replace(/^Referencia[:\s]*/i,'').trim();if(rv)referencia=referencia?referencia+' '+rv:rv;}
+          var mDest=l.match(/^Destinatario[:\s]+(.+)/i);if(mDest&&!destinatario)destinatario=mDest[1].replace(/\([^)]*\)/g,'').trim();
+        });
+        if(flexIdx>=0&&!comuna){for(var ci=flexIdx+1;ci<lineas.length&&ci<flexIdx+8;ci++){var c=lineas[ci]?lineas[ci].trim():'';if(!c)continue;var esMayus=c===c.toUpperCase()&&/[A-ZÁÉÍÓÚÑ]/.test(c);if(esMayus&&c.length>3&&!NO_COMUNA.test(c)&&!/^\d/.test(c)){comuna=c;break;}}}
+        if(codigo&&codigo.length>=8){
+          var foto_etiqueta=null;
+          try{var vp=page.getViewport({scale:1.5});var cv=document.createElement('canvas');cv.width=vp.width;cv.height=vp.height;await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;foto_etiqueta=cv.toDataURL('image/jpeg',0.72);cv.width=0;cv.height=0;}catch(re){}
+          envios.push({codigo,cliente:clientePDF,destinatario,direccion,referencia,comuna,fecha:new Date().toISOString().slice(0,10),estado:'en_bodega',mensajero:'',monto:0,nota:referencia||'',fuente:'flex',telefono:'',foto_etiqueta,historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:'Importado desde PDF Flex'}]});
         }
-        if(!envios.length){toast('⚠ No se encontraron envíos');setProcesando(false);setProgreso('');return;}
+      }catch(pe){}
+    }
+    return envios;
+  }
+
+  async function confirmarCarga(){
+    if(!clientePDF){toast('⚠ Selecciona un cliente primero');return;}
+    if(!archivos.length){toast('⚠ Agrega al menos un PDF');return;}
+    setProcesando(true);
+    var totalEnvios=0;
+    var BATCH=50;
+    for(var ai=0;ai<archivos.length;ai++){
+      var arch=archivos[ai];
+      setProgreso('Procesando '+arch.nombre+' ('+(ai+1)+'/'+archivos.length+')...');
+      setArchivos(function(prev){return prev.map(function(a,idx){return idx===ai?{...a,estado:'procesando'}:a;});});
+      try{
+        var envios=await parsearPDF(arch.file);
         // Subir a Supabase
-        var BATCH=50;
         for(var bi=0;bi<envios.length;bi+=BATCH){
-          var lote=envios.slice(bi,bi+BATCH).map(function(env){return{
-            codigo:env.codigo,cliente:env.cliente,destinatario:env.destinatario,
-            telefono:env.telefono,direccion:env.direccion,comuna:env.comuna,
-            referencia:env.referencia||'',fecha:env.fecha,estado:env.estado,
-            mensajero:env.mensajero,monto:env.monto,en_un_cambio:false,
-            nota:env.nota,fuente:env.fuente,foto_etiqueta:env.foto_etiqueta||null
-          };});
+          var lote=envios.slice(bi,bi+BATCH).map(function(env){return{codigo:env.codigo,cliente:env.cliente,destinatario:env.destinatario,telefono:env.telefono,direccion:env.direccion,comuna:env.comuna,referencia:env.referencia||'',fecha:env.fecha,estado:env.estado,mensajero:env.mensajero,monto:env.monto,en_un_cambio:false,nota:env.nota,fuente:env.fuente,foto_etiqueta:env.foto_etiqueta||null};});
           try{await db.from('envios').upsert(lote,{onConflict:'codigo'});}catch(ue){}
         }
-        setPreview({total:envios.length,cliente:clientePDF});
-        setProgreso('');setProcesando(false);
-        toast('✓ '+envios.length+' envíos importados desde PDF · '+clientePDF);
+        totalEnvios+=envios.length;
+        var capturedAi=ai;var capturedTotal=envios.length;
+        setArchivos(function(prev){return prev.map(function(a,idx){return idx===capturedAi?{...a,estado:'ok',total:capturedTotal}:a;});});
       }catch(err){
-        toast('⚠ Error: '+err.message);
-        setProcesando(false);setProgreso('');
+        var capturedAi2=ai;
+        setArchivos(function(prev){return prev.map(function(a,idx){return idx===capturedAi2?{...a,estado:'error'}:a;});});
       }
-    };
-    reader.readAsArrayBuffer(file);
+    }
+    setResultado({total:totalEnvios,cliente:clientePDF});
+    setProgreso('');setProcesando(false);
+    toast('✓ '+totalEnvios+' envíos importados desde '+archivos.length+' PDFs · '+clientePDF);
   }
 
   return /*#__PURE__*/React.createElement('div',null,
+    // Selector de cliente
     /*#__PURE__*/React.createElement('div',{style:{marginBottom:16}},
       /*#__PURE__*/React.createElement('label',{className:'form-label'},'Cliente *'),
       /*#__PURE__*/React.createElement('select',{className:'form-input',value:clientePDF,onChange:function(e){setClientePDF(e.target.value);}},
@@ -2912,30 +2893,47 @@ function ImportarPDFColecta(_ref_ipdf){
         clientesActivos.map(function(c){return /*#__PURE__*/React.createElement('option',{key:c.id,value:c.nombre},c.nombre);})
       )
     ),
-    preview&&/*#__PURE__*/React.createElement('div',{style:{padding:'12px 16px',background:'rgba(46,125,79,0.1)',border:'1px solid rgba(46,125,79,0.3)',borderRadius:10,marginBottom:16,fontWeight:700,color:'var(--success)'}},
-      '✓ '+preview.total+' envíos importados de '+preview.cliente+' · Recarga Gestión de Envíos para verlos'
-    ),
+    // Zona de drop
     /*#__PURE__*/React.createElement('div',{
       onDragOver:function(e){e.preventDefault();},
-      onDrop:function(e){e.preventDefault();var f=e.dataTransfer.files[0];if(f)procesarPDF(f);},
+      onDrop:function(e){e.preventDefault();agregarArchivos(e.dataTransfer.files);},
       onClick:function(){fileRef.current&&fileRef.current.click();},
-      style:{border:'2px dashed rgba(200,168,75,0.4)',borderRadius:14,padding:'40px 20px',textAlign:'center',cursor:procesando?'wait':'pointer',
-        background:'linear-gradient(145deg,rgba(200,168,75,0.05),rgba(200,168,75,0.1))',transition:'all 0.2s',opacity:procesando?0.7:1}
+      style:{border:'2px dashed rgba(200,168,75,0.4)',borderRadius:14,padding:'28px 20px',textAlign:'center',cursor:'pointer',background:'linear-gradient(145deg,rgba(200,168,75,0.05),rgba(200,168,75,0.1))',transition:'all 0.2s',marginBottom:16}
     },
-      procesando
-        ?/*#__PURE__*/React.createElement('div',null,
-            /*#__PURE__*/React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:16,letterSpacing:2,color:'var(--gold)',marginBottom:6}},progreso||'Procesando...'),
-            /*#__PURE__*/React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)'}},'Por favor espera...')
-          )
-        :/*#__PURE__*/React.createElement('div',null,
-            /*#__PURE__*/React.createElement('div',{style:{fontSize:36,marginBottom:10}},'⎙'),
-            /*#__PURE__*/React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:2,color:'var(--dark)',marginBottom:4}},'ARRASTRA TU PDF AQUÍ'),
-            /*#__PURE__*/React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)'}},'o haz clic · Solo PDFs de MercadoLibre Flex')
-          )
+      /*#__PURE__*/React.createElement('div',{style:{fontSize:32,marginBottom:8}},'⎙'),
+      /*#__PURE__*/React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,color:'var(--dark)',marginBottom:4}},'ARRASTRA TUS PDFs AQUÍ'),
+      /*#__PURE__*/React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)'}},'o haz clic · Puedes agregar varios PDFs a la vez')
     ),
-    /*#__PURE__*/React.createElement('input',{ref:fileRef,type:'file',accept:'application/pdf',style:{display:'none'},
-      onChange:function(e){var f=e.target.files[0];if(f)procesarPDF(f);e.target.value='';}
-    })
+    /*#__PURE__*/React.createElement('input',{ref:fileRef,type:'file',accept:'application/pdf',multiple:true,style:{display:'none'},onChange:function(e){agregarArchivos(e.target.files);e.target.value='';}}),
+    // Lista de archivos agregados
+    archivos.length>0&&/*#__PURE__*/React.createElement('div',{style:{marginBottom:16,border:'1px solid rgba(200,168,75,0.2)',borderRadius:12,overflow:'hidden'}},
+      archivos.map(function(a,idx){
+        var bgColor=a.estado==='ok'?'rgba(46,125,79,0.08)':a.estado==='error'?'rgba(176,48,48,0.08)':a.estado==='procesando'?'rgba(200,168,75,0.08)':'transparent';
+        var icon=a.estado==='ok'?'✓':a.estado==='error'?'✗':a.estado==='procesando'?'⏳':'⎙';
+        var color=a.estado==='ok'?'var(--success)':a.estado==='error'?'var(--danger)':a.estado==='procesando'?'var(--gold)':'var(--text-soft)';
+        return /*#__PURE__*/React.createElement('div',{key:a.nombre,style:{display:'flex',alignItems:'center',gap:12,padding:'10px 14px',background:bgColor,borderBottom:'1px solid rgba(200,168,75,0.1)'}},
+          /*#__PURE__*/React.createElement('span',{style:{fontSize:16,color:color,fontWeight:700,minWidth:20}},icon),
+          /*#__PURE__*/React.createElement('span',{style:{flex:1,fontSize:13,color:'var(--dark)',fontWeight:600}},a.nombre),
+          a.estado==='ok'&&/*#__PURE__*/React.createElement('span',{style:{fontSize:11,color:'var(--success)',fontWeight:700}},a.total+' envíos'),
+          a.estado==='pendiente'&&!procesando&&/*#__PURE__*/React.createElement('button',{onClick:function(){setArchivos(function(prev){return prev.filter(function(_,i){return i!==idx;});});},style:{background:'none',border:'none',cursor:'pointer',color:'var(--text-soft)',fontSize:14,padding:'0 4px'}},'✕')
+        );
+      })
+    ),
+    // Resultado final
+    resultado&&/*#__PURE__*/React.createElement('div',{style:{padding:'12px 16px',background:'rgba(46,125,79,0.1)',border:'1px solid rgba(46,125,79,0.3)',borderRadius:10,marginBottom:16,fontWeight:700,color:'var(--success)'}},
+      '✓ '+resultado.total+' envíos importados de '+resultado.cliente+' · Ve a Gestión de Envíos para verlos'
+    ),
+    // Progreso
+    procesando&&/*#__PURE__*/React.createElement('div',{style:{padding:'10px 14px',background:'rgba(200,168,75,0.08)',borderRadius:8,marginBottom:12,fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--gold)'}},progreso),
+    // Botones
+    /*#__PURE__*/React.createElement('div',{style:{display:'flex',gap:10}},
+      archivos.length>0&&!procesando&&/*#__PURE__*/React.createElement('button',{className:'btn-futurista btn-f-ghost',onClick:function(){setArchivos([]);setResultado(null);}},
+        'Limpiar lista'
+      ),
+      archivos.length>0&&!procesando&&/*#__PURE__*/React.createElement('button',{className:'btn-futurista btn-f-gold',style:{flex:1},onClick:confirmarCarga},
+        '⬇ CONFIRMAR Y CARGAR '+archivos.length+' PDF'+(archivos.length>1?'s':'')
+      )
+    )
   );
 }
 
