@@ -4763,9 +4763,9 @@ function ColectaRider(_ref_cr){
       return{
         codigo:d.codigo,
         cliente:clienteNombre,
-        estado:'en_bodega',
+        estado:'en_ruta',
         fuente:'colecta_galeria_'+turno,
-        mensajero:'',
+        mensajero:normNombre(usuario.nombre),
         destinatario:d.destinatario||'',
         direccion:d.direccion||'',
         telefono:d.telefono||'',
@@ -4868,9 +4868,9 @@ function ColectaRider(_ref_cr){
         inserts.push({
           codigo:p.codigo,
           cliente:clienteNombre,
-          estado:'en_bodega',
+          estado:'en_ruta',
           fuente:'colecta_'+turno,
-          mensajero:'',
+          mensajero:normNombre(usuario.nombre),
           destinatario:d.destinatario||'',
           direccion:d.direccion||'',
           telefono:d.telefono||'',
@@ -4889,7 +4889,7 @@ function ColectaRider(_ref_cr){
       try{
         const pActual=paquetes.find(pp=>pp.codigo===cod);
         const dActual=pActual?.datos||{};
-        const updateFields={estado:'en_bodega',fuente:'colecta_'+turno,actualizado_en:ts};
+        const updateFields={estado:'en_ruta',mensajero:normNombre(usuario.nombre),fuente:'colecta_'+turno,actualizado_en:ts};
         if(dActual.destinatario) updateFields.destinatario=dActual.destinatario;
         if(dActual.direccion) updateFields.direccion=dActual.direccion;
         if(dActual.telefono) updateFields.telefono=dActual.telefono;
