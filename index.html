@@ -5642,27 +5642,26 @@ function GananciasRider(_ref_gr){
     function cargarTarifa(){
       const nombre=usuario.nombre.trim().toUpperCase();
       const primerNombre=nombre.split(' ')[0].split(',')[0];
-      // Buscar en localStorage primero (fuente de verdad)
-      try{
-        const mensajerosLocal=JSON.parse(localStorage.getItem('transpgso_v2_mensajeros')||'[]');
-        if(mensajerosLocal.length>0){
-          const match=mensajerosLocal.find(m=>{
-            const mn=(m.nombre||'').replace(/,\s*/g,' ').trim().toUpperCase();
-            return mn===nombre||mn.includes(primerNombre)||nombre.includes(mn.split(' ')[0]);
-          });
-          if(match&&match.tarifa){setTarifa(match.tarifa);return;}
-        }
-      }catch(e){}
-      // Fallback Supabase
+      // Siempre cargar de Supabase — fuente de verdad para tarifa actualizada
       db.from('mensajeros').select('tarifa,nombre').eq('activo',true).then(({data})=>{
         if(data){
           const match=data.find(m=>{
             const mn=(m.nombre||'').replace(/,\s*/g,' ').trim().toUpperCase();
             return mn===nombre||mn.includes(primerNombre)||nombre.includes(mn.split(' ')[0]);
           });
-          if(match) setTarifa(match.tarifa);
+          if(match&&match.tarifa) setTarifa(match.tarifa);
         }
-      }).catch(()=>{});
+      }).catch(()=>{
+        // Fallback localStorage solo si Supabase falla
+        try{
+          const mensajerosLocal=JSON.parse(localStorage.getItem('transpgso_v2_mensajeros')||'[]');
+          const match=mensajerosLocal.find(m=>{
+            const mn=(m.nombre||'').replace(/,\s*/g,' ').trim().toUpperCase();
+            return mn===nombre||mn.includes(primerNombre)||nombre.includes(mn.split(' ')[0]);
+          });
+          if(match&&match.tarifa) setTarifa(match.tarifa);
+        }catch(e){}
+      });
     }
     cargarTarifa();
   },[]);
@@ -6287,7 +6286,7 @@ useEffect(function(){
     // Marcar como inactivo al salir
     try{db.from('ubicaciones_mensajeros').update({activo:false}).eq('mensajero',usuario.nombre).then(function(){}).catch(function(){});}catch(e){}
   };
-},[]);const ESTADOS_RIDER=[{val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#C8A84B',bg:'rgba(200,168,75,0.15)'},{val:'entregado',label:'Entregado',icon:'✅',color:'#2e7d4f',bg:'rgba(46,125,79,0.15)'},{val:'reprogramado',label:'Reprogramado',icon:'📅',color:'#b07d10',bg:'rgba(176,125,16,0.15)'},{val:'cancelado',label:'Cancelado',icon:'❌',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'siniestro',label:'Siniestro',icon:'⚠️',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'pendiente_retiro',label:'Pend. Retiro',icon:'📦',color:'#7a7d6a',bg:'rgba(122,125,106,0.12)'}];async function cargarEnvios(){setLoading(true);try{const nombreRider=normNombre(usuario.nombre);
+},[]);const ESTADOS_RIDER=[{val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#C8A84B',bg:'rgba(200,168,75,0.15)'},{val:'entregado',label:'Entregado',icon:'✅',color:'#2e7d4f',bg:'rgba(46,125,79,0.15)'},{val:'reprogramado',label:'Reprogramado',icon:'📅',color:'#b07d10',bg:'rgba(176,125,16,0.15)'},{val:'cancelado',label:'Cancelado',icon:'❌',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'siniestro',label:'Siniestro',icon:'⚠️',color:'#b03030',bg:'rgba(176,48,48,0.12)'}];async function cargarEnvios(){setLoading(true);try{const nombreRider=normNombre(usuario.nombre);
     const partes=nombreRider.split(' ');
     const primerNombre=partes[0];
     const apellido=partes[1]||partes[0];
