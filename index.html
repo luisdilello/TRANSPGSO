@@ -3723,17 +3723,18 @@ showListaNegra&&(()=>{const lista=lsLoad('envios_eliminados',[]);return/*#__PURE
 })(),
 /*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:20,overflowX:'auto'}},[{val:'todos',label:'Todos',color:'var(--gold)'},...ESTADOS_ENVIO].map(est=>{const count=est.val==='todos'?envios.length:stats[est.val]||0;const active=filtroEst===est.val;const accentColor=est.color||'var(--gold)';return/*#__PURE__*/React.createElement("div",{key:est.val,onClick:()=>{setFiltroEst(est.val);setPage(1);},style:{
   padding:'16px 18px',borderRadius:14,cursor:'pointer',minWidth:100,textAlign:'center',
-  background:active?'linear-gradient(145deg,#ffffff,#f5eedc)':'linear-gradient(145deg,#fff,#faf3e0)',
-  border:'1px solid '+(active?accentColor:'rgba(200,168,75,0.15)'),
-  borderTop:'4px solid '+(active?accentColor:'rgba(200,168,75,0.1)'),
-  boxShadow:active?'6px 6px 12px rgba(43,46,32,0.14),-3px -3px 8px rgba(255,255,255,0.9),0 0 0 1px '+accentColor+'22':'3px 3px 8px rgba(43,46,32,0.08),-2px -2px 6px rgba(255,255,255,0.9)',
-  transform:active?'translateY(-3px)':'none',
-  transition:'all 0.2s cubic-bezier(0.34,1.56,0.64,1)'}},
-  /*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:36,lineHeight:1,
-    color:active?accentColor:'#2b2e20',
-    filter:active?'drop-shadow(0 0 6px '+accentColor+'66)':'none',
-    transition:'all 0.2s'}},count),
-  /*#__PURE__*/React.createElement("div",{style:{fontSize:9,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:active?accentColor:'var(--text-soft)',marginTop:6}},est.label));})),selected.size>0&&/*#__PURE__*/React.createElement("div",{style:{background:'linear-gradient(145deg,#ffffff,#f5eedc)',border:'1px solid rgba(200,168,75,0.3)',borderTop:'3px solid var(--gold)',borderRadius:14,padding:'16px 20px',marginBottom:16,boxShadow:'6px 6px 16px rgba(43,46,32,0.12),-2px -2px 8px rgba(255,255,255,0.9)'}},
+  background:active?'linear-gradient(145deg,#ffffff,#f0e8d0)':'linear-gradient(145deg,#fff,#faf3e0)',
+  border:'2px solid '+(active?accentColor:'rgba(200,168,75,0.12)'),
+  borderTop:'4px solid '+(active?accentColor:'rgba(200,168,75,0.08)'),
+  boxShadow:active?'8px 8px 16px rgba(43,46,32,0.15),-3px -3px 8px rgba(255,255,255,0.95),0 0 20px '+accentColor+'33':'4px 4px 8px rgba(43,46,32,0.08),-2px -2px 6px rgba(255,255,255,0.9)',
+  transform:active?'perspective(600px) rotateX(-2deg) translateY(-5px)':'perspective(600px) rotateX(0deg)',
+  transition:'all 0.25s cubic-bezier(0.34,1.56,0.64,1)'}},
+  /*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:42,lineHeight:1,
+    color:active?accentColor:'#9a9d8a',
+    textShadow:active?'0 0 12px '+accentColor+'88':'none',
+    filter:active?'drop-shadow(0 2px 2px rgba(43,46,32,0.2))':'none',
+    transition:'all 0.25s'}},count),
+  /*#__PURE__*/React.createElement("div",{style:{fontSize:9,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:active?accentColor:'#b0b3a0',marginTop:8,transition:'all 0.25s'}},est.label));})),selected.size>0&&/*#__PURE__*/React.createElement("div",{style:{background:'linear-gradient(145deg,#ffffff,#f5eedc)',border:'1px solid rgba(200,168,75,0.3)',borderTop:'3px solid var(--gold)',borderRadius:14,padding:'16px 20px',marginBottom:16,boxShadow:'6px 6px 16px rgba(43,46,32,0.12),-2px -2px 8px rgba(255,255,255,0.9)'}},
   // Encabezado
   React.createElement("div",{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}},
     React.createElement("div",{style:{display:'flex',alignItems:'center',gap:8}},
@@ -3745,7 +3746,7 @@ showListaNegra&&(()=>{const lista=lsLoad('envios_eliminados',[]);return/*#__PURE
   // Botones en dos filas
   React.createElement("div",{style:{display:'flex',gap:8,flexWrap:'wrap'}},
     React.createElement("button",{onClick:()=>setAsignarModal(true),className:'btn-futurista btn-f-gold',style:{display:'flex',alignItems:'center',gap:6}},"Asignar mensajero"),
-    ESTADOS_ENVIO.map(est=>React.createElement("button",{key:est.val,onClick:()=>cambiarEstado(selected,est.val),style:{display:'flex',alignItems:'center',gap:5,padding:'8px 14px',borderRadius:8,border:'1.5px solid '+est.color,background:'rgba(0,0,0,0.3)',color:est.color,fontSize:12,fontWeight:700,cursor:'pointer',letterSpacing:0.5}},est.icon||'→',' ',est.label)),
+    ESTADOS_ENVIO.map(est=>React.createElement("button",{key:est.val,onClick:()=>cambiarEstado(selected,est.val),style:{padding:'10px 18px',borderRadius:10,border:'2px solid '+est.color,background:'linear-gradient(145deg,'+est.color+'25,'+est.color+'0a)',color:est.color,fontSize:11,fontWeight:700,cursor:'pointer',letterSpacing:1.5,whiteSpace:'nowrap',fontFamily:'Bebas Neue',boxShadow:'4px 4px 10px '+est.color+'33,-2px -2px 6px rgba(255,255,255,0.9),inset 0 1px 0 rgba(255,255,255,0.3)',transition:'all 0.2s'}},est.icon||'→',' ',est.label)),
     esSuperAdmin&&React.createElement("button",{onClick:eliminarSeleccionados,className:'btn-futurista btn-f-danger',style:{marginLeft:'auto'}},"Eliminar permanente")
   )
 ),/*#__PURE__*/React.createElement("div",{className:"toolbar",style:{marginBottom:12}},/*#__PURE__*/React.createElement("textarea",{className:"search-box",placeholder:"Buscar por código, destinatario, dirección...\nPega múltiples códigos (uno por línea) para búsqueda masiva",value:search,onChange:function(e){setSearch(e.target.value);setPage(1);},rows:search.split("\n").length>1?Math.min(search.split("\n").length,4):1,style:{resize:"vertical",minHeight:38,fontFamily:"inherit",fontSize:13,lineHeight:1.4}}),/*#__PURE__*/React.createElement("select",{className:"filter-btn",style:{background:'#fff'},value:filtroCli,onChange:e=>{setFiltroCli(e.target.value);setPage(1);}},/*#__PURE__*/React.createElement("option",{value:"todos"},"Todos los clientes"),clientesUnicos.map(c=>/*#__PURE__*/React.createElement("option",{key:c,value:c},c))),/*#__PURE__*/React.createElement("select",{className:"filter-btn",style:{background:'#fff'},value:filtroMen,onChange:e=>{setFiltroMen(e.target.value);setPage(1);}},/*#__PURE__*/React.createElement("option",{value:"todos"},"Todos los mensajeros"),mensajerosUnicos.map(m=>/*#__PURE__*/React.createElement("option",{key:m,value:m},m.replace(/,\s*/g,' '))))),envios.length===0&&/*#__PURE__*/React.createElement("div",{className:"info-banner"},"\uD83D\uDCE5 Importa el archivo del sistema (CARGA_PGSO) o un Excel propio. Si tu Excel ya tiene c\xF3digos (ML, Falabella, Shopify) se respetan tal cual. Si no tiene c\xF3digo, se genera uno PGSO autom\xE1ticamente."),filtrados.length>0&&/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginBottom:10,display:'flex',justifyContent:'space-between',alignItems:'center'}},/*#__PURE__*/React.createElement("span",null,/*#__PURE__*/React.createElement("strong",{style:{color:'var(--gold)'}},filtrados.length.toLocaleString('es-CL'))," env\xEDos",filtroEst!=='todos'?` · ${estadoInfo(filtroEst).label}`:''),/*#__PURE__*/React.createElement(ExportBtn,{label:"Exportar",onPDF:()=>{var _document$querySelect10;const logoSrc=((_document$querySelect10=document.querySelector('.logo-img'))==null?void 0:_document$querySelect10.src)||'';const win=window.open('','_blank','width=1000,height=700');const filas=filtrados.slice(0,500).map((e,i)=>`
