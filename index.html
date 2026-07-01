@@ -514,36 +514,32 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
   const _uEx=useState([]),extraEnvios=_uEx[0],setExtraEnvios=_uEx[1];
   const _uExL=useState(false),cargandoExtra=_uExL[0],setCargandoExtra=_uExL[1];
   const hoy=new Date().toISOString().slice(0,10);
-  // El sync global (App) solo trae últimos 8 días. Para Mes/Todo/Rango, traer bajo demanda.
+  // El sync global (App) solo trae últimos 8 días. Para ver más historial, traer todo una sola vez
+  // y filtrar siempre en el cliente (igual que 'todos', que es el único período confirmado funcionando).
   useEffect(()=>{
-    if(!db||(periodo!=='mes'&&periodo!=='todos'&&periodo!=='rango'))return;
+    if(!db||(periodo!=='mes'&&periodo!=='todos'&&periodo!=='rango'&&periodo!=='semana'))return;
+    if(extraEnvios.length>0)return; // ya se cargó una vez, alcanza para todos los períodos
     let cancelado=false;
     async function fetchExtra(){
       setCargandoExtra(true);
       try{
-        let q=db.from('envios').select('codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto').neq('estado','eliminado').order('fecha',{ascending:false}).limit(20000);
-        if(periodo==='mes'){
-          q=q.gte('fecha',(mesFiltro||hoy.slice(0,7))+'-01');
-        }else if(periodo==='rango'&&desde){
-          q=q.gte('fecha',desde);
-          if(hasta)q=q.lte('fecha',hasta);
-        }
-        // 'todos' no filtra fecha
-        const{data,error}=await q;
+        const{data,error}=await db.from('envios').select('codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto').neq('estado','eliminado').order('fecha',{ascending:false}).limit(20000);
+        if(error)console.warn('Dashboard fetch extra error:',error.message);
         if(!cancelado&&!error&&data)setExtraEnvios(data);
       }catch(e){console.warn('Dashboard fetch extra error:',e.message);}
       if(!cancelado)setCargandoExtra(false);
     }
     fetchExtra();
     return()=>{cancelado=true;};
-  },[periodo,mesFiltro,desde,hasta,db]);
+  },[periodo,db]);
   const lunesStr=(()=>{const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));return d.toISOString().slice(0,10);})();
   // Fecha de ingreso al sistema = primera entrada del historial (cuando se creó)
   function fechaIngreso(e){
+    if(e.fecha)return(e.fecha+'').slice(0,10);
     if(e.historial&&e.historial.length>0){
       return(e.historial[0].fecha||'').slice(0,10);
     }
-    return e.fecha||'';
+    return'';
   }
   function enPeriodo(e){
     const fi=fechaIngreso(e);
