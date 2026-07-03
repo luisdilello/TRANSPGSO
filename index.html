@@ -3610,6 +3610,21 @@ function ConteoAyudas(_ref_ay){let mensajeros=_ref_ay.mensajeros,toast=_ref_ay.t
   const _uFC=useState(''),formCodigo=_uFC[0],setFormCodigo=_uFC[1];
   const _uEF=useState(''),exportFrom=_uEF[0],setExportFrom=_uEF[1];
   const _uET=useState(''),exportTo=_uET[0],setExportTo=_uET[1];
+  const _uCV=useState(null),codigoValido=_uCV[0],setCodigoValido=_uCV[1]; // null=sin chequear, true/false
+  const _uCC=useState(false),chequeando=_uCC[0],setChequeando=_uCC[1];
+  useEffect(()=>{
+    if(formCodigo.length!==11){setCodigoValido(null);return;}
+    let cancelado=false;
+    setChequeando(true);
+    (async()=>{
+      try{
+        const{data}=await db.from('envios').select('codigo').eq('codigo',formCodigo).limit(1);
+        if(!cancelado)setCodigoValido(!!(data&&data.length>0));
+      }catch(e){if(!cancelado)setCodigoValido(null);}
+      if(!cancelado)setChequeando(false);
+    })();
+    return()=>{cancelado=true;};
+  },[formCodigo]);
   const weekStart=aydGetWeekStart(weekOffset);
   const weekDays=aydGetWeekDays(weekStart);
   async function cargarDia(fecha){
@@ -3625,11 +3640,12 @@ function ConteoAyudas(_ref_ay){let mensajeros=_ref_ay.mensajeros,toast=_ref_ay.t
   async function addEntry(){
     const codigo=aydSanitizeCodigo(formCodigo);
     if(!formMensajero||codigo.length!==11)return;
+    if(codigoValido!==true){toast('⚠ Ese código no está registrado en Colecta');return;}
     try{
       const{data,error}=await db.from('ayudas').insert({mensajero:formMensajero,codigo,fecha:selectedDay,valor:0}).select();
       if(error){toast('⚠ '+error.message);return;}
       setEntries(prev=>[...prev,...(data||[])]);
-      setFormMensajero('');setFormCodigo('');
+      setFormMensajero('');setFormCodigo('');setCodigoValido(null);
       toast('✓ Ayuda registrada');
     }catch(e){toast('⚠ '+e.message);}
   }
@@ -3683,8 +3699,11 @@ function ConteoAyudas(_ref_ay){let mensajeros=_ref_ay.mensajeros,toast=_ref_ay.t
       /*#__PURE__*/React.createElement("div",{className:"panel-title"},"Registrar ayuda · ",aydFmtDate(new Date(selectedDay+'T00:00:00'))),
       /*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:16}},
         /*#__PURE__*/React.createElement("select",{className:"form-input",style:{minWidth:200},value:formMensajero,onChange:e=>setFormMensajero(e.target.value)},/*#__PURE__*/React.createElement("option",{value:""},"Selecciona mensajero..."),mensajerosActivos.map(m=>/*#__PURE__*/React.createElement("option",{key:m.id,value:m.nombre},m.nombre.replace(/,\s*/g,' ')))),
-        /*#__PURE__*/React.createElement("input",{className:"form-input",style:{flex:1,minWidth:160},placeholder:"Código de la ayuda (11 dígitos)",disabled:!formMensajero,maxLength:11,inputMode:"numeric",value:formCodigo,onChange:e=>setFormCodigo(aydSanitizeCodigo(e.target.value)),onKeyDown:e=>{if(e.key==='Enter')addEntry();}}),
-        /*#__PURE__*/React.createElement("button",{className:"btn-add",disabled:!formMensajero||formCodigo.length!==11,onClick:addEntry,style:{opacity:!formMensajero||formCodigo.length!==11?0.5:1}},"Registrar")
+        /*#__PURE__*/React.createElement("div",{style:{flex:1,minWidth:160}},
+          /*#__PURE__*/React.createElement("input",{className:"form-input",style:{width:'100%',borderColor:codigoValido===false?'var(--danger)':codigoValido===true?'var(--success)':undefined},placeholder:"Código de la ayuda (11 dígitos)",disabled:!formMensajero,maxLength:11,inputMode:"numeric",value:formCodigo,onChange:e=>setFormCodigo(aydSanitizeCodigo(e.target.value)),onKeyDown:e=>{if(e.key==='Enter')addEntry();}}),
+          formCodigo.length===11&&/*#__PURE__*/React.createElement("div",{style:{fontSize:11,marginTop:4,color:chequeando?'var(--text-soft)':codigoValido?'var(--success)':'var(--danger)',fontWeight:600}},chequeando?'Verificando en Colecta...':codigoValido?'✓ Código encontrado en Colecta':'⚠ Código no registrado en Colecta')
+        ),
+        /*#__PURE__*/React.createElement("button",{className:"btn-add",disabled:!formMensajero||formCodigo.length!==11||codigoValido!==true,onClick:addEntry,style:{opacity:!formMensajero||formCodigo.length!==11||codigoValido!==true?0.5:1}},"Registrar")
       ),
       loading?/*#__PURE__*/React.createElement("div",{style:{fontSize:13,color:'var(--text-soft)'}},"Cargando..."):entries.length===0?/*#__PURE__*/React.createElement("div",{className:"info-banner"},"Sin registros para este día todavía."):/*#__PURE__*/React.createElement("div",{className:"table-wrap"},/*#__PURE__*/React.createElement("table",null,
         /*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("th",null,"Mensajero"),/*#__PURE__*/React.createElement("th",null,"Código"),/*#__PURE__*/React.createElement("th",null,"Valor Descuento"),/*#__PURE__*/React.createElement("th",null))),
