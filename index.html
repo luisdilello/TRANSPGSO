@@ -1210,7 +1210,7 @@ const filtrados=mensajeros.filter(m=>m.nombre.toLowerCase().includes(search.toLo
     }catch(e){toast('⚠ '+e.message);}
   }
   setModal(null);
-}function del(id){setMensajeros(prev=>prev.filter(m=>m.id!==id));toast('Mensajero eliminado');setConfirmDel(null);}return/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{className:"section-head"},/*#__PURE__*/React.createElement("div",{className:"section-title"},"Gesti\xF3n ",/*#__PURE__*/React.createElement("span",null,"Mensajeros")),/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:8}},esAdmin&&/*#__PURE__*/React.createElement("button",{className:"btn-secondary",onClick:buscarDuplicados,disabled:buscandoDup},buscandoDup?'Buscando...':'Revisar Duplicados'),/*#__PURE__*/React.createElement("button",{className:"btn-add",onClick:()=>{setForm({nombre:'',tarifa:1800});setModal('add');}},"+ Nuevo"))),/*#__PURE__*/React.createElement("div",{className:"stats-grid",style:{marginBottom:20}},[{label:'Total',val:mensajeros.length,cls:''},{label:'Activos',val:mensajeros.filter(m=>m.activo).length,cls:'green'},{label:'Pausados',val:mensajeros.filter(m=>!m.activo).length,cls:'red'}].map(s=>/*#__PURE__*/React.createElement("div",{key:s.label,className:"stat-card"},/*#__PURE__*/React.createElement("div",{className:"stat-label"},s.label),/*#__PURE__*/React.createElement("div",{className:`stat-value ${s.cls}`},s.val)))),/*#__PURE__*/React.createElement("div",{className:"toolbar"},/*#__PURE__*/React.createElement("input",{className:"search-box",placeholder:"Buscar mensajero...",value:search,onChange:e=>setSearch(e.target.value)}),['todos','activos','pausados'].map(f=>/*#__PURE__*/React.createElement("button",{key:f,className:`filter-btn ${filtro===f?'active':''}`,onClick:()=>setFiltro(f)},f.charAt(0).toUpperCase()+f.slice(1)))),/*#__PURE__*/React.createElement("div",{className:"table-wrap"},/*#__PURE__*/React.createElement("table",null,/*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("th",null,"Mensajero"),esAdmin&&/*#__PURE__*/React.createElement("th",null,"Tarifa"),/*#__PURE__*/React.createElement("th",null,"Hoy: Total"),/*#__PURE__*/React.createElement("th",null,"Hoy: Entregas"),/*#__PURE__*/React.createElement("th",null,"Efectividad"),/*#__PURE__*/React.createElement("th",null,"Estado"),/*#__PURE__*/React.createElement("th",null,"Acciones"))),/*#__PURE__*/React.createElement("tbody",null,filtrados.map(m=>{const s=statsMap[normNombre(m.nombre)];return/*#__PURE__*/React.createElement("tr",{key:m.id,className:m.activo?'':'paused'},/*#__PURE__*/React.createElement("td",{style:{fontWeight:600}},m.nombre,),esAdmin&&/*#__PURE__*/React.createElement("td",{className:"mono"},"$",fmt(m.tarifa)),/*#__PURE__*/React.createElement("td",{className:"mono"},s?s.total:'—'),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)'}},s?s.entregados:'—'),/*#__PURE__*/React.createElement("td",null,s?/*#__PURE__*/React.createElement(KpiBar,{value:s.ef}):/*#__PURE__*/React.createElement("span",{style:{color:'var(--text-soft)',fontSize:12}},"Sin datos")),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement(Badge,{type:m.activo?'active':'paused'},m.activo?'● Activo':'● Pausado')),/*#__PURE__*/React.createElement("td",{style:{display:'flex',gap:5}},/*#__PURE__*/React.createElement("button",{className:"action-btn btn-edit",onClick:()=>{setForm({nombre:m.nombre,tarifa:m.tarifa});setModal(m.id);}},"Editar"),/*#__PURE__*/React.createElement("button",{style:{padding:'4px 10px',borderRadius:6,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',cursor:'pointer',fontSize:11,fontWeight:700},onClick:()=>setDocsMensajero(m)},"\uD83D\uDCC1 Docs"),/*#__PURE__*/React.createElement("button",{className:`action-btn ${m.activo?'btn-pause':'btn-resume'}`,onClick:()=>toggleEstado(m.id)},m.activo?'Pausar':'Activar'),/*#__PURE__*/React.createElement("button",{className:"action-btn btn-delete",onClick:()=>setConfirmDel(m.id)},"\u2715")));}),filtrados.length===0&&/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",{colSpan:7,className:"empty-state"},"Sin resultados"))))),modal&&/*#__PURE__*/React.createElement(Modal,{title:modal==='add'?'Nuevo Mensajero':'Editar Mensajero',onClose:()=>setModal(null)},
+}async function toggleRutaIA(id){const m=mensajeros.find(x=>x.id===id);const nuevo=!m.optimizacionRutaActiva;setMensajeros(prev=>prev.map(x=>x.id===id?{...x,optimizacionRutaActiva:nuevo}:x));toast(`Ruta IA ${nuevo?'activada':'desactivada'} para ${m.nombre}`);try{const nombreActual=(m.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim();const{data:rows}=await db.from('mensajeros').select('id').ilike('nombre','%'+nombreActual.split(' ')[0]+'%');const sbId=rows&&rows.length>0?rows[0].id:id;const{error:errUpd}=await db.from('mensajeros').update({optimizacion_ruta_activa:nuevo}).eq('id',sbId);if(errUpd)toast('⚠ Error guardando: '+errUpd.message);}catch(e){toast('⚠ '+e.message);}}function del(id){setMensajeros(prev=>prev.filter(m=>m.id!==id));toast('Mensajero eliminado');setConfirmDel(null);}return/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{className:"section-head"},/*#__PURE__*/React.createElement("div",{className:"section-title"},"Gesti\xF3n ",/*#__PURE__*/React.createElement("span",null,"Mensajeros")),/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:8}},esAdmin&&/*#__PURE__*/React.createElement("button",{className:"btn-secondary",onClick:buscarDuplicados,disabled:buscandoDup},buscandoDup?'Buscando...':'Revisar Duplicados'),/*#__PURE__*/React.createElement("button",{className:"btn-add",onClick:()=>{setForm({nombre:'',tarifa:1800});setModal('add');}},"+ Nuevo"))),/*#__PURE__*/React.createElement("div",{className:"stats-grid",style:{marginBottom:20}},[{label:'Total',val:mensajeros.length,cls:''},{label:'Activos',val:mensajeros.filter(m=>m.activo).length,cls:'green'},{label:'Pausados',val:mensajeros.filter(m=>!m.activo).length,cls:'red'}].map(s=>/*#__PURE__*/React.createElement("div",{key:s.label,className:"stat-card"},/*#__PURE__*/React.createElement("div",{className:"stat-label"},s.label),/*#__PURE__*/React.createElement("div",{className:`stat-value ${s.cls}`},s.val)))),/*#__PURE__*/React.createElement("div",{className:"toolbar"},/*#__PURE__*/React.createElement("input",{className:"search-box",placeholder:"Buscar mensajero...",value:search,onChange:e=>setSearch(e.target.value)}),['todos','activos','pausados'].map(f=>/*#__PURE__*/React.createElement("button",{key:f,className:`filter-btn ${filtro===f?'active':''}`,onClick:()=>setFiltro(f)},f.charAt(0).toUpperCase()+f.slice(1)))),/*#__PURE__*/React.createElement("div",{className:"table-wrap"},/*#__PURE__*/React.createElement("table",null,/*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("th",null,"Mensajero"),esAdmin&&/*#__PURE__*/React.createElement("th",null,"Tarifa"),/*#__PURE__*/React.createElement("th",null,"Hoy: Total"),/*#__PURE__*/React.createElement("th",null,"Hoy: Entregas"),/*#__PURE__*/React.createElement("th",null,"Efectividad"),/*#__PURE__*/React.createElement("th",null,"Estado"),esAdmin&&/*#__PURE__*/React.createElement("th",null,"Ruta IA"),/*#__PURE__*/React.createElement("th",null,"Acciones"))),/*#__PURE__*/React.createElement("tbody",null,filtrados.map(m=>{const s=statsMap[normNombre(m.nombre)];return/*#__PURE__*/React.createElement("tr",{key:m.id,className:m.activo?'':'paused'},/*#__PURE__*/React.createElement("td",{style:{fontWeight:600}},m.nombre,),esAdmin&&/*#__PURE__*/React.createElement("td",{className:"mono"},"$",fmt(m.tarifa)),/*#__PURE__*/React.createElement("td",{className:"mono"},s?s.total:'—'),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)'}},s?s.entregados:'—'),/*#__PURE__*/React.createElement("td",null,s?/*#__PURE__*/React.createElement(KpiBar,{value:s.ef}):/*#__PURE__*/React.createElement("span",{style:{color:'var(--text-soft)',fontSize:12}},"Sin datos")),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement(Badge,{type:m.activo?'active':'paused'},m.activo?'● Activo':'● Pausado')),esAdmin&&/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("button",{onClick:()=>toggleRutaIA(m.id),title:"Cobrable por mensajero",style:{display:'inline-flex',alignItems:'center',gap:6,padding:'4px 10px',borderRadius:20,border:'1px solid '+(m.optimizacionRutaActiva?'var(--success)':'var(--border)'),background:m.optimizacionRutaActiva?'rgba(46,125,79,0.1)':'#fff',cursor:'pointer',fontSize:11,fontWeight:700,color:m.optimizacionRutaActiva?'var(--success)':'var(--text-soft)'}},m.optimizacionRutaActiva?'● ON':'○ OFF')),/*#__PURE__*/React.createElement("td",{style:{display:'flex',gap:5}},/*#__PURE__*/React.createElement("button",{className:"action-btn btn-edit",onClick:()=>{setForm({nombre:m.nombre,tarifa:m.tarifa});setModal(m.id);}},"Editar"),/*#__PURE__*/React.createElement("button",{style:{padding:'4px 10px',borderRadius:6,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',cursor:'pointer',fontSize:11,fontWeight:700},onClick:()=>setDocsMensajero(m)},"\uD83D\uDCC1 Docs"),/*#__PURE__*/React.createElement("button",{className:`action-btn ${m.activo?'btn-pause':'btn-resume'}`,onClick:()=>toggleEstado(m.id)},m.activo?'Pausar':'Activar'),/*#__PURE__*/React.createElement("button",{className:"action-btn btn-delete",onClick:()=>setConfirmDel(m.id)},"\u2715")));}),filtrados.length===0&&/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",{colSpan:7,className:"empty-state"},"Sin resultados"))))),modal&&/*#__PURE__*/React.createElement(Modal,{title:modal==='add'?'Nuevo Mensajero':'Editar Mensajero',onClose:()=>setModal(null)},
   /*#__PURE__*/React.createElement(PestanasMensajero,{
     form:form,setForm:setForm,modal:modal,esAdmin:esAdmin,
     save:save,onClose:()=>setModal(null),db:db,toast:toast,
@@ -6608,7 +6608,159 @@ function RetirosRider(_ref_rr){
   );
 }
 
-function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout;const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87bp=useState(null),clienteRetiroPresel=_useState87bp[0],setClienteRetiroPresel=_useState87bp[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);};useEffect(function(){var prev=document.body.style.background;var prevHtml=document.documentElement.style.background;document.body.style.background='#1a1d13';document.documentElement.style.background='#1a1d13';return function(){document.body.style.background=prev;document.documentElement.style.background=prevHtml;};},[]);
+// ── OPTIMIZAR RUTA (IA) ─────────────────────────────────────────
+function aiGeocode(geocoder,direccion,comuna){
+  return new Promise(resolve=>{
+    geocoder.geocode({address:direccion+', '+comuna+', Chile'},(results,status)=>{
+      if(status==='OK'&&results&&results[0]){
+        const loc=results[0].geometry.location;
+        resolve({lat:loc.lat(),lng:loc.lng()});
+      }else resolve(null);
+    });
+  });
+}
+function aiOptimizeBatch(directionsService,origin,destination,waypoints){
+  return new Promise(resolve=>{
+    directionsService.route({
+      origin,destination,
+      waypoints:waypoints.map(w=>({location:w,stopover:true})),
+      optimizeWaypoints:true,
+      travelMode:google.maps.TravelMode.DRIVING
+    },(result,status)=>{
+      if(status==='OK')resolve(result);
+      else resolve(null);
+    });
+  });
+}
+function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,envios=_ref_or.envios,onClose=_ref_or.onClose;
+  const mapRef=React.useRef(null);
+  const mapObjRef=React.useRef(null);
+  const _uEstado=useState('inicial'),estado=_uEstado[0],setEstado=_uEstado[1]; // inicial | geocodificando | optimizando | listo | error
+  const _uProg=useState(0),progreso=_uProg[0],setProgreso=_uProg[1];
+  const _uStops=useState([]),stopsOrdenados=_uStops[0],setStopsOrdenados=_uStops[1];
+  const _uErr=useState(''),errorMsg=_uErr[0],setErrorMsg=_uErr[1];
+  const _uDist=useState(null),distTotal=_uDist[0],setDistTotal=_uDist[1];
+  async function calcularRuta(){
+    if(!envios.length){setErrorMsg('No tienes envíos pendientes para optimizar.');setEstado('error');return;}
+    if(!window.google||!window.google.maps){setErrorMsg('El mapa no está disponible en este momento.');setEstado('error');return;}
+    setEstado('geocodificando');setProgreso(0);
+    const geocoder=new google.maps.Geocoder();
+    // 1. Origen: última ubicación GPS conocida del mensajero
+    let origen=null;
+    try{
+      const nombreActual=(usuario.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim();
+      const{data}=await db.from('ubicaciones_mensajeros').select('lat,lng').eq('mensajero',usuario.nombre).limit(1).maybeSingle();
+      if(data)origen={lat:data.lat,lng:data.lng};
+    }catch(e){}
+    // 2. Geocodificar todos los envíos (secuencial, con pausa para no saturar la API)
+    const puntos=[];
+    for(let i=0;i<envios.length;i++){
+      const e=envios[i];
+      const p=await aiGeocode(geocoder,e.direccion||'',e.comuna||'');
+      if(p)puntos.push({...p,envio:e});
+      setProgreso(Math.round(((i+1)/envios.length)*60));
+      await new Promise(r=>setTimeout(r,120));
+    }
+    if(puntos.length===0){setErrorMsg('No se pudo ubicar ninguna dirección en el mapa.');setEstado('error');return;}
+    if(!origen)origen=puntos[0];
+    // 3. Agrupar por comuna (mismo grupo = tramo de ruta), partido en bloques de máx 23 paradas
+    const porComuna={};
+    puntos.forEach(p=>{const c=p.envio.comuna||'Sin comuna';if(!porComuna[c])porComuna[c]=[];porComuna[c].push(p);});
+    const bloques=[];
+    Object.values(porComuna).forEach(grupo=>{
+      for(let i=0;i<grupo.length;i+=23)bloques.push(grupo.slice(i,i+23));
+    });
+    // 4. Optimizar cada bloque con Google Directions (respeta calles reales)
+    setEstado('optimizando');
+    const directionsService=new google.maps.DirectionsService();
+    let puntoAnterior=origen;
+    let ordenFinal=[];
+    let distanciaAcumM=0;
+    for(let b=0;b<bloques.length;b++){
+      const bloque=bloques[b];
+      if(bloque.length===1){
+        ordenFinal.push(bloque[0]);
+        puntoAnterior=bloque[0];
+      }else{
+        const destino=bloque[bloque.length-1];
+        const intermedios=bloque.slice(0,-1);
+        const resultado=await aiOptimizeBatch(directionsService,puntoAnterior,destino,intermedios);
+        if(resultado){
+          const orden=resultado.routes[0].waypoint_order;
+          orden.forEach(idx=>ordenFinal.push(intermedios[idx]));
+          ordenFinal.push(destino);
+          resultado.routes[0].legs.forEach(leg=>{distanciaAcumM+=leg.distance?leg.distance.value:0;});
+          puntoAnterior=destino;
+        }else{
+          bloque.forEach(p=>ordenFinal.push(p));
+          puntoAnterior=bloque[bloque.length-1];
+        }
+      }
+      setProgreso(60+Math.round(((b+1)/bloques.length)*40));
+    }
+    setStopsOrdenados(ordenFinal);
+    setDistTotal(distanciaAcumM>0?(distanciaAcumM/1000).toFixed(1):null);
+    setEstado('listo');
+    // 5. Dibujar mapa
+    setTimeout(()=>{
+      if(!mapRef.current)return;
+      const map=new google.maps.Map(mapRef.current,{zoom:12,center:origen,disableDefaultUI:true,zoomControl:true});
+      mapObjRef.current=map;
+      new google.maps.Marker({position:origen,map,label:{text:'🏍',fontSize:'16px'},title:'Tu ubicación'});
+      const path=[origen,...ordenFinal.map(p=>({lat:p.lat,lng:p.lng}))];
+      new google.maps.Polyline({path,map,strokeColor:'#C8A84B',strokeWeight:4,strokeOpacity:0.85});
+      ordenFinal.forEach((p,i)=>{
+        new google.maps.Marker({position:{lat:p.lat,lng:p.lng},map,label:{text:String(i+1),color:'#fff',fontSize:'11px',fontWeight:'700'},icon:{path:google.maps.SymbolPath.CIRCLE,scale:13,fillColor:'#3A3D2E',fillOpacity:1,strokeColor:'#C8A84B',strokeWeight:2}});
+      });
+      const bounds=new google.maps.LatLngBounds();
+      path.forEach(pt=>bounds.extend(pt));
+      map.fitBounds(bounds);
+    },100);
+  }
+  useEffect(()=>{calcularRuta();},[]);
+  function abrirEnGoogleMaps(){
+    if(stopsOrdenados.length===0)return;
+    const dest=stopsOrdenados[stopsOrdenados.length-1];
+    const waypoints=stopsOrdenados.slice(0,-1).slice(0,23).map(p=>`${p.lat},${p.lng}`).join('|');
+    const url=`https://www.google.com/maps/dir/?api=1&destination=${dest.lat},${dest.lng}${waypoints?'&waypoints='+waypoints:''}&travelmode=driving`;
+    window.open(url,'_blank');
+  }
+  return/*#__PURE__*/React.createElement("div",{style:{position:'fixed',inset:0,background:'var(--dark-deep)',zIndex:9999,display:'flex',flexDirection:'column'}},
+    /*#__PURE__*/React.createElement("div",{style:{background:'var(--dark)',borderBottom:'2px solid var(--gold)',padding:'14px 16px',paddingTop:'max(14px,env(safe-area-inset-top))',display:'flex',alignItems:'center',justifyContent:'space-between'}},
+      /*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1.5,color:'var(--gold)'}},"🧭 Optimizar Ruta"),
+      /*#__PURE__*/React.createElement("button",{onClick:onClose,style:{background:'none',border:'none',color:'#fff',fontSize:22,cursor:'pointer'}},"✕")
+    ),
+    (estado==='geocodificando'||estado==='optimizando')&&/*#__PURE__*/React.createElement("div",{style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff',padding:20}},
+      /*#__PURE__*/React.createElement("div",{style:{fontSize:14,color:'var(--gold)',marginBottom:14,fontWeight:700}},estado==='geocodificando'?'Ubicando direcciones...':'Calculando el mejor orden...'),
+      /*#__PURE__*/React.createElement("div",{style:{width:'80%',maxWidth:300,height:8,background:'rgba(255,255,255,0.1)',borderRadius:4,overflow:'hidden'}},/*#__PURE__*/React.createElement("div",{style:{width:progreso+'%',height:'100%',background:'var(--gold)',transition:'width 0.3s'}})),
+      /*#__PURE__*/React.createElement("div",{style:{fontSize:11,color:'rgba(255,255,255,0.4)',marginTop:10}},progreso+"%")
+    ),
+    estado==='error'&&/*#__PURE__*/React.createElement("div",{style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff',padding:20,textAlign:'center'}},
+      /*#__PURE__*/React.createElement("div",{style:{fontSize:14,color:'var(--danger)',marginBottom:14}},errorMsg),
+      /*#__PURE__*/React.createElement("button",{onClick:onClose,style:{padding:'10px 24px',borderRadius:10,border:'1px solid var(--gold)',background:'none',color:'var(--gold)',cursor:'pointer'}},"Volver")
+    ),
+    estado==='listo'&&/*#__PURE__*/React.createElement(React.Fragment,null,
+      /*#__PURE__*/React.createElement("div",{ref:mapRef,style:{height:'42vh',width:'100%',background:'#222'}}),
+      /*#__PURE__*/React.createElement("div",{style:{padding:'10px 16px',background:'var(--dark)',borderBottom:'1px solid rgba(200,168,75,0.2)',display:'flex',justifyContent:'space-between',alignItems:'center'}},
+        /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'rgba(255,255,255,0.6)'}},stopsOrdenados.length," paradas",distTotal?` · ~${distTotal} km`:''),
+        /*#__PURE__*/React.createElement("button",{onClick:abrirEnGoogleMaps,style:{padding:'8px 16px',borderRadius:8,border:'none',background:'var(--gold)',color:'var(--dark-deep)',fontWeight:700,fontSize:12,cursor:'pointer'}},"Abrir en Maps")
+      ),
+      /*#__PURE__*/React.createElement("div",{style:{flex:1,overflowY:'auto',padding:'10px 16px 30px'}},stopsOrdenados.map((p,i)=>/*#__PURE__*/React.createElement("div",{key:p.envio.codigo+i,style:{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:'1px solid rgba(255,255,255,0.08)'}},
+        /*#__PURE__*/React.createElement("div",{style:{width:26,height:26,borderRadius:'50%',background:'var(--gold)',color:'var(--dark-deep)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:12,flexShrink:0}},i+1),
+        /*#__PURE__*/React.createElement("div",{style:{flex:1,minWidth:0}},
+          /*#__PURE__*/React.createElement("div",{style:{fontSize:13,fontWeight:600,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},p.envio.destinatario||p.envio.cliente||'—'),
+          /*#__PURE__*/React.createElement("div",{style:{fontSize:11,color:'rgba(255,255,255,0.5)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},p.envio.direccion,", ",p.envio.comuna)
+        )
+      )))
+    )
+  );
+}
+function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout;const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87bp=useState(null),clienteRetiroPresel=_useState87bp[0],setClienteRetiroPresel=_useState87bp[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const _useRIA=useState(false),rutaIAActiva=_useRIA[0],setRutaIAActiva=_useRIA[1];const _useSRIA=useState(false),showRutaIA=_useSRIA[0],setShowRutaIA=_useSRIA[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);};useEffect(()=>{
+  const nombreActual=(usuario.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim();
+  db.from('mensajeros').select('optimizacion_ruta_activa').ilike('nombre','%'+nombreActual.split(' ')[0]+'%').limit(1).then(res=>{
+    if(res.data&&res.data.length>0)setRutaIAActiva(!!res.data[0].optimizacion_ruta_activa);
+  }).catch(()=>{});
+},[]);useEffect(function(){var prev=document.body.style.background;var prevHtml=document.documentElement.style.background;document.body.style.background='#1a1d13';document.documentElement.style.background='#1a1d13';return function(){document.body.style.background=prev;document.documentElement.style.background=prevHtml;};},[]);
 // GPS Tracking - actualizar ubicación cada 30 segundos
 useEffect(function(){
   var watchId=null;
@@ -6781,7 +6933,7 @@ useEffect(function(){
           setShowColecta(false);
           setClienteRetiroPresel(null);
           if(riderTab==='colecta') setRiderTab('retiros');
-        }})),showAsignacion&&/*#__PURE__*/React.createElement(AsignacionRider,{usuario:usuario,toast:toast,onClose:()=>setShowAsignacion(false),onEnviosUpdate:envioNuevo=>{setEnvios(prev=>{const nuevos=prev.find(e=>e.codigo===envioNuevo.codigo)?prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e):[envioNuevo,...prev];const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,nuevos);return nuevos;});}}),showAjustes&&/*#__PURE__*/React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:9999,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},
+        }})),showRutaIA&&/*#__PURE__*/React.createElement(OptimizarRuta,{usuario:usuario,envios:envios.filter(e=>e.estado==='en_ruta'||e.estado==='reprogramado'),onClose:()=>setShowRutaIA(false)}),showAsignacion&&/*#__PURE__*/React.createElement(AsignacionRider,{usuario:usuario,toast:toast,onClose:()=>setShowAsignacion(false),onEnviosUpdate:envioNuevo=>{setEnvios(prev=>{const nuevos=prev.find(e=>e.codigo===envioNuevo.codigo)?prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e):[envioNuevo,...prev];const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,nuevos);return nuevos;});}}),showAjustes&&/*#__PURE__*/React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:9999,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},
   React.createElement('div',{style:{background:'#1a1d14',borderRadius:'20px 20px 0 0',padding:24,border:'1px solid rgba(200,168,75,0.2)',maxHeight:'80vh',overflowY:'auto'}},
     React.createElement('div',{style:{width:40,height:4,background:'rgba(255,255,255,0.2)',borderRadius:2,margin:'0 auto 20px'}},null),
     React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:2,color:'var(--gold)',marginBottom:20}},"⚙ AJUSTES"),
@@ -6817,7 +6969,7 @@ useEffect(function(){
     React.createElement('button',{onClick:()=>setShowAjustes(false),style:{width:'100%',marginTop:16,padding:'12px',borderRadius:10,border:'none',background:'rgba(255,255,255,0.06)',color:'rgba(255,255,255,0.5)',fontFamily:'Bebas Neue',fontSize:15,letterSpacing:1,cursor:'pointer'}},'Cerrar')
   )
 ),
-showScanner&&/*#__PURE__*/React.createElement(ScannerRider,{usuario:usuario,onScanSuccess:envioNuevo=>{setEnvios(prev=>{const existe=prev.find(e=>e.codigo===envioNuevo.codigo);if(existe)return prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e);return[envioNuevo,...prev];});},onClose:()=>setShowScanner(false)}),/*#__PURE__*/React.createElement('div',{style:{position:'fixed',bottom:0,left:0,right:0,background:'var(--dark)',borderTop:'2px solid rgba(200,168,75,0.3)',display:'flex',alignItems:'stretch',zIndex:200,paddingBottom:'env(safe-area-inset-bottom,0px)'}},[{val:'envios',icon:'📦',label:'Envíos'},{val:'ganancias',icon:'💰',label:'Ganancias'},{val:'colecta',icon:'📥',label:'Colecta'},{val:'asignacion',icon:'📷',label:'Asignación'},{val:'scan',icon:'⚡',label:'Express'},{val:'retiros',icon:'🚚',label:'Retiros'},{val:'ajustes',icon:'⚙',label:'Ajustes'},].map(function(tab){var isActive=riderTab===tab.val;return React.createElement('button',{key:tab.val,onClick:function(){if(tab.val==='scan'){setShowScanner(true);return;}if(tab.val==='retiros'){setRiderTab('retiros');return;}if(tab.val==='colecta'){setShowColecta(true);return;}if(tab.val==='asignacion'){setShowAsignacion(true);return;}if(tab.val==='ajustes'){setShowAjustes(true);return;}setRiderTab(tab.val);},style:{flex:1,padding:'8px 2px 6px',border:'none',cursor:'pointer',background:isActive?'rgba(200,168,75,0.12)':'transparent',borderTop:isActive?'2px solid var(--gold)':'2px solid transparent',display:'flex',flexDirection:'column',alignItems:'center',gap:2,transition:'all 0.15s'}},React.createElement('span',{style:{fontSize:20,lineHeight:1}},tab.icon),React.createElement('span',{style:{fontSize:9,color:isActive?'var(--gold)':'rgba(255,255,255,0.35)',fontWeight:700,letterSpacing:0.5,textTransform:'uppercase',marginTop:2}},tab.label));})),riderToast&&React.createElement('div',{style:{position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',background:'#3A3D2E',color:'var(--gold)',padding:'12px 24px',borderRadius:10,fontWeight:700,fontSize:14,zIndex:99999,boxShadow:'0 4px 20px rgba(0,0,0,0.4)',whiteSpace:'nowrap'}},riderToast),envioActivo&&/*#__PURE__*/React.createElement(EnvioAccion,{envio:envioActivo,usuario:usuario,estados:ESTADOS_RIDER,onClose:()=>setEnvioActivo(null),onUpdate:(codigo,nuevoEstado,nota,foto,operador)=>{if(estadoEsTerminal(envioActivo?.estado||'')){toast('⚠ Estado terminal. Contacta al admin.');return;}setEnvios(prev=>{const updated=prev.map(e=>e.codigo===codigo?{...e,estado:nuevoEstado,nota:nota||e.nota,historial:[...(e.historial||[]),crearEntradaHistorial(nuevoEstado,nota,operador||usuario.nombre)]}:e);const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,updated);return updated;});setEnvioActivo(prev=>({...prev,estado:nuevoEstado}));sbUpdateEstado(codigo,nuevoEstado,nota,operador||usuario.nombre);}}));}function EnvioAccion(_ref33){var _estados$find;let envio=_ref33.envio,usuario=_ref33.usuario,estados=_ref33.estados,onClose=_ref33.onClose,onUpdate=_ref33.onUpdate;const _useState88=useState(''),nota=_useState88[0],setNota=_useState88[1];const _useState89=useState([]),fotos=_useState89[0],setFotos=_useState89[1];const _useState90=useState(false),guardando=_useState90[0],setGuardando=_useState90[1];const _useState91=useState(null),estadoSel=_useState91[0],setEstadoSel=_useState91[1];
+showScanner&&/*#__PURE__*/React.createElement(ScannerRider,{usuario:usuario,onScanSuccess:envioNuevo=>{setEnvios(prev=>{const existe=prev.find(e=>e.codigo===envioNuevo.codigo);if(existe)return prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e);return[envioNuevo,...prev];});},onClose:()=>setShowScanner(false)}),/*#__PURE__*/React.createElement('div',{style:{position:'fixed',bottom:0,left:0,right:0,background:'var(--dark)',borderTop:'2px solid rgba(200,168,75,0.3)',display:'flex',alignItems:'stretch',zIndex:200,paddingBottom:'env(safe-area-inset-bottom,0px)'}},[{val:'envios',icon:'📦',label:'Envíos'},{val:'ganancias',icon:'💰',label:'Ganancias'},{val:'colecta',icon:'📥',label:'Colecta'},...(rutaIAActiva?[{val:'ruta',icon:'🧭',label:'Ruta'}]:[]),{val:'asignacion',icon:'📷',label:'Asignación'},{val:'scan',icon:'⚡',label:'Express'},{val:'retiros',icon:'🚚',label:'Retiros'},{val:'ajustes',icon:'⚙',label:'Ajustes'},].map(function(tab){var isActive=riderTab===tab.val;return React.createElement('button',{key:tab.val,onClick:function(){if(tab.val==='scan'){setShowScanner(true);return;}if(tab.val==='retiros'){setRiderTab('retiros');return;}if(tab.val==='colecta'){setShowColecta(true);return;}if(tab.val==='asignacion'){setShowAsignacion(true);return;}if(tab.val==='ajustes'){setShowAjustes(true);return;}if(tab.val==='ruta'){setShowRutaIA(true);return;}setRiderTab(tab.val);},style:{flex:1,padding:'8px 2px 6px',border:'none',cursor:'pointer',background:isActive?'rgba(200,168,75,0.12)':'transparent',borderTop:isActive?'2px solid var(--gold)':'2px solid transparent',display:'flex',flexDirection:'column',alignItems:'center',gap:2,transition:'all 0.15s'}},React.createElement('span',{style:{fontSize:20,lineHeight:1}},tab.icon),React.createElement('span',{style:{fontSize:9,color:isActive?'var(--gold)':'rgba(255,255,255,0.35)',fontWeight:700,letterSpacing:0.5,textTransform:'uppercase',marginTop:2}},tab.label));})),riderToast&&React.createElement('div',{style:{position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',background:'#3A3D2E',color:'var(--gold)',padding:'12px 24px',borderRadius:10,fontWeight:700,fontSize:14,zIndex:99999,boxShadow:'0 4px 20px rgba(0,0,0,0.4)',whiteSpace:'nowrap'}},riderToast),envioActivo&&/*#__PURE__*/React.createElement(EnvioAccion,{envio:envioActivo,usuario:usuario,estados:ESTADOS_RIDER,onClose:()=>setEnvioActivo(null),onUpdate:(codigo,nuevoEstado,nota,foto,operador)=>{if(estadoEsTerminal(envioActivo?.estado||'')){toast('⚠ Estado terminal. Contacta al admin.');return;}setEnvios(prev=>{const updated=prev.map(e=>e.codigo===codigo?{...e,estado:nuevoEstado,nota:nota||e.nota,historial:[...(e.historial||[]),crearEntradaHistorial(nuevoEstado,nota,operador||usuario.nombre)]}:e);const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,updated);return updated;});setEnvioActivo(prev=>({...prev,estado:nuevoEstado}));sbUpdateEstado(codigo,nuevoEstado,nota,operador||usuario.nombre);}}));}function EnvioAccion(_ref33){var _estados$find;let envio=_ref33.envio,usuario=_ref33.usuario,estados=_ref33.estados,onClose=_ref33.onClose,onUpdate=_ref33.onUpdate;const _useState88=useState(''),nota=_useState88[0],setNota=_useState88[1];const _useState89=useState([]),fotos=_useState89[0],setFotos=_useState89[1];const _useState90=useState(false),guardando=_useState90[0],setGuardando=_useState90[1];const _useState91=useState(null),estadoSel=_useState91[0],setEstadoSel=_useState91[1];
 
 const _useState91s=useState(''),valorSiniestro=_useState91s[0],setValorSiniestro=_useState91s[1];const _useState92=useState(false),comunaModal=_useState92[0],setComunaModal=_useState92[1];const _useState93=useState(envio.comuna||''),comunaSel=_useState93[0],setComunaSel=_useState93[1];const fileRef=useRef();const MAX_FOTOS=5;function agregarFotos(files){const arr=Array.from(files).slice(0,MAX_FOTOS-fotos.length);arr.forEach(file=>{const reader=new FileReader();reader.onload=e=>setFotos(prev=>[...prev,{data:e.target.result,file}].slice(0,MAX_FOTOS));reader.readAsDataURL(file);});}function quitarFoto(i){setFotos(prev=>prev.filter((_,idx)=>idx!==i));}const mountedRef=useRef(true);useEffect(()=>{return()=>{mountedRef.current=false;};},[]);
 async function guardarConEstado(estadoFinal){
@@ -7701,7 +7853,7 @@ function App(){useEffect(()=>{
   // Sincronizar mensajeros desde Supabase y normalizar nombres al iniciar
   db.from('mensajeros').select('*').order('nombre').then(function(res){
     if(res.data&&res.data.length>0){
-      var normMens=res.data.map(function(m){return{...m,nombre:(m.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim()};});
+      var normMens=res.data.map(function(m){return{...m,nombre:(m.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim(),optimizacionRutaActiva:!!m.optimizacion_ruta_activa};});
       setMensajeros(normMens);
       lsSave('mensajeros',normMens);
     }
