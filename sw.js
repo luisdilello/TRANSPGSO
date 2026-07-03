@@ -1,5 +1,5 @@
-// TransPgso SW v1782924375
-const APP_VERSION = '1782924375';
+// TransPgso SW v1783086655
+const APP_VERSION = '1783086655';
 const CACHE_NAME = 'transpgso-' + APP_VERSION;
 self.addEventListener('install', e => { e.waitUntil(caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))).then(() => self.clients.claim()).then(() => self.clients.matchAll({type:'window'})).then(clients => clients.forEach(c => c.postMessage({type:'SW_UPDATED',version:APP_VERSION})))); });
