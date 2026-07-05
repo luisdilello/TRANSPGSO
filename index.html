@@ -473,7 +473,7 @@ async function suscribirsePush(nombreMensajero){
       sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)});
     }
     const subJson=sub.toJSON();
-    await db.from('push_subscriptions').upsert({
+    const{error:errSub}=await db.from('push_subscriptions').upsert({
       mensajero:nombreMensajero,
       endpoint:subJson.endpoint,
       p256dh:subJson.keys.p256dh,
@@ -481,6 +481,7 @@ async function suscribirsePush(nombreMensajero){
       activo:true,
       updated_at:new Date().toISOString()
     },{onConflict:'endpoint'});
+    if(errSub)return{ok:false,motivo:'Error guardando suscripción: '+errSub.message};
     return{ok:true};
   }catch(e){return{ok:false,motivo:e.message};}
 }
@@ -1205,7 +1206,11 @@ async function confirmarEnvioNotif(){
   const destino=notifTarget==='all'?'all':notifTarget.nombre;
   const res=await enviarNotificacionPush(destino,notifForm.title.trim(),notifForm.message.trim());
   setEnviandoNotif(false);
-  if(res.ok){toast(`✓ Notificación enviada a ${res.enviados} celular${res.enviados!==1?'es':''}`);setNotifTarget(null);setNotifForm({title:'',message:''});}
+  if(res.ok){
+    if(res.guardado===false)toast('⚠ Se envió pero el guardado del mensaje falló: '+(res.guardadoError||''));
+    else toast(`✓ Notificación enviada a ${res.enviados} celular${res.enviados!==1?'es':''}`);
+    setNotifTarget(null);setNotifForm({title:'',message:''});
+  }
   else toast('⚠ '+(res.error||'No se pudo enviar'));
 }
 async function buscarDuplicados(){
