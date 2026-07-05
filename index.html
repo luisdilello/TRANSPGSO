@@ -8181,6 +8181,7 @@ function MapaRutas(props){
   var geocoderRef=React.useRef(null);
   var _ml=React.useState(false);var mapaListo=_ml[0];var setMapaListo=_ml[1];
   var _pf=React.useState('hoy');var pinFiltro=_pf[0];var setPinFiltro=_pf[1];
+  var _pfe=React.useState('todos');var estadoFiltroPin=_pfe[0];var setEstadoFiltroPin=_pfe[1];
   var _ps=React.useState(true);var pinsVisible=_ps[0];var setPinsVisible=_ps[1];
 
   var _tab=React.useState('rutas');var mapaTab=_tab[0];var setMapaTab=_tab[1];
@@ -8226,6 +8227,9 @@ function MapaRutas(props){
       enviosPin=conDir.filter(function(e){return e.estado!=='entregado'&&e.estado!=='cancelado'&&e.estado!=='siniestro';});
     }else{
       enviosPin=conDir;
+    }
+    if(estadoFiltroPin!=='todos'){
+      enviosPin=enviosPin.filter(function(e){return e.estado===estadoFiltroPin;});
     }
     enviosPin=enviosPin.slice(0,2000);
     console.log('Pins:',enviosPin.length,'filtro:',pinFiltro);
@@ -8289,7 +8293,7 @@ function MapaRutas(props){
       geocodTimeoutsRef.current.push(_tid);
       },i*200); // 200ms entre cada geocodificación para evitar límite
     });
-  },[mapaListo,pinFiltro]); // Solo re-geocodifica al cambiar filtro
+  },[mapaListo,pinFiltro,estadoFiltroPin]); // Solo re-geocodifica al cambiar filtro
 
   // Toggle visibilidad pins - useEffect separado para no re-geocodificar
   React.useEffect(function(){
@@ -8730,6 +8734,16 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
         pinsVisible?'OCULTAR':'MOSTRAR'),
       React.createElement('span',{style:{fontSize:10,color:'rgba(255,255,255,0.25)',marginLeft:'auto'}},
         envios.filter(function(e){return e.direccion&&e.comuna;}).length,' con dirección')
+    ),
+    React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',background:'rgba(0,0,0,0.15)',borderBottom:'1px solid rgba(200,168,75,0.15)',flexShrink:0,flexWrap:'wrap'}},
+      React.createElement('span',{style:{fontSize:10,color:'rgba(255,255,255,0.35)',letterSpacing:1.5,fontFamily:'Bebas Neue',marginRight:2}},'ESTADO'),
+      React.createElement('button',{onClick:function(){setEstadoFiltroPin('todos');},style:{padding:'4px 12px',borderRadius:20,border:'1px solid '+(estadoFiltroPin==='todos'?'var(--gold)':'rgba(255,255,255,0.1)'),background:estadoFiltroPin==='todos'?'rgba(200,168,75,0.15)':'transparent',color:estadoFiltroPin==='todos'?'var(--gold)':'rgba(255,255,255,0.4)',cursor:'pointer',fontSize:10.5,fontWeight:700}},'Todos'),
+      ESTADOS_ENVIO.map(function(est){
+        var isAct=estadoFiltroPin===est.val;
+        return React.createElement('button',{key:est.val,onClick:function(){setEstadoFiltroPin(est.val);},style:{padding:'4px 12px',borderRadius:20,border:'1px solid '+(isAct?est.color:'rgba(255,255,255,0.1)'),background:isAct?est.color+'22':'transparent',color:isAct?est.color:'rgba(255,255,255,0.4)',cursor:'pointer',fontSize:10.5,fontWeight:700,display:'flex',alignItems:'center',gap:5}},
+          React.createElement('span',{style:{width:7,height:7,borderRadius:'50%',background:est.color,display:'inline-block'}}),
+          est.label);
+      })
     ),
     React.createElement('div',{style:{display:'flex',flex:1,overflow:'hidden'}},
     // ── SIDEBAR ──────────────────────────────────────────
