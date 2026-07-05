@@ -6627,6 +6627,8 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
   const _uDragO=useState(null),dragOverIndex=_uDragO[0],setDragOverIndex=_uDragO[1];
   const dragStateRef=React.useRef({dragging:false,index:null,currentIndex:null});
   const rowRefs=React.useRef([]);
+  const _uPinF=useState('pendientes'),pinFiltroRuta=_uPinF[0],setPinFiltroRuta=_uPinF[1];
+  const _uPinV=useState(true),pinsVisibleRuta=_uPinV[0],setPinsVisibleRuta=_uPinV[1];
   // Reflejar en vivo el estado real del envío (entregado/cancelado/etc) sin perder el orden ni volver a geocodificar
   useEffect(()=>{
     if(!enviosTodos.length||estado!=='listo')return;
@@ -6701,7 +6703,7 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     setEstado('listo');
   }
   useEffect(()=>{calcularRuta();},[]);
-  // Redibuja el mapa cada vez que cambia el orden de las paradas (manual, o al dividir)
+  // Redibuja el mapa cada vez que cambia el orden de las paradas (manual, o al dividir) o el filtro de pins
   useEffect(()=>{
     if(estado!=='listo'||!mapRef.current||!origenRef.current)return;
     markersRef.current.forEach(m=>m.setMap(null));
@@ -6716,9 +6718,16 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     }
     const origenMarker=new google.maps.Marker({position:origen,map,label:{text:'🏍',fontSize:'16px'},title:'Tu ubicación'});
     markersRef.current.push(origenMarker);
-    const path=[origen,...stopsOrdenados.map(p=>({lat:p.lat,lng:p.lng}))];
-    polylineRef.current=new google.maps.Polyline({path,map,strokeColor:'#C8A84B',strokeWeight:4,strokeOpacity:0.85});
-    stopsOrdenados.forEach((p,i)=>{
+    const hoy=new Date().toISOString().slice(0,10);
+    const stopsVisibles=!pinsVisibleRuta?[]:stopsOrdenados.filter(p=>{
+      if(pinFiltroRuta==='hoy')return(p.envio.fecha||'').slice(0,10)===hoy;
+      if(pinFiltroRuta==='pendientes')return p.envio.estado!=='entregado'&&p.envio.estado!=='cancelado';
+      return true; // todos
+    });
+    const path=[origen,...stopsVisibles.map(p=>({lat:p.lat,lng:p.lng}))];
+    if(pinsVisibleRuta)polylineRef.current=new google.maps.Polyline({path,map,strokeColor:'#C8A84B',strokeWeight:4,strokeOpacity:0.85});
+    stopsVisibles.forEach(p=>{
+      const i=stopsOrdenados.indexOf(p);
       const colorEstado=RUTA_ESTADO_COLORS[p.envio.estado]||'#3A3D2E';
       const marker=new google.maps.Marker({position:{lat:p.lat,lng:p.lng},map,label:{text:String(i+1),color:'#fff',fontSize:'11px',fontWeight:'700'},icon:{path:google.maps.SymbolPath.CIRCLE,scale:14,fillColor:colorEstado,fillOpacity:1,strokeColor:seleccionados.has(p.envio.codigo)?'#fff':'#C8A84B',strokeWeight:seleccionados.has(p.envio.codigo)?3:2}});
       marker.addListener('click',()=>{
@@ -6738,7 +6747,7 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     const bounds=new google.maps.LatLngBounds();
     path.forEach(pt=>bounds.extend(pt));
     map.fitBounds(bounds);
-  },[stopsOrdenados,estado,seleccionados]);
+  },[stopsOrdenados,estado,seleccionados,pinFiltroRuta,pinsVisibleRuta]);
   function moverParada(idx,dir){
     setStopsOrdenados(prev=>{
       const nuevo=[...prev];
@@ -6845,6 +6854,15 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     ),
     estado==='listo'&&/*#__PURE__*/React.createElement(React.Fragment,null,
       /*#__PURE__*/React.createElement("div",{ref:mapRef,style:{height:'38vh',width:'100%',background:'#222'}}),
+      /*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:8,padding:'10px 14px',background:'linear-gradient(135deg,#2b2e20,#222518)',borderBottom:'1px solid rgba(200,168,75,0.2)',flexShrink:0,flexWrap:'wrap',boxShadow:'0 2px 8px rgba(0,0,0,0.2)'}},
+        /*#__PURE__*/React.createElement("span",{style:{fontSize:13,color:'var(--gold)',letterSpacing:3,fontFamily:'Bebas Neue',textShadow:'0 0 8px rgba(200,168,75,0.4)'}},"PINS"),
+        ['hoy','pendientes','todos'].map(f=>{
+          const isAct=pinFiltroRuta===f;
+          return/*#__PURE__*/React.createElement("button",{key:f,onClick:()=>setPinFiltroRuta(f),style:{padding:'5px 14px',borderRadius:8,border:'1px solid '+(isAct?'var(--gold)':'rgba(255,255,255,0.08)'),background:isAct?'linear-gradient(145deg,#d4b050,#C8A84B,#a87d2a)':'rgba(255,255,255,0.03)',color:isAct?'#1a1d13':'rgba(255,255,255,0.4)',cursor:'pointer',fontSize:11,fontFamily:'Bebas Neue',letterSpacing:1.5,boxShadow:isAct?'3px 3px 8px rgba(200,168,75,0.3)':'none',transition:'all 0.2s'}},f==='hoy'?'HOY':f==='pendientes'?'PENDIENTES':'TODOS');
+        }),
+        /*#__PURE__*/React.createElement("div",{style:{width:1,height:16,background:'rgba(255,255,255,0.08)',margin:'0 2px'}}),
+        /*#__PURE__*/React.createElement("button",{onClick:()=>setPinsVisibleRuta(v=>!v),style:{padding:'5px 14px',borderRadius:8,border:'1px solid '+(pinsVisibleRuta?'rgba(200,168,75,0.3)':'rgba(255,255,255,0.08)'),background:pinsVisibleRuta?'rgba(200,168,75,0.08)':'rgba(255,255,255,0.03)',color:pinsVisibleRuta?'var(--gold)':'rgba(255,255,255,0.3)',cursor:'pointer',fontSize:11,fontFamily:'Bebas Neue',letterSpacing:1.5,transition:'all 0.2s'}},pinsVisibleRuta?'OCULTAR':'MOSTRAR')
+      ),
       /*#__PURE__*/React.createElement("div",{style:{padding:'10px 16px',background:'var(--dark)',borderBottom:'1px solid rgba(200,168,75,0.2)',display:'flex',flexWrap:'wrap',gap:8,alignItems:'center',justifyContent:'space-between'}},
         /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'rgba(255,255,255,0.6)'}},stopsOrdenados.length," paradas",distTotal?` · ~${distTotal} km`:''),
         /*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:6}},
