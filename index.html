@@ -6949,13 +6949,14 @@ useEffect(function(){
     const apellido=partes[1]||partes[0];
     // Traer todos los no-terminados y filtrar por nombre en JS para evitar bugs del .or() en Supabase
     const hoy=new Date().toISOString().slice(0,10);
-    // Pendientes: siempre visibles | Entregados/cancelados: solo hoy
+    const inicioHoy=hoy+'T00:00:00';
+    // Pendientes: siempre visibles | Entregados/cancelados: actualizados hoy (no importa la fecha original del envío)
     const [resPend,resHoy]=await Promise.all([
       db.from('envios').select('codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,fuente,peso,updated_at')
         .or('estado.eq.en_ruta,estado.eq.reprogramado,estado.eq.cancelado,estado.eq.siniestro')
         .ilike('mensajero','%'+primerNombre+'%').order('fecha',{ascending:false}).limit(500),
       db.from('envios').select('codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,fuente,peso,updated_at')
-        .eq('fecha',hoy).ilike('mensajero','%'+primerNombre+'%').order('fecha',{ascending:false}).limit(500)
+        .gte('updated_at',inicioHoy).ilike('mensajero','%'+primerNombre+'%').order('fecha',{ascending:false}).limit(500)
     ]);
     const error=resPend.error||resHoy.error;
     // Combinar sin duplicados
