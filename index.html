@@ -8235,9 +8235,12 @@ function MapaRutas(props){
     // colorEstado definida en scope externo
     function colorEstadoLocal(estado){
       if(estado==='entregado') return '#2e7d4f';
-      if(estado==='cancelado'||estado==='siniestro') return '#b03030';
+      if(estado==='cancelado') return '#b03030';
+      if(estado==='siniestro') return '#e65100';
+      if(estado==='reprogramado') return '#9c27b0';
+      if(estado==='en_bodega') return '#1a6b8a';
       if(estado==='en_ruta') return '#1976d2';
-      return '#C8A84B'; // pendiente/bodega/asignado
+      return '#C8A84B'; // pendiente/asignado/sin_asignar
     }
 
     // Geocodificar en lotes de 5 con delay para no exceder límite
