@@ -7170,6 +7170,9 @@ function dispararFoto(){
   setFotos(prev=>[...prev,{data:b64}]);
   setFotosSesion(n=>n+1);
 }
+
+
+const _useState91s=useState(''),valorSiniestro=_useState91s[0],setValorSiniestro=_useState91s[1];const _useState92=useState(false),comunaModal=_useState92[0],setComunaModal=_useState92[1];const _useState93=useState(envio.comuna||''),comunaSel=_useState93[0],setComunaSel=_useState93[1];const fileRef=useRef();const MAX_FOTOS=5;function agregarFotos(files){const arr=Array.from(files).slice(0,MAX_FOTOS-fotos.length);arr.forEach(file=>{const reader=new FileReader();reader.onload=e=>setFotos(prev=>[...prev,{data:e.target.result,file}].slice(0,MAX_FOTOS));reader.readAsDataURL(file);});}function quitarFoto(i){setFotos(prev=>prev.filter((_,idx)=>idx!==i));}const mountedRef=useRef(true);useEffect(()=>{return()=>{mountedRef.current=false;};},[]);
 if(showCamara){
   return/*#__PURE__*/React.createElement("div",{style:{position:'fixed',inset:0,background:'#000',zIndex:99999,display:'flex',flexDirection:'column'}},
     /*#__PURE__*/React.createElement("video",{ref:videoRefCamEA,autoPlay:true,playsInline:true,muted:true,style:{flex:1,width:'100%',objectFit:'cover',background:'#000'}}),
@@ -7182,8 +7185,6 @@ if(showCamara){
     )
   );
 }
-
-const _useState91s=useState(''),valorSiniestro=_useState91s[0],setValorSiniestro=_useState91s[1];const _useState92=useState(false),comunaModal=_useState92[0],setComunaModal=_useState92[1];const _useState93=useState(envio.comuna||''),comunaSel=_useState93[0],setComunaSel=_useState93[1];const fileRef=useRef();const MAX_FOTOS=5;function agregarFotos(files){const arr=Array.from(files).slice(0,MAX_FOTOS-fotos.length);arr.forEach(file=>{const reader=new FileReader();reader.onload=e=>setFotos(prev=>[...prev,{data:e.target.result,file}].slice(0,MAX_FOTOS));reader.readAsDataURL(file);});}function quitarFoto(i){setFotos(prev=>prev.filter((_,idx)=>idx!==i));}const mountedRef=useRef(true);useEffect(()=>{return()=>{mountedRef.current=false;};},[]);
 async function guardarConEstado(estadoFinal){
   setGuardando(true);
   try{
