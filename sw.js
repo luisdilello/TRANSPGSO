@@ -1,5 +1,5 @@
-// TransPgso SW v1783286673
-const APP_VERSION = '1783286673';
+// TransPgso SW v1783291081
+const APP_VERSION = '1783291081';
 const CACHE_NAME = 'transpgso-' + APP_VERSION;
 self.addEventListener('install', e => { e.waitUntil(caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))).then(() => self.clients.claim()).then(() => self.clients.matchAll({type:'window'})).then(clients => clients.forEach(c => c.postMessage({type:'SW_UPDATED',version:APP_VERSION})))); });
@@ -7,10 +7,10 @@ self.addEventListener('fetch', e => { const url = new URL(e.request.url); if(url
 self.addEventListener('message', e => { if(e.data === 'SKIP_WAITING') self.skipWaiting(); });
 self.addEventListener('push', e => {
   let data = {};
-  try{ data = e.data ? e.data.json() : {}; }catch(err){ data = {title:'TransPgso', body: e.data ? e.data.text() : ''}; }
+  try{ data = e.data ? e.data.json() : {}; }catch(err){ data = {}; }
   const title = data.title || 'TransPgso';
   const options = {
-    body: data.body || '',
+    body: data.body || 'Tienes un aviso nuevo — abre la app para verlo',
     icon: data.icon || undefined,
     badge: data.badge || undefined,
     data: { url: data.url || '/TRANSPGSO/' },

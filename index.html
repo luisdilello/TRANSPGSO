@@ -497,6 +497,29 @@ async function desuscribirsePush(nombreMensajero){
 }
 // ⚠️ Completar esta URL con la del Worker una vez desplegado en Cloudflare
 const PUSH_WORKER_URL='https://transpgso-push.luisdilellopadrino.workers.dev';
+function AvisosRider(_ref_av){let usuario=_ref_av.usuario;
+  const _uAv=useState([]),avisos=_uAv[0],setAvisos=_uAv[1];
+  const _uAvL=useState(true),cargandoAvisos=_uAvL[0],setCargandoAvisos=_uAvL[1];
+  useEffect(()=>{
+    const nombreActual=(usuario.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim();
+    db.from('notificaciones').select('*').or(`mensajero.is.null,mensajero.ilike.%${nombreActual.split(' ')[0]}%`).order('created_at',{ascending:false}).limit(15).then(res=>{
+      if(res.data)setAvisos(res.data);
+      setCargandoAvisos(false);
+    }).catch(()=>setCargandoAvisos(false));
+  },[]);
+  if(avisos.length===0&&!cargandoAvisos)return null;
+  return/*#__PURE__*/React.createElement('div',{style:{marginBottom:16}},
+    /*#__PURE__*/React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)',letterSpacing:1.5,textTransform:'uppercase',marginBottom:10}},'Avisos recientes'),
+    cargandoAvisos?/*#__PURE__*/React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.3)'}},'Cargando...'):
+    /*#__PURE__*/React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8,maxHeight:220,overflowY:'auto'}},avisos.map(a=>
+      /*#__PURE__*/React.createElement('div',{key:a.id,style:{background:'rgba(255,255,255,0.04)',borderRadius:10,padding:'10px 12px',border:'1px solid rgba(255,255,255,0.08)'}},
+        /*#__PURE__*/React.createElement('div',{style:{fontWeight:700,fontSize:13,color:'var(--gold)',marginBottom:3}},a.title),
+        /*#__PURE__*/React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.7)'}},a.message),
+        /*#__PURE__*/React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.3)',marginTop:4}},new Date(a.created_at).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))
+      )
+    ))
+  );
+}
 const PUSH_API_KEY='transpgso_push_2026_cambiame';
 async function enviarNotificacionPush(mensajero,title,message,url){
   try{
@@ -7190,6 +7213,7 @@ useEffect(function(){
       React.createElement('div',{style:{fontWeight:700,fontSize:15,color:'#fff'}},usuario.nombre.replace(/,\s*/g,' ')),
       React.createElement('div',{style:{fontSize:11,color:'rgba(200,168,75,0.6)',marginTop:2}},usuario.email||'Rider')
     ),
+    React.createElement(AvisosRider,{usuario:usuario}),
     React.createElement('div',{style:{marginBottom:16}},
       React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)',letterSpacing:1.5,textTransform:'uppercase',marginBottom:10}},'Notificaciones'),
       React.createElement('button',{onClick:async()=>{
