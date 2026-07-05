@@ -8170,10 +8170,9 @@ function MapaRutas(props){
   function colorEstado(estado){
     if(estado==='entregado') return '#2e7d4f';        // verde
     if(estado==='cancelado'||estado==='siniestro') return '#b03030'; // rojo
-    if(estado==='en_ruta') return '#1976d2';           // azul
     if(estado==='reprogramado') return '#9c27b0';      // morado
     if(estado==='en_bodega') return '#1a6b8a';         // azul oscuro
-    return '#C8A84B';                                  // dorado (asignado/sin asignar)
+    return '#C8A84B';                                  // dorado (en_ruta/asignado/sin asignar)
   }
   var markersMensajerosRef=React.useRef({});
   var geocoderRef=React.useRef(null);
@@ -8239,8 +8238,7 @@ function MapaRutas(props){
       if(estado==='siniestro') return '#e65100';
       if(estado==='reprogramado') return '#9c27b0';
       if(estado==='en_bodega') return '#1a6b8a';
-      if(estado==='en_ruta') return '#1976d2';
-      return '#C8A84B'; // pendiente/asignado/sin_asignar
+      return '#C8A84B'; // en_ruta/pendiente/asignado/sin_asignar
     }
 
     // Geocodificar en lotes de 5 con delay para no exceder límite
