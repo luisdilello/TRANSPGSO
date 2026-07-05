@@ -576,12 +576,12 @@ function Comunicados(_ref_com){let mensajeros=_ref_com.mensajeros||[],toast=_ref
     )
   );
 }
-function AvisosRider(_ref_av){let usuario=_ref_av.usuario;
+function AvisosRider(_ref_av){let usuario=_ref_av.usuario,onClose=_ref_av.onClose;
   const _uAv=useState([]),avisos=_uAv[0],setAvisos=_uAv[1];
   const _uAvL=useState(true),cargandoAvisos=_uAvL[0],setCargandoAvisos=_uAvL[1];
   useEffect(()=>{
     const nombreActual=(usuario.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim();
-    db.from('notificaciones').select('*').or(`mensajero.is.null,mensajero.ilike.%${nombreActual.split(' ')[0]}%`).order('created_at',{ascending:false}).limit(15).then(res=>{
+    db.from('notificaciones').select('*').or(`mensajero.is.null,mensajero.ilike.%${nombreActual.split(' ')[0]}%`).order('created_at',{ascending:false}).limit(30).then(res=>{
       if(res.data)setAvisos(res.data);
       setCargandoAvisos(false);
     }).catch(()=>setCargandoAvisos(false));
@@ -590,18 +590,26 @@ function AvisosRider(_ref_av){let usuario=_ref_av.usuario;
     setAvisos(prev=>prev.filter(a=>a.id!==id));
     try{await db.from('notificaciones').delete().eq('id',id);}catch(e){}
   }
-  if(avisos.length===0&&!cargandoAvisos)return null;
-  return/*#__PURE__*/React.createElement('div',{style:{marginBottom:16}},
-    /*#__PURE__*/React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)',letterSpacing:1.5,textTransform:'uppercase',marginBottom:10}},'Avisos recientes'),
-    cargandoAvisos?/*#__PURE__*/React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.3)'}},'Cargando...'):
-    /*#__PURE__*/React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8,maxHeight:220,overflowY:'auto'}},avisos.map(a=>
-      /*#__PURE__*/React.createElement('div',{key:a.id,style:{background:'rgba(255,255,255,0.04)',borderRadius:10,padding:'10px 12px',border:'1px solid rgba(255,255,255,0.08)',position:'relative'}},
-        /*#__PURE__*/React.createElement('button',{onClick:()=>borrarAviso(a.id),style:{position:'absolute',top:8,right:8,background:'none',border:'none',color:'rgba(255,255,255,0.3)',cursor:'pointer',fontSize:14,padding:2}},'✕'),
-        /*#__PURE__*/React.createElement('div',{style:{fontWeight:700,fontSize:13,color:'var(--gold)',marginBottom:3,paddingRight:20}},a.title),
-        /*#__PURE__*/React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.7)'}},a.message),
-        /*#__PURE__*/React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.3)',marginTop:4}},new Date(a.created_at).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))
-      )
-    ))
+  return/*#__PURE__*/React.createElement('div',{style:{position:'fixed',inset:0,background:'var(--dark-deep)',zIndex:9999,display:'flex',flexDirection:'column'}},
+    /*#__PURE__*/React.createElement('div',{style:{background:'var(--dark)',borderBottom:'2px solid var(--gold)',padding:'14px 16px',paddingTop:'max(14px,env(safe-area-inset-top))',display:'flex',alignItems:'center',justifyContent:'space-between'}},
+      /*#__PURE__*/React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1.5,color:'var(--gold)'}},'📢 Avisos'),
+      /*#__PURE__*/React.createElement('button',{onClick:onClose,style:{background:'none',border:'none',color:'#fff',fontSize:22,cursor:'pointer'}},'✕')
+    ),
+    /*#__PURE__*/React.createElement('div',{style:{flex:1,overflowY:'auto',padding:16}},
+      cargandoAvisos?/*#__PURE__*/React.createElement('div',{style:{textAlign:'center',padding:40,color:'rgba(255,255,255,0.3)'}},'Cargando...'):
+      avisos.length===0?/*#__PURE__*/React.createElement('div',{style:{textAlign:'center',padding:40,color:'rgba(255,255,255,0.3)'}},
+        /*#__PURE__*/React.createElement('div',{style:{fontSize:40,marginBottom:8}},'📭'),
+        /*#__PURE__*/React.createElement('div',{style:{fontSize:14}},'Sin avisos por ahora')
+      ):
+      /*#__PURE__*/React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:10}},avisos.map(a=>
+        /*#__PURE__*/React.createElement('div',{key:a.id,style:{background:'rgba(255,255,255,0.04)',borderRadius:10,padding:'12px 14px',border:'1px solid rgba(255,255,255,0.08)',position:'relative'}},
+          /*#__PURE__*/React.createElement('button',{onClick:()=>borrarAviso(a.id),style:{position:'absolute',top:10,right:10,background:'none',border:'none',color:'rgba(255,255,255,0.3)',cursor:'pointer',fontSize:15,padding:2}},'✕'),
+          /*#__PURE__*/React.createElement('div',{style:{fontWeight:700,fontSize:14,color:'var(--gold)',marginBottom:4,paddingRight:20}},a.title),
+          /*#__PURE__*/React.createElement('div',{style:{fontSize:13,color:'rgba(255,255,255,0.7)'}},a.message),
+          /*#__PURE__*/React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.3)',marginTop:6}},new Date(a.created_at).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))
+        )
+      ))
+    )
   );
 }
 const PUSH_API_KEY='transpgso_push_2026_cambiame';
@@ -7087,7 +7095,7 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     )
   );
 }
-function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout,mensajeros=_ref32.mensajeros||[];const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87bp=useState(null),clienteRetiroPresel=_useState87bp[0],setClienteRetiroPresel=_useState87bp[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const _useRIA=useState(false),rutaIAActiva=_useRIA[0],setRutaIAActiva=_useRIA[1];const _useSRIA=useState(false),showRutaIA=_useSRIA[0],setShowRutaIA=_useSRIA[1];const _useMas=useState(false),showMas=_useMas[0],setShowMas=_useMas[1];const _useNotif=useState(false),notifActivas=_useNotif[0],setNotifActivas=_useNotif[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);};useEffect(()=>{
+function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout,mensajeros=_ref32.mensajeros||[];const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87bp=useState(null),clienteRetiroPresel=_useState87bp[0],setClienteRetiroPresel=_useState87bp[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const _useRIA=useState(false),rutaIAActiva=_useRIA[0],setRutaIAActiva=_useRIA[1];const _useSRIA=useState(false),showRutaIA=_useSRIA[0],setShowRutaIA=_useSRIA[1];const _useMas=useState(false),showMas=_useMas[0],setShowMas=_useMas[1];const _useNotif=useState(false),notifActivas=_useNotif[0],setNotifActivas=_useNotif[1];const _useShowAv=useState(false),showAvisos=_useShowAv[0],setShowAvisos=_useShowAv[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);};useEffect(()=>{
   if('serviceWorker' in navigator){
     navigator.serviceWorker.ready.then(reg=>reg.pushManager.getSubscription()).then(sub=>{if(sub)setNotifActivas(true);}).catch(()=>{});
   }
@@ -7291,7 +7299,7 @@ useEffect(function(){
           setShowColecta(false);
           setClienteRetiroPresel(null);
           if(riderTab==='colecta') setRiderTab('retiros');
-        }})),showRutaIA&&/*#__PURE__*/React.createElement(OptimizarRuta,{usuario:usuario,mensajeros:mensajeros,envios:envios.filter(e=>e.estado==='en_ruta'||e.estado==='reprogramado'),enviosTodos:envios,onClose:()=>setShowRutaIA(false),onDividido:(codigos)=>{setEnvios(prev=>prev.filter(e=>!codigos.includes(e.codigo)));}}),showAsignacion&&/*#__PURE__*/React.createElement(AsignacionRider,{usuario:usuario,toast:toast,onClose:()=>setShowAsignacion(false),onEnviosUpdate:envioNuevo=>{setEnvios(prev=>{const nuevos=prev.find(e=>e.codigo===envioNuevo.codigo)?prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e):[envioNuevo,...prev];const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,nuevos);return nuevos;});}}),showAjustes&&/*#__PURE__*/React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:9999,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},
+        }})),showRutaIA&&/*#__PURE__*/React.createElement(OptimizarRuta,{usuario:usuario,mensajeros:mensajeros,envios:envios.filter(e=>e.estado==='en_ruta'||e.estado==='reprogramado'),enviosTodos:envios,onClose:()=>setShowRutaIA(false),onDividido:(codigos)=>{setEnvios(prev=>prev.filter(e=>!codigos.includes(e.codigo)));}}),showAvisos&&/*#__PURE__*/React.createElement(AvisosRider,{usuario:usuario,onClose:()=>setShowAvisos(false)}),showAsignacion&&/*#__PURE__*/React.createElement(AsignacionRider,{usuario:usuario,toast:toast,onClose:()=>setShowAsignacion(false),onEnviosUpdate:envioNuevo=>{setEnvios(prev=>{const nuevos=prev.find(e=>e.codigo===envioNuevo.codigo)?prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e):[envioNuevo,...prev];const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,nuevos);return nuevos;});}}),showAjustes&&/*#__PURE__*/React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:9999,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},
   React.createElement('div',{style:{background:'#1a1d14',borderRadius:'20px 20px 0 0',padding:24,border:'1px solid rgba(200,168,75,0.2)',maxHeight:'80vh',overflowY:'auto'}},
     React.createElement('div',{style:{width:40,height:4,background:'rgba(255,255,255,0.2)',borderRadius:2,margin:'0 auto 20px'}},null),
     React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:2,color:'var(--gold)',marginBottom:20}},"⚙ AJUSTES"),
@@ -7301,7 +7309,6 @@ useEffect(function(){
       React.createElement('div',{style:{fontWeight:700,fontSize:15,color:'#fff'}},usuario.nombre.replace(/,\s*/g,' ')),
       React.createElement('div',{style:{fontSize:11,color:'rgba(200,168,75,0.6)',marginTop:2}},usuario.email||'Rider')
     ),
-    React.createElement(AvisosRider,{usuario:usuario}),
     React.createElement('div',{style:{marginBottom:16}},
       React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)',letterSpacing:1.5,textTransform:'uppercase',marginBottom:10}},'Notificaciones'),
       React.createElement('button',{onClick:async()=>{
@@ -7340,8 +7347,8 @@ showMas&&/*#__PURE__*/React.createElement('div',{onClick:()=>setShowMas(false),s
   /*#__PURE__*/React.createElement('div',{onClick:e=>e.stopPropagation(),style:{width:'100%',background:'linear-gradient(180deg,#232619,#14150e)',borderTop:'1px solid rgba(200,168,75,0.4)',borderRadius:'20px 20px 0 0',padding:'20px 16px calc(20px + env(safe-area-inset-bottom,0px))',boxShadow:'0 -10px 40px rgba(200,168,75,0.15)'}},
     /*#__PURE__*/React.createElement('div',{style:{width:40,height:4,background:'rgba(200,168,75,0.3)',borderRadius:2,margin:'0 auto 18px'}}),
     /*#__PURE__*/React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}},
-      [{val:'ganancias',icon:'💰',label:'Ganancias'},{val:'colecta',icon:'📥',label:'Colecta'},...(rutaIAActiva?[{val:'ruta',icon:'🧭',label:'Ruta IA'}]:[]),{val:'retiros',icon:'🚚',label:'Retiros'},{val:'ajustes',icon:'⚙',label:'Ajustes'}].map(item=>
-        React.createElement('button',{key:item.val,onClick:()=>{setShowMas(false);if(item.val==='colecta'){setShowColecta(true);return;}if(item.val==='ajustes'){setShowAjustes(true);return;}if(item.val==='ruta'){setShowRutaIA(true);return;}setRiderTab(item.val);},style:{display:'flex',flexDirection:'column',alignItems:'center',gap:8,padding:'16px 8px',borderRadius:14,border:'1px solid rgba(200,168,75,0.15)',background:'rgba(200,168,75,0.05)',cursor:'pointer'}},
+      [{val:'ganancias',icon:'💰',label:'Ganancias'},{val:'colecta',icon:'📥',label:'Colecta'},...(rutaIAActiva?[{val:'ruta',icon:'🧭',label:'Ruta IA'}]:[]),{val:'avisos',icon:'📢',label:'Avisos'},{val:'retiros',icon:'🚚',label:'Retiros'},{val:'ajustes',icon:'⚙',label:'Ajustes'}].map(item=>
+        React.createElement('button',{key:item.val,onClick:()=>{setShowMas(false);if(item.val==='colecta'){setShowColecta(true);return;}if(item.val==='ajustes'){setShowAjustes(true);return;}if(item.val==='ruta'){setShowRutaIA(true);return;}if(item.val==='avisos'){setShowAvisos(true);return;}setRiderTab(item.val);},style:{display:'flex',flexDirection:'column',alignItems:'center',gap:8,padding:'16px 8px',borderRadius:14,border:'1px solid rgba(200,168,75,0.15)',background:'rgba(200,168,75,0.05)',cursor:'pointer'}},
           React.createElement('span',{style:{fontSize:26,filter:'drop-shadow(0 0 8px rgba(200,168,75,0.4))'}},item.icon),
           React.createElement('span',{style:{fontSize:10.5,color:'rgba(255,255,255,0.75)',fontWeight:700,letterSpacing:0.5,textTransform:'uppercase'}},item.label)
         )
