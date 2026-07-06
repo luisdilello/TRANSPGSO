@@ -8476,13 +8476,24 @@ function MapaRutas(props){
 
   // Cargar ubicaciones en tiempo real
   React.useEffect(function(){
+    var ultimaCarga=0;
+    var pendiente=null;
     function cargarUbicaciones(){
-      db.from('ubicaciones_mensajeros').select('*').eq('activo',true).then(function(res){
+      db.from('ubicaciones_mensajeros').select('mensajero,lat,lng,accuracy,updated_at,activo').eq('activo',true).then(function(res){
         if(res.data) setUbicaciones(res.data);
       }).catch(function(){});
     }
+    function cargarConThrottle(){
+      var ahora=Date.now();
+      if(ahora-ultimaCarga>8000){ // maximo 1 recarga cada 8 segundos, sin importar cuantos mensajeros actualicen su GPS a la vez
+        ultimaCarga=ahora;
+        cargarUbicaciones();
+      }else if(!pendiente){
+        pendiente=setTimeout(function(){pendiente=null;ultimaCarga=Date.now();cargarUbicaciones();},8000-(ahora-ultimaCarga));
+      }
+    }
     cargarUbicaciones();
-    var canal=db.channel('ubicaciones-live').on('postgres_changes',{event:'*',schema:'public',table:'ubicaciones_mensajeros'},function(){cargarUbicaciones();}).subscribe();
+    var canal=db.channel('ubicaciones-live').on('postgres_changes',{event:'*',schema:'public',table:'ubicaciones_mensajeros'},function(){cargarConThrottle();}).subscribe();
     var iv=setInterval(cargarUbicaciones,30000);
     return function(){db.removeChannel(canal);clearInterval(iv);};
   },[]);
