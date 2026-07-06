@@ -613,6 +613,26 @@ function AvisosRider(_ref_av){let usuario=_ref_av.usuario,onClose=_ref_av.onClos
   );
 }
 const PUSH_API_KEY='transpgso_push_2026_cambiame';
+function base64ToBlob(base64){
+  const arr=base64.split(',');
+  const mimeMatch=arr[0].match(/:(.*?);/);
+  const mime=mimeMatch?mimeMatch[1]:'image/jpeg';
+  const bstr=atob(arr[1]);
+  let n=bstr.length;
+  const u8arr=new Uint8Array(n);
+  while(n--){u8arr[n]=bstr.charCodeAt(n);}
+  return new Blob([u8arr],{type:mime});
+}
+async function subirFotoStorage(base64,codigo,tag){
+  try{
+    const blob=base64ToBlob(base64);
+    const fn='entregas/'+codigo+'_'+tag+'_'+Date.now()+'.jpg';
+    const {error}=await db.storage.from('evidencias').upload(fn,blob,{upsert:true,contentType:'image/jpeg'});
+    if(error){console.warn('Storage upload error:',error.message);return base64;} // fallback: si falla la subida, al menos no se pierde la foto
+    const {data}=db.storage.from('evidencias').getPublicUrl(fn);
+    return (data&&data.publicUrl)||base64;
+  }catch(e){console.warn('subirFotoStorage error:',e.message);return base64;}
+}
 async function enviarNotificacionPush(mensajero,title,message,url){
   try{
     const res=await fetch(PUSH_WORKER_URL,{
@@ -7418,13 +7438,18 @@ async function guardarConEstado(estadoFinal){
         if(b64)fotosB64.push(b64);
       }catch(e){}
     }
-    if(fotosB64.length>0){
+    // Subir cada foto a Supabase Storage en vez de guardar el base64 completo en la tabla (ahorra espacio y ancho de banda)
+    const fotosUrls=[];
+    for(let fu=0;fu<fotosB64.length;fu++){
+      fotosUrls.push(await subirFotoStorage(fotosB64[fu],envio.codigo,'e'+fu));
+    }
+    if(fotosUrls.length>0){
       var intentosAnt=[];
       try{const _r=await db.from('envios').select('fotos_entrega').eq('codigo',envio.codigo).single();if(_r.data&&_r.data.fotos_entrega){const parsed=JSON.parse(_r.data.fotos_entrega);if(Array.isArray(parsed)&&parsed.length>0){if(typeof parsed[0]==='string'){intentosAnt=[{intento:1,estado:envio.estado,fecha:new Date().toISOString(),mensajero:usuario.nombre,fotos:parsed}];}else{intentosAnt=parsed;}}}}catch(e){}
-      const nuevoIntento={intento:intentosAnt.length+1,estado:estadoFinal,fecha:new Date().toISOString(),mensajero:usuario.nombre,nota:nota||'',fotos:fotosB64};
+      const nuevoIntento={intento:intentosAnt.length+1,estado:estadoFinal,fecha:new Date().toISOString(),mensajero:usuario.nombre,nota:nota||'',fotos:fotosUrls};
       await db.from('envios').update({fotos_entrega:JSON.stringify([...intentosAnt,nuevoIntento])}).eq('codigo',envio.codigo);
     }
-    onUpdate(envio.codigo,estadoFinal,nota,fotosB64,usuario.nombre);
+    onUpdate(envio.codigo,estadoFinal,nota,fotosUrls,usuario.nombre);
     onClose();
   }catch(e){console.warn(e);}
   if(mountedRef.current)setGuardando(false);
@@ -7437,7 +7462,12 @@ async function guardarCambio(){if(!estadoSel){return;}setGuardando(true);try{
           if(b64) fotosB64.push(b64);
         }catch(e){console.warn('Foto compress error:',e.message);}
       }
-      if(fotosB64.length>0){
+      // Subir cada foto a Supabase Storage en vez de guardar el base64 completo en la tabla
+      const fotosUrls=[];
+      for(let fu=0;fu<fotosB64.length;fu++){
+        fotosUrls.push(await subirFotoStorage(fotosB64[fu],envio.codigo,'c'+fu));
+      }
+      if(fotosUrls.length>0){
         // Leer intentos anteriores y ACUMULAR
         let intentosAnteriores=[];
         try{
@@ -7454,12 +7484,12 @@ async function guardarCambio(){if(!estadoSel){return;}setGuardando(true);try{
             }
           }
         }catch(e){}
-        const nuevoIntento={intento:intentosAnteriores.length+1,estado:estadoSel,fecha:new Date().toISOString(),mensajero:usuario.nombre,nota:nota||'',fotos:fotosB64};
+        const nuevoIntento={intento:intentosAnteriores.length+1,estado:estadoSel,fecha:new Date().toISOString(),mensajero:usuario.nombre,nota:nota||'',fotos:fotosUrls};
         const todosIntentos=[...intentosAnteriores,nuevoIntento];
         await db.from('envios').update({fotos_entrega:JSON.stringify(todosIntentos)}).eq('codigo',envio.codigo);
       }
       if(estadoSel==='siniestro'&&valorSiniestro){try{await db.from('envios').update({valor_siniestro:parseFloat(valorSiniestro)||0}).eq('codigo',envio.codigo);}catch(e){}}
-      onUpdate(envio.codigo,estadoSel,nota,fotosB64,usuario.nombre);
+      onUpdate(envio.codigo,estadoSel,nota,fotosUrls,usuario.nombre);
       onClose();
     }catch(e){console.warn(e);}if(mountedRef.current)setGuardando(false);}const est=estados.find(s=>s.val===envio.estado)||{label:envio.estado,color:'#7a7d6a',icon:'📦'};
 // Si es grupo, mostrar panel de grupo
