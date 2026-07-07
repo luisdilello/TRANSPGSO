@@ -504,6 +504,42 @@ async function desuscribirsePush(nombreMensajero){
 }
 // ⚠️ Completar esta URL con la del Worker una vez desplegado en Cloudflare
 const PUSH_WORKER_URL='https://transpgso-push.luisdilellopadrino.workers.dev';
+function Permisos(_ref_perm){let permisosOp=_ref_perm.permisosOp,setPermisosOp=_ref_perm.setPermisosOp,toast=_ref_perm.toast;
+  const SECCIONES=[
+    {id:'colecta-admin',label:'Colecta · Lector/Scanner'},
+    {id:'etiquetas',label:'Colecta · Envíos Manuales'},
+    {id:'pagos',label:'Pagos y Cobros'},
+    {id:'mensajeros',label:'Administración · Mensajeros'},
+    {id:'clientes',label:'Administración · Clientes'},
+    {id:'usuarios',label:'Administración · Usuarios'},
+    {id:'mapa-rutas',label:'Administración · Mapa Rutas'},
+    {id:'comunicados',label:'Administración · Comunicados'},
+    {id:'cierre',label:'Cierre Mes'}
+  ];
+  async function toggle(seccion){
+    const actual=permisosOp[seccion]===true;
+    const nuevo=!actual;
+    setPermisosOp(prev=>({...prev,[seccion]:nuevo}));
+    try{
+      await db.from('permisos_operador').upsert({seccion,permitido:nuevo},{onConflict:'seccion'});
+      toast(`✓ ${nuevo?'Habilitado':'Deshabilitado'} para Operadores`);
+    }catch(e){toast('⚠ Error guardando: '+e.message);}
+  }
+  return/*#__PURE__*/React.createElement("div",null,
+    /*#__PURE__*/React.createElement("div",{className:"section-head"},/*#__PURE__*/React.createElement("div",{className:"section-title"},"Permisos")),
+    /*#__PURE__*/React.createElement("div",{className:"panel"},
+      /*#__PURE__*/React.createElement("div",{className:"panel-title"},"Acceso del rol Operador"),
+      /*#__PURE__*/React.createElement("div",{style:{fontSize:13,color:'var(--text-mid)',marginBottom:20}},"Dashboard, Envíos y Análitica siempre están disponibles para todos. Aquí controlas qué otras secciones puede ver el rol Operador. Admin y Super Admin siempre ven todo."),
+      /*#__PURE__*/React.createElement("div",{style:{display:'flex',flexDirection:'column',gap:10}},SECCIONES.map(s=>{
+        const activo=permisosOp[s.id]===true;
+        return/*#__PURE__*/React.createElement("div",{key:s.id,onClick:()=>toggle(s.id),style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'14px 18px',borderRadius:10,border:'1px solid '+(activo?'var(--gold)':'var(--border)'),background:activo?'rgba(200,168,75,0.08)':'#fff',cursor:'pointer',transition:'all 0.15s'}},
+          /*#__PURE__*/React.createElement("span",{style:{fontWeight:600,fontSize:14}},s.label),
+          /*#__PURE__*/React.createElement("span",{style:{padding:'4px 14px',borderRadius:20,fontSize:11,fontWeight:700,background:activo?'var(--gold)':'var(--cream)',color:activo?'var(--dark-deep)':'var(--text-soft)'}},activo?'✓ Habilitado':'Deshabilitado')
+        );
+      }))
+    )
+  );
+}
 function Comunicados(_ref_com){let mensajeros=_ref_com.mensajeros||[],toast=_ref_com.toast;
   const _uHist=useState([]),historial=_uHist[0],setHistorial=_uHist[1];
   const _uLoad=useState(true),cargando=_uLoad[0],setCargando=_uLoad[1];
@@ -8333,7 +8369,7 @@ useEffect(()=>{
   }).catch(function(){});
 },[]);
 useEffect(()=>{try{const saved=localStorage.getItem('transpgso_v1_mensajeros');if(saved){const parsed=JSON.parse(saved);const nombres=parsed.map(m=>m.nombre);const hayDuplicados=new Set(nombres).size<nombres.length;const muchosMensajeros=parsed.length>40;const muchasTarifas1800=parsed.filter(m=>m.tarifa===1800).length>15;if(hayDuplicados||muchosMensajeros||muchasTarifas1800){['mensajeros','pagos_semana','cierre_semanas','cierre_colecta'].forEach(k=>{localStorage.removeItem('transpgso_v1_'+k);});console.log('Migración v2: duplicados eliminados');}}}catch(e){}},[]);const _useState100=useState('dashboard'),tab=_useState100[0],setTab=_useState100[1];const _useState101=useState(()=>lsLoad('clientes',INIT_CLIENTES)),clientes=_useState101[0],setClientes=_useState101[1];const _useState102=useState(()=>{const local=lsLoad('mensajeros',INIT_MENSAJEROS);return local.map(m=>({...m,nombre:(m.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim()}));
-}),mensajeros=_useState102[0],setMensajeros=_useState102[1];const _useState103=useState(()=>lsLoad('mensajerosDia',[])),mensajerosDia=_useState103[0],setMensajerosDia=_useState103[1];const _useState104=useState(()=>lsLoad('kpi',{fecha:'',totalPaquetes:0,entregados:0,enCamino:0,reprogramados:0,cancelados:0,obs:''})),kpi=_useState104[0],setKpi=_useState104[1];const _useState105=useState(null),toastMsg=_useState105[0],setToastMsg=_useState105[1];const _useState106=useState(()=>lsLoad('session_usuario',null)),usuarioActivo=_useState106[0],setUsuarioActivo=_useState106[1];const _useState107=useState(()=>lsLoad('session_perfil',null)),perfil=_useState107[0],setPerfil=_useState107[1];const _useState108=useState(false),showManifiesto=_useState108[0],setShowManifiesto=_useState108[1];const _useState109=useState([]),enviosSupabase=_useState109[0],setEnviosSupabase=_useState109[1];
+}),mensajeros=_useState102[0],setMensajeros=_useState102[1];const _useState103=useState(()=>lsLoad('mensajerosDia',[])),mensajerosDia=_useState103[0],setMensajerosDia=_useState103[1];const _useState104=useState(()=>lsLoad('kpi',{fecha:'',totalPaquetes:0,entregados:0,enCamino:0,reprogramados:0,cancelados:0,obs:''})),kpi=_useState104[0],setKpi=_useState104[1];const _useState105=useState(null),toastMsg=_useState105[0],setToastMsg=_useState105[1];const _useState106=useState(()=>lsLoad('session_usuario',null)),usuarioActivo=_useState106[0],setUsuarioActivo=_useState106[1];const _useState107=useState(()=>lsLoad('session_perfil',null)),perfil=_useState107[0],setPerfil=_useState107[1];const _useState108=useState(false),showManifiesto=_useState108[0],setShowManifiesto=_useState108[1];const _useState109=useState([]),enviosSupabase=_useState109[0],setEnviosSupabase=_useState109[1];const _usePermOp=useState({}),permisosOp=_usePermOp[0],setPermisosOp=_usePermOp[1];useEffect(()=>{db.from('permisos_operador').select('*').then(res=>{if(res.data){const map={};res.data.forEach(p=>{map[p.seccion]=p.permitido;});setPermisosOp(map);}}).catch(()=>{});},[]);function puedeVer(seccion){return!!(perfil&&perfil.esAdmin)||permisosOp[seccion]===true;}
 const _useState110=useState(()=>lsLoad('gestion_envios',[])),enviosGestion=_useState110[0],setEnviosGestion=_useState110[1];const toast=msg=>setToastMsg(msg);useEffect(()=>{lsSave('clientes',clientes);},[clientes]);useEffect(()=>{
   lsSave('mensajeros',mensajeros);
   // Nota: el sync a Supabase ya lo hace cada acción individual (save/toggleEstado)
@@ -8380,30 +8416,31 @@ useEffect(()=>{async function syncInicial(){
     tab:tab,setTab:setTab
   }),
   /*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='envios'?'active':''}`,onClick:()=>setTab('envios')},'Envíos'),
-  perfil!=null&&perfil.esAdmin&&/*#__PURE__*/React.createElement(NavDropdown,{
+  (perfil!=null&&perfil.esAdmin||puedeVer('colecta-admin')||puedeVer('etiquetas'))&&/*#__PURE__*/React.createElement(NavDropdown,{
     label:'Colecta',
     active:tab==='colecta-admin'||tab==='etiquetas',
     items:[
-      {id:'colecta-admin',label:'Lector/Scanner'},
-      {id:'etiquetas',label:'Envíos Manuales'}
+      ...(puedeVer('colecta-admin')?[{id:'colecta-admin',label:'Lector/Scanner'}]:[]),
+      ...(puedeVer('etiquetas')?[{id:'etiquetas',label:'Envíos Manuales'}]:[])
     ],
     tab:tab,setTab:setTab
   }),
-  perfil!=null&&perfil.esAdmin&&/*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='pagos'?'active':''}`,onClick:()=>setTab('pagos')},'Pagos y Cobros'),
-  perfil!=null&&perfil.esAdmin&&/*#__PURE__*/React.createElement(NavDropdown,{
+  puedeVer('pagos')&&/*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='pagos'?'active':''}`,onClick:()=>setTab('pagos')},'Pagos y Cobros'),
+  (perfil!=null&&perfil.esAdmin||puedeVer('mensajeros')||puedeVer('clientes')||puedeVer('usuarios')||puedeVer('mapa-rutas')||puedeVer('comunicados'))&&/*#__PURE__*/React.createElement(NavDropdown,{
     label:'Administración',
-    active:tab==='mensajeros'||tab==='clientes'||tab==='usuarios'||tab==='mapa-rutas'||tab==='comunicados',
+    active:tab==='mensajeros'||tab==='clientes'||tab==='usuarios'||tab==='mapa-rutas'||tab==='comunicados'||tab==='permisos',
     items:[
-      {id:'mensajeros',label:'Mensajeros'},
-      {id:'clientes',label:'Clientes'},
-      {id:'usuarios',label:'Usuarios'},
-      {id:'mapa-rutas',label:'Mapa Rutas'},
-      {id:'comunicados',label:'Comunicados'}
+      ...(puedeVer('mensajeros')?[{id:'mensajeros',label:'Mensajeros'}]:[]),
+      ...(puedeVer('clientes')?[{id:'clientes',label:'Clientes'}]:[]),
+      ...(puedeVer('usuarios')?[{id:'usuarios',label:'Usuarios'}]:[]),
+      ...(puedeVer('mapa-rutas')?[{id:'mapa-rutas',label:'Mapa Rutas'}]:[]),
+      ...(puedeVer('comunicados')?[{id:'comunicados',label:'Comunicados'}]:[]),
+      ...(perfil!=null&&perfil.esSuperAdmin?[{id:'permisos',label:'Permisos'}]:[])
     ],
     tab:tab,setTab:setTab
   }),
-  perfil!=null&&perfil.esAdmin&&/*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='cierre'?'active':''}`,onClick:()=>setTab('cierre')},'Cierre Mes')
-),/*#__PURE__*/React.createElement("div",{className:"main"},tab==='dashboard'&&/*#__PURE__*/React.createElement(Dashboard,{kpi:kpiVista,mensajerosDia:mensajerosDiaVista,db:db,enviosLocales:enviosGestion,clientes:clientes}),tab==='envios'&&/*#__PURE__*/React.createElement(GestionEnvios,{mensajeros:mensajeros,clientes:clientes,toast:toast,usuario:usuarioActivo,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}),tab==='importar'&&/*#__PURE__*/React.createElement(ImportarExcel,{mensajeros:mensajeros,setMensajeros:setMensajeros,setMensajerosDia:setMensajerosDia,setKpi:setKpi,toast:toast}),tab==='kpi-men'&&/*#__PURE__*/React.createElement(KpiMensajeros,{mensajerosDia:mensajerosDiaVista,setMensajerosDia:setMensajerosDia}),tab==='analitica'&&/*#__PURE__*/React.createElement(Analitica,null),tab==='etiquetas'&&/*#__PURE__*/React.createElement(Etiquetas,{clientes:clientes}),tab==='pagos'&&/*#__PURE__*/React.createElement(PagosMensajeros,{mensajeros:mensajeros,mensajerosDia:mensajerosDiaVista,esAdmin:perfil==null?void 0:perfil.esAdmin,toast:toast,clientes:clientes}),tab==='colecta-admin'&&React.createElement(ColectaAdmin,{clientes:clientes,mensajeros:mensajeros,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}),tab==='cierre'&&/*#__PURE__*/React.createElement(CierreMes,{clientes:clientes,mensajeros:mensajeros,esAdmin:perfil==null?void 0:perfil.esAdmin,toast:toast}),tab==='usuarios'&&/*#__PURE__*/React.createElement(GestionUsuarios,{toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}),tab==='clientes'&&/*#__PURE__*/React.createElement(GestionClientes,{clientes:clientes,setClientes:setClientes,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}),tab==='mensajeros'&&/*#__PURE__*/React.createElement(GestionMensajeros,{mensajeros:mensajeros,setMensajeros:setMensajeros,mensajerosDia:mensajerosDiaVista,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin})),tab==='comunicados'&&/*#__PURE__*/React.createElement(Comunicados,{mensajeros:mensajeros,toast:toast}),tab==='mapa-rutas'&&/*#__PURE__*/React.createElement(MapaRutas,{mensajeros:mensajeros,toast:toast,db:db,envios:enviosGestion||[]}),toastMsg&&/*#__PURE__*/React.createElement(Toast,{msg:toastMsg,onClose:()=>setToastMsg(null)}),showManifiesto&&/*#__PURE__*/React.createElement(ManifiestoExport,{mensajerosDia:mensajerosDiaVista,clientes:clientes,kpi:kpiVista,esAdmin:perfil==null?void 0:perfil.esAdmin,onClose:()=>setShowManifiesto(false)}));}
+  puedeVer('cierre')&&/*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='cierre'?'active':''}`,onClick:()=>setTab('cierre')},'Cierre Mes')
+),/*#__PURE__*/React.createElement("div",{className:"main"},tab==='dashboard'&&/*#__PURE__*/React.createElement(Dashboard,{kpi:kpiVista,mensajerosDia:mensajerosDiaVista,db:db,enviosLocales:enviosGestion,clientes:clientes}),tab==='envios'&&/*#__PURE__*/React.createElement(GestionEnvios,{mensajeros:mensajeros,clientes:clientes,toast:toast,usuario:usuarioActivo,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}),tab==='importar'&&/*#__PURE__*/React.createElement(ImportarExcel,{mensajeros:mensajeros,setMensajeros:setMensajeros,setMensajerosDia:setMensajerosDia,setKpi:setKpi,toast:toast}),tab==='kpi-men'&&/*#__PURE__*/React.createElement(KpiMensajeros,{mensajerosDia:mensajerosDiaVista,setMensajerosDia:setMensajerosDia}),tab==='analitica'&&/*#__PURE__*/React.createElement(Analitica,null),puedeVer('etiquetas')&&tab==='etiquetas'&&/*#__PURE__*/React.createElement(Etiquetas,{clientes:clientes}),puedeVer('pagos')&&tab==='pagos'&&/*#__PURE__*/React.createElement(PagosMensajeros,{mensajeros:mensajeros,mensajerosDia:mensajerosDiaVista,esAdmin:perfil==null?void 0:perfil.esAdmin,toast:toast,clientes:clientes}),puedeVer('colecta-admin')&&tab==='colecta-admin'&&React.createElement(ColectaAdmin,{clientes:clientes,mensajeros:mensajeros,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}),puedeVer('cierre')&&tab==='cierre'&&/*#__PURE__*/React.createElement(CierreMes,{clientes:clientes,mensajeros:mensajeros,esAdmin:perfil==null?void 0:perfil.esAdmin,toast:toast}),puedeVer('usuarios')&&tab==='usuarios'&&/*#__PURE__*/React.createElement(GestionUsuarios,{toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}),puedeVer('clientes')&&tab==='clientes'&&/*#__PURE__*/React.createElement(GestionClientes,{clientes:clientes,setClientes:setClientes,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}),puedeVer('mensajeros')&&tab==='mensajeros'&&/*#__PURE__*/React.createElement(GestionMensajeros,{mensajeros:mensajeros,setMensajeros:setMensajeros,mensajerosDia:mensajerosDiaVista,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}),perfil!=null&&perfil.esSuperAdmin&&tab==='permisos'&&/*#__PURE__*/React.createElement(Permisos,{permisosOp:permisosOp,setPermisosOp:setPermisosOp,toast:toast})),puedeVer('comunicados')&&tab==='comunicados'&&/*#__PURE__*/React.createElement(Comunicados,{mensajeros:mensajeros,toast:toast}),puedeVer('mapa-rutas')&&tab==='mapa-rutas'&&/*#__PURE__*/React.createElement(MapaRutas,{mensajeros:mensajeros,toast:toast,db:db,envios:enviosGestion||[]}),toastMsg&&/*#__PURE__*/React.createElement(Toast,{msg:toastMsg,onClose:()=>setToastMsg(null)}),showManifiesto&&/*#__PURE__*/React.createElement(ManifiestoExport,{mensajerosDia:mensajerosDiaVista,clientes:clientes,kpi:kpiVista,esAdmin:perfil==null?void 0:perfil.esAdmin,onClose:()=>setShowManifiesto(false)}));}
 // ══════════════════════════════════════════════════════════
 // MapaRutas v3 — fixes: persistencia, panel, dibujo
 // ══════════════════════════════════════════════════════════
