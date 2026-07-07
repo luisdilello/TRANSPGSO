@@ -8386,14 +8386,14 @@ useEffect(()=>{try{const saved=localStorage.getItem('transpgso_v1_mensajeros');i
         setUsuarioActivo(null);setPerfil(null);lsSave('session_usuario',null);lsSave('session_perfil',null);
         return;
       }
-      if(u.rol!==usuarioActivo.rol||u.nombre!==usuarioActivo.nombre){
-        setUsuarioActivo(u);lsSave('session_usuario',u);
-        let pf=null;
-        if(u.rol==='superadmin'){pf={nombre:u.nombre,rol:'superadmin',esAdmin:true,esSuperAdmin:true,verTodo:true,mensajerosIds:[]};}
-        else if(u.rol==='admin'){pf={nombre:u.nombre,rol:'admin',esAdmin:true,esSuperAdmin:false,verTodo:true,mensajerosIds:[]};}
-        else if(u.rol==='operador'){pf=perfil&&perfil.rol==='operador'?perfil:null;}
-        setPerfil(pf);lsSave('session_perfil',pf);
-      }
+      let pfCorrecto=null;
+      if(u.rol==='superadmin'){pfCorrecto={nombre:u.nombre,rol:'superadmin',esAdmin:true,esSuperAdmin:true,verTodo:true,mensajerosIds:[]};}
+      else if(u.rol==='admin'){pfCorrecto={nombre:u.nombre,rol:'admin',esAdmin:true,esSuperAdmin:false,verTodo:true,mensajerosIds:[]};}
+      else if(u.rol==='operador'){pfCorrecto=(perfil&&perfil.rol==='operador')?perfil:null;}
+      const usuarioCambio=u.rol!==usuarioActivo.rol||u.nombre!==usuarioActivo.nombre;
+      const perfilDesactualizado=JSON.stringify(pfCorrecto)!==JSON.stringify(perfil);
+      if(usuarioCambio){setUsuarioActivo(u);lsSave('session_usuario',u);}
+      if(perfilDesactualizado){setPerfil(pfCorrecto);lsSave('session_perfil',pfCorrecto);}
     }).catch(()=>{});
   },[]);
 const _useState110=useState(()=>lsLoad('gestion_envios',[])),enviosGestion=_useState110[0],setEnviosGestion=_useState110[1];const toast=msg=>setToastMsg(msg);useEffect(()=>{lsSave('clientes',clientes);},[clientes]);useEffect(()=>{
