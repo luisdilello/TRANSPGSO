@@ -6315,11 +6315,15 @@ function GananciasRider(_ref_gr){
     }
     return new Date(e.updated_at||e.fecha||0);
   }
+  function localDateStr(d){
+    const dt=d?new Date(d):new Date();
+    return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+  }
   function filtrarEnvios(){
     const entregados=envios.filter(e=>e.estado==='entregado');
-    const hoy=new Date().toISOString().slice(0,10);
+    const hoy=localDateStr();
     if(periodo==='hoy'){
-      return entregados.filter(e=>fechaEntrega(e).toISOString().slice(0,10)===hoy);
+      return entregados.filter(e=>localDateStr(fechaEntrega(e))===hoy);
     }
     if(periodo==='semana'){
       const lunes=new Date();
@@ -6342,9 +6346,9 @@ function GananciasRider(_ref_gr){
   const filtrados=filtrarEnvios();
   const tarifaVal=tarifa||0;
   const totalPesos=filtrados.length*tarifaVal;
-  const hoy=new Date().toISOString().slice(0,10);
+  const hoy=localDateStr();
   const todosEntregados=envios.filter(e=>e.estado==='entregado');
-  const hoyCount=todosEntregados.filter(e=>fechaEntrega(e).toISOString().slice(0,10)===hoy).length;
+  const hoyCount=todosEntregados.filter(e=>localDateStr(fechaEntrega(e))===hoy).length;
 
   // Retiros/colectas del rider
   // Leer retiros desde la planilla del admin (fuente principal)
@@ -6359,7 +6363,7 @@ function GananciasRider(_ref_gr){
   // Leer retiros desde Supabase para tener el total real
   const _useRetSupa=React.useState({retiros:0,total:0}),retirosSupa=_useRetSupa[0],setRetirosSupa=_useRetSupa[1];
   React.useEffect(()=>{
-    const hoy=new Date().toISOString().slice(0,10);
+    const hoy=localDateStr();
     const nombre=(usuario.nombre||'').replace(/,\s*/g,' ').toUpperCase().trim();
     db.from('retiros').select('pago_mensajero,retirado,mensajero').eq('fecha',hoy)
       .then(res=>{
