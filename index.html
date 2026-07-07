@@ -4553,12 +4553,12 @@ const ESTADO_FLUJO={
   'en_bodega':   {siguientes:['en_ruta'],label:'En Bodega',   icon:'📦',color:'#1a6b8a'},
   'sin_asignar': {siguientes:['en_ruta'],label:'Sin Asignar', icon:'⬜',color:'#7a7d6a'},
   'asignado':    {siguientes:['en_ruta'],label:'Asignado',    icon:'📋',color:'#b07d10'},
-  'en_ruta':     {siguientes:['entregado','reprogramado','cancelado','pendiente_retiro'],label:'En Ruta',icon:'🚴',color:'#C8A84B'},
+  'en_ruta':     {siguientes:['entregado','reprogramado','cancelado','siniestro','pendiente_retiro'],label:'En Ruta',icon:'🚴',color:'#C8A84B'},
   'reprogramado':{siguientes:['en_ruta','cancelado'],label:'Reprogramado',icon:'📅',color:'#b07d10'},
   'pendiente_retiro':{siguientes:['en_ruta','cancelado'],label:'Pend.Retiro',icon:'📦',color:'#7a7d6a'},
-  'entregado':   {siguientes:[],label:'Entregado',icon:'✅',color:'#2e7d4f',terminal:true},
-  'siniestro':   {siguientes:[],label:'Siniestro',icon:'⚠️',color:'#b03030',terminal:true},
-  'cancelado':   {siguientes:[],label:'Cancelado', icon:'❌',color:'#b03030',terminal:true},
+  'entregado':   {siguientes:['en_bodega'],label:'Entregado',icon:'✅',color:'#2e7d4f',terminal:true},
+  'siniestro':   {siguientes:['en_bodega'],label:'Siniestro',icon:'⚠️',color:'#b03030',terminal:true},
+  'cancelado':   {siguientes:['en_bodega'],label:'Cancelado', icon:'❌',color:'#b03030',terminal:true},
 };
 function estadoEsTerminal(estado){return ESTADO_FLUJO[estado]?.terminal===true;}
 function estadoPermitido(actual,nuevo,esAdmin){
@@ -4900,7 +4900,13 @@ function RetiroMasivoRider(_ref_rm){
       var lote=inserts.slice(i,i+LOTE);
       try{
         var res=await db.from('envios').upsert(lote,{onConflict:'codigo',ignoreDuplicates:false});
-        if(res.error){err+=lote.length;}else{ok+=lote.length;}
+        if(res.error){err+=lote.length;}else{
+          ok+=lote.length;
+          // Registrar en el historial quien y a que hora ingreso cada paquete via colecta
+          var ts=new Date().toISOString();
+          var registros=lote.map(function(e){return{envio_id:null,codigo_envio:e.codigo,estado:'en_bodega',nota:'Colecta / Retiro masivo',usuario:usuario.nombre,fecha:ts};});
+          try{await db.from('historial_envios').insert(registros);}catch(errHist){}
+        }
       }catch(e){err+=lote.length;}
     }
     // Subir fotos en background sin bloquear
