@@ -8376,6 +8376,26 @@ useEffect(()=>{
 },[]);
 useEffect(()=>{try{const saved=localStorage.getItem('transpgso_v1_mensajeros');if(saved){const parsed=JSON.parse(saved);const nombres=parsed.map(m=>m.nombre);const hayDuplicados=new Set(nombres).size<nombres.length;const muchosMensajeros=parsed.length>40;const muchasTarifas1800=parsed.filter(m=>m.tarifa===1800).length>15;if(hayDuplicados||muchosMensajeros||muchasTarifas1800){['mensajeros','pagos_semana','cierre_semanas','cierre_colecta'].forEach(k=>{localStorage.removeItem('transpgso_v1_'+k);});console.log('Migración v2: duplicados eliminados');}}}catch(e){}},[]);const _useState100=useState('dashboard'),tab=_useState100[0],setTab=_useState100[1];const _useState101=useState(()=>lsLoad('clientes',INIT_CLIENTES)),clientes=_useState101[0],setClientes=_useState101[1];const _useState102=useState(()=>{const local=lsLoad('mensajeros',INIT_MENSAJEROS);return local.map(m=>({...m,nombre:(m.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim()}));
 }),mensajeros=_useState102[0],setMensajeros=_useState102[1];const _useState103=useState(()=>lsLoad('mensajerosDia',[])),mensajerosDia=_useState103[0],setMensajerosDia=_useState103[1];const _useState104=useState(()=>lsLoad('kpi',{fecha:'',totalPaquetes:0,entregados:0,enCamino:0,reprogramados:0,cancelados:0,obs:''})),kpi=_useState104[0],setKpi=_useState104[1];const _useState105=useState(null),toastMsg=_useState105[0],setToastMsg=_useState105[1];const _useState106=useState(()=>lsLoad('session_usuario',null)),usuarioActivo=_useState106[0],setUsuarioActivo=_useState106[1];const _useState107=useState(()=>lsLoad('session_perfil',null)),perfil=_useState107[0],setPerfil=_useState107[1];const _useState108=useState(false),showManifiesto=_useState108[0],setShowManifiesto=_useState108[1];const _useState109=useState([]),enviosSupabase=_useState109[0],setEnviosSupabase=_useState109[1];const _usePermOp=useState({}),permisos=_usePermOp[0],setPermisos=_usePermOp[1];useEffect(()=>{db.from('permisos').select('*').then(res=>{if(res.data){const map={};res.data.forEach(p=>{map[p.rol+'|'+p.seccion]=p.permitido;});setPermisos(map);}}).catch(()=>{});},[]);function puedeVer(seccion){if(perfil&&perfil.esSuperAdmin)return true;const rolActual=perfil&&perfil.esAdmin?'admin':'operador';return permisos[rolActual+'|'+seccion]===true;}
+  // Revalidar la sesión guardada contra la base de datos real (evita quedar con un rol viejo en caché)
+  useEffect(()=>{
+    if(!usuarioActivo||!usuarioActivo.email)return;
+    db.from('usuarios').select('*').eq('email',usuarioActivo.email).eq('activo',true).single().then(res=>{
+      const u=res.data;
+      if(!u){
+        // Cuenta desactivada o eliminada: forzar salida
+        setUsuarioActivo(null);setPerfil(null);lsSave('session_usuario',null);lsSave('session_perfil',null);
+        return;
+      }
+      if(u.rol!==usuarioActivo.rol||u.nombre!==usuarioActivo.nombre){
+        setUsuarioActivo(u);lsSave('session_usuario',u);
+        let pf=null;
+        if(u.rol==='superadmin'){pf={nombre:u.nombre,rol:'superadmin',esAdmin:true,esSuperAdmin:true,verTodo:true,mensajerosIds:[]};}
+        else if(u.rol==='admin'){pf={nombre:u.nombre,rol:'admin',esAdmin:true,esSuperAdmin:false,verTodo:true,mensajerosIds:[]};}
+        else if(u.rol==='operador'){pf=perfil&&perfil.rol==='operador'?perfil:null;}
+        setPerfil(pf);lsSave('session_perfil',pf);
+      }
+    }).catch(()=>{});
+  },[]);
 const _useState110=useState(()=>lsLoad('gestion_envios',[])),enviosGestion=_useState110[0],setEnviosGestion=_useState110[1];const toast=msg=>setToastMsg(msg);useEffect(()=>{lsSave('clientes',clientes);},[clientes]);useEffect(()=>{
   lsSave('mensajeros',mensajeros);
   // Nota: el sync a Supabase ya lo hace cada acción individual (save/toggleEstado)
