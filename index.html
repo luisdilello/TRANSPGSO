@@ -8741,10 +8741,13 @@ useEffect(()=>{try{const saved=localStorage.getItem('transpgso_v1_mensajeros');i
   // ── Avisos en tiempo real cuando un cliente ingresa carga ──
   const _avAdmin=useState([]),avisosAdmin=_avAdmin[0],setAvisosAdmin=_avAdmin[1];
   useEffect(()=>{
+    console.log('[avisos_admin] efecto corriendo, usuarioActivo:',usuarioActivo);
     if(!usuarioActivo||usuarioActivo.rol==='cliente'||usuarioActivo.rol==='rider')return;
     db.from('avisos_admin').select('*').eq('leido',false).order('created_at',{ascending:false}).limit(20).then(function(res){
+      console.log('[avisos_admin] fetch resultado:',res);
+      if(res.error)console.error('[avisos_admin] ERROR:',res.error);
       if(res.data)setAvisosAdmin(res.data);
-    }).catch(function(){});
+    }).catch(function(e){console.error('[avisos_admin] EXCEPCION:',e);});
     const canal=db.channel('avisos-admin-live').on('postgres_changes',{event:'INSERT',schema:'public',table:'avisos_admin'},function(payload){
       setAvisosAdmin(function(prev){return[payload.new,...prev];});
       try{playSound('ruta');}catch(e){}
