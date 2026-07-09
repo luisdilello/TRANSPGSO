@@ -7696,7 +7696,108 @@ fotos.filter(Boolean).length>0&&React.createElement("div",{style:{display:'grid'
     React.createElement('button',{onClick:function(){setFotos(function(prev){return prev.filter(function(_,idx){return idx!==i;});});},style:{position:'absolute',top:3,right:3,background:'rgba(176,48,48,0.9)',border:'none',borderRadius:4,color:'#fff',width:22,height:22,cursor:'pointer',fontSize:13,lineHeight:'22px',padding:0,textAlign:'center'}},'✕')
   );})
 )),comunaModal&&/*#__PURE__*/React.createElement("div",{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:10000,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},/*#__PURE__*/React.createElement("div",{style:{background:'#1a1d14',borderRadius:'16px 16px 0 0',maxHeight:'75vh',overflow:'hidden',display:'flex',flexDirection:'column',border:'1px solid rgba(200,168,75,0.2)'}},/*#__PURE__*/React.createElement("div",{style:{padding:'14px 16px',borderBottom:'1px solid rgba(255,255,255,0.08)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}},/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:16,color:'var(--gold)',letterSpacing:2}},"Seleccionar Comuna"),/*#__PURE__*/React.createElement("button",{onClick:()=>setComunaModal(false),style:{background:'none',border:'none',color:'rgba(255,255,255,0.5)',fontSize:20,cursor:'pointer'}},"\u2715")),/*#__PURE__*/React.createElement("div",{style:{overflowY:'auto',flex:1}},COMUNAS_CHILE.map(c=>/*#__PURE__*/React.createElement("div",{key:c,onClick:async()=>{setComunaSel(c);setComunaModal(false);try{await db.from('envios').update({comuna:c}).eq('codigo',envio.codigo);}catch(e){}onUpdate(envio.codigo,'__actualizarCampo__',c,null);},style:{padding:'13px 16px',borderBottom:'1px solid rgba(255,255,255,0.05)',cursor:'pointer',fontSize:14,color:comunaSel===c?'var(--gold)':'#fff',background:comunaSel===c?'rgba(200,168,75,0.08)':'transparent',display:'flex',justifyContent:'space-between'}},c,comunaSel===c&&/*#__PURE__*/React.createElement("span",null,"\u2713")))))),/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:10}},/*#__PURE__*/React.createElement("button",{onClick:onClose,style:{flex:1,padding:'14px',borderRadius:10,border:'1px solid rgba(255,255,255,0.15)',background:'transparent',color:'rgba(255,255,255,0.5)',cursor:'pointer',fontFamily:'Bebas Neue',fontSize:16,letterSpacing:1}},"Cancelar"),/*#__PURE__*/React.createElement("button",{onClick:function(){if(guardando||estadoEsTerminal(envio.estado))return;guardarConEstado(estadoSel||'entregado');},disabled:guardando||estadoEsTerminal(envio.estado),style:{flex:2,padding:'14px',borderRadius:10,border:'none',cursor:guardando||estadoEsTerminal(envio.estado)?'not-allowed':'pointer',background:estadoEsTerminal(envio.estado)?'rgba(255,255,255,0.1)':guardando?'rgba(200,168,75,0.3)':'linear-gradient(135deg,#2e7d4f,#1a5c38)',color:estadoEsTerminal(envio.estado)?'rgba(255,255,255,0.3)':'#fff',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,transition:'all 0.2s',boxShadow:estadoEsTerminal(envio.estado)?'none':'0 4px 15px rgba(46,125,79,0.4)'}},guardando?'GUARDANDO...':estadoSel&&estadoSel!=='entregado'?'CONFIRMAR '+(estados.find(function(s){return s.val===estadoSel;})||{label:estadoSel}).label.toUpperCase():'✅ ENTREGADO'))));}function PerfilSelector(_ref34){let mensajeros=_ref34.mensajeros,usuario=_ref34.usuario,onConfirm=_ref34.onConfirm;const activos=mensajeros.filter(m=>m.activo);const _useState94=useState(new Set(activos.map(m=>m.id))),selected=_useState94[0],setSelected=_useState94[1];function toggle(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function selAll(){setSelected(new Set(activos.map(m=>m.id)));}function selNone(){setSelected(new Set());}function confirmar(){if(selected.size===0)return;onConfirm({nombre:usuario.nombre,rol:'operador',mensajerosIds:Array.from(selected),verTodo:selected.size===activos.length,esAdmin:false,esSuperAdmin:false});}return/*#__PURE__*/React.createElement("div",{className:"perfil-screen"},/*#__PURE__*/React.createElement("div",{className:"perfil-card"},/*#__PURE__*/React.createElement("div",{className:"perfil-logo"},/*#__PURE__*/React.createElement("img",{src:LOGO_SRC,alt:"TransPgso"}),/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{style:{fontFamily:"Bebas Neue",fontSize:22,letterSpacing:3,color:"var(--gold)"}},"TRANSPGSO"),/*#__PURE__*/React.createElement("div",{className:"perfil-sub"},"Centro de Operaciones"))),/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',marginBottom:20,fontSize:15,color:'var(--text)'}},"Hola, ",/*#__PURE__*/React.createElement("strong",{style:{color:'var(--gold)'}},usuario.nombre),/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginTop:4}},"Selecciona los mensajeros que supervisas")),/*#__PURE__*/React.createElement("div",{className:"form-group"},/*#__PURE__*/React.createElement("div",{className:"sel-actions"},/*#__PURE__*/React.createElement("button",{className:"sel-link",onClick:selAll},"Seleccionar todos"),/*#__PURE__*/React.createElement("span",{style:{color:'var(--border)',margin:'0 6px'}},"|"),/*#__PURE__*/React.createElement("button",{className:"sel-link",onClick:selNone},"Limpiar"),/*#__PURE__*/React.createElement("span",{style:{marginLeft:'auto',fontSize:12,color:'var(--text-soft)',fontFamily:'JetBrains Mono'}},selected.size,"/",activos.length," seleccionados")),/*#__PURE__*/React.createElement("div",{className:"men-grid"},activos.map(m=>/*#__PURE__*/React.createElement("div",{key:m.id,className:`men-chip${selected.has(m.id)?' selected':''}`,onClick:()=>toggle(m.id)},/*#__PURE__*/React.createElement("div",{className:"men-chip-check"},selected.has(m.id)?'✓':''),/*#__PURE__*/React.createElement("span",{className:"men-chip-name"},m.nombre))))),/*#__PURE__*/React.createElement("div",{style:{marginTop:24,display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10}},/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)'}},selected.size===0&&/*#__PURE__*/React.createElement("span",{style:{color:'var(--danger)',fontWeight:600}},"Selecciona al menos un mensajero"),selected.size>0&&/*#__PURE__*/React.createElement("span",null,/*#__PURE__*/React.createElement("strong",{style:{color:'var(--gold)'}},selected.size)," mensajero",selected.size!==1?'s':''," seleccionado",selected.size!==1?'s':'')),/*#__PURE__*/React.createElement("button",{className:"btn-confirm",onClick:confirmar,disabled:selected.size===0,style:{opacity:selected.size===0?0.5:1}},"Entrar al sistema \u2192"))));}function fechaHoyCL(d){d=d||new Date();var y=d.getFullYear();var m=String(d.getMonth()+1).padStart(2,'0');var dia=String(d.getDate()).padStart(2,'0');return y+'-'+m+'-'+dia;}
-const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localStorage.getItem(LS_KEY+'_'+key);return raw?JSON.parse(raw):fallback;}catch(e){return fallback;}}function lsSave(key,val){try{localStorage.setItem(LS_KEY+'_'+key,JSON.stringify(val));}catch(e){}}function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY)).forEach(k=>localStorage.removeItem(k));}catch(e){}}function PortalCliente({usuario,onLogout}){
+const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localStorage.getItem(LS_KEY+'_'+key);return raw?JSON.parse(raw):fallback;}catch(e){return fallback;}}function lsSave(key,val){try{localStorage.setItem(LS_KEY+'_'+key,JSON.stringify(val));}catch(e){}}function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY)).forEach(k=>localStorage.removeItem(k));}catch(e){}}function MapaCliente(props){
+  var nombreCliente=props.nombreCliente;
+  var mapRef=React.useRef(null);
+  var mapObj=React.useRef(null);
+  var geocoderRef=React.useRef(null);
+  var markersRef=React.useRef({});
+  var coordsCacheRef=React.useRef({});
+  var _envios=React.useState([]);var envios=_envios[0];var setEnvios=_envios[1];
+  var _mapaListo=React.useState(false);var mapaListo=_mapaListo[0];var setMapaListo=_mapaListo[1];
+  function colorEstado(estado){
+    if(estado==='entregado')return'#2e7d4f';
+    if(estado==='cancelado'||estado==='siniestro')return'#b03030';
+    if(estado==='reprogramado')return'#9c27b0';
+    if(estado==='en_bodega')return'#1a6b8a';
+    return'#C8A84B';
+  }
+  function labelEstado(estado){
+    var m={en_bodega:'En bodega',en_ruta:'En ruta',entregado:'Entregado',reprogramado:'Reprogramado',cancelado:'Cancelado',siniestro:'Siniestro'};
+    return m[estado]||estado;
+  }
+  React.useEffect(function(){
+    var cancelado=false;
+    function cargar(){
+      db.from('envios').select('codigo,destinatario,direccion,comuna,estado,fecha').eq('cliente',nombreCliente).neq('estado','eliminado').then(function(res){
+        if(!cancelado&&res.data)setEnvios(res.data);
+      }).catch(function(){});
+    }
+    cargar();
+    var canalId='envios-cliente-'+nombreCliente.replace(/[^a-zA-Z0-9]/g,'_');
+    var canal=db.channel(canalId).on('postgres_changes',{event:'*',schema:'public',table:'envios',filter:'cliente=eq.'+nombreCliente},function(){cargar();}).subscribe();
+    var iv=setInterval(cargar,30000);
+    return function(){cancelado=true;db.removeChannel(canal);clearInterval(iv);};
+  },[nombreCliente]);
+  React.useEffect(function(){
+    function tryInit(){
+      if(!mapRef.current||mapObj.current)return;
+      if(!window.google||!window.google.maps){setTimeout(tryInit,200);return;}
+      var map=new google.maps.Map(mapRef.current,{center:{lat:-33.47,lng:-70.65},zoom:11,streetViewControl:false,fullscreenControl:false,gestureHandling:'greedy'});
+      geocoderRef.current=new google.maps.Geocoder();
+      mapObj.current=map;
+      setMapaListo(true);
+    }
+    tryInit();
+  },[]);
+  React.useEffect(function(){
+    if(!mapaListo||!mapObj.current||!geocoderRef.current)return;
+    var map=mapObj.current;
+    var geocoder=geocoderRef.current;
+    var codigosActuales={};
+    envios.forEach(function(e){codigosActuales[e.codigo]=true;});
+    Object.keys(markersRef.current).forEach(function(cod){
+      if(!codigosActuales[cod]){markersRef.current[cod].setMap(null);delete markersRef.current[cod];}
+    });
+    var delay=0;
+    envios.forEach(function(e){
+      if(!e.direccion)return;
+      var existente=markersRef.current[e.codigo];
+      if(existente){
+        existente.setIcon({path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:colorEstado(e.estado),fillOpacity:1,strokeColor:'#fff',strokeWeight:2});
+        return;
+      }
+      function ponerPin(loc){
+        var marker=new google.maps.Marker({position:loc,map:map,icon:{path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:colorEstado(e.estado),fillOpacity:1,strokeColor:'#fff',strokeWeight:2}});
+        var info=new google.maps.InfoWindow({content:'<div style="font-family:DM Sans;padding:2px 4px;min-width:180px"><div style="font-weight:700;color:#C8A84B;font-size:11px;letter-spacing:1px;margin-bottom:4px">'+e.codigo+'</div><div style="font-size:13px;margin-bottom:2px">'+(e.destinatario||'')+'</div><div style="font-size:12px;color:#666;margin-bottom:6px">'+(e.direccion||'')+(e.comuna?', '+e.comuna:'')+'</div><div style="font-size:12px;font-weight:700;color:'+colorEstado(e.estado)+'">'+labelEstado(e.estado)+'</div></div>'});
+        marker.addListener('click',function(){info.open(map,marker);});
+        markersRef.current[e.codigo]=marker;
+      }
+      var cached=coordsCacheRef.current[e.codigo];
+      if(cached){ponerPin(cached);return;}
+      delay+=250;
+      setTimeout(function(){
+        geocoder.geocode({address:e.direccion+', '+(e.comuna||'')+', Santiago, Chile'},function(results,status){
+          if(status==='OK'&&results&&results[0]){
+            var loc={lat:results[0].geometry.location.lat(),lng:results[0].geometry.location.lng()};
+            coordsCacheRef.current[e.codigo]=loc;
+            ponerPin(loc);
+          }
+        });
+      },delay);
+    });
+  },[envios,mapaListo]);
+  return React.createElement('div',null,
+    React.createElement('div',{className:'section-head'},
+      React.createElement('div',{className:'section-title'},'Mapa de ',React.createElement('span',null,'Entregas')),
+      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6,background:'rgba(46,125,79,0.1)',border:'1px solid rgba(46,125,79,0.2)',borderRadius:20,padding:'4px 10px'}},
+        React.createElement('div',{style:{width:8,height:8,borderRadius:'50%',background:'#2e7d4f'}}),
+        React.createElement('span',{style:{fontSize:10,color:'#2e7d4f',fontWeight:700,letterSpacing:1}},'TIEMPO REAL')
+      )
+    ),
+    React.createElement('div',{style:{display:'flex',gap:14,flexWrap:'wrap',marginBottom:12,fontSize:11}},
+      [['#1a6b8a','En bodega'],['#C8A84B','En ruta'],['#2e7d4f','Entregado'],['#9c27b0','Reprogramado'],['#b03030','Cancelado/Siniestro']].map(function(x){
+        return React.createElement('div',{key:x[1],style:{display:'flex',alignItems:'center',gap:5}},
+          React.createElement('div',{style:{width:10,height:10,borderRadius:'50%',background:x[0]}}),
+          React.createElement('span',{style:{color:'var(--text-soft)'}},x[1])
+        );
+      })
+    ),
+    React.createElement('div',{ref:mapRef,style:{width:'100%',height:'70vh',borderRadius:12,border:'1px solid var(--border)'}}),
+    !mapaListo&&React.createElement('div',{style:{textAlign:'center',padding:20,color:'var(--text-soft)',fontSize:12}},'Cargando mapa...')
+  );
+}
+function PortalCliente({usuario,onLogout}){
   var nombreCliente=(usuario.cliente_nombre||usuario.nombre||'').toUpperCase().trim();
   var _t=useState('dashboard'),tab=_t[0],setTab=_t[1];
   var _e=useState([]),envios=_e[0],setEnvios=_e[1];
@@ -7784,7 +7885,7 @@ const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localSto
     ),
     // Nav
     React.createElement('div',{className:'nav'},
-      [{id:'dashboard',label:'Dashboard'},{id:'envios',label:'Mis Envíos'},{id:'etiquetas',label:'Envíos Manuales'}].map(function(t){
+      [{id:'dashboard',label:'Dashboard'},{id:'envios',label:'Mis Envíos'},{id:'mapa',label:'Mapa'},{id:'etiquetas',label:'Envíos Manuales'}].map(function(t){
         return React.createElement('button',{key:t.id,className:'nav-btn '+(tab===t.id?'active':''),onClick:function(){setTab(t.id);}},t.label);
       })
     ),
@@ -7884,6 +7985,7 @@ const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localSto
       ),
 
       // Etiquetas tab
+      tab==='mapa'&&React.createElement(MapaCliente,{nombreCliente:nombreCliente}),
       tab==='etiquetas'&&React.createElement(EtiquetasCliente,{nombreCliente:nombreCliente,envios:envios,setEnvios:setEnvios})
     ),
 
