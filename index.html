@@ -878,7 +878,7 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
         React.createElement('span',{style:{color:'var(--text-soft)',fontSize:12}},'al'),
         React.createElement('input',{type:'date',value:hasta,onChange:e=>setHasta(e.target.value),style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12,outline:'none'}}),
       ),
-      React.createElement('span',{style:{marginLeft:'auto',fontFamily:'JetBrains Mono',fontSize:11,color:'var(--text-soft)'}},cargandoExtra?'Cargando historial...':total.toLocaleString('es-CL')+' envíos en período')
+      React.createElement('span',{style:{marginLeft:'auto',display:'flex',alignItems:'center',gap:8,fontFamily:'Bebas Neue',fontSize:20,letterSpacing:1,color:'var(--dark)',background:'linear-gradient(145deg,#fff,#f5eedc)',border:'1.5px solid var(--gold)',borderRadius:12,padding:'8px 18px',boxShadow:'3px 3px 8px rgba(43,46,32,0.1)'}},cargandoExtra?React.createElement('span',{style:{fontSize:13,fontFamily:'DM Sans',color:'var(--text-soft)'}},'Cargando historial...'):React.createElement(React.Fragment,null,React.createElement('span',{style:{color:'var(--gold)',fontSize:26}},total.toLocaleString('es-CL')),React.createElement('span',{style:{fontSize:12,fontFamily:'DM Sans',color:'var(--text-soft)',letterSpacing:0,textTransform:'none'}},'envíos en período')))
     ),
     // ── KPI CARDS ESTADO ──
     React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12,marginBottom:20}},
