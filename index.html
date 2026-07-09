@@ -7991,29 +7991,6 @@ function PortalCliente({usuario,onLogout}){
 
     // Modal detalle envío
     detalle&&React.createElement(Modal,{title:'Envío '+detalle.codigo,onClose:function(){setDetalle(null);}},
-      // Cambiar cliente
-      React.createElement('div',{style:{background:'linear-gradient(145deg,rgba(200,168,75,0.08),rgba(200,168,75,0.04))',border:'1px solid rgba(200,168,75,0.25)',borderRadius:10,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',gap:12}},
-        React.createElement('div',{style:{flex:1}},
-          React.createElement('div',{style:{fontSize:9,color:'rgba(200,168,75,0.7)',letterSpacing:2,textTransform:'uppercase',fontFamily:'Bebas Neue',marginBottom:4}},'Cliente'),
-          React.createElement('select',{
-            value:detalle.cliente||'',
-            onChange:async function(e){
-              var nuevoCliente=e.target.value;
-              setDetalle(function(prev){return{...prev,cliente:nuevoCliente};});
-              setEnvios(function(prev){return prev.map(function(env){return env.codigo===detalle.codigo?{...env,cliente:nuevoCliente}:env;});});
-              await db.from('envios').update({cliente:nuevoCliente}).eq('codigo',detalle.codigo);
-              toast('✓ Cliente actualizado a '+nuevoCliente);
-            },
-            style:{width:'100%',padding:'8px 12px',borderRadius:8,border:'1px solid rgba(200,168,75,0.3)',background:'linear-gradient(145deg,#fff,#fdf6e8)',color:'var(--dark)',fontSize:13,fontWeight:700,fontFamily:'DM Sans',outline:'none',cursor:'pointer'}
-          },
-            React.createElement('option',{value:''},'— Sin cliente —'),
-            clientes.filter(function(c){return c.activo;}).map(function(c){
-              return React.createElement('option',{key:c.id,value:c.nombre},c.nombre);
-            })
-          )
-        ),
-        React.createElement('div',{style:{fontSize:10,color:'rgba(200,168,75,0.5)',textAlign:'right',maxWidth:120,lineHeight:1.4}},'Cambia el cliente asignado a este envío')
-      ),
       React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}},
         [['Código',detalle.codigo],['Destinatario',detalle.destinatario],['Dirección',detalle.direccion],['Comuna',detalle.comuna],['Teléfono',detalle.telefono],['Fecha',detalle.fecha],['Estado',(estadoInfo?estadoInfo(detalle.estado):{label:detalle.estado}).label]].map(function(x){
           return React.createElement('div',{key:x[0],style:{padding:'8px 12px',background:'linear-gradient(145deg,#fff,#fdf6e8)',borderRadius:8,border:'1px solid rgba(200,168,75,0.1)',boxShadow:'2px 2px 4px rgba(43,46,32,0.06)'}},
