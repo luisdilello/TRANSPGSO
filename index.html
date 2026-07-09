@@ -7705,6 +7705,7 @@ const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localSto
   var coordsCacheRef=React.useRef({});
   var _envios=React.useState([]);var envios=_envios[0];var setEnvios=_envios[1];
   var _mapaListo=React.useState(false);var mapaListo=_mapaListo[0];var setMapaListo=_mapaListo[1];
+  var _fe=React.useState('todos');var filtroEstado=_fe[0];var setFiltroEstado=_fe[1];
   function colorEstado(estado){
     if(estado==='entregado')return'#2e7d4f';
     if(estado==='cancelado'||estado==='siniestro')return'#b03030';
@@ -7745,12 +7746,13 @@ const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localSto
     var map=mapObj.current;
     var geocoder=geocoderRef.current;
     var codigosActuales={};
-    envios.forEach(function(e){codigosActuales[e.codigo]=true;});
+    var enviosVisibles=filtroEstado==='todos'?envios:filtroEstado==='cancelado'?envios.filter(function(e){return e.estado==='cancelado'||e.estado==='siniestro';}):envios.filter(function(e){return e.estado===filtroEstado;});
+    enviosVisibles.forEach(function(e){codigosActuales[e.codigo]=true;});
     Object.keys(markersRef.current).forEach(function(cod){
       if(!codigosActuales[cod]){markersRef.current[cod].setMap(null);delete markersRef.current[cod];}
     });
     var delay=0;
-    envios.forEach(function(e){
+    enviosVisibles.forEach(function(e){
       if(!e.direccion)return;
       var existente=markersRef.current[e.codigo];
       if(existente){
@@ -7776,7 +7778,7 @@ const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localSto
         });
       },delay);
     });
-  },[envios,mapaListo]);
+  },[envios,mapaListo,filtroEstado]);
   return React.createElement('div',null,
     React.createElement('div',{className:'section-head'},
       React.createElement('div',{className:'section-title'},'Mapa de ',React.createElement('span',null,'Entregas')),
@@ -7785,11 +7787,13 @@ const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localSto
         React.createElement('span',{style:{fontSize:10,color:'#2e7d4f',fontWeight:700,letterSpacing:1}},'TIEMPO REAL')
       )
     ),
-    React.createElement('div',{style:{display:'flex',gap:14,flexWrap:'wrap',marginBottom:12,fontSize:11}},
-      [['#1a6b8a','En bodega'],['#C8A84B','En ruta'],['#2e7d4f','Entregado'],['#9c27b0','Reprogramado'],['#b03030','Cancelado/Siniestro']].map(function(x){
-        return React.createElement('div',{key:x[1],style:{display:'flex',alignItems:'center',gap:5}},
-          React.createElement('div',{style:{width:10,height:10,borderRadius:'50%',background:x[0]}}),
-          React.createElement('span',{style:{color:'var(--text-soft)'}},x[1])
+    React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12,fontSize:11}},
+      React.createElement('button',{onClick:function(){setFiltroEstado('todos');},style:{display:'flex',alignItems:'center',gap:5,padding:'4px 12px',borderRadius:20,border:'1px solid '+(filtroEstado==='todos'?'var(--gold)':'var(--border)'),background:filtroEstado==='todos'?'rgba(200,168,75,0.12)':'#fff',color:filtroEstado==='todos'?'var(--gold)':'var(--text-soft)',fontWeight:700,cursor:'pointer'}},'Todos'),
+      [['en_bodega','#1a6b8a','En bodega'],['en_ruta','#C8A84B','En ruta'],['entregado','#2e7d4f','Entregado'],['reprogramado','#9c27b0','Reprogramado'],['cancelado','#b03030','Cancelado/Siniestro']].map(function(x){
+        var isAct=filtroEstado===x[0]||(x[0]==='cancelado'&&filtroEstado==='siniestro');
+        return React.createElement('button',{key:x[1],onClick:function(){setFiltroEstado(x[0]==='cancelado'?'cancelado':x[0]);},style:{display:'flex',alignItems:'center',gap:5,padding:'4px 12px',borderRadius:20,border:'1px solid '+(isAct?x[1]:'var(--border)'),background:isAct?x[1]+'22':'#fff',color:isAct?x[1]:'var(--text-soft)',fontWeight:700,cursor:'pointer'}},
+          React.createElement('div',{style:{width:10,height:10,borderRadius:'50%',background:x[1]}}),
+          x[2]
         );
       })
     ),
