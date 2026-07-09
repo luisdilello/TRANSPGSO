@@ -7885,7 +7885,7 @@ function PortalCliente({usuario,onLogout}){
     ),
     // Nav
     React.createElement('div',{className:'nav'},
-      [{id:'dashboard',label:'Dashboard'},{id:'envios',label:'Mis Envíos'},{id:'mapa',label:'Mapa'},{id:'etiquetas',label:'Envíos Manuales'}].map(function(t){
+      [{id:'dashboard',label:'Dashboard'},{id:'envios',label:'Mis Envíos'},{id:'mapa',label:'Mapa'},{id:'etiquetas',label:'Carga de Envíos'}].map(function(t){
         return React.createElement('button',{key:t.id,className:'nav-btn '+(tab===t.id?'active':''),onClick:function(){setTab(t.id);}},t.label);
       })
     ),
@@ -8040,6 +8040,10 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios}){
   var _preview=useState([]),preview=_preview[0],setPreview=_preview[1];
   var _msg=useState(''),msg=_msg[0],setMsg=_msg[1];
   var fileRef=React.useRef();
+  var pdfFileRef=React.useRef();
+  var _previewPDF=useState([]),previewPDF=_previewPDF[0],setPreviewPDF=_previewPDF[1];
+  var _procesandoPDF=useState(false),procesandoPDF=_procesandoPDF[0],setProcesandoPDF=_procesandoPDF[1];
+  var _progresoPDF=useState(''),progresoPDF=_progresoPDF[0],setProgresoPDF=_progresoPDF[1];
 
   // Obtener próximo correlativo PGSO desde Supabase
   async function getSiguienteCodigo(){
@@ -8144,6 +8148,106 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios}){
     localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifs.slice(0,100)));
     setPreview([]);
     setMsg('✓ '+creados+' envíos creados'+(errores>0?' ('+errores+' errores)':''));
+    setGuardando(false);
+  }
+
+  // Carga masiva desde PDF (mismo parser que usa el admin en Colecta para etiquetas Flex)
+  function procesarPDF(file){
+    setProcesandoPDF(true);setProgresoPDF('📄 Leyendo PDF...');setMsg('');
+    var reader=new FileReader();
+    reader.onload=async function(e){
+      try{
+        var arrayBuffer=e.target.result;
+        if(!window.pdfjsLib){throw new Error('pdf.js no cargado. Recarga la página.');}
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        var pdfDoc=await window.pdfjsLib.getDocument({data:arrayBuffer}).promise;
+        var totalPags=pdfDoc.numPages;
+        setProgresoPDF('📄 PDF cargado · '+totalPags+' páginas · Extrayendo datos...');
+        var enviosPDF=[];
+        var NO_COMUNA=/^(RESIDENCIAL|FLEX|ANILLO|DISTRIBUIDOR|PUNTO|Pack|Venta|Envio|Avenida|Quilicura|Recorta|Color|Unidad|Led|ZONA|SECTOR|NORTE|SUR|ESTE|ORIENTE|PONIENTE|CENTRO)/i;
+        for(var i=1;i<=totalPags;i++){
+          if(i%10===0||i===1){setProgresoPDF('⚙ Procesando página '+i+' / '+totalPags+'...');await new Promise(function(r){setTimeout(r,0);});}
+          try{
+            var page=await pdfDoc.getPage(i);
+            var tc=await page.getTextContent();
+            var lineas=[];var lastY=-1;var linea='';
+            tc.items.forEach(function(it){
+              var y=Math.round(it.transform[5]);
+              if(lastY!==-1&&Math.abs(y-lastY)>3){lineas.push(linea.trim());linea='';}
+              linea+=it.str;lastY=y;
+            });
+            if(linea.trim())lineas.push(linea.trim());
+            var codigo='',destinatario='',direccion='',referencia='',comuna='';
+            var flexIdx=-1;
+            lineas.forEach(function(l,idx2){
+              var mCod=l.match(/Envio[:\s]+(\d[\d\s]{5,})/i);
+              if(mCod&&!codigo)codigo=mCod[1].replace(/\s+/g,'');
+              if(/FLEX/i.test(l)&&/\d{2}\s+(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC)/i.test(l))flexIdx=idx2;
+              var mDir=l.match(/^Direcci[oó]n[:\s]+(.+)/i);
+              if(mDir&&!direccion)direccion=mDir[1].trim();
+              var mRef=l.match(/^Referencia[:\s]+(.+)/i);
+              if(mRef){var rv=mRef[1].replace(/^Referencia[:\s]*/i,'').trim();if(rv)referencia=referencia?referencia+' '+rv:rv;}
+              var mDest=l.match(/^Destinatario[:\s]+(.+)/i);
+              if(mDest&&!destinatario)destinatario=mDest[1].replace(/\([^)]*\)/g,'').trim();
+            });
+            if(flexIdx>=0&&!comuna){
+              for(var ci=flexIdx+1;ci<lineas.length&&ci<flexIdx+8;ci++){
+                var c=(lineas[ci]||'').trim();
+                if(!c)continue;
+                var esMayus=c===c.toUpperCase()&&/[A-ZÁÉÍÓÚÑ]/.test(c);
+                if(esMayus&&c.length>3&&!NO_COMUNA.test(c)&&!/^\d/.test(c)){comuna=c;break;}
+                if(/^ANILLO/i.test(c)){
+                  for(var ci2=ci+1;ci2<lineas.length&&ci2<ci+4;ci2++){
+                    var c2=(lineas[ci2]||'').trim();
+                    if(c2&&c2===c2.toUpperCase()&&c2.length>3&&!NO_COMUNA.test(c2)&&!/^\d/.test(c2)){comuna=c2;break;}
+                  }
+                  if(comuna)break;
+                }
+                if(/^Direcci/i.test(c))break;
+              }
+            }
+            if(!codigo)continue;
+            var foto_etiqueta=null;
+            try{
+              var vp=page.getViewport({scale:1.5});
+              var cv=document.createElement('canvas');
+              cv.width=vp.width;cv.height=vp.height;
+              await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+              foto_etiqueta=cv.toDataURL('image/jpeg',0.72);
+              cv.width=0;cv.height=0;
+            }catch(re){console.warn('Error render pág '+i,re);}
+            enviosPDF.push({codigo:codigo,destinatario:destinatario,direccion:direccion,comuna:comuna.toUpperCase(),referencia:referencia,telefono:'',monto:0,foto_etiqueta:foto_etiqueta});
+          }catch(pe){console.warn('Error página '+i+':',pe.message);}
+        }
+        setProcesandoPDF(false);setProgresoPDF('');
+        if(!enviosPDF.length){setMsg('⚠ No se encontraron envíos en el PDF');return;}
+        setPreviewPDF(enviosPDF);
+        setMsg('✓ '+enviosPDF.length+' envíos detectados en el PDF. Revisa y confirma.');
+      }catch(err){setMsg('⚠ Error procesando PDF: '+err.message);setProcesandoPDF(false);setProgresoPDF('');}
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  async function confirmarCargaPDF(){
+    if(!previewPDF.length)return;
+    setGuardando(true);setMsg('Procesando '+previewPDF.length+' envíos...');
+    var creados=0;var errores=0;
+    for(var i=0;i<previewPDF.length;i++){
+      try{
+        var r=previewPDF[i];
+        var nuevo={codigo:r.codigo,cliente:nombreCliente,destinatario:r.destinatario,telefono:r.telefono,direccion:r.direccion,comuna:r.comuna,referencia:r.referencia,monto:r.monto,fecha:fechaHoyCL(),estado:'sin_asignar',mensajero:'',nota:r.referencia?'Ref: '+r.referencia:'',fuente:'externo',foto_etiqueta:r.foto_etiqueta,historial:[{fecha:new Date().toISOString(),estado:'sin_asignar',nota:'PDF cargado por '+nombreCliente}]};
+        await db.from('envios').upsert({codigo:nuevo.codigo,cliente:nuevo.cliente,destinatario:nuevo.destinatario,telefono:nuevo.telefono,direccion:nuevo.direccion,comuna:nuevo.comuna,referencia:nuevo.referencia,monto:nuevo.monto,fecha:nuevo.fecha,estado:nuevo.estado,mensajero:'',nota:nuevo.nota,fuente:'externo',foto_etiqueta:nuevo.foto_etiqueta},{onConflict:'codigo'});
+        var local2=lsLoad('gestion_envios',[]);lsSave('gestion_envios',[nuevo,...local2]);
+        setEnvios(function(prev){return[nuevo,...prev];});
+        setSeleccionados(function(p){return[...p,nuevo.codigo];});
+        creados++;
+      }catch(e){errores++;}
+    }
+    var notifs2=JSON.parse(localStorage.getItem('transpgso_v2_notificaciones')||'[]');
+    notifs2.unshift({id:Date.now(),tipo:'carga_pdf',cliente:nombreCliente,cantidad:creados,fecha:new Date().toISOString(),leida:false});
+    localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifs2.slice(0,100)));
+    setPreviewPDF([]);
+    setMsg('✓ '+creados+' envíos cargados desde PDF'+(errores>0?' ('+errores+' errores)':''));
     setGuardando(false);
   }
 
@@ -8277,6 +8381,7 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios}){
         btnSub('lista','Mis Envíos'),
         btnSub('nuevo','➕ Nuevo Envío'),
         btnSub('masiva','Carga Masiva'),
+        btnSub('pdf','📄 Carga PDF'),
         subTab==='lista'&&React.createElement(React.Fragment,null,
           React.createElement('div',{style:{width:1,height:20,background:'var(--border)',margin:'0 4px'}}),
           React.createElement('button',{className:'btn-secondary',onClick:selTodo},'Sel. todos'),
@@ -8385,6 +8490,64 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios}){
               }),
               preview.length>20&&React.createElement('tr',null,
                 React.createElement('td',{colSpan:6,style:{textAlign:'center',padding:'10px',color:'var(--text-soft)',fontSize:12}},'... y '+(preview.length-20)+' más')
+              )
+            )
+          )
+        )
+      )
+    ),
+
+    // Tab: Carga masiva desde PDF
+    subTab==='pdf'&&React.createElement('div',null,
+      React.createElement('div',{className:'panel',style:{marginBottom:16}},
+        React.createElement('div',{className:'panel-title'},'Carga Masiva desde PDF'),
+        React.createElement('div',{style:{fontSize:13,color:'var(--text-soft)',marginBottom:16}},'Sube el PDF de etiquetas (formato Flex) y el sistema detecta automáticamente código, destinatario, dirección y comuna de cada envío.'),
+        React.createElement('div',{style:{display:'flex',gap:12,marginBottom:20,flexWrap:'wrap'}},
+          React.createElement('div',{style:{flex:1,minWidth:200}},
+            React.createElement('div',{
+              style:{border:'2px dashed var(--gold)',borderRadius:10,padding:'20px',textAlign:'center',cursor:procesandoPDF?'default':'pointer',background:'rgba(200,168,75,0.04)',opacity:procesandoPDF?0.6:1},
+              onClick:function(){!procesandoPDF&&pdfFileRef.current&&pdfFileRef.current.click();},
+              onDragOver:function(e){e.preventDefault();},
+              onDrop:function(e){e.preventDefault();if(procesandoPDF)return;var f=e.dataTransfer.files[0];if(f)procesarPDF(f);}
+            },
+              React.createElement('div',{style:{fontSize:28,marginBottom:8}},'📄'),
+              React.createElement('div',{style:{fontWeight:700,color:'var(--dark)',marginBottom:4}},procesandoPDF?(progresoPDF||'Procesando...'):'Arrastra tu PDF aquí o haz clic'),
+              React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)'}},'Formato: .pdf — etiquetas Flex'),
+              React.createElement('input',{ref:pdfFileRef,type:'file',accept:'application/pdf',style:{display:'none'},onChange:function(e){if(e.target.files[0])procesarPDF(e.target.files[0]);e.target.value='';}})
+            )
+          )
+        )
+      ),
+      previewPDF.length>0&&React.createElement('div',{className:'panel'},
+        React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,flexWrap:'wrap',gap:8}},
+          React.createElement('div',{className:'panel-title',style:{marginBottom:0}},'Vista previa — '+previewPDF.length+' envíos'),
+          React.createElement('button',{className:'btn-primary',onClick:confirmarCargaPDF,disabled:guardando},guardando?'Cargando...':'✓ Confirmar y Crear '+previewPDF.length+' Envíos')
+        ),
+        React.createElement('div',{className:'table-wrap'},
+          React.createElement('table',null,
+            React.createElement('thead',null,
+              React.createElement('tr',null,
+                React.createElement('th',null,'#'),
+                React.createElement('th',null,'Código'),
+                React.createElement('th',null,'Destinatario'),
+                React.createElement('th',null,'Dirección'),
+                React.createElement('th',null,'Comuna'),
+                React.createElement('th',null,'Foto')
+              )
+            ),
+            React.createElement('tbody',null,
+              previewPDF.slice(0,20).map(function(r,i){
+                return React.createElement('tr',{key:r.codigo+i},
+                  React.createElement('td',null,i+1),
+                  React.createElement('td',{style:{fontFamily:'JetBrains Mono',fontSize:11}},r.codigo),
+                  React.createElement('td',null,r.destinatario||'—'),
+                  React.createElement('td',null,r.direccion||'—'),
+                  React.createElement('td',null,r.comuna||'—'),
+                  React.createElement('td',null,r.foto_etiqueta?'✓':'—')
+                );
+              }),
+              previewPDF.length>20&&React.createElement('tr',null,
+                React.createElement('td',{colSpan:6,style:{textAlign:'center',padding:'10px',color:'var(--text-soft)',fontSize:12}},'... y '+(previewPDF.length-20)+' más')
               )
             )
           )
