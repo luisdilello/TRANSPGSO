@@ -1801,7 +1801,7 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
     // También leer desde Supabase para tener datos actualizados del mensajero
     db.from('retiros').select('*').eq('fecha',retiroFecha)
       .then(function(res){
-        if(res.data&&res.data.length>0){
+        if(res.data){
           // Actualizar campos que el mensajero puede haber cambiado
           setFilas(function(prev){
             return prev.map(function(fila){
@@ -6676,7 +6676,7 @@ function RetirosRider(_ref_rr){
     db.from('retiros').select('*').eq('fecha',fecha)
       .then(function(res){
         setLoading(false);
-        if(res.data&&res.data.length>0){
+        if(res.data){
           var mios=res.data.filter(function(r){
             return (r.mensajero||'').replace(/,\s*/g,' ').toUpperCase().trim()===nombre;
           });
@@ -8719,7 +8719,7 @@ function NavDropdown(_ref_nd){
 function App(){useEffect(()=>{
   // Sincronizar mensajeros desde Supabase y normalizar nombres al iniciar
   db.from('mensajeros').select('*').order('nombre').then(function(res){
-    if(res.data&&res.data.length>0){
+    if(res.data){
       var normMens=res.data.map(function(m){return{...m,nombre:(m.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim(),optimizacionRutaActiva:!!m.optimizacion_ruta_activa};});
       setMensajeros(normMens);
       lsSave('mensajeros',normMens);
