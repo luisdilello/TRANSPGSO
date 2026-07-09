@@ -8070,7 +8070,7 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios}){
       var notifs=JSON.parse(localStorage.getItem('transpgso_v2_notificaciones')||'[]');
       notifs.unshift({id:Date.now(),tipo:'nuevo_envio',cliente:nombreCliente,codigo:nuevo.codigo,fecha:new Date().toISOString(),leida:false});
       localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifs.slice(0,100)));
-      db.from('avisos_admin').insert({tipo:'nuevo_envio',cliente:nombreCliente,cantidad:1,mensaje:'Nuevo envío: '+nuevo.codigo}).then(function(){}).catch(function(){});
+      db.from('avisos_admin').insert({tipo:'nuevo_envio',cliente:nombreCliente,cantidad:1,mensaje:'Nuevo envío: '+nuevo.codigo}).then(function(r){console.log('[avisos_admin] INSERT resultado:',r);}).catch(function(e){console.error('[avisos_admin] INSERT EXCEPCION:',e);});
       // Actualizar estado local
       var local=lsLoad('gestion_envios',[]);
       lsSave('gestion_envios',[nuevo,...local]);
