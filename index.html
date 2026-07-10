@@ -1699,9 +1699,8 @@ tbody tr:nth-child(even){background:#FAFAF7;}td{padding:6px 8px;border-bottom:1p
     const filaHtml=filasCli.map((r,i)=>{
       const est=r['Estatus de Envio']||r.estado||'Pendiente';
       const env=String(r['Envio']||r.codigo||'—').replace(/^'/,'');
-      const desp=(r['Despachador']||r.despachador||r.mensajero||'').replace(/,\s*/g,' ');
       const estCls=est.toLowerCase().includes('entregado')?'entregado':est.toLowerCase().includes('reprog')?'reprog':est.toLowerCase().includes('cancel')?'cancelado':'pendiente';
-      return`<tr><td style="color:#9a9d8a;font-size:9px">${i+1}</td><td style="font-family:monospace;font-size:10px;font-weight:600">${env}</td><td style="font-weight:600">${cli}</td><td style="color:#4a4d3a;font-size:11px">${desp}</td><td><span class="est est-${estCls}">${est}</span></td></tr>`;
+      return`<tr><td style="color:#9a9d8a;font-size:9px">${i+1}</td><td style="font-family:monospace;font-size:10px;font-weight:600">${env}</td><td style="font-weight:600">${cli}</td><td><span class="est est-${estCls}">${est}</span></td></tr>`;
     }).join('');
     const htmlContent=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Manifiesto ${cli} - ${fechaStr}</title><style>${css}</style></head><body>
 <div class="header">
@@ -1714,7 +1713,7 @@ tbody tr:nth-child(even){background:#FAFAF7;}td{padding:6px 8px;border-bottom:1p
   </div>
 </div>
 <div style="padding:0 16px 16px">
-  <table><thead><tr><th>#</th><th>Seguimiento</th><th>Remitente</th><th>Despachador</th><th>Estado</th></tr></thead><tbody>${filaHtml}</tbody></table>
+  <table><thead><tr><th>#</th><th>Seguimiento</th><th>Remitente</th><th>Estado</th></tr></thead><tbody>${filaHtml}</tbody></table>
   <div class="resumen">
     <div class="res-item"><div class="res-val">${total}</div><div class="res-lbl">Envíos</div></div>
     <div class="res-item"><div class="res-val" style="color:#2e7d4f">${entregados}</div><div class="res-lbl">Entregados</div></div>
