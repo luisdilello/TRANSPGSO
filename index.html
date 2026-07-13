@@ -795,6 +795,8 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
   const _uD2=useState(''),hasta=_uD2[0],setHasta=_uD2[1];
   const _uEx=useState([]),extraEnvios=_uEx[0],setExtraEnvios=_uEx[1];
   const _uExL=useState(false),cargandoExtra=_uExL[0],setCargandoExtra=_uExL[1];
+  const _uRE=useState([]),rangoEnvios=_uRE[0],setRangoEnvios=_uRE[1];
+  const _uRL=useState(false),cargandoRango=_uRL[0],setCargandoRango=_uRL[1];
   const hoy=fechaHoyCL();
   // El sync global (App) solo trae últimos 8 días. Para ver más historial, traer todo una sola vez
   // y filtrar siempre en el cliente (igual que 'todos', que es el único período confirmado funcionando).
@@ -814,6 +816,23 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
     fetchExtra();
     return()=>{cancelado=true;};
   },[periodo,db]);
+  // Consulta específica para Rango: se dispara cada vez que cambian las fechas elegidas,
+  // trayendo exactamente ese rango directo de Supabase (sin depender del tope de 20.000 del fetch general).
+  useEffect(()=>{
+    if(!db||periodo!=='rango'||!desde||!hasta)return;
+    let cancelado=false;
+    async function fetchRango(){
+      setCargandoRango(true);
+      try{
+        const{data,error}=await db.from('envios').select('codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto').neq('estado','eliminado').gte('fecha',desde).lte('fecha',hasta).order('fecha',{ascending:false}).limit(50000);
+        if(error)console.warn('Dashboard fetch rango error:',error.message);
+        if(!cancelado&&!error&&data)setRangoEnvios(data);
+      }catch(e){console.warn('Dashboard fetch rango error:',e.message);}
+      if(!cancelado)setCargandoRango(false);
+    }
+    fetchRango();
+    return()=>{cancelado=true;};
+  },[periodo,desde,hasta,db]);
   const lunesStr=(()=>{const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));return d.toISOString().slice(0,10);})();
   // Fecha de ingreso al sistema = primera entrada del historial (cuando se creó)
   function fechaIngreso(e){
@@ -837,11 +856,12 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
   // ── DATOS FILTRADOS ───────────────────────────────────────────
   const todos=useMemo(()=>{
     const locales=enviosLocales||[];
-    if(!extraEnvios.length)return locales;
+    const fuenteExtra=(periodo==='rango'&&rangoEnvios.length)?rangoEnvios:extraEnvios;
+    if(!fuenteExtra.length)return locales;
     const codigosLocales=new Set(locales.map(e=>e.codigo));
-    const soloExtra=extraEnvios.filter(e=>!codigosLocales.has(e.codigo));
+    const soloExtra=fuenteExtra.filter(e=>!codigosLocales.has(e.codigo));
     return[...locales,...soloExtra];
-  },[enviosLocales,extraEnvios]);
+  },[enviosLocales,extraEnvios,rangoEnvios,periodo]);
   const filtrados=todos.filter(e=>enPeriodo(e));
   const total=filtrados.length;
   const porEstado={
@@ -878,7 +898,7 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
         React.createElement('span',{style:{color:'var(--text-soft)',fontSize:12}},'al'),
         React.createElement('input',{type:'date',value:hasta,onChange:e=>setHasta(e.target.value),style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12,outline:'none'}}),
       ),
-      React.createElement('span',{style:{marginLeft:'auto',display:'flex',alignItems:'center',gap:8,fontFamily:'Bebas Neue',fontSize:20,letterSpacing:1,color:'var(--dark)',background:'linear-gradient(145deg,#fff,#f5eedc)',border:'1.5px solid var(--gold)',borderRadius:12,padding:'8px 18px',boxShadow:'3px 3px 8px rgba(43,46,32,0.1)'}},cargandoExtra?React.createElement('span',{style:{fontSize:13,fontFamily:'DM Sans',color:'var(--text-soft)'}},'Cargando historial...'):React.createElement(React.Fragment,null,React.createElement('span',{style:{color:'var(--gold)',fontSize:26}},total.toLocaleString('es-CL')),React.createElement('span',{style:{fontSize:12,fontFamily:'DM Sans',color:'var(--text-soft)',letterSpacing:0,textTransform:'none'}},'envíos en período')))
+      React.createElement('span',{style:{marginLeft:'auto',display:'flex',alignItems:'center',gap:8,fontFamily:'Bebas Neue',fontSize:20,letterSpacing:1,color:'var(--dark)',background:'linear-gradient(145deg,#fff,#f5eedc)',border:'1.5px solid var(--gold)',borderRadius:12,padding:'8px 18px',boxShadow:'3px 3px 8px rgba(43,46,32,0.1)'}},cargandoExtra||cargandoRango?React.createElement('span',{style:{fontSize:13,fontFamily:'DM Sans',color:'var(--text-soft)'}},'Cargando historial...'):React.createElement(React.Fragment,null,React.createElement('span',{style:{color:'var(--gold)',fontSize:26}},total.toLocaleString('es-CL')),React.createElement('span',{style:{fontSize:12,fontFamily:'DM Sans',color:'var(--text-soft)',letterSpacing:0,textTransform:'none'}},'envíos en período')))
     ),
     // ── KPI CARDS ESTADO ──
     React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12,marginBottom:20}},
