@@ -2481,6 +2481,29 @@ React.useEffect(()=>{
   }
   return buildPagos();
 }),pagos=_useState40[0],setPagos=_useState40[1];useEffect(()=>{lsSave('pagos_semana',pagos);},[pagos]);
+// ── Respaldo en Supabase de Pago Mensajeros (mismo patrón que Cierre de Mes) ──
+const _pagosCargados=useRef(false);
+useEffect(()=>{
+  let cancelado=false;
+  _pagosCargados.current=false;
+  (async()=>{
+    try{
+      const{data,error}=await db.from('pagos_mensajeros_semanales').select('data').eq('semana',semana).single();
+      if(!cancelado&&!error&&data&&data.data&&Array.isArray(data.data.pagos)&&data.data.pagos.length>0){
+        setPagos(data.data.pagos);
+      }
+    }catch(e){console.warn('Pago Mensajeros: error cargando desde Supabase:',e.message);}
+    _pagosCargados.current=true;
+  })();
+  return()=>{cancelado=true;};
+},[semana]);
+useEffect(()=>{
+  if(!_pagosCargados.current)return; // no pisar Supabase con datos vacíos antes de terminar de cargar
+  const t=setTimeout(()=>{
+    db.from('pagos_mensajeros_semanales').upsert({semana,data:{pagos,fechaPago},updated_at:new Date().toISOString()},{onConflict:'semana'}).then(function(r){if(r.error)console.warn('Pago Mensajeros: error guardando en Supabase:',r.error.message);});
+  },2500);
+  return()=>clearTimeout(t);
+},[semana,pagos,fechaPago]);
 useEffect(()=>{try{localStorage.setItem('transpgso_v2_productos_local',JSON.stringify(productosLocal));}catch(e){};},[productosLocal]);
 
 useEffect(()=>{lsSave('transpgso_v2_productos_local',productosLocal);},[productosLocal]);
