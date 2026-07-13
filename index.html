@@ -1843,10 +1843,7 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
 
   // Estado de filas del día
   var _fd=React.useState(function(){return cargarRetirosDia(retiroFecha);}),filas=_fd[0],setFilas=_fd[1];
-  React.useEffect(function(){
-    var data=cargarRetirosDia(retiroFecha);
-    setFilas(data);
-    setRetirosDB(data);
+  function sincronizarDesdeSupabaseRetiros(){
     // También leer desde Supabase para tener datos actualizados del mensajero
     db.from('retiros').select('*').eq('fecha',retiroFecha)
       .then(function(res){
@@ -1869,6 +1866,15 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
           });
         }
       }).catch(function(){});
+  }
+  React.useEffect(function(){
+    var data=cargarRetirosDia(retiroFecha);
+    setFilas(data);
+    setRetirosDB(data);
+    sincronizarDesdeSupabaseRetiros();
+    var interval=setInterval(sincronizarDesdeSupabaseRetiros,15000);
+    var canal=db.channel('planilla-retiros-admin-'+retiroFecha).on('postgres_changes',{event:'*',schema:'public',table:'retiros',filter:'fecha=eq.'+retiroFecha},sincronizarDesdeSupabaseRetiros).subscribe();
+    return function(){clearInterval(interval);db.removeChannel(canal);};
   },[retiroFecha]);
 
   function actualizarFila(idx,campo,valor){
