@@ -6779,7 +6779,7 @@ function RetirosRider(_ref_rr){
   // Cuenta cuántos paquetes escaneó realmente el mensajero en Colecta, por cliente, ese día
   function calcularPiezasAuto(fecha){
     var nombre=normNombre(usuario.nombre||'');
-    db.from('envios').select('cliente').eq('mensajero',nombre).eq('fecha',fecha).like('fuente','colecta_%')
+    db.from('envios').select('cliente,fuente').eq('mensajero',nombre).eq('fecha',fecha).or('fuente.eq.retiro_masivo,fuente.like.colecta_*')
       .then(function(res){
         if(!res.data)return;
         var conteo={};
