@@ -1945,6 +1945,19 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
     guardarRetirosDia(retiroFecha,nueva);
   }
 
+  function cargarTodosClientes(){
+    var clientesYaEnLista={};
+    filas.forEach(function(f){if(f.cliente)clientesYaEnLista[f.cliente]=true;});
+    var nuevasFilas=clientesOpts.filter(function(c){return!clientesYaEnLista[c.nombre];}).map(function(c,i){
+      return{id:Date.now()+i,cliente:c.nombre,direccion:c.direccion||'',mensajero:'',confirmado:false,piezas:'',retirado:false,enBodega:false,respaldos:false,cobro:0};
+    });
+    if(nuevasFilas.length===0){toast('Ya están todos los clientes activos en la lista de hoy.');return;}
+    var nueva=filas.concat(nuevasFilas);
+    setFilas(nueva);
+    guardarRetirosDia(retiroFecha,nueva);
+    toast('✓ '+nuevasFilas.length+' clientes agregados a la planilla.');
+  }
+
   var clientesOpts=(clientes||[]).filter(function(c){return c.activo!==false;}).sort(function(a,b){return(a.nombre||'').localeCompare(b.nombre||'');});
   var mensajerosOpts=(mensajeros||[]).filter(function(m){return m.activo!==false;}).sort(function(a,b){return(a.nombre||'').localeCompare(b.nombre||'');});
 
@@ -1984,7 +1997,8 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
         btnSV('diario','Diario'),
         btnSV('resumen','Resumen'),
         React.createElement('input',{type:'date',value:retiroFecha,onChange:function(e){setRetiroFecha(e.target.value);},style:{padding:'6px 12px',borderRadius:8,border:'1px solid var(--border)',fontSize:12,fontFamily:'JetBrains Mono'}}),
-        subVista==='diario'&&React.createElement('button',{className:'btn-add',onClick:agregarFila},'+ Agregar fila')
+        subVista==='diario'&&React.createElement('button',{className:'btn-add',onClick:agregarFila},'+ Agregar fila'),
+        subVista==='diario'&&React.createElement('button',{className:'btn-add',style:{background:'var(--dark)'},onClick:cargarTodosClientes},'📋 Cargar todos los clientes')
       )
     ),
 
