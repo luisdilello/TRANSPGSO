@@ -726,10 +726,10 @@ function base64ToBlob(base64){
   while(n--){u8arr[n]=bstr.charCodeAt(n);}
   return new Blob([u8arr],{type:mime});
 }
-async function subirFotoStorage(base64,codigo,tag){
+async function subirFotoStorage(base64,codigo,tag,carpeta){
   try{
     const blob=base64ToBlob(base64);
-    const fn='entregas/'+codigo+'_'+tag+'_'+Date.now()+'.jpg';
+    const fn=(carpeta||'entregas')+'/'+codigo+'_'+tag+'_'+Date.now()+'.jpg';
     const {error}=await db.storage.from('evidencias').upload(fn,blob,{upsert:true,contentType:'image/jpeg'});
     if(error){console.warn('Storage upload error:',error.message);return base64;} // fallback: si falla la subida, al menos no se pierde la foto
     const {data}=db.storage.from('evidencias').getPublicUrl(fn);
@@ -3420,7 +3420,7 @@ function ImportarPDFColecta(_ref_ipdf){
         if(flexIdx>=0&&!comuna){for(var ci=flexIdx+1;ci<lineas.length&&ci<flexIdx+8;ci++){var c=lineas[ci]?lineas[ci].trim():'';if(!c)continue;var esMayus=c===c.toUpperCase()&&/[A-ZÁÉÍÓÚÑ]/.test(c);var esZona=/\s+(ESTE|NORTE|SUR|ORIENTE|PONIENTE|CENTRO|ANILLO)$/.test(c);if(esMayus&&c.length>3&&!NO_COMUNA.test(c)&&!esZona&&!/^\d/.test(c)){comuna=c;break;}}}
         if(codigo&&codigo.length>=8){
           var foto_etiqueta=null;
-          try{var vp=page.getViewport({scale:1.5});var cv=document.createElement('canvas');cv.width=vp.width;cv.height=vp.height;await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;foto_etiqueta=cv.toDataURL('image/jpeg',0.72);cv.width=0;cv.height=0;}catch(re){}
+          try{var vp=page.getViewport({scale:1.5});var cv=document.createElement('canvas');cv.width=vp.width;cv.height=vp.height;await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;foto_etiqueta=cv.toDataURL('image/jpeg',0.72);cv.width=0;cv.height=0;foto_etiqueta=await subirFotoStorage(foto_etiqueta,codigo,'etq','etiquetas');}catch(re){}
           envios.push({codigo,cliente:clientePDF,destinatario,direccion,referencia,comuna,fecha:fechaHoyCL(),estado:'en_bodega',mensajero:'',monto:0,nota:referencia||'',fuente:'flex',telefono:'',foto_etiqueta,historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:'Importado desde PDF Flex'}]});
         }
       }catch(pe){}
@@ -4270,6 +4270,7 @@ const msg=conCodigo>0&&sinCodigo>0?`✓ ${nuevos.length} envíos cargados · ${c
               await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
               foto_etiqueta=cv.toDataURL('image/jpeg',0.72);
               cv.width=0;cv.height=0; // liberar memoria
+              foto_etiqueta=await subirFotoStorage(foto_etiqueta,codigo,'etq','etiquetas');
             }catch(re){console.warn('Error render pág '+i,re);}
           }
           envios.push({
@@ -8197,6 +8198,7 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios}){
               await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
               foto_etiqueta=cv.toDataURL('image/jpeg',0.72);
               cv.width=0;cv.height=0;
+              foto_etiqueta=await subirFotoStorage(foto_etiqueta,codigo,'etq','etiquetas');
             }catch(re){console.warn('Error render pág '+i,re);}
             enviosPDF.push({codigo:codigo,destinatario:destinatario,direccion:direccion,comuna:comuna.toUpperCase(),referencia:referencia,telefono:'',monto:0,foto_etiqueta:foto_etiqueta});
           }catch(pe){console.warn('Error página '+i+':',pe.message);}
