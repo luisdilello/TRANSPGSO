@@ -7530,7 +7530,7 @@ useEffect(function(){
         .or('estado.eq.en_ruta,estado.eq.reprogramado,estado.eq.cancelado,estado.eq.siniestro')
         .ilike('mensajero','%'+primerNombre+'%').order('fecha',{ascending:false}).limit(500),
       db.from('envios').select('codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,fuente,peso,updated_at')
-        .gte('updated_at',inicioHoy).ilike('mensajero','%'+primerNombre+'%').order('fecha',{ascending:false}).limit(500)
+        .gte('updated_at',inicioHoy).or('estado.eq.entregado,estado.eq.cancelado,estado.eq.siniestro,estado.eq.reprogramado,estado.eq.en_ruta').ilike('mensajero','%'+primerNombre+'%').order('fecha',{ascending:false}).limit(500)
     ]);
     const error=resPend.error||resHoy.error;
     // Combinar sin duplicados
