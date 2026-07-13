@@ -6569,10 +6569,10 @@ function GananciasRider(_ref_gr){
     db.from('retiros').select('pago_mensajero,retirado,mensajero').eq('fecha',hoy)
       .then(res=>{
         if(res.data){
-          const mios=res.data.filter(r=>(r.mensajero||'').replace(/,\s*/g,' ').toUpperCase().trim()===nombre||true);
+          const mios=res.data.filter(r=>(r.mensajero||'').replace(/,\s*/g,' ').toUpperCase().trim()===nombre);
           const retirados=mios.filter(r=>r.retirado);
           const total=retirados.reduce((a,r)=>a+(parseFloat(r.pago_mensajero)||0),0);
-          setRetirosSupa({retiros:retirados.length,total:total});
+          setRetirosSupa({retiros:retirados.length,total:total,loaded:true});
           // Actualizar localStorage para consistencia
           if(total>0){
             const key='transpgso_v2_retiros_rider_'+nombre.toLowerCase().replace(/[^a-z]/g,'_');
