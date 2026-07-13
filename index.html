@@ -2020,7 +2020,14 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
                 return React.createElement('tr',{key:fila.id||idx,style:{background:rowBg,borderBottom:'1px solid var(--border)'}},
                   // Cliente
                   React.createElement('td',{style:{padding:'4px 6px',minWidth:140}},
-                    React.createElement('select',{style:inputStyle,value:fila.cliente||'',onChange:function(e){actualizarFila(idx,'cliente',e.target.value);}},
+                    React.createElement('select',{style:inputStyle,value:fila.cliente||'',onChange:function(e){
+                      var nombreSel=e.target.value;
+                      actualizarFila(idx,'cliente',nombreSel);
+                      if(!fila.direccion){
+                        var clienteObj=clientesOpts.find(function(c){return c.nombre===nombreSel;});
+                        if(clienteObj&&clienteObj.direccion){actualizarFila(idx,'direccion',clienteObj.direccion);}
+                      }
+                    }},
                       React.createElement('option',{value:''},'— Cliente —'),
                       clientesOpts.map(function(c){return React.createElement('option',{key:c.id||c.nombre,value:c.nombre},c.nombre);})
                     )
@@ -6736,11 +6743,13 @@ function RetirosRider(_ref_rr){
   var _sproc=React.useState(false),procesandoRespaldo=_sproc[0],setProcesandoRespaldo=_sproc[1];
   var respaldoInputRef=useRef();
 
-  // Cargar retiros + polling cada 30 seg
+  // Cargar retiros + tiempo real + polling cada 30 seg como respaldo
   React.useEffect(function(){
     cargarRetiros(fechaVer);
     var interval=setInterval(function(){cargarRetiros(fechaVer);},30000);
-    return function(){clearInterval(interval);};
+    var canalId='retiros-rider-'+(usuario.nombre||'').toLowerCase().replace(/[^a-z0-9]/g,'_');
+    var canal=db.channel(canalId).on('postgres_changes',{event:'*',schema:'public',table:'retiros'},function(){cargarRetiros(fechaVer);}).subscribe();
+    return function(){clearInterval(interval);db.removeChannel(canal);};
   },[fechaVer]);
 
   function cargarRetiros(fecha){
