@@ -6750,6 +6750,7 @@ function RetirosRider(_ref_rr){
   var hoy=fechaHoyCL();
   var _sf=React.useState(hoy),fechaVer=_sf[0],setFechaVer=_sf[1];
   var _sr=React.useState([]),retiros=_sr[0],setRetiros=_sr[1];
+  var _spa=React.useState({}),piezasAuto=_spa[0],setPiezasAuto=_spa[1];
   var _sl=React.useState(false),loading=_sl[0],setLoading=_sl[1];
   var _sfr=React.useState('ver'),faseRetiro=_sfr[0],setFaseRetiro=_sfr[1];
   var _srs=React.useState(null),retiroSelRespaldo=_srs[0],setRetiroSelRespaldo=_srs[1];
@@ -6760,11 +6761,40 @@ function RetirosRider(_ref_rr){
   // Cargar retiros + tiempo real + polling cada 30 seg como respaldo
   React.useEffect(function(){
     cargarRetiros(fechaVer);
-    var interval=setInterval(function(){cargarRetiros(fechaVer);},30000);
+    calcularPiezasAuto(fechaVer);
+    var interval=setInterval(function(){cargarRetiros(fechaVer);calcularPiezasAuto(fechaVer);},30000);
     var canalId='retiros-rider-'+(usuario.nombre||'').toLowerCase().replace(/[^a-z0-9]/g,'_');
     var canal=db.channel(canalId).on('postgres_changes',{event:'*',schema:'public',table:'retiros'},function(){cargarRetiros(fechaVer);}).subscribe();
-    return function(){clearInterval(interval);db.removeChannel(canal);};
+    var canalId2='colecta-piezas-'+(usuario.nombre||'').toLowerCase().replace(/[^a-z0-9]/g,'_');
+    var canal2=db.channel(canalId2).on('postgres_changes',{event:'*',schema:'public',table:'envios',filter:'mensajero=eq.'+normNombre(usuario.nombre)},function(){calcularPiezasAuto(fechaVer);}).subscribe();
+    return function(){clearInterval(interval);db.removeChannel(canal);db.removeChannel(canal2);};
   },[fechaVer]);
+
+  // Cuenta cuántos paquetes escaneó realmente el mensajero en Colecta, por cliente, ese día
+  function calcularPiezasAuto(fecha){
+    var nombre=normNombre(usuario.nombre||'');
+    db.from('envios').select('cliente').eq('mensajero',nombre).eq('fecha',fecha).like('fuente','colecta_%')
+      .then(function(res){
+        if(!res.data)return;
+        var conteo={};
+        res.data.forEach(function(e){
+          var cli=(e.cliente||'').trim();
+          if(!cli)return;
+          conteo[cli]=(conteo[cli]||0)+1;
+        });
+        setPiezasAuto(conteo);
+        // Reflejar el conteo real en la tabla de retiros para que el admin también lo vea
+        setRetiros(function(prev){
+          prev.forEach(function(r){
+            var real=conteo[r.cliente]||0;
+            if(r.id&&real!==(r.piezas||0)){
+              db.from('retiros').update({piezas:real}).eq('id',r.id).then(function(){}).catch(function(){});
+            }
+          });
+          return prev.map(function(r){return Object.assign({},r,{piezas:conteo[r.cliente]||0});});
+        });
+      }).catch(function(){});
+  }
 
   function cargarRetiros(fecha){
     setLoading(true);
@@ -7066,9 +7096,8 @@ function RetirosRider(_ref_rr){
                 '$'+pago.toLocaleString('es-CL')):null,
               React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8}},
                 React.createElement('span',{style:{fontSize:12,color:'rgba(255,255,255,0.5)'}},'Piezas:'),
-                React.createElement('input',{type:'number',min:0,style:inputNum,
-                  value:r.piezas||'',placeholder:'0',
-                  onChange:function(e){actualizarRetiro(i,'piezas',e.target.value);}})
+                React.createElement('span',{style:{...inputNum,display:'inline-flex',alignItems:'center',justifyContent:'center',fontWeight:700}},piezasAuto[r.cliente]||0),
+                React.createElement('span',{style:{fontSize:10,color:'rgba(200,168,75,0.6)'}},'(detectado en Colecta)')
               )
             ),
             React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
