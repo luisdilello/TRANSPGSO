@@ -1966,6 +1966,23 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
     guardarRetirosDia(retiroFecha,nueva);
   }
 
+  // Rango de fechas para la vista Resumen (independiente del día único de Diario)
+  function inicioSemanaActual(){
+    var d=new Date();var dia=(d.getDay()+6)%7;d.setDate(d.getDate()-dia);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  var _rgD=React.useState(inicioSemanaActual()),rangoDesde=_rgD[0],setRangoDesde=_rgD[1];
+  var _rgH=React.useState(hoy),rangoHasta=_rgH[0],setRangoHasta=_rgH[1];
+  var _resRet=React.useState([]),resumenRetiros=_resRet[0],setResumenRetiros=_resRet[1];
+  var _resCarg=React.useState(false),cargandoResumen=_resCarg[0],setCargandoResumen=_resCarg[1];
+  React.useEffect(function(){
+    if(subVista!=='resumen')return;
+    setCargandoResumen(true);
+    db.from('retiros').select('*').gte('fecha',rangoDesde).lte('fecha',rangoHasta)
+      .then(function(res){setResumenRetiros(res.data||[]);setCargandoResumen(false);})
+      .catch(function(){setCargandoResumen(false);});
+  },[subVista,rangoDesde,rangoHasta]);
+
   function cargarTodosClientes(){
     var clientesYaEnLista={};
     filas.forEach(function(f){if(f.cliente)clientesYaEnLista[f.cliente]=true;});
@@ -1982,18 +1999,19 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
   var clientesOpts=(clientes||[]).filter(function(c){return c.activo!==false;}).sort(function(a,b){return(a.nombre||'').localeCompare(b.nombre||'');});
   var mensajerosOpts=(mensajeros||[]).filter(function(m){return m.activo!==false;}).sort(function(a,b){return(a.nombre||'').localeCompare(b.nombre||'');});
 
-  // Resumen por mensajero
+  // Resumen por mensajero (usa el rango de fechas en la vista Resumen, el día único en Diario)
+  var fuenteResumen=subVista==='resumen'?resumenRetiros:filas;
   var resumenMen={};
-  filas.forEach(function(r){
+  fuenteResumen.forEach(function(r){
     if(!r.mensajero)return;
     var m=r.mensajero;
     if(!resumenMen[m])resumenMen[m]={retiros:0,total:0};
-    if(r.retirado){resumenMen[m].retiros++;resumenMen[m].total+=1190;}
+    if(r.retirado){resumenMen[m].retiros++;resumenMen[m].total+=(parseFloat(r.pagoMensajero||r.pago_mensajero)||0);}
   });
 
   // Resumen por cliente
   var resumenCli={};
-  filas.forEach(function(r){
+  fuenteResumen.forEach(function(r){
     if(!r.cliente)return;
     var c=r.cliente;
     if(!resumenCli[c])resumenCli[c]={retiros:0,cobro:0};
@@ -2130,7 +2148,16 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
     ),
 
     // Vista resumen
-    subVista==='resumen'&&React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}},
+    subVista==='resumen'&&React.createElement('div',null,
+      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,marginBottom:16,flexWrap:'wrap',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 14px'}},
+        React.createElement('span',{style:{fontSize:12,fontWeight:700,color:'var(--dark)'}},'Rango:'),
+        React.createElement('input',{type:'date',value:rangoDesde,onChange:function(e){setRangoDesde(e.target.value);},style:{padding:'6px 10px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,fontFamily:'JetBrains Mono'}}),
+        React.createElement('span',{style:{fontSize:12,color:'var(--text-soft)'}},'al'),
+        React.createElement('input',{type:'date',value:rangoHasta,onChange:function(e){setRangoHasta(e.target.value);},style:{padding:'6px 10px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,fontFamily:'JetBrains Mono'}}),
+        cargandoResumen&&React.createElement('span',{style:{fontSize:11,color:'var(--text-soft)'}},'Cargando...'),
+        !cargandoResumen&&React.createElement('span',{style:{fontSize:11,color:'var(--text-soft)'}},resumenRetiros.length+' retiros en el rango')
+      ),
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}},
       // Por mensajero
       React.createElement('div',{className:'panel'},
         React.createElement('div',{className:'panel-title'},'Retiros por Mensajero'),
@@ -2169,7 +2196,7 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
           }))
         )
       )
-    )
+    ))
   );
 }
 // ── HistorialPrestamos helper ──────────────────────────────────────────────
@@ -2383,34 +2410,11 @@ React.useEffect(function(){
     });
 },[]);
 async function cerrarSemana(){
-  if(!confirm('¿Cerrar la semana '+semana+'?\nEsto guardará el registro de todos los mensajeros.'))return;
+  if(!confirm('¿Guardar ahora mismo el cierre de la semana '+semana+'?\nEsto ya se guarda solo automáticamente, este botón solo lo fuerza al instante.'))return;
   toast('💾 Guardando cierre semanal...');
   try{
-    var records=pagos.map(function(p){
-      var key=p.nombre.toUpperCase().trim();
-      var saldoDB=(prestamosDB[key]&&prestamosDB[key].saldo)||0;
-      return{
-        semana:semana,
-        fecha_inicio:fechaInicio||null,
-        fecha_fin:fechaFin||null,
-        fecha_cierre:new Date().toISOString(),
-        mensajero_nombre:p.nombre,
-        envios:p.envios||0,
-        tarifa:p.tarifa||0,
-        pago_bruto:p.bruto||0,
-        consumo:p.consumo||0,
-        extra:p.extra||0,
-        adelanto:p.adelanto||0,
-        prestamo_descontado:p.prestamo||0,
-        saldo_prestamo:saldoDB,
-        total_pagado:p.totalPagar||0,
-        estado:p.estado||'PENDIENTE',
-        obs:p.obs||''
-      };
-    });
-    var r=await db.from('cierres_semanales').insert(records);
-    if(r.error){toast('⚠ Error: '+r.error.message);return;}
-    toast('✓ Semana '+semana+' cerrada y guardada correctamente');
+    await autoGuardarCierreSemanal();
+    toast('✓ Semana '+semana+' guardada correctamente');
   }catch(e){toast('⚠ Error: '+e.message);}
 }
 async function guardarPrestamo(nombre,montoDesc,saldoPrev,sem){
@@ -2555,9 +2559,40 @@ useEffect(()=>{
   if(!_pagosCargados.current)return; // no pisar Supabase con datos vacíos antes de terminar de cargar
   const t=setTimeout(()=>{
     db.from('pagos_mensajeros_semanales').upsert({semana,data:{pagos,fechaPago},updated_at:new Date().toISOString()},{onConflict:'semana'}).then(function(r){if(r.error)console.warn('Pago Mensajeros: error guardando en Supabase:',r.error.message);});
+    autoGuardarCierreSemanal();
   },2500);
   return()=>clearTimeout(t);
 },[semana,pagos,fechaPago]);
+async function autoGuardarCierreSemanal(){
+  if(!pagos||pagos.length===0)return;
+  try{
+    // Borra lo que ya había guardado de esta semana y vuelve a insertar fresco (evita duplicados al repetirse)
+    await db.from('cierres_semanales').delete().eq('semana',semana);
+    var records=pagos.map(function(p){
+      var key=p.nombre.toUpperCase().trim();
+      var saldoDB=(prestamosDB[key]&&prestamosDB[key].saldo)||0;
+      return{
+        semana:semana,
+        fecha_inicio:fechaInicio||null,
+        fecha_fin:fechaFin||null,
+        fecha_cierre:new Date().toISOString(),
+        mensajero_nombre:p.nombre,
+        envios:p.envios||0,
+        tarifa:p.tarifa||0,
+        pago_bruto:p.bruto||0,
+        consumo:p.consumo||0,
+        extra:p.extra||0,
+        adelanto:p.adelanto||0,
+        prestamo_descontado:p.prestamo||0,
+        saldo_prestamo:saldoDB,
+        total_pagado:p.totalPagar||0,
+        estado:p.estado||'PENDIENTE',
+        obs:p.obs||''
+      };
+    });
+    await db.from('cierres_semanales').insert(records);
+  }catch(e){console.warn('Auto-cierre semanal: error guardando:',e.message);}
+}
 useEffect(()=>{try{localStorage.setItem('transpgso_v2_productos_local',JSON.stringify(productosLocal));}catch(e){};},[productosLocal]);
 
 useEffect(()=>{lsSave('transpgso_v2_productos_local',productosLocal);},[productosLocal]);
