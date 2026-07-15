@@ -1804,8 +1804,18 @@ return/*#__PURE__*/React.createElement("div",{className:"manifiesto-modal-overla
 function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_pr.mensajeros,retirosDB=_ref_pr.retirosDB,setRetirosDB=_ref_pr.setRetirosDB,retiroFecha=_ref_pr.retiroFecha,setRetiroFecha=_ref_pr.setRetiroFecha,toast=_ref_pr.toast;
   var hoy=fechaHoyCL();
   var _sv=React.useState('diario'),subVista=_sv[0],setSubVista=_sv[1];
-  var TARIFA_MIN=1190;
-  var MIN_PIEZAS=5;
+  var _cfgR=React.useState({min_piezas:5,tarifa_minima:1190}),cfgRetiro=_cfgR[0],setCfgRetiro=_cfgR[1];
+  var _cfgEd=React.useState(false),editandoCfg=_cfgEd[0],setEditandoCfg=_cfgEd[1];
+  React.useEffect(function(){
+    db.from('configuracion').select('valor').eq('clave','retiro_cobro_minimo').single()
+      .then(function(res){if(res.data&&res.data.valor)setCfgRetiro(res.data.valor);}).catch(function(){});
+  },[]);
+  function guardarCfgRetiro(nuevaCfg){
+    setCfgRetiro(nuevaCfg);
+    db.from('configuracion').upsert({clave:'retiro_cobro_minimo',valor:nuevaCfg,updated_at:new Date().toISOString()},{onConflict:'clave'}).then(function(){}).catch(function(){});
+  }
+  var TARIFA_MIN=cfgRetiro.tarifa_minima;
+  var MIN_PIEZAS=cfgRetiro.min_piezas;
 
   // Cargar retiros del día seleccionado
   function lsKeyRetiros(fecha){return 'transpgso_v2_retiros_dia_'+fecha;}
@@ -2009,8 +2019,20 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
         btnSV('resumen','Resumen'),
         React.createElement('input',{type:'date',value:retiroFecha,onChange:function(e){setRetiroFecha(e.target.value);},style:{padding:'6px 12px',borderRadius:8,border:'1px solid var(--border)',fontSize:12,fontFamily:'JetBrains Mono'}}),
         subVista==='diario'&&React.createElement('button',{className:'btn-add',onClick:agregarFila},'+ Agregar fila'),
-        subVista==='diario'&&React.createElement('button',{className:'btn-add',style:{background:'var(--dark)'},onClick:cargarTodosClientes},'📋 Cargar todos los clientes')
+        subVista==='diario'&&React.createElement('button',{className:'btn-add',style:{background:'var(--dark)'},onClick:cargarTodosClientes},'📋 Cargar todos los clientes'),
+        subVista==='diario'&&React.createElement('button',{className:'btn-add',style:{background:'transparent',border:'1px solid var(--gold)',color:'var(--gold)'},onClick:function(){setEditandoCfg(!editandoCfg);}},'⚙ Cobro mínimo ('+MIN_PIEZAS+' piezas · $'+TARIFA_MIN.toLocaleString('es-CL')+')')
       )
+    ),
+    editandoCfg&&React.createElement('div',{style:{display:'flex',alignItems:'center',gap:14,background:'rgba(200,168,75,0.08)',border:'1px solid var(--gold)',borderRadius:8,padding:'12px 16px',marginBottom:12,flexWrap:'wrap'}},
+      React.createElement('span',{style:{fontSize:12,fontWeight:700,color:'var(--dark)'}},'Regla de cobro mínimo:'),
+      React.createElement('label',{style:{fontSize:11,color:'var(--text-soft)',display:'flex',alignItems:'center',gap:6}},'Piezas o menos:',
+        React.createElement('input',{type:'number',min:0,value:cfgRetiro.min_piezas,style:{width:60,padding:'4px 8px',borderRadius:6,border:'1px solid var(--border)'},onChange:function(e){setCfgRetiro(function(prev){return{...prev,min_piezas:parseInt(e.target.value)||0};});}})
+      ),
+      React.createElement('label',{style:{fontSize:11,color:'var(--text-soft)',display:'flex',alignItems:'center',gap:6}},'Cobro ($, IVA incl.):',
+        React.createElement('input',{type:'number',min:0,value:cfgRetiro.tarifa_minima,style:{width:90,padding:'4px 8px',borderRadius:6,border:'1px solid var(--border)'},onChange:function(e){setCfgRetiro(function(prev){return{...prev,tarifa_minima:parseInt(e.target.value)||0};});}})
+      ),
+      React.createElement('button',{className:'btn-add',onClick:function(){guardarCfgRetiro(cfgRetiro);setEditandoCfg(false);toast('✓ Regla de cobro mínimo actualizada');}},'Guardar'),
+      React.createElement('span',{style:{fontSize:10,color:'var(--text-soft)'}},'Aplica a los cálculos nuevos de piezas (no recalcula los ya guardados).')
     ),
 
     // Vista diario
