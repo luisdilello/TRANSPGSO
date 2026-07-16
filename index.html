@@ -4510,29 +4510,44 @@ async function cambiarEstado(ids,nuevoEstado,nota){if(nota===void 0){nota='';}co
   toast('⏳ Eliminando '+count+' envíos...');
   
   try{
-    // Eliminar en lotes de 50 para no saturar Supabase
+    /* Eliminar en lotes de 50 para no saturar Supabase. OJO: Supabase/PostgREST no tira error
+       si el DELETE afecta 0 filas (ej. el codigo no matchea exactamente por espacios, comillas
+       de Excel u otra causa) - "sin error" no es lo mismo que "borrado de verdad". Por eso,
+       despues de cada lote, se vuelve a consultar cuales de esos codigos SIGUEN existiendo y
+       solo se consideran borrados los que realmente desaparecieron. */
     const BATCH=50;
-    let errores=0;
+    let erroresRed=0;
+    const sobrevivientes=[];
     for(let i=0;i<codigosElim.length;i+=BATCH){
       const lote=codigosElim.slice(i,i+BATCH);
       const r=await db.from('envios').delete().in('codigo',lote);
       if(r.error){
-        errores+=lote.length;
+        erroresRed+=lote.length;
         console.warn('Error lote '+(i/BATCH+1)+':',r.error.message);
+        continue;
       }
+      try{
+        const chk=await db.from('envios').select('codigo').in('codigo',lote);
+        const codigosVivos=new Set((chk.data||[]).map(x=>x.codigo));
+        lote.forEach(cod=>{if(codigosVivos.has(cod))sobrevivientes.push(cod);});
+      }catch(chkErr){console.warn('No se pudo verificar el borrado:',chkErr.message);}
     }
-    // También borrar de historial_envios
-    if(codigosElim.length>0){
-      await db.from('historial_envios').delete().in('codigo_envio',codigosElim);
+    const codigosBorradosOk=codigosElim.filter(cod=>!sobrevivientes.includes(cod));
+    // También borrar de historial_envios (solo lo que sí se confirmó borrado)
+    if(codigosBorradosOk.length>0){
+      await db.from('historial_envios').delete().in('codigo_envio',codigosBorradosOk);
     }
-    // Lista negra local
+    // Lista negra local (solo lo confirmado)
     const eliminadosPrev=lsLoad('envios_eliminados',[]);
-    lsSave('envios_eliminados',[...new Set([...eliminadosPrev,...codigosElim])]);
-    // Borrar del estado local
-    setEnvios(prev=>prev.filter(e=>!selected.has(e.id)));
+    lsSave('envios_eliminados',[...new Set([...eliminadosPrev,...codigosBorradosOk])]);
+    // Borrar del estado local solo lo confirmado; lo que sobrevivió se deja visible
+    const idsBorradosOk=enviosElim.filter(e=>codigosBorradosOk.includes(e.codigo)).map(e=>e.id);
+    setEnvios(prev=>prev.filter(e=>!idsBorradosOk.includes(e.id)));
     setSelected(new Set());
-    if(errores>0){
-      toast('⚠ '+(count-errores)+' eliminados · '+errores+' con error');
+    if(sobrevivientes.length>0){
+      toast('⚠ '+codigosBorradosOk.length+' eliminados · '+sobrevivientes.length+' NO se pudieron borrar en Supabase (sigue en la base): '+sobrevivientes.join(', '));
+    }else if(erroresRed>0){
+      toast('⚠ '+(count-erroresRed)+' eliminados · '+erroresRed+' con error de red');
     }else{
       toast('🗑 '+count+' envío'+(count>1?'s':'')+' eliminado'+(count>1?'s':'')+' permanentemente');
     }
