@@ -2388,9 +2388,9 @@ function HistorialPrestamos(_ref_hp){var nombre=_ref_hp.nombre,db=_ref_hp.db;
 // ─────────────────────────────────────────────────────────────────────────────
 function PagosMensajeros(_ref18){let mensajeros=_ref18.mensajeros,mensajerosDia=_ref18.mensajerosDia,esAdmin=_ref18.esAdmin,toast=_ref18.toast,clientes=_ref18.clientes||[];const semanaActual=()=>{const hoy=new Date();const lunes=new Date(hoy);lunes.setDate(hoy.getDate()-((hoy.getDay()+6)%7));const sabado=new Date(lunes);sabado.setDate(lunes.getDate()+5);const fmt=d=>d.toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric'});return`${fmt(lunes)} al ${fmt(sabado)}`;};const _useState34=useState(semanaActual()),semana=_useState34[0],setSemana=_useState34[1];
 // Fechas de rango para calcular envíos
-var _fi=React.useState(()=>{var h=new Date();var lu=new Date(h);lu.setDate(h.getDate()-((h.getDay()+6)%7));return lu.toISOString().slice(0,10);});
+var _fi=React.useState(()=>{var h=new Date();var lu=new Date(h);lu.setDate(h.getDate()-((h.getDay()+6)%7));return fechaHoyCL(lu);});
 var fechaInicio=_fi[0];var setFechaInicio=_fi[1];
-var _ff=React.useState(()=>{var h=new Date();var lu=new Date(h);lu.setDate(h.getDate()-((h.getDay()+6)%7));var sa=new Date(lu);sa.setDate(lu.getDate()+5);return sa.toISOString().slice(0,10);});
+var _ff=React.useState(()=>{var h=new Date();var lu=new Date(h);lu.setDate(h.getDate()-((h.getDay()+6)%7));var sa=new Date(lu);sa.setDate(lu.getDate()+5);return fechaHoyCL(sa);});
 var fechaFin=_ff[0];var setFechaFin=_ff[1];
 var _calc=React.useState(false);var calculando=_calc[0];var setCalculando=_calc[1];
 var _prDB=React.useState({});var prestamosDB=_prDB[0];var setPrestamosDB=_prDB[1];
@@ -2472,8 +2472,8 @@ React.useEffect(()=>{
   const hoy=new Date();
   const lunes=new Date(hoy); lunes.setDate(hoy.getDate()-((hoy.getDay()+6)%7)); lunes.setHours(0,0,0,0);
   const domingo=new Date(lunes); domingo.setDate(lunes.getDate()+6); domingo.setHours(23,59,59,999);
-  const lunesStr=lunes.toISOString().slice(0,10);
-  const domingoStr=domingo.toISOString().slice(0,10);
+  const lunesStr=fechaHoyCL(lunes);
+  const domingoStr=fechaHoyCL(domingo);
   // Leer envíos locales
   const enviosLocal=lsLoad('gestion_envios',[]);
   const enviosSemana=enviosLocal.filter(e=>{
@@ -2563,6 +2563,14 @@ useEffect(()=>{
   },2500);
   return()=>clearTimeout(t);
 },[semana,pagos,fechaPago]);
+const _autoCalc=useRef(false);
+useEffect(()=>{
+  if(_autoCalc.current)return;
+  if(!mensajeros||mensajeros.length===0)return;
+  _autoCalc.current=true;
+  var t=setTimeout(function(){calcularEnviosSemana();},600);
+  return function(){clearTimeout(t);};
+},[mensajeros]);
 async function autoGuardarCierreSemanal(){
   if(!pagos||pagos.length===0)return;
   try{
