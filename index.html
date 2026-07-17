@@ -468,7 +468,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
   };
   // Service Worker — URL estable (evita loop de reinstalación en iOS); updateViaCache:none ya fuerza red fresca en cada chequeo
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('/TRANSPGSO/sw.js', {updateViaCache: 'none'})
+    navigator.serviceWorker.register('/sw.js', {updateViaCache: 'none'})
       .then(function(reg){
         if(reg.waiting){
           reg.waiting.postMessage('SKIP_WAITING');

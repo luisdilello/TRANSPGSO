@@ -2,8 +2,8 @@
   "name": "TransPgso — Centro de Operaciones",
   "short_name": "TransPgso",
   "description": "Sistema operacional de última milla TransPgso SpA",
-  "start_url": "/TRANSPGSO/",
-  "scope": "/TRANSPGSO/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#3A3D2E",
   "theme_color": "#C8A84B",
@@ -32,7 +32,7 @@
       "name": "Mis Envíos",
       "short_name": "Envíos",
       "description": "Ver envíos asignados",
-      "url": "/TRANSPGSO/"
+      "url": "/"
     }
   ]
 }
