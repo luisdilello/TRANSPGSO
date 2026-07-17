@@ -3285,16 +3285,38 @@ useEffect(()=>{
 function EnvioDetalleCard(_ref_edc){
   const envio=_ref_edc.envio;
   const [historial,setHistorial]=useState([]);
+  const [visible,setVisible]=useState(false);
+  const cargadoRef=useRef(false);
+  const elRef=useRef(null);
+  // Carga perezosa: solo dispara las consultas (historial + fotos, via FotosEntregaConRecarga)
+  // cuando la tarjeta esta por entrar al viewport. Asi 500 resultados no disparan 500 consultas
+  // simultaneas al abrir la vista de detalle — solo las que el usuario realmente scrollea a ver.
   useEffect(function(){
+    const el=elRef.current;
+    if(!el||typeof IntersectionObserver==='undefined'){setVisible(true);return;}
+    const obs=new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if(entry.isIntersecting){setVisible(true);obs.disconnect();}
+      });
+    },{rootMargin:'600px 0px'});
+    obs.observe(el);
+    return function(){obs.disconnect();};
+  },[]);
+  useEffect(function(){
+    if(!visible||cargadoRef.current)return;
+    cargadoRef.current=true;
     let activo=true;
     db.from('historial_envios').select('*').eq('codigo_envio',envio.codigo).order('fecha',{ascending:true})
       .then(function(r){if(activo)setHistorial(r.data||[]);})
       .catch(function(){if(activo)setHistorial([]);});
     return function(){activo=false;};
-  },[envio.codigo]);
+  },[visible,envio.codigo]);
   const fmtCLPce=n=>'$'+Math.round(n||0).toLocaleString('es-CL');
   const fmtFH=iso=>{if(!iso)return'—';try{return new Date(iso).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return iso;}};
-  return/*#__PURE__*/React.createElement('div',null,
+  if(!visible){
+    return/*#__PURE__*/React.createElement('div',{ref:elRef,style:{minHeight:90,display:'flex',alignItems:'center',padding:'14px 4px',color:'var(--text-soft)',fontSize:12,fontFamily:'JetBrains Mono'}},'⏳ '+envio.codigo+' — '+(envio.destinatario||'')+' (cargando al hacer scroll...)');
+  }
+  return/*#__PURE__*/React.createElement('div',{ref:elRef},
     /*#__PURE__*/React.createElement('div',{className:'panel',style:{background:'var(--cream)',marginBottom:16}},
       esEnvioAtrasado(envio)&&/*#__PURE__*/React.createElement('div',{style:{marginBottom:12,padding:'8px 12px',background:'rgba(176,48,48,0.1)',border:'1px solid rgba(176,48,48,0.3)',borderRadius:8,color:'var(--danger)',fontWeight:700,fontSize:12}},'⚠ Atrasado: lleva '+diasDesdeFecha(envio.fecha)+' día(s) sin ser entregado'),
       /*#__PURE__*/React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12,fontSize:13}},
@@ -3340,9 +3362,7 @@ function ConsultaExpress(_ref_ce){
   const [fechaHasta,setFechaHasta]=useState('');
   const [excedente,setExcedente]=useState(false);
   const [vistaBulk,setVistaBulk]=useState('detalle'); // 'detalle' | 'tabla'
-  const [confirmarDetalleGrande,setConfirmarDetalleGrande]=useState(false);
   const MAX_BULK=500;
-  const LIMITE_AUTO_DETALLE=30; // sobre este numero de resultados pide confirmacion antes de expandir todo
 
   const fmtFH=iso=>{if(!iso)return'—';try{return new Date(iso).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return iso;}};
 
@@ -3391,7 +3411,7 @@ function ConsultaExpress(_ref_ce){
     let huboExcedente=false;
     if(lista.length>MAX_BULK){huboExcedente=true;lista=lista.slice(0,MAX_BULK);}
     setExcedente(huboExcedente);
-    setBuscandoBulk(true);setResultadosBulk([]);setNoEncontrados([]);setErrorMsg('');setFiltroEstadoBulk('todos');setConfirmarDetalleGrande(false);
+    setBuscandoBulk(true);setResultadosBulk([]);setNoEncontrados([]);setErrorMsg('');setFiltroEstadoBulk('todos');
     try{
       const CHUNK=150;
       const chunks=[];
@@ -3405,7 +3425,6 @@ function ConsultaExpress(_ref_ce){
       const faltantes=lista.filter(c=>!mapa[c]);
       setResultadosBulk(encontrados);
       setNoEncontrados(faltantes);
-      setVistaBulk(encontrados.length<=LIMITE_AUTO_DETALLE?'detalle':'tabla');
       if(toast)toast('✓ '+encontrados.length+' de '+lista.length+' códigos encontrados'+(huboExcedente?' (se tomaron los primeros '+MAX_BULK+')':''));
     }catch(e){
       setErrorMsg('Error al buscar en lote: '+e.message);
@@ -3520,13 +3539,7 @@ function ConsultaExpress(_ref_ce){
         )
       ),
 
-      vistaBulk==='detalle'&&resultadosFiltrados.length>LIMITE_AUTO_DETALLE&&!confirmarDetalleGrande&&/*#__PURE__*/React.createElement('div',{className:'info-banner',style:{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}},
-        'Son '+resultadosFiltrados.length+' resultados — mostrar el detalle completo de todos (con fotos) puede tardar.',
-        /*#__PURE__*/React.createElement('button',{className:'btn-primary',onClick:()=>setConfirmarDetalleGrande(true)},'Mostrar de todos modos'),
-        /*#__PURE__*/React.createElement('button',{className:'btn-secondary',onClick:()=>setVistaBulk('tabla')},'Ver como tabla')
-      ),
-
-      vistaBulk==='detalle'&&(resultadosFiltrados.length<=LIMITE_AUTO_DETALLE||confirmarDetalleGrande)&&resultadosFiltrados.map(function(e){return/*#__PURE__*/React.createElement('div',{key:e.codigo,style:{marginBottom:24,paddingBottom:24,borderBottom:'2px solid var(--border)'}},
+      vistaBulk==='detalle'&&resultadosFiltrados.map(function(e){return/*#__PURE__*/React.createElement('div',{key:e.codigo,style:{marginBottom:24,paddingBottom:24,borderBottom:'2px solid var(--border)'}},
         /*#__PURE__*/React.createElement(EnvioDetalleCard,{envio:e})
       );})
     ),
