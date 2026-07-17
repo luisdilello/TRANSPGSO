@@ -755,6 +755,16 @@ async function subirFotoStorage(base64,codigo,tag,carpeta){
     return (data&&data.publicUrl)||base64;
   }catch(e){console.warn('subirFotoStorage error:',e.message);return base64;}
 }
+async function subirVideoStorage(blob,codigo,tag){
+  try{
+    const ext=(blob.type&&blob.type.includes('mp4'))?'mp4':'webm';
+    const fn='entregas_video/'+codigo+'_'+tag+'_'+Date.now()+'.'+ext;
+    const {error}=await db.storage.from('evidencias').upload(fn,blob,{upsert:true,contentType:blob.type||'video/webm'});
+    if(error){console.warn('Video upload error:',error.message);return null;}
+    const {data}=db.storage.from('evidencias').getPublicUrl(fn);
+    return (data&&data.publicUrl)||null;
+  }catch(e){console.warn('subirVideoStorage error:',e.message);return null;}
+}
 async function enviarNotificacionPush(mensajero,title,message,url){
   try{
     const res=await fetch(PUSH_WORKER_URL,{
@@ -3731,6 +3741,10 @@ function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoE
             React.createElement("img",{src:f.url||f,style:{width:'100%',height:'100%',objectFit:'cover'},onError:e=>e.target.style.display='none'}),
             React.createElement("div",{style:{position:'absolute',bottom:0,left:0,right:0,background:'rgba(0,0,0,0.5)',fontSize:8,color:'#fff',textAlign:'center',padding:'1px 0'}},(fi+1)+"/"+(it.fotos||[]).length)
           ))
+        ),
+        it.video&&React.createElement("div",{style:{padding:'0 8px 8px'}},
+          React.createElement("div",{style:{fontSize:10,fontWeight:700,color:estadoColor(it.estado),marginBottom:4}},"🎥 VIDEO DE RESPALDO"),
+          React.createElement("video",{src:it.video,controls:true,playsInline:true,style:{width:'100%',maxWidth:260,borderRadius:8,display:'block',background:'#000'}})
         )
       ))
     ),
@@ -8120,6 +8134,15 @@ const videoRefCamEA=React.useRef(null);
 const streamRefCamEA=React.useRef(null);
 const _useCamCountEA=useState(0),fotosSesion=_useCamCountEA[0],setFotosSesion=_useCamCountEA[1];
 const _useCamErrEA=useState(''),errorCamara=_useCamErrEA[0],setErrorCamara=_useCamErrEA[1];
+const _useVideoEA=useState(null),videoGrabado=_useVideoEA[0],setVideoGrabado=_useVideoEA[1];
+const _useShowGrabEA=useState(false),showGrabadora=_useShowGrabEA[0],setShowGrabadora=_useShowGrabEA[1];
+const _useGrabandoEA=useState(false),grabando=_useGrabandoEA[0],setGrabando=_useGrabandoEA[1];
+const _useSegsEA=useState(0),segsGrabacion=_useSegsEA[0],setSegsGrabacion=_useSegsEA[1];
+const mediaRecorderRefEA=React.useRef(null);
+const videoChunksRefEA=React.useRef([]);
+const grabTimerRefEA=React.useRef(null);
+const descartarVideoRefEA=React.useRef(false);
+const MAX_SEG_VIDEO=10;
 async function abrirCamaraPropia(){
   setErrorCamara('');
   try{
@@ -8153,6 +8176,67 @@ function dispararFoto(){
   setFotosSesion(n=>n+1);
 }
 
+// ── Grabacion de video corto (respaldo de entrega, prueba) ──
+async function abrirGrabadora(){
+  setErrorCamara('');
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:true});
+    streamRefCamEA.current=stream;
+    setShowGrabadora(true);
+    setTimeout(()=>{if(videoRefCamEA.current)videoRefCamEA.current.srcObject=stream;},50);
+  }catch(e){
+    setErrorCamara('No se pudo abrir la cámara/micrófono para video: '+e.message);
+  }
+}
+function cerrarGrabadora(){
+  if(grabTimerRefEA.current){clearInterval(grabTimerRefEA.current);grabTimerRefEA.current=null;}
+  if(streamRefCamEA.current){streamRefCamEA.current.getTracks().forEach(t=>t.stop());streamRefCamEA.current=null;}
+  setShowGrabadora(false);
+  setGrabando(false);
+  setSegsGrabacion(0);
+}
+function iniciarGrabacion(){
+  const stream=streamRefCamEA.current;
+  if(!stream)return;
+  videoChunksRefEA.current=[];
+  descartarVideoRefEA.current=false;
+  var mime='video/webm;codecs=vp8,opus';
+  if(!(window.MediaRecorder&&MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(mime)))mime='';
+  try{
+    var rec=mime?new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:500000,audioBitsPerSecond:64000}):new MediaRecorder(stream);
+    rec.ondataavailable=function(e){if(e.data&&e.data.size>0)videoChunksRefEA.current.push(e.data);};
+    rec.onstop=function(){
+      if(descartarVideoRefEA.current){descartarVideoRefEA.current=false;cerrarGrabadora();return;}
+      var blob=new Blob(videoChunksRefEA.current,{type:rec.mimeType||'video/webm'});
+      var url=URL.createObjectURL(blob);
+      setVideoGrabado({blob:blob,url:url});
+      cerrarGrabadora();
+    };
+    mediaRecorderRefEA.current=rec;
+    rec.start();
+    setGrabando(true);
+    setSegsGrabacion(0);
+    grabTimerRefEA.current=setInterval(function(){
+      setSegsGrabacion(function(s){
+        if(s+1>=MAX_SEG_VIDEO){detenerGrabacion();return MAX_SEG_VIDEO;}
+        return s+1;
+      });
+    },1000);
+  }catch(e){setErrorCamara('No se pudo grabar video: '+e.message);}
+}
+function detenerGrabacion(){
+  if(grabTimerRefEA.current){clearInterval(grabTimerRefEA.current);grabTimerRefEA.current=null;}
+  if(mediaRecorderRefEA.current&&mediaRecorderRefEA.current.state!=='inactive')mediaRecorderRefEA.current.stop();
+}
+function cancelarGrabadora(){
+  descartarVideoRefEA.current=true;
+  if(mediaRecorderRefEA.current&&mediaRecorderRefEA.current.state!=='inactive'){mediaRecorderRefEA.current.stop();}
+  else{cerrarGrabadora();}
+}
+function quitarVideo(){
+  if(videoGrabado&&videoGrabado.url){try{URL.revokeObjectURL(videoGrabado.url);}catch(e){}}
+  setVideoGrabado(null);
+}
 
 const _useState91s=useState(''),valorSiniestro=_useState91s[0],setValorSiniestro=_useState91s[1];const _useState92=useState(false),comunaModal=_useState92[0],setComunaModal=_useState92[1];const _useState93=useState(envio.comuna||''),comunaSel=_useState93[0],setComunaSel=_useState93[1];const fileRef=useRef();const MAX_FOTOS=5;function agregarFotos(files){const arr=Array.from(files).slice(0,MAX_FOTOS-fotos.length);arr.forEach(file=>{const reader=new FileReader();reader.onload=e=>setFotos(prev=>[...prev,{data:e.target.result,file}].slice(0,MAX_FOTOS));reader.readAsDataURL(file);});}function quitarFoto(i){setFotos(prev=>prev.filter((_,idx)=>idx!==i));}const mountedRef=useRef(true);useEffect(()=>{return()=>{mountedRef.current=false;};},[]);
 if(showCamara){
@@ -8164,6 +8248,20 @@ if(showCamara){
     ),
     /*#__PURE__*/React.createElement("div",{style:{position:'absolute',bottom:0,left:0,right:0,padding:'20px',paddingBottom:'max(30px,env(safe-area-inset-bottom))',display:'flex',justifyContent:'center',background:'linear-gradient(0deg,rgba(0,0,0,0.6),transparent)'}},
       /*#__PURE__*/React.createElement("button",{onClick:dispararFoto,style:{width:72,height:72,borderRadius:'50%',border:'4px solid #fff',background:'var(--gold)',cursor:'pointer',boxShadow:'0 0 20px rgba(0,0,0,0.4)'}})
+    )
+  );
+}
+if(showGrabadora){
+  return/*#__PURE__*/React.createElement("div",{style:{position:'fixed',inset:0,background:'#000',zIndex:99999,display:'flex',flexDirection:'column'}},
+    /*#__PURE__*/React.createElement("video",{ref:videoRefCamEA,autoPlay:true,playsInline:true,muted:true,style:{flex:1,width:'100%',objectFit:'cover',background:'#000'}}),
+    /*#__PURE__*/React.createElement("div",{style:{position:'absolute',top:0,left:0,right:0,padding:'14px 16px',paddingTop:'max(14px,env(safe-area-inset-top))',display:'flex',justifyContent:'space-between',alignItems:'center',background:'linear-gradient(180deg,rgba(0,0,0,0.6),transparent)'}},
+      /*#__PURE__*/React.createElement("span",{style:{color:grabando?'#ff6b6b':'#fff',fontSize:13,fontWeight:700}},grabando?('🔴 '+segsGrabacion+'s / '+MAX_SEG_VIDEO+'s'):'Video de respaldo (máx '+MAX_SEG_VIDEO+'s)'),
+      /*#__PURE__*/React.createElement("button",{onClick:cancelarGrabadora,style:{background:'rgba(255,255,255,0.15)',border:'none',borderRadius:20,padding:'8px 18px',color:'#fff',fontWeight:700,fontSize:13,cursor:'pointer'}},"Cancelar")
+    ),
+    /*#__PURE__*/React.createElement("div",{style:{position:'absolute',bottom:0,left:0,right:0,padding:'20px',paddingBottom:'max(30px,env(safe-area-inset-bottom))',display:'flex',justifyContent:'center',background:'linear-gradient(0deg,rgba(0,0,0,0.6),transparent)'}},
+      grabando
+        ?/*#__PURE__*/React.createElement("button",{onClick:detenerGrabacion,style:{width:72,height:72,borderRadius:16,border:'4px solid #fff',background:'#b03030',cursor:'pointer',boxShadow:'0 0 20px rgba(0,0,0,0.4)'}})
+        :/*#__PURE__*/React.createElement("button",{onClick:iniciarGrabacion,style:{width:72,height:72,borderRadius:'50%',border:'4px solid #fff',background:'#b03030',cursor:'pointer',boxShadow:'0 0 20px rgba(0,0,0,0.4)'}})
     )
   );
 }
@@ -8182,10 +8280,12 @@ async function guardarConEstado(estadoFinal){
     for(let fu=0;fu<fotosB64.length;fu++){
       fotosUrls.push(await subirFotoStorage(fotosB64[fu],envio.codigo,'e'+fu));
     }
-    if(fotosUrls.length>0){
+    let videoUrlSubido=null;
+    if(videoGrabado&&videoGrabado.blob){videoUrlSubido=await subirVideoStorage(videoGrabado.blob,envio.codigo,'e');}
+    if(fotosUrls.length>0||videoUrlSubido){
       var intentosAnt=[];
       try{const _r=await db.from('envios').select('fotos_entrega').eq('codigo',envio.codigo).single();if(_r.data&&_r.data.fotos_entrega){const parsed=JSON.parse(_r.data.fotos_entrega);if(Array.isArray(parsed)&&parsed.length>0){if(typeof parsed[0]==='string'){intentosAnt=[{intento:1,estado:envio.estado,fecha:new Date().toISOString(),mensajero:usuario.nombre,fotos:parsed}];}else{intentosAnt=parsed;}}}}catch(e){}
-      const nuevoIntento={intento:intentosAnt.length+1,estado:estadoFinal,fecha:new Date().toISOString(),mensajero:usuario.nombre,nota:nota||'',fotos:fotosUrls};
+      const nuevoIntento={intento:intentosAnt.length+1,estado:estadoFinal,fecha:new Date().toISOString(),mensajero:usuario.nombre,nota:nota||'',fotos:fotosUrls,video:videoUrlSubido||undefined};
       await db.from('envios').update({fotos_entrega:JSON.stringify([...intentosAnt,nuevoIntento])}).eq('codigo',envio.codigo);
     }
     onUpdate(envio.codigo,estadoFinal,nota,fotosUrls,usuario.nombre);
@@ -8206,7 +8306,9 @@ async function guardarCambio(){if(!estadoSel){return;}setGuardando(true);try{
       for(let fu=0;fu<fotosB64.length;fu++){
         fotosUrls.push(await subirFotoStorage(fotosB64[fu],envio.codigo,'c'+fu));
       }
-      if(fotosUrls.length>0){
+      let videoUrlSubido2=null;
+      if(videoGrabado&&videoGrabado.blob){videoUrlSubido2=await subirVideoStorage(videoGrabado.blob,envio.codigo,'c');}
+      if(fotosUrls.length>0||videoUrlSubido2){
         // Leer intentos anteriores y ACUMULAR
         let intentosAnteriores=[];
         try{
@@ -8223,7 +8325,7 @@ async function guardarCambio(){if(!estadoSel){return;}setGuardando(true);try{
             }
           }
         }catch(e){}
-        const nuevoIntento={intento:intentosAnteriores.length+1,estado:estadoSel,fecha:new Date().toISOString(),mensajero:usuario.nombre,nota:nota||'',fotos:fotosUrls};
+        const nuevoIntento={intento:intentosAnteriores.length+1,estado:estadoSel,fecha:new Date().toISOString(),mensajero:usuario.nombre,nota:nota||'',fotos:fotosUrls,video:videoUrlSubido2||undefined};
         const todosIntentos=[...intentosAnteriores,nuevoIntento];
         await db.from('envios').update({fotos_entrega:JSON.stringify(todosIntentos)}).eq('codigo',envio.codigo);
       }
@@ -8276,13 +8378,18 @@ React.createElement("div",{style:{marginBottom:20}},
 React.createElement("div",{style:{fontSize:11,color:'rgba(255,255,255,0.4)',letterSpacing:2,textTransform:'uppercase',marginBottom:10}},"📷 FOTOS (",fotos.filter(Boolean).length,")"),
 React.createElement("div",{style:{display:'flex',gap:8,marginBottom:10}},
   React.createElement("button",{onClick:abrirCamaraPropia,style:{flex:1,padding:'10px',borderRadius:8,border:'none',background:'var(--gold)',color:'var(--dark-deep)',fontWeight:700,cursor:'pointer',fontSize:13}},"📸 Tomar fotos"),
-  React.createElement("button",{onClick:function(){var inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.multiple=true;inp.onchange=function(ev){Array.from(ev.target.files).forEach(function(file){var reader=new FileReader();reader.onload=function(re){setFotos(function(prev){return[...prev,{data:re.target.result}];});};reader.readAsDataURL(file);});};document.body.appendChild(inp);inp.click();setTimeout(function(){document.body.removeChild(inp);},1000);},style:{padding:'10px 14px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',background:'transparent',color:'var(--gold)',cursor:'pointer',fontSize:13}},"🖼 Galería")
+  React.createElement("button",{onClick:function(){var inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.multiple=true;inp.onchange=function(ev){Array.from(ev.target.files).forEach(function(file){var reader=new FileReader();reader.onload=function(re){setFotos(function(prev){return[...prev,{data:re.target.result}];});};reader.readAsDataURL(file);});};document.body.appendChild(inp);inp.click();setTimeout(function(){document.body.removeChild(inp);},1000);},style:{padding:'10px 14px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',background:'transparent',color:'var(--gold)',cursor:'pointer',fontSize:13}},"🖼 Galería"),
+  !videoGrabado&&React.createElement("button",{onClick:abrirGrabadora,style:{padding:'10px 14px',borderRadius:8,border:'1px solid rgba(176,48,48,0.4)',background:'transparent',color:'#b03030',cursor:'pointer',fontSize:13}},"🎥 Video (prueba)")
 ),
 fotos.filter(Boolean).length>0&&React.createElement("div",{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}},
   fotos.filter(Boolean).map(function(foto,i){return React.createElement('div',{key:i,style:{position:'relative',borderRadius:8,overflow:'hidden',border:'2px solid rgba(200,168,75,0.4)',aspectRatio:'1',background:'#000'}},
     React.createElement('img',{src:foto.data,style:{width:'100%',height:'100%',objectFit:'cover',display:'block'}}),
     React.createElement('button',{onClick:function(){setFotos(function(prev){return prev.filter(function(_,idx){return idx!==i;});});},style:{position:'absolute',top:3,right:3,background:'rgba(176,48,48,0.9)',border:'none',borderRadius:4,color:'#fff',width:22,height:22,cursor:'pointer',fontSize:13,lineHeight:'22px',padding:0,textAlign:'center'}},'✕')
   );})
+),
+videoGrabado&&React.createElement("div",{style:{position:'relative',marginTop:8,borderRadius:8,overflow:'hidden',border:'2px solid rgba(176,48,48,0.5)',maxWidth:220}},
+  React.createElement('video',{src:videoGrabado.url,controls:true,style:{width:'100%',display:'block',background:'#000'}}),
+  React.createElement('button',{onClick:quitarVideo,style:{position:'absolute',top:3,right:3,background:'rgba(176,48,48,0.9)',border:'none',borderRadius:4,color:'#fff',width:22,height:22,cursor:'pointer',fontSize:13,lineHeight:'22px',padding:0,textAlign:'center'}},'✕')
 )),comunaModal&&/*#__PURE__*/React.createElement("div",{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:10000,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},/*#__PURE__*/React.createElement("div",{style:{background:'#1a1d14',borderRadius:'16px 16px 0 0',maxHeight:'75vh',overflow:'hidden',display:'flex',flexDirection:'column',border:'1px solid rgba(200,168,75,0.2)'}},/*#__PURE__*/React.createElement("div",{style:{padding:'14px 16px',borderBottom:'1px solid rgba(255,255,255,0.08)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}},/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:16,color:'var(--gold)',letterSpacing:2}},"Seleccionar Comuna"),/*#__PURE__*/React.createElement("button",{onClick:()=>setComunaModal(false),style:{background:'none',border:'none',color:'rgba(255,255,255,0.5)',fontSize:20,cursor:'pointer'}},"\u2715")),/*#__PURE__*/React.createElement("div",{style:{overflowY:'auto',flex:1}},COMUNAS_CHILE.map(c=>/*#__PURE__*/React.createElement("div",{key:c,onClick:async()=>{setComunaSel(c);setComunaModal(false);try{await db.from('envios').update({comuna:c}).eq('codigo',envio.codigo);}catch(e){}if(onComunaUpdate)onComunaUpdate(envio.codigo,c);},style:{padding:'13px 16px',borderBottom:'1px solid rgba(255,255,255,0.05)',cursor:'pointer',fontSize:14,color:comunaSel===c?'var(--gold)':'#fff',background:comunaSel===c?'rgba(200,168,75,0.08)':'transparent',display:'flex',justifyContent:'space-between'}},c,comunaSel===c&&/*#__PURE__*/React.createElement("span",null,"\u2713")))))),/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:10}},/*#__PURE__*/React.createElement("button",{onClick:onClose,style:{flex:1,padding:'14px',borderRadius:10,border:'1px solid rgba(255,255,255,0.15)',background:'transparent',color:'rgba(255,255,255,0.5)',cursor:'pointer',fontFamily:'Bebas Neue',fontSize:16,letterSpacing:1}},"Cancelar"),/*#__PURE__*/React.createElement("button",{onClick:function(){if(guardando||estadoEsTerminal(envio.estado))return;guardarConEstado(estadoSel||'entregado');},disabled:guardando||estadoEsTerminal(envio.estado),style:{flex:2,padding:'14px',borderRadius:10,border:'none',cursor:guardando||estadoEsTerminal(envio.estado)?'not-allowed':'pointer',background:estadoEsTerminal(envio.estado)?'rgba(255,255,255,0.1)':guardando?'rgba(200,168,75,0.3)':'linear-gradient(135deg,#2e7d4f,#1a5c38)',color:estadoEsTerminal(envio.estado)?'rgba(255,255,255,0.3)':'#fff',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,transition:'all 0.2s',boxShadow:estadoEsTerminal(envio.estado)?'none':'0 4px 15px rgba(46,125,79,0.4)'}},guardando?'GUARDANDO...':estadoSel&&estadoSel!=='entregado'?'CONFIRMAR '+(estados.find(function(s){return s.val===estadoSel;})||{label:estadoSel}).label.toUpperCase():'✅ ENTREGADO'))));}function PerfilSelector(_ref34){let mensajeros=_ref34.mensajeros,usuario=_ref34.usuario,onConfirm=_ref34.onConfirm;const activos=mensajeros.filter(m=>m.activo);const _useState94=useState(new Set(activos.map(m=>m.id))),selected=_useState94[0],setSelected=_useState94[1];function toggle(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function selAll(){setSelected(new Set(activos.map(m=>m.id)));}function selNone(){setSelected(new Set());}function confirmar(){if(selected.size===0)return;onConfirm({nombre:usuario.nombre,rol:'operador',mensajerosIds:Array.from(selected),verTodo:selected.size===activos.length,esAdmin:false,esSuperAdmin:false});}return/*#__PURE__*/React.createElement("div",{className:"perfil-screen"},/*#__PURE__*/React.createElement("div",{className:"perfil-card"},/*#__PURE__*/React.createElement("div",{className:"perfil-logo"},/*#__PURE__*/React.createElement("img",{src:LOGO_SRC,alt:"TransPgso"}),/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{style:{fontFamily:"Bebas Neue",fontSize:22,letterSpacing:3,color:"var(--gold)"}},"TRANSPGSO"),/*#__PURE__*/React.createElement("div",{className:"perfil-sub"},"Centro de Operaciones"))),/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',marginBottom:20,fontSize:15,color:'var(--text)'}},"Hola, ",/*#__PURE__*/React.createElement("strong",{style:{color:'var(--gold)'}},usuario.nombre),/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginTop:4}},"Selecciona los mensajeros que supervisas")),/*#__PURE__*/React.createElement("div",{className:"form-group"},/*#__PURE__*/React.createElement("div",{className:"sel-actions"},/*#__PURE__*/React.createElement("button",{className:"sel-link",onClick:selAll},"Seleccionar todos"),/*#__PURE__*/React.createElement("span",{style:{color:'var(--border)',margin:'0 6px'}},"|"),/*#__PURE__*/React.createElement("button",{className:"sel-link",onClick:selNone},"Limpiar"),/*#__PURE__*/React.createElement("span",{style:{marginLeft:'auto',fontSize:12,color:'var(--text-soft)',fontFamily:'JetBrains Mono'}},selected.size,"/",activos.length," seleccionados")),/*#__PURE__*/React.createElement("div",{className:"men-grid"},activos.map(m=>/*#__PURE__*/React.createElement("div",{key:m.id,className:`men-chip${selected.has(m.id)?' selected':''}`,onClick:()=>toggle(m.id)},/*#__PURE__*/React.createElement("div",{className:"men-chip-check"},selected.has(m.id)?'✓':''),/*#__PURE__*/React.createElement("span",{className:"men-chip-name"},m.nombre))))),/*#__PURE__*/React.createElement("div",{style:{marginTop:24,display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10}},/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)'}},selected.size===0&&/*#__PURE__*/React.createElement("span",{style:{color:'var(--danger)',fontWeight:600}},"Selecciona al menos un mensajero"),selected.size>0&&/*#__PURE__*/React.createElement("span",null,/*#__PURE__*/React.createElement("strong",{style:{color:'var(--gold)'}},selected.size)," mensajero",selected.size!==1?'s':''," seleccionado",selected.size!==1?'s':'')),/*#__PURE__*/React.createElement("button",{className:"btn-confirm",onClick:confirmar,disabled:selected.size===0,style:{opacity:selected.size===0?0.5:1}},"Entrar al sistema \u2192"))));}function fechaHoyCL(d){d=d||new Date();var y=d.getFullYear();var m=String(d.getMonth()+1).padStart(2,'0');var dia=String(d.getDate()).padStart(2,'0');return y+'-'+m+'-'+dia;}
 var UMBRAL_ATRASO_DIAS=2; // dias en 'asignado'/'en_ruta' antes de marcar el envio como atrasado
 function diasDesdeFecha(fechaStr){if(!fechaStr)return 0;try{var f=new Date(fechaStr+'T00:00:00');var hoy=new Date(fechaHoyCL()+'T00:00:00');return Math.round((hoy-f)/86400000);}catch(e){return 0;}}
