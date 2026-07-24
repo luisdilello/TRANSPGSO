@@ -1,3 +1,6 @@
+(function(){
+var useEffect=React.useEffect, useMemo=React.useMemo, useState=React.useState;
+var Badge=window.__app.Badge, COMUNAS_RM_LIST=window.__app.COMUNAS_RM_LIST, DocumentosMensajero=window.__app.DocumentosMensajero, KpiBar=window.__app.KpiBar, Modal=window.__app.Modal, PestanasMensajero=window.__app.PestanasMensajero, db=window.__app.db, enviarNotificacionPush=window.__app.enviarNotificacionPush, fmt=window.__app.fmt;
 function GestionMensajeros(_ref15){let mensajerosProp=_ref15.mensajeros,setMensajeros=_ref15.setMensajeros,mensajerosDia=_ref15.mensajerosDia,toast=_ref15.toast,esAdmin=_ref15.esAdmin;
   const _usUsr=useState(null),usuariosRider=_usUsr[0],setUsuariosRider=_usUsr[1]; // null = aun cargando
   useEffect(()=>{
@@ -123,3 +126,5 @@ const filtrados=mensajeros.filter(m=>m.nombre.toLowerCase().includes(search.toLo
   /*#__PURE__*/React.createElement("div",{className:"form-group"},/*#__PURE__*/React.createElement("label",{className:"form-label"},"Mensaje"),/*#__PURE__*/React.createElement("input",{className:"form-input",placeholder:"Ej: Se corta la colecta a las 15:00 por feria",value:notifForm.message,onChange:e=>setNotifForm(f=>({...f,message:e.target.value}))})),
   /*#__PURE__*/React.createElement("div",{className:"modal-actions"},/*#__PURE__*/React.createElement("button",{className:"btn-secondary",onClick:()=>{setNotifTarget(null);setNotifForm({title:'',message:''});}},"Cancelar"),/*#__PURE__*/React.createElement("button",{className:"btn-primary",disabled:enviandoNotif||!notifForm.title.trim()||!notifForm.message.trim(),onClick:confirmarEnvioNotif},enviandoNotif?'Enviando...':'Enviar'))
 ));}
+window.GestionMensajeros = GestionMensajeros;
+})();

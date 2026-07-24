@@ -1,3 +1,6 @@
+(function(){
+var useState=React.useState;
+var ImportarPDFColecta=window.__app.ImportarPDFColecta, db=window.__app.db, fechaHoyCL=window.__app.fechaHoyCL, lsLoad=window.__app.lsLoad;
 function ColectaAdmin(_ref_ca){var clientes=_ref_ca.clientes,mensajeros=_ref_ca.mensajeros,toast=_ref_ca.toast,esAdmin=_ref_ca.esAdmin;
   var hoy=fechaHoyCL();
   var _t=useState('lector'),subTab=_t[0],setSubTab=_t[1];
@@ -427,3 +430,5 @@ async function guardarColecta(){
     )
   );
 }
+window.ColectaAdmin = ColectaAdmin;
+})();
