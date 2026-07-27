@@ -850,10 +850,9 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
   // y filtrar siempre en el cliente (igual que 'todos', que es el único período confirmado funcionando).
   useEffect(()=>{
     if(!db||(periodo!=='mes'&&periodo!=='rango'&&periodo!=='semana'))return;
-    if(extraEnvios.length>0)return; // ya se cargó una vez, alcanza para todos los períodos
     let cancelado=false;
-    async function fetchExtra(){
-      setCargandoExtra(true);
+    async function fetchExtra(esRefresco){
+      if(!esRefresco)setCargandoExtra(true);
       try{
         const{data,error}=await db.from('envios').select('codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto').neq('estado','eliminado').order('fecha',{ascending:false}).limit(20000);
         if(error)console.warn('Dashboard fetch extra error:',error.message);
@@ -861,16 +860,17 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
       }catch(e){console.warn('Dashboard fetch extra error:',e.message);}
       if(!cancelado)setCargandoExtra(false);
     }
-    fetchExtra();
-    return()=>{cancelado=true;};
+    fetchExtra(false);
+    const _intervalExtra=setInterval(()=>fetchExtra(true),60000);
+    return()=>{cancelado=true;clearInterval(_intervalExtra);};
   },[periodo,db]);
   // Consulta específica para Rango: se dispara cada vez que cambian las fechas elegidas,
   // trayendo exactamente ese rango directo de Supabase (sin depender del tope de 20.000 del fetch general).
   useEffect(()=>{
     if(!db||periodo!=='rango'||!desde||!hasta)return;
     let cancelado=false;
-    async function fetchRango(){
-      setCargandoRango(true);
+    async function fetchRango(esRefresco){
+      if(!esRefresco)setCargandoRango(true);
       try{
         const{data,error}=await db.from('envios').select('codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto').neq('estado','eliminado').gte('fecha',desde).lte('fecha',hasta).order('fecha',{ascending:false}).limit(50000);
         if(error)console.warn('Dashboard fetch rango error:',error.message);
@@ -878,14 +878,14 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
       }catch(e){console.warn('Dashboard fetch rango error:',e.message);}
       if(!cancelado)setCargandoRango(false);
     }
-    fetchRango();
-    return()=>{cancelado=true;};
+    fetchRango(false);
+    const _intervalRango=setInterval(()=>fetchRango(true),60000);
+    return()=>{cancelado=true;clearInterval(_intervalRango);};
   },[periodo,desde,hasta,db]);
   // Consulta completa para 'Todo': trae TODA la tabla en bloques de 1000, sin tope artificial,
   // solo se carga una vez por sesión (igual que el fetch genérico) porque es costosa a alto volumen.
   useEffect(()=>{
     if(!db||periodo!=='todos')return;
-    if(todosHistorico.length>0)return; // ya se cargó completo una vez, alcanza
     let cancelado=false;
     async function fetchTodoHistorico(){
       setCargandoTodos(true);
@@ -907,7 +907,9 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
       if(!cancelado)setCargandoTodos(false);
     }
     fetchTodoHistorico();
-    return()=>{cancelado=true;};
+    // Refresco cada 3 min (no 60s) porque es un escaneo completo de la tabla, mas pesado que los otros.
+    const _intervalTodos=setInterval(fetchTodoHistorico,180000);
+    return()=>{cancelado=true;clearInterval(_intervalTodos);};
   },[periodo,db]);
   const lunesStr=(()=>{const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));return d.toISOString().slice(0,10);})();
   // Fecha de ingreso al sistema = primera entrada del historial (cuando se creó)
