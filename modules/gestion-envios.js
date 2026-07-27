@@ -54,7 +54,7 @@ const pdfRef=useRef();const _usePS=useState(50),PAGE_SIZE=_usePS[0],setPageSize=
   const soloLocales=prev.filter(e=>!codigosExcel.has(e.codigo));
   syncToSupabase(actualizados);
   return[...soloLocales,...actualizados];
-});const nuevosCount=nuevos.filter(n=>{const local=lsLoad('gestion_envios',[]);return!local.find(e=>e.codigo===n.codigo);}).length;const actualizadosCount=nuevos.length-nuevosCount;toast(`✓ ${nuevos.length} envíos procesados · ${actualizadosCount} actualizados · ${nuevosCount} nuevos`);}catch(err){toast('⚠ Error: '+err.message);}};reader.readAsArrayBuffer(file);}function importarExcelPropio(file){const reader=new FileReader();reader.onload=e=>{try{let wb;try{wb=XLSX.read(e.target.result,{type:'array',cellDates:true});}catch(e1){wb=XLSX.read(e.target.result,{type:'array'});}const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{defval:''});if(!rows.length){toast('⚠ Archivo vacío');return;}const nuevos=rows.map((r,i)=>{const codigoExcel=String(r['Codigo']||r['Código']||r['codigo']||r['N° Envío']||r['Envio']||r['Número de Envío']||r['numero_envio']||r['tracking']||r['Tracking']||'').replace(/^'/,'').trim();const codigo=codigoExcel||confirmarCodigo();const fuente=codigoExcel?'externo':'propio';return{id:Date.now()+i,codigo,cliente:(r['Cliente']||r['cliente']||r['Remitente']||'').toString().trim().toUpperCase(),despachador:'',destinatario:(r['Destinatario']||r['destinatario']||r['Nombre']||r['nombre']||'').toString().trim(),telefono:(r['Telefono']||r['Teléfono']||r['telefono']||r['Celular']||'').toString().trim(),direccion:(r['Direccion']||r['Dirección']||r['direccion']||r['Calle']||'').toString().trim(),comuna:(r['Comuna']||r['comuna']||'').toString().trim(),fecha:fechaHoyCL(),estado:'sin_asignar',mensajero:'',monto:parseFloat(String(r['Monto']||r['monto']||r['Cobrar']||0).replace(/[^0-9.]/g,''))||0,nota:(r['Nota']||r['nota']||r['Referencia']||r['referencia']||'').toString().trim(),fuente,historial:[{fecha:new Date().toISOString(),estado:'sin_asignar',nota:codigoExcel?`Importado con código externo ${codigoExcel}`:'Importado desde Excel propio — código PGSO asignado'}]};}).filter(e=>e.destinatario||e.direccion||e.codigo);setEnvios(prev=>{
+});const nuevosCount=nuevos.filter(n=>{const local=lsLoad('gestion_envios',[]);return!local.find(e=>e.codigo===n.codigo);}).length;const actualizadosCount=nuevos.length-nuevosCount;toast(`✓ ${nuevos.length} envíos procesados · ${actualizadosCount} actualizados · ${nuevosCount} nuevos`);}catch(err){toast('⚠ Error: '+err.message);}};reader.readAsArrayBuffer(file);}function importarExcelPropio(file){const reader=new FileReader();reader.onload=e=>{try{let wb;try{wb=XLSX.read(e.target.result,{type:'array',cellDates:true});}catch(e1){wb=XLSX.read(e.target.result,{type:'array'});}const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{defval:''});if(!rows.length){toast('⚠ Archivo vacío');return;}const nuevos=rows.map((r,i)=>{const codigoExcel=String(r['Codigo']||r['Código']||r['codigo']||r['N° Envío']||r['Envio']||r['Número de Envío']||r['numero_envio']||r['tracking']||r['Tracking']||'').replace(/^'/,'').trim();const codigo=codigoExcel||confirmarCodigo();const fuente=codigoExcel?'externo':'propio';return{id:Date.now()+i,codigo,cliente:(r['Cliente']||r['cliente']||r['Remitente']||'').toString().trim().toUpperCase(),despachador:'',destinatario:(r['Destinatario']||r['destinatario']||r['Nombre']||r['nombre']||'').toString().trim(),telefono:(r['Telefono']||r['Teléfono']||r['telefono']||r['Celular']||'').toString().trim(),direccion:(r['Direccion']||r['Dirección']||r['direccion']||r['Calle']||'').toString().trim(),comuna:(r['Comuna']||r['comuna']||'').toString().trim(),fecha:fechaHoyCL(),estado:'en_bodega',mensajero:'',monto:parseFloat(String(r['Monto']||r['monto']||r['Cobrar']||0).replace(/[^0-9.]/g,''))||0,nota:(r['Nota']||r['nota']||r['Referencia']||r['referencia']||'').toString().trim(),fuente,historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:codigoExcel?`Importado con código externo ${codigoExcel}`:'Importado desde Excel propio — código PGSO asignado'}]};}).filter(e=>e.destinatario||e.direccion||e.codigo);setEnvios(prev=>{
   const mapaExist={};
   prev.forEach(e=>{mapaExist[e.codigo]=e;});
   // Upsert: actualizar si ya existe, agregar si es nuevo
@@ -185,10 +185,10 @@ const msg=conCodigo>0&&sinCodigo>0?`✓ ${nuevos.length} envíos cargados · ${c
             id:Date.now()+i,
             codigo,cliente,destinatario,direccion,referencia,
             comuna:comuna.toUpperCase(),zona,telefono:'',fecha,
-            estado:'sin_asignar',mensajero:'',monto:0,
+            estado:'en_bodega',mensajero:'',monto:0,
             nota:referencia?'Ref: '+referencia:'',
             fuente:'externo',foto_etiqueta,
-            historial:[{fecha:new Date().toISOString(),estado:'sin_asignar',nota:'PDF Flex · '+cliente}]
+            historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:'PDF Flex · '+cliente}]
           });
         }catch(pe){console.warn('Error página '+i+':',pe.message);}
       }
@@ -231,7 +231,7 @@ function confirmarImportPDF(){
     (async()=>{
       for(const e of procesados.slice(0,500)){
         try{
-          const upsertData={codigo:e.codigo,cliente:e.cliente||'',destinatario:e.destinatario||'',telefono:e.telefono||'',direccion:e.direccion||'',comuna:e.comuna||'',referencia:e.referencia||'',fecha:fechaHoyCL(),estado:e.estado||'sin_asignar',mensajero:e.mensajero||'',monto:0,en_un_cambio:false,nota:e.nota||'',fuente:'externo'};
+          const upsertData={codigo:e.codigo,cliente:e.cliente||'',destinatario:e.destinatario||'',telefono:e.telefono||'',direccion:e.direccion||'',comuna:e.comuna||'',referencia:e.referencia||'',fecha:fechaHoyCL(),estado:e.estado||'en_bodega',mensajero:e.mensajero||'',monto:0,en_un_cambio:false,nota:e.nota||'',fuente:'externo'};
           if(e.foto_etiqueta)upsertData.foto_etiqueta=e.foto_etiqueta;
           await db.from('envios').upsert(upsertData,{onConflict:'codigo'});
         }catch(err){}

@@ -104,7 +104,7 @@ function ColectaAdmin(_ref_ca){var clientes=_ref_ca.clientes,mensajeros=_ref_ca.
     mensajero:scanMensajero||'',
     fecha:hoy,
     hora:new Date().toLocaleTimeString('es-CL'),
-    estado:'sin_asignar'
+    estado:'en_bodega'
   };
   setScanList(function(prev){return[nuevo,...prev];});
   setScanCode('');
@@ -128,7 +128,7 @@ async function guardarLoteScanner(){
         comuna:'',
         referencia:'',
         fecha:hoy,
-        estado:'sin_asignar',
+        estado:'en_bodega',
         monto:0,
         en_un_cambio:false,
         nota:'Ingresado por lector - '+hoy,
@@ -142,7 +142,7 @@ async function guardarLoteScanner(){
     var hist=scanList.map(function(e){
       return{
         codigo_envio:e.codigo,
-        estado:'sin_asignar',
+        estado:'en_bodega',
         nota:'Ingresado por lector en bodega',
         usuario:'Admin',
         fecha:ts
