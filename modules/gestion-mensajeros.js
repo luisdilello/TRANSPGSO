@@ -4,7 +4,7 @@ var Badge=window.__app.Badge, COMUNAS_RM_LIST=window.__app.COMUNAS_RM_LIST, Docu
 function GestionMensajeros(_ref15){let mensajerosProp=_ref15.mensajeros,setMensajeros=_ref15.setMensajeros,mensajerosDia=_ref15.mensajerosDia,toast=_ref15.toast,esAdmin=_ref15.esAdmin;
   const _usUsr=useState(null),usuariosRider=_usUsr[0],setUsuariosRider=_usUsr[1]; // null = aun cargando
   useEffect(()=>{
-    db.from('usuarios').select('mensajero_id,nombre,rol').eq('rol','rider').then(res=>{
+    db.from('usuarios_publico').select('mensajero_id,nombre,rol').eq('rol','rider').then(res=>{
       if(res.data)setUsuariosRider(res.data);
       else setUsuariosRider([]);
     }).catch(()=>setUsuariosRider([]));

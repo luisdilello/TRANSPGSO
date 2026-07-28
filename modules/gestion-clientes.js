@@ -4,7 +4,7 @@ var Badge=window.__app.Badge, COMUNAS_CHILE=window.__app.COMUNAS_CHILE, Modal=wi
 function GestionClientes(_ref14){let clientesProp=_ref14.clientes,setClientes=_ref14.setClientes,toast=_ref14.toast,esAdmin=_ref14.esAdmin;
 const _usUsrC=useState(null),usuariosCliente=_usUsrC[0],setUsuariosCliente=_usUsrC[1];
 useEffect(()=>{
-  db.from('usuarios').select('nombre,rol').eq('rol','cliente').then(res=>{
+  db.from('usuarios_publico').select('nombre,rol').eq('rol','cliente').then(res=>{
     if(res.data)setUsuariosCliente(res.data);
     else setUsuariosCliente([]);
   }).catch(()=>setUsuariosCliente([]));

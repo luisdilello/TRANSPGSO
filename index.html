@@ -462,7 +462,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785216098';
+window.__MODULES_VERSION = '1785216704';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7192,7 +7192,7 @@ useEffect(()=>{try{const saved=localStorage.getItem('transpgso_v1_mensajeros');i
   // Revalidar la sesión guardada contra la base de datos real (evita quedar con un rol viejo en caché)
   useEffect(()=>{
     if(!usuarioActivo||!usuarioActivo.email)return;
-    db.from('usuarios').select('*').eq('email',usuarioActivo.email).eq('activo',true).single().then(res=>{
+    db.from('usuarios_publico').select('nombre,email,rol,activo,mensajero_id,cliente_nombre').eq('email',usuarioActivo.email).eq('activo',true).single().then(res=>{
       const u=res.data;
       if(!u){
         // Cuenta desactivada o eliminada: forzar salida
