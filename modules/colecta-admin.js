@@ -67,26 +67,28 @@ function ColectaAdmin(_ref_ca){var clientes=_ref_ca.clientes,mensajeros=_ref_ca.
 
   async function procesarScanLector(codigo){
   if(!codigo||!codigo.trim())return;
-  var raw=codigo.trim();
-  
-  // Extraer código Flex del QR — formato: [id[Ñ[47364708748[,...
-  var cod=raw;
-  var matchQR=raw.match(/id[^\d]+(\d{8,})/);
-  if(matchQR){
-    cod=matchQR[1];
+  var raw=codigo.trim().toUpperCase();
+
+  // Reconocer etiqueta propia PGSO (formato: PGSO + 9 dígitos)
+  var matchPGSO=raw.match(/PGSO\d{9}/);
+  var cod;
+  if(matchPGSO){
+    cod=matchPGSO[0];
   } else {
-    // Buscar cualquier secuencia de 8+ dígitos en el string
-    var matchNum=raw.match(/(\d{8,})/);
-    if(matchNum){
-      cod=matchNum[1];
+    // Extraer código Flex del QR — formato: [id[Ñ[47364708748[,...
+    var matchQR=raw.match(/id[^\d]+(\d{11})/);
+    if(matchQR){
+      cod=matchQR[1];
     } else {
-      cod=raw.replace(/[^\d]/g,'');
+      // Buscar una secuencia de exactamente 11 dígitos en el string
+      var matchNum=raw.match(/(?<!\d)(\d{11})(?!\d)/);
+      cod=matchNum?matchNum[1]:raw.replace(/[^\d]/g,'');
     }
   }
-  
-  // Validar que quedó un número de 8+ dígitos
-  if(!cod||!/^\d{8,}$/.test(cod)){
-    toast('⚠ No se pudo extraer código Flex válido');
+
+  // Validar que sea Flex (11 dígitos exactos) o etiqueta PGSO valida
+  if(!cod||!(/^\d{11}$/.test(cod)||/^PGSO\d{9}$/.test(cod))){
+    toast('⚠ Código inválido — debe ser Flex (11 dígitos) o etiqueta PGSO');
     setScanCode('');
     if(scanInputRef.current)scanInputRef.current.focus();
     return;
