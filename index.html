@@ -462,7 +462,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785216704';
+window.__MODULES_VERSION = '1785257613';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3884,7 +3884,7 @@ function ColectaRider(_ref_cr){
         }catch(e){errFotos.push(e.message);}
       }));
       if(errFotos.length>0) console.warn('Errores foto colecta:',errFotos);
-      // Insertar envíos manuales con estado pendiente_completar
+      // Insertar envíos manuales con estado en_bodega (quedan marcados para completar datos en la nota)
       if(manuales.length>0){
         const insertsManuales=manuales.map(f=>({
           codigo:f.datos.codigo||('MAN-'+Date.now()+'-'+Math.floor(Math.random()*1000)),
@@ -3895,7 +3895,7 @@ function ColectaRider(_ref_cr){
           comuna:f.datos.comuna||'',
           referencia:f.datos.referencia||'',
           fecha:fechaHoyCL(),
-          estado:'pendiente_completar',
+          estado:'en_bodega',
           mensajero:'',
           monto:0,
           en_un_cambio:false,
