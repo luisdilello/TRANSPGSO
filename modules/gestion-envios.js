@@ -302,7 +302,7 @@ async function cambiarEstado(ids,nuevoEstado,nota){if(nota===void 0){nota='';}co
     toast('⚠ Error: '+e.message);
   }
 }const hoyGE=fechaHoyCL();
-const lunesStrGE=(()=>{const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));return d.toISOString().slice(0,10);})();
+const lunesStrGE=(()=>{const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
 function enPeriodoGE(e){
   const fi=(e.fecha||'').slice(0,10);
   if(periodo==='hoy')return fi===hoyGE;
