@@ -462,7 +462,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785205842';
+window.__MODULES_VERSION = '1785206647';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7113,7 +7113,7 @@ window.__app = {
   estadoInfo, imprimirFotoEtiqueta, normalizarNombre, playSound, subirFotoStorage,
   Badge, COMUNAS_RM_LIST, DocumentosMensajero, KpiBar, PestanasMensajero,
   enviarNotificacionPush, fmt, ConteoAyudas, HistorialCierres, PlanillaRetiros,
-  normNombre, sbSelect, EnvioDetalleCard, UMBRAL_ATRASO_DIAS
+  normNombre, sbSelect, EnvioDetalleCard, UMBRAL_ATRASO_DIAS, EtiquetaPreview
 };
 function App(){useEffect(()=>{
   // Sincronizar mensajeros desde Supabase y normalizar nombres al iniciar
