@@ -462,7 +462,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785207535';
+window.__MODULES_VERSION = '1785208700';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3214,10 +3214,13 @@ function RetiroMasivoRider(_ref_rm){
     try{
       if(!videoRef.current||videoRef.current.readyState!==4) return null;
       var canvas=document.createElement('canvas');
-      canvas.width=videoRef.current.videoWidth;
-      canvas.height=videoRef.current.videoHeight;
-      canvas.getContext('2d').drawImage(videoRef.current,0,0);
-      return canvas.toDataURL('image/jpeg',0.8);
+      var MAXDIM=1280;
+      var vw=videoRef.current.videoWidth,vh=videoRef.current.videoHeight;
+      var scale=Math.min(1,MAXDIM/Math.max(vw,vh));
+      canvas.width=Math.round(vw*scale);
+      canvas.height=Math.round(vh*scale);
+      canvas.getContext('2d').drawImage(videoRef.current,0,0,canvas.width,canvas.height);
+      return canvas.toDataURL('image/jpeg',0.75);
     }catch(e){return null;}
   }
 
