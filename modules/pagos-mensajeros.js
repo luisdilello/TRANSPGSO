@@ -152,7 +152,19 @@ useEffect(()=>{
     try{
       const{data,error}=await db.from('pagos_mensajeros_semanales').select('data').eq('semana',semana).single();
       if(!cancelado&&!error&&data&&data.data&&Array.isArray(data.data.pagos)&&data.data.pagos.length>0){
-        setPagos(data.data.pagos);
+        // Recalcular bruto/total al cargar, por si el dato guardado quedo desactualizado
+        // respecto a los envios/tarifa actuales (evita mostrar montos viejos "pegados").
+        const normNomLoad=n=>(n||'').replace(/,\s*/g,' ').replace(/\s+/g,' ').trim().toUpperCase();
+        const tarifaMapLoad={};
+        mensajeros.forEach(m=>{tarifaMapLoad[normNomLoad(m.nombre)]=m.tarifa||1200;});
+        const pagosRecalculados=data.data.pagos.map(p=>{
+          const tarifaActual=tarifaMapLoad[normNomLoad(p.nombre)]||p.tarifa||1200;
+          const bruto=p.envios*tarifaActual;
+          const totalBruto=bruto+(p.ajuste||0)-(p.iva||0);
+          const totalPagar=totalBruto+(p.extra||0)-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0);
+          return{...p,tarifa:tarifaActual,bruto,totalBruto,totalPagar};
+        });
+        setPagos(pagosRecalculados);
       }
     }catch(e){console.warn('Pago Mensajeros: error cargando desde Supabase:',e.message);}
     _pagosCargados.current=true;
