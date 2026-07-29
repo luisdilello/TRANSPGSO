@@ -152,19 +152,9 @@ useEffect(()=>{
     try{
       const{data,error}=await db.from('pagos_mensajeros_semanales').select('data').eq('semana',semana).single();
       if(!cancelado&&!error&&data&&data.data&&Array.isArray(data.data.pagos)&&data.data.pagos.length>0){
-        // Recalcular bruto/total al cargar, por si el dato guardado quedo desactualizado
-        // respecto a los envios/tarifa actuales (evita mostrar montos viejos "pegados").
-        const normNomLoad=n=>(n||'').replace(/,\s*/g,' ').replace(/\s+/g,' ').trim().toUpperCase();
-        const tarifaMapLoad={};
-        mensajeros.forEach(m=>{tarifaMapLoad[normNomLoad(m.nombre)]=m.tarifa||1200;});
-        const pagosRecalculados=data.data.pagos.map(p=>{
-          const tarifaActual=tarifaMapLoad[normNomLoad(p.nombre)]||p.tarifa||1200;
-          const bruto=p.envios*tarifaActual;
-          const totalBruto=bruto+(p.ajuste||0)-(p.iva||0);
-          const totalPagar=totalBruto+(p.extra||0)-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0);
-          return{...p,tarifa:tarifaActual,bruto,totalBruto,totalPagar};
-        });
-        setPagos(pagosRecalculados);
+        // Respetar el bruto guardado tal cual: puede venir de un calculo por tarifa
+        // de comuna (calcularEnviosSemana), que es mas especifico que envios*tarifa plana.
+        setPagos(data.data.pagos);
       }
     }catch(e){console.warn('Pago Mensajeros: error cargando desde Supabase:',e.message);}
     _pagosCargados.current=true;
@@ -232,11 +222,11 @@ useEffect(()=>{
     mensajeros.forEach(m=>{tarifaMap[normNom(m.nombre)]=m.tarifa||1200;});
     setPagos(prev=>prev.map(p=>{
       const tarifaActual=tarifaMap[normNom(p.nombre)]||p.tarifa||1200;
-      const bruto=p.envios*tarifaActual;
-      const totalBruto=bruto+p.ajuste-p.iva;
-      const totalPagar=totalBruto+p.extra-p.adelanto-p.prestamo-p.consumo;
-      if(tarifaActual===p.tarifa&&bruto===p.bruto&&totalPagar===p.totalPagar)return p; // ya esta consistente, no re-renderizar
-      return{...p,tarifa:tarifaActual,bruto,totalBruto,totalPagar};
+      if(tarifaActual===p.tarifa)return p; // sin cambio de tarifa base: no tocar bruto (puede venir de tarifa por comuna)
+      // Solo si la tarifa BASE realmente cambio, actualizamos tarifa mostrada.
+      // El bruto/total NO se recalcula aca para no pisar un calculo por comuna ya hecho;
+      // el admin debe usar 'Calcular Envios Semana' para refrescar el monto real.
+      return{...p,tarifa:tarifaActual};
     }));
   }
 },[mensajeros]);useEffect(()=>{if(mensajerosDia.length>0){const normNom2=n=>(n||'').replace(/,\s*/g,' ').replace(/\s+/g,' ').trim().toUpperCase();const tarifaMap={};mensajeros.forEach(m=>{tarifaMap[normNom2(m.nombre)]=m.tarifa||1200;});setPagos(prev=>{const prevMap={};prev.forEach(p=>{prevMap[normNom2(p.nombre)]=p;});return mensajerosDia.filter(m=>m.total>0).map((m,i)=>{const tarifa=tarifaMap[normNom2(m.nombre)]||1200;const bruto=m.entregados*tarifa;const existing=prevMap[normNom2(m.nombre)];if(existing)return{...existing,envios:m.entregados,tarifa,bruto,totalBruto:bruto+existing.ajuste-existing.iva,totalPagar:bruto+existing.ajuste-existing.iva+existing.extra-existing.adelanto-existing.prestamo-(existing.consumo||0)};return{id:m.id||i,nombre:m.nombre,envios:m.entregados,tarifa,bruto,ajuste:0,iva:0,totalBruto:bruto,adelanto:0,extra:0,prestamo:0,totalPagar:bruto,estado:'PENDIENTE',obs:''};});});}},[mensajerosDia]);function updatePago(id,field,val){setPagos(prev=>prev.map(p=>{if(p.id!==id)return p;const strFields=['estado','obs','tipoIVA'];const updated={...p,[field]:strFields.includes(field)?val:+val};if(field==='tipoIVA'){if(val==='ninguno'){updated.iva=0;}else if(val==='manual'){}else{const rate=val==='honorarios'?0.1525:val==='factura'?0.19:0;updated.iva=Math.round(updated.bruto*rate/(1+rate));}}if(field==='tarifa'){updated.bruto=updated.envios*+val;const rate=updated.tipoIVA==='honorarios'?0.1525:updated.tipoIVA==='factura'?0.19:0;if(rate>0)updated.iva=Math.round(updated.bruto*rate/(1+rate));}if(!strFields.includes(field)){updated.totalBruto=updated.bruto+updated.ajuste-updated.iva;updated.totalPagar=updated.totalBruto+updated.extra-updated.adelanto-updated.prestamo-updated.consumo;}if(field==='tipoIVA'){updated.totalBruto=updated.bruto+updated.ajuste-updated.iva;updated.totalPagar=updated.totalBruto+updated.extra-updated.adelanto-updated.prestamo-updated.consumo;}return updated;}));}async function calcularEnviosSemana(){
