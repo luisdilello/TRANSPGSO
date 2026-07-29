@@ -220,10 +220,10 @@ useEffect(()=>{
     mensajeros.forEach(m=>{tarifaMap[normNom(m.nombre)]=m.tarifa||1200;});
     setPagos(prev=>prev.map(p=>{
       const tarifaActual=tarifaMap[normNom(p.nombre)]||p.tarifa||1200;
-      if(tarifaActual===p.tarifa)return p; // sin cambio
       const bruto=p.envios*tarifaActual;
       const totalBruto=bruto+p.ajuste-p.iva;
       const totalPagar=totalBruto+p.extra-p.adelanto-p.prestamo-p.consumo;
+      if(tarifaActual===p.tarifa&&bruto===p.bruto&&totalPagar===p.totalPagar)return p; // ya esta consistente, no re-renderizar
       return{...p,tarifa:tarifaActual,bruto,totalBruto,totalPagar};
     }));
   }
