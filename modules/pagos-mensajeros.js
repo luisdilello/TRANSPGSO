@@ -151,14 +151,28 @@ useEffect(()=>{
   _pagosCargados.current=false;
   setPagosListos(false);
   (async()=>{
-    try{
-      const{data,error}=await db.from('pagos_mensajeros_semanales').select('data').eq('semana',semana).single();
-      if(!cancelado&&!error&&data&&data.data&&Array.isArray(data.data.pagos)&&data.data.pagos.length>0){
-        // Respetar el bruto guardado tal cual: puede venir de un calculo por tarifa
-        // de comuna (calcularEnviosSemana), que es mas especifico que envios*tarifa plana.
-        setPagos(data.data.pagos);
+    let intentos=0;
+    let logrado=false;
+    while(intentos<4&&!cancelado&&!logrado){
+      try{
+        const{data,error}=await db.from('pagos_mensajeros_semanales').select('data').eq('semana',semana).single();
+        if(error&&error.code!=='PGRST116'){
+          // Error de red/timeout (no es simplemente "no existe todavia esta semana"): reintentar
+          intentos++;
+          if(intentos<4){await new Promise(r=>setTimeout(r,800));continue;}
+        }
+        if(!cancelado&&!error&&data&&data.data&&Array.isArray(data.data.pagos)&&data.data.pagos.length>0){
+          // Respetar el bruto guardado tal cual: puede venir de un calculo por tarifa
+          // de comuna (calcularEnviosSemana), que es mas especifico que envios*tarifa plana.
+          setPagos(data.data.pagos);
+        }
+        logrado=true;
+      }catch(e){
+        console.warn('Pago Mensajeros: error cargando desde Supabase (intento '+(intentos+1)+'):',e.message);
+        intentos++;
+        if(intentos<4)await new Promise(r=>setTimeout(r,800));
       }
-    }catch(e){console.warn('Pago Mensajeros: error cargando desde Supabase:',e.message);}
+    }
     _pagosCargados.current=true;
     if(!cancelado)setPagosListos(true);
   })();
