@@ -246,7 +246,7 @@ useEffect(()=>{
       return{...p,tarifa:tarifaActual};
     }));
   }
-},[mensajeros]);useEffect(()=>{if(mensajerosDia.length>0){const normNom2=n=>(n||'').replace(/,\s*/g,' ').replace(/\s+/g,' ').trim().toUpperCase();const tarifaMap={};mensajeros.forEach(m=>{tarifaMap[normNom2(m.nombre)]=m.tarifa||1200;});setPagos(prev=>{const prevMap={};prev.forEach(p=>{prevMap[normNom2(p.nombre)]=p;});return mensajerosDia.filter(m=>m.total>0).map((m,i)=>{const tarifa=tarifaMap[normNom2(m.nombre)]||1200;const bruto=m.entregados*tarifa;const existing=prevMap[normNom2(m.nombre)];if(existing)return{...existing,envios:m.entregados,tarifa,bruto,totalBruto:bruto+existing.ajuste-existing.iva,totalPagar:bruto+existing.ajuste-existing.iva+existing.extra-existing.adelanto-existing.prestamo-(existing.consumo||0)};return{id:m.id||i,nombre:m.nombre,envios:m.entregados,tarifa,bruto,ajuste:0,iva:0,totalBruto:bruto,adelanto:0,extra:0,prestamo:0,totalPagar:bruto,estado:'PENDIENTE',obs:''};});});}},[mensajerosDia]);function updatePago(id,field,val){setPagos(prev=>prev.map(p=>{if(p.id!==id)return p;const strFields=['estado','obs','tipoIVA'];const updated={...p,[field]:strFields.includes(field)?val:+val};if(field==='tipoIVA'){if(val==='ninguno'){updated.iva=0;}else if(val==='manual'){}else{const rate=val==='honorarios'?0.1525:val==='factura'?0.19:0;updated.iva=Math.round(updated.bruto*rate/(1+rate));}}if(field==='tarifa'){updated.bruto=updated.envios*+val;const rate=updated.tipoIVA==='honorarios'?0.1525:updated.tipoIVA==='factura'?0.19:0;if(rate>0)updated.iva=Math.round(updated.bruto*rate/(1+rate));}if(!strFields.includes(field)){updated.totalBruto=updated.bruto+updated.ajuste-updated.iva;updated.totalPagar=updated.totalBruto+updated.extra-updated.adelanto-updated.prestamo-updated.consumo;}if(field==='tipoIVA'){updated.totalBruto=updated.bruto+updated.ajuste-updated.iva;updated.totalPagar=updated.totalBruto+updated.extra-updated.adelanto-updated.prestamo-updated.consumo;}return updated;}));}async function calcularEnviosSemana(){
+},[mensajeros]);useEffect(()=>{if(mensajerosDia.length>0){const normNom2=n=>(n||'').replace(/,\s*/g,' ').replace(/\s+/g,' ').trim().toUpperCase();const tarifaMap={};mensajeros.forEach(m=>{tarifaMap[normNom2(m.nombre)]=m.tarifa||1200;});setPagos(prev=>{const prevMap={};prev.forEach(p=>{prevMap[normNom2(p.nombre)]=p;});return mensajerosDia.filter(m=>m.total>0).map((m,i)=>{const tarifa=tarifaMap[normNom2(m.nombre)]||1200;const bruto=m.entregados*tarifa;const existing=prevMap[normNom2(m.nombre)];if(existing)return{...existing,envios:m.entregados};return{id:m.id||i,nombre:m.nombre,envios:m.entregados,tarifa,bruto,ajuste:0,iva:0,totalBruto:bruto,adelanto:0,extra:0,prestamo:0,totalPagar:bruto,estado:'PENDIENTE',obs:''};});});}},[mensajerosDia]);function updatePago(id,field,val){setPagos(prev=>prev.map(p=>{if(p.id!==id)return p;const strFields=['estado','obs','tipoIVA'];const updated={...p,[field]:strFields.includes(field)?val:+val};if(field==='tipoIVA'){if(val==='ninguno'){updated.iva=0;}else if(val==='manual'){}else{const rate=val==='honorarios'?0.1525:val==='factura'?0.19:0;updated.iva=Math.round(updated.bruto*rate/(1+rate));}}if(field==='tarifa'){updated.bruto=updated.envios*+val;const rate=updated.tipoIVA==='honorarios'?0.1525:updated.tipoIVA==='factura'?0.19:0;if(rate>0)updated.iva=Math.round(updated.bruto*rate/(1+rate));}if(!strFields.includes(field)){updated.totalBruto=updated.bruto+updated.ajuste-updated.iva;updated.totalPagar=updated.totalBruto+updated.extra-updated.adelanto-updated.prestamo-updated.consumo;}if(field==='tipoIVA'){updated.totalBruto=updated.bruto+updated.ajuste-updated.iva;updated.totalPagar=updated.totalBruto+updated.extra-updated.adelanto-updated.prestamo-updated.consumo;}return updated;}));}async function calcularEnviosSemana(){
   if(!fechaInicio||!fechaFin){toast('Selecciona el rango de fechas');return;}
   setCalculando(true);
   toast('⏳ Calculando envíos...');
@@ -286,7 +286,6 @@ useEffect(()=>{
     // Buscar tarifas con nombre exacto Y con nombre normalizado
     var rTar=await db.from('tarifas_comunas')
       .select('mensajero_nombre,comuna,tarifa');
-    console.log('[DEBUG calcularEnviosSemana] rTar.error=',rTar.error,'rTar.data.length=',rTar.data?rTar.data.length:'null');
     var tarifasComunaMap={};
     var tarifasComunaMapPrimerNombre={};
     (rTar.data||[]).forEach(function(t){
@@ -317,9 +316,6 @@ useEffect(()=>{
         var enviosPorComuna=conteoDetalle[key]||{};
         var totalEnvios=Object.values(enviosPorComuna).reduce(function(a,b){return a+b;},0);
         var tarsCom=tarifasComunaMap[key]||tarifasComunaMapPrimerNombre[key.split(' ')[0]]||{};
-        if(key.indexOf('GUSTAVO')!==-1){
-          console.log('[DEBUG calcularEnviosSemana] key=',key,'enviosPorComuna=',JSON.stringify(enviosPorComuna),'tarsCom=',JSON.stringify(tarsCom),'tarifasComunaMap completo=',JSON.stringify(tarifasComunaMap));
-        }
         // Calcular bruto usando tarifa específica por comuna
         var bruto=Object.keys(enviosPorComuna).reduce(function(sum,com){
           var tar=tarsCom[com]!==undefined?tarsCom[com]:(p.tarifa||1200);
