@@ -274,21 +274,13 @@ useEffect(()=>{
       conteo[n]=(conteo[n]||0)+1;
     });
 
-    // Actualizar pagos con los conteos reales
-    setPagos(function(prev){
-      return prev.map(function(p){
-        var key=p.nombre.replace(/,\s*/g,' ').toUpperCase().trim();
-        var envios=conteo[key]||0;
-        var bruto=envios*p.tarifa;
-        var totalBruto=bruto+(p.ajuste||0)-(p.iva||0);
-        var totalPagar=totalBruto+(p.extra||0)-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0);
-        return Object.assign({},p,{envios:envios,bruto:bruto,totalBruto:totalBruto,totalPagar:totalPagar});
-      });
-    });
+    // (No se aplica aqui un calculo intermedio con tarifa plana: se espera a tener
+    // las tarifas por comuna para hacer el calculo correcto de una sola vez, evitando
+    // mostrar un monto transitorio incorrecto).
 
     // Cargar tarifas por comuna de todos los mensajeros
     // Normalizar nombres: quitar comas para comparar con envios
-    var normNombre=function(n){return (n||'').replace(/,\s*/g,' ').toUpperCase().trim();};
+    var normNombre=function(n){return (n||'').replace(/,\s*/g,' ').replace(/\s+/g,' ').toUpperCase().trim();};
     var mensajerosList=pagos.map(function(p){return p.nombre.toUpperCase().trim();});
     var mensajerosListNorm=pagos.map(function(p){return normNombre(p.nombre);});
     // Buscar tarifas con nombre exacto Y con nombre normalizado
