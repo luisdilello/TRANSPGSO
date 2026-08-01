@@ -286,6 +286,7 @@ useEffect(()=>{
     // Buscar tarifas con nombre exacto Y con nombre normalizado
     var rTar=await db.from('tarifas_comunas')
       .select('mensajero_nombre,comuna,tarifa');
+    console.log('[DEBUG calcularEnviosSemana] rTar.error=',rTar.error,'rTar.data.length=',rTar.data?rTar.data.length:'null');
     var tarifasComunaMap={};
     var tarifasComunaMapPrimerNombre={};
     (rTar.data||[]).forEach(function(t){
@@ -316,6 +317,9 @@ useEffect(()=>{
         var enviosPorComuna=conteoDetalle[key]||{};
         var totalEnvios=Object.values(enviosPorComuna).reduce(function(a,b){return a+b;},0);
         var tarsCom=tarifasComunaMap[key]||tarifasComunaMapPrimerNombre[key.split(' ')[0]]||{};
+        if(key.indexOf('GUSTAVO')!==-1){
+          console.log('[DEBUG calcularEnviosSemana] key=',key,'enviosPorComuna=',JSON.stringify(enviosPorComuna),'tarsCom=',JSON.stringify(tarsCom),'tarifasComunaMap completo=',JSON.stringify(tarifasComunaMap));
+        }
         // Calcular bruto usando tarifa específica por comuna
         var bruto=Object.keys(enviosPorComuna).reduce(function(sum,com){
           var tar=tarsCom[com]!==undefined?tarsCom[com]:(p.tarifa||1200);
