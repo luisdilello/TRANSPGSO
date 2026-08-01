@@ -287,11 +287,15 @@ useEffect(()=>{
     var rTar=await db.from('tarifas_comunas')
       .select('mensajero_nombre,comuna,tarifa');
     var tarifasComunaMap={};
+    var tarifasComunaMapPrimerNombre={};
     (rTar.data||[]).forEach(function(t){
-      // Indexar por nombre normalizado (sin comas)
+      // Indexar por nombre normalizado (sin comas) y tambien por primer nombre, como respaldo
       var key=normNombre(t.mensajero_nombre);
+      var primerN=key.split(' ')[0];
       if(!tarifasComunaMap[key])tarifasComunaMap[key]={};
       tarifasComunaMap[key][t.comuna.toUpperCase().trim()]=t.tarifa;
+      if(!tarifasComunaMapPrimerNombre[primerN])tarifasComunaMapPrimerNombre[primerN]={};
+      tarifasComunaMapPrimerNombre[primerN][t.comuna.toUpperCase().trim()]=t.tarifa;
     });
 
     // Construir conteo detallado por mensajero y comuna
@@ -311,7 +315,7 @@ useEffect(()=>{
         var key=normNombre(p.nombre);
         var enviosPorComuna=conteoDetalle[key]||{};
         var totalEnvios=Object.values(enviosPorComuna).reduce(function(a,b){return a+b;},0);
-        var tarsCom=tarifasComunaMap[key]||tarifasComunaMap[normNombre(p.nombre)]||{};
+        var tarsCom=tarifasComunaMap[key]||tarifasComunaMapPrimerNombre[key.split(' ')[0]]||{};
         // Calcular bruto usando tarifa específica por comuna
         var bruto=Object.keys(enviosPorComuna).reduce(function(sum,com){
           var tar=tarsCom[com]!==undefined?tarsCom[com]:(p.tarifa||1200);
@@ -363,7 +367,7 @@ function recalcAll(){
 }const totales=pagos.reduce((a,p)=>({envios:a.envios+p.envios,bruto:a.bruto+p.bruto,adelanto:a.adelanto+p.adelanto,extra:a.extra+p.extra,prestamo:a.prestamo+p.prestamo,iva:a.iva+p.iva,consumo:a.consumo+(p.consumo||0),total:a.total+p.totalPagar,pendientes:a.pendientes+(p.estado==='PENDIENTE'?1:0),pagados:a.pagados+(p.estado==='PAGADO'?1:0)}),{envios:0,bruto:0,adelanto:0,extra:0,prestamo:0,iva:0,consumo:0,total:0,pendientes:0,pagados:0});const fmtCLP=n=>`$${Math.round(n).toLocaleString('es-CL')}`;function exportarComprobante(p){var _document$querySelect5;const win=window.open('','_blank','width=600,height=800');const logoSrc=((_document$querySelect5=document.querySelector('.logo-img'))==null?void 0:_document$querySelect5.src)||'';win.document.write(`<!DOCTYPE html><html><head>
     <meta charset="UTF-8"/>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet"/>
-    <title>Comprobante - ${p.nombre}</title>
+    <title>Comprobante - ${p.nombre.replace(/,\s*/g,' ')}</title>
     <style>
       *{box-sizing:border-box;margin:0;padding:0;}
       body{font-family:Arial,sans-serif;padding:32px;background:#FEF8EA;color:#2b2e20;}
