@@ -462,7 +462,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785554774';
+window.__MODULES_VERSION = '1785555027';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -5053,7 +5053,7 @@ function GananciasRider(_ref_gr){
           e.comuna&&React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.3)'}},e.comuna)
         ),
         React.createElement('div',{style:{textAlign:'right'}},
-          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:16,color:'var(--gold)'}},'$'+tarifaVal.toLocaleString('es-CL')),
+          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:16,color:'var(--gold)'}},'$'+montoEnvio(e).toLocaleString('es-CL')),
           React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.3)',marginTop:2}},(e.actualizado_en||e.fecha||'').slice(0,10))
         )
       )),
