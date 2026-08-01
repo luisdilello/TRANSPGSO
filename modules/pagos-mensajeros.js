@@ -186,14 +186,6 @@ useEffect(()=>{
   },2500);
   return()=>clearTimeout(t);
 },[semana,pagos,fechaPago]);
-const _autoCalc=useRef(false);
-useEffect(()=>{
-  if(_autoCalc.current)return;
-  if(!mensajeros||mensajeros.length===0)return;
-  _autoCalc.current=true;
-  var t=setTimeout(function(){calcularEnviosSemana();},600);
-  return function(){clearTimeout(t);};
-},[mensajeros]);
 async function autoGuardarCierreSemanal(){
   if(!pagos||pagos.length===0)return;
   try{
