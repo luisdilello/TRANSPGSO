@@ -143,6 +143,10 @@ const _useExpandido=useState({}),expandido=_useExpandido[0],setExpandido=_useExp
   }
   return buildPagos();
 }),pagos=_useState40[0],setPagos=_useState40[1];useEffect(()=>{lsSave('pagos_semana',pagos);},[pagos]);
+useEffect(()=>{
+  const g=pagos.find(p=>(p.nombre||'').toUpperCase().indexOf('GUSTAVO')!==-1);
+  if(g)console.log('[DEBUG3] pagos cambio - GUSTAVO bruto=',g.bruto,'envios=',g.envios,'hora=',new Date().toLocaleTimeString(),new Error().stack);
+},[pagos]);
 // ── Respaldo en Supabase de Pago Mensajeros (mismo patrón que Cierre de Mes) ──
 const _pagosCargados=useRef(false);
 const _usePagosListos=useState(false),pagosListos=_usePagosListos[0],setPagosListos=_usePagosListos[1];
@@ -308,12 +312,16 @@ useEffect(()=>{
         var enviosPorComuna=conteoDetalle[key]||{};
         var totalEnvios=Object.values(enviosPorComuna).reduce(function(a,b){return a+b;},0);
         var tarsCom=tarifasComunaMap[key]||tarifasComunaMapPrimerNombre[key.split(' ')[0]]||{};
+        if(key.indexOf('GUSTAVO')!==-1){
+          console.log('[DEBUG2] key=',key,'p.tarifa=',p.tarifa,'p.envios(antes)=',p.envios,'enviosPorComuna=',JSON.stringify(enviosPorComuna),'totalEnvios=',totalEnvios,'tarsCom=',JSON.stringify(tarsCom));
+        }
         // Calcular bruto usando tarifa específica por comuna
         var bruto=Object.keys(enviosPorComuna).reduce(function(sum,com){
           var tar=tarsCom[com]!==undefined?tarsCom[com]:(p.tarifa||1200);
           return sum+(enviosPorComuna[com]*tar);
         },0);
         if(totalEnvios===0){bruto=0;}
+        if(key.indexOf('GUSTAVO')!==-1){console.log('[DEBUG2] bruto final calculado=',bruto);}
         var totalBruto=bruto+(p.ajuste||0)-(p.iva||0);
         var totalPagar=totalBruto+(p.extra||0)-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0);
         return Object.assign({},p,{envios:totalEnvios,bruto:bruto,totalBruto:totalBruto,totalPagar:totalPagar});
