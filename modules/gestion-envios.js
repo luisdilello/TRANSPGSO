@@ -15,7 +15,7 @@ const pdfRef=useRef();const _usePS=useState(50),PAGE_SIZE=_usePS[0],setPageSize=
   // Trae TODO el historial (no solo hoy/en_bodega/en_ruta), paginado en bloques de 1000
   // para no chocar con el tope de fila de Supabase. A pedido de Luis: Gestion de Envios
   // debe mostrar siempre el historial completo, igual que Consulta Express y el Dashboard.
-  const COLS='codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,nota_admin,fuente,peso,valor_siniestro,updated_at,created_at';
+  const COLS='id,codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,nota_admin,fuente,peso,valor_siniestro,updated_at,created_at';
   let rows=[];let offset=0;const BLOQUE=1000;
   while(true){
     const _r=await db.from('envios').select(COLS).neq('estado','eliminado').order('updated_at',{ascending:false}).range(offset,offset+BLOQUE-1);

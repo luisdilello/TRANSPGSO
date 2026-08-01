@@ -32,7 +32,7 @@ function ColectaAdmin(_ref_ca){var clientes=_ref_ca.clientes,mensajeros=_ref_ca.
   async function cargarScanHoy(){
     try{
       var r=await db.from('envios')
-        .select('codigo,cliente,mensajero,fecha,estado,fuente,nota,updated_at')
+        .select('id,codigo,cliente,mensajero,fecha,estado,fuente,nota,updated_at')
         .eq('fecha',filtroFecha)
         .in('fuente',['flex','lector','manual','scanner'])
         .order('updated_at',{ascending:false});

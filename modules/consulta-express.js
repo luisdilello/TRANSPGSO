@@ -32,7 +32,7 @@ function ConsultaExpress(_ref_ce){
       const rCod=await db.from('envios').select('*').eq('codigo',term.toUpperCase()).maybeSingle();
       if(rCod.error)throw rCod.error;
       if(rCod.data){setEnvio(rCod.data);setBuscando(false);return;}
-      const rBusq=await db.from('envios').select('codigo,cliente,destinatario,telefono,direccion,comuna,mensajero,estado,fecha')
+      const rBusq=await db.from('envios').select('id,codigo,cliente,destinatario,telefono,direccion,comuna,mensajero,estado,fecha')
         .or('destinatario.ilike.%'+term+'%,telefono.ilike.%'+term+'%')
         .order('fecha',{ascending:false}).limit(30);
       if(rBusq.error)throw rBusq.error;
@@ -73,7 +73,7 @@ function ConsultaExpress(_ref_ce){
       const CHUNK=150;
       const chunks=[];
       for(let k=0;k<lista.length;k+=CHUNK)chunks.push(lista.slice(k,k+CHUNK));
-      const respuestas=await Promise.all(chunks.map(ch=>db.from('envios').select('codigo,cliente,destinatario,telefono,direccion,comuna,mensajero,estado,monto,foto_etiqueta,updated_at,fecha').in('codigo',ch)));
+      const respuestas=await Promise.all(chunks.map(ch=>db.from('envios').select('id,codigo,cliente,destinatario,telefono,direccion,comuna,mensajero,estado,monto,foto_etiqueta,updated_at,fecha').in('codigo',ch)));
       const conError=respuestas.find(r=>r.error);
       if(conError)throw conError.error;
       const mapa={};

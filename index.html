@@ -462,7 +462,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785549363';
+window.__MODULES_VERSION = '1785552614';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -863,7 +863,7 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
     async function fetchExtra(esRefresco){
       if(!esRefresco)setCargandoExtra(true);
       try{
-        const{data,error}=await db.from('envios').select('codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente').neq('estado','eliminado').order('fecha',{ascending:false}).limit(20000);
+        const{data,error}=await db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente').neq('estado','eliminado').order('fecha',{ascending:false}).limit(20000);
         if(error)console.warn('Dashboard fetch extra error:',error.message);
         if(!cancelado&&!error&&data)setExtraEnvios(data);
       }catch(e){console.warn('Dashboard fetch extra error:',e.message);}
@@ -881,7 +881,7 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
     async function fetchRango(esRefresco){
       if(!esRefresco)setCargandoRango(true);
       try{
-        const{data,error}=await db.from('envios').select('codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente').neq('estado','eliminado').gte('fecha',desde).lte('fecha',hasta).order('fecha',{ascending:false}).limit(50000);
+        const{data,error}=await db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente').neq('estado','eliminado').gte('fecha',desde).lte('fecha',hasta).order('fecha',{ascending:false}).limit(50000);
         if(error)console.warn('Dashboard fetch rango error:',error.message);
         if(!cancelado&&!error&&data)setRangoEnvios(data);
       }catch(e){console.warn('Dashboard fetch rango error:',e.message);}
@@ -903,7 +903,7 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
         let desde_i=0;
         const bloque=1000;
         while(true){
-          const{data,error}=await db.from('envios').select('codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente').neq('estado','eliminado').order('fecha',{ascending:false}).range(desde_i,desde_i+bloque-1);
+          const{data,error}=await db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente').neq('estado','eliminado').order('fecha',{ascending:false}).range(desde_i,desde_i+bloque-1);
           if(error){console.warn('Dashboard fetch todo histórico error:',error.message);break;}
           if(!data||data.length===0)break;
           acumulado=acumulado.concat(data);
@@ -5857,10 +5857,10 @@ useEffect(function(){
     const inicioHoy=hace2Dias.toISOString();
     // Pendientes: siempre visibles | Entregados/cancelados: actualizados hoy (no importa la fecha original del envío)
     const [resPend,resHoy]=await Promise.all([
-      db.from('envios').select('codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,fuente,peso,updated_at')
+      db.from('envios').select('id,codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,fuente,peso,updated_at')
         .or('estado.eq.asignado,estado.eq.en_ruta,estado.eq.reprogramado,estado.eq.cancelado,estado.eq.siniestro')
         .ilike('mensajero','%'+primerNombre+'%').order('fecha',{ascending:false}).limit(500),
-      db.from('envios').select('codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,fuente,peso,updated_at')
+      db.from('envios').select('id,codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,fuente,peso,updated_at')
         .gte('updated_at',inicioHoy).or('estado.eq.entregado,estado.eq.cancelado,estado.eq.siniestro,estado.eq.reprogramado,estado.eq.en_ruta').ilike('mensajero','%'+primerNombre+'%').order('fecha',{ascending:false}).limit(500)
     ]);
     const error=resPend.error||resHoy.error;
