@@ -462,7 +462,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785678418';
+window.__MODULES_VERSION = '1785679267';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7830,7 +7830,7 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
     var esNC=NC_M.includes(nombre);
     var mId=asigRef.current[nombre];
     var mens=mensajerosRef.current;
-    var m=mId?mens.find(function(x){return x.id===mId;}):null;
+    var m=mId?mens.find(function(x){return String(x.id)===String(mId);}):null;
     var color=m?mColor(m,mens.indexOf(m)):null;
     var curOp=opRef.current;
     if(esNC)return{fillColor:'#5a1010',fillOpacity:curOp*0.5,strokeColor:'#000',strokeWeight:1,strokeOpacity:0.8,clickable:false};
@@ -7863,7 +7863,7 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
     zonasPolyRef.current=[];
     zonas.forEach(function(zona){
       var path=zona.coords.map(function(c){return{lat:c[1],lng:c[0]};});
-      var m=mensajeros.find(function(x){return x.id===zona.mensajero_id;});
+      var m=mensajeros.find(function(x){return String(x.id)===String(zona.mensajero_id);});
       var color=m?mColor(m,mensajeros.indexOf(m)):'#C8A84B';if(m&&m.activo===false)return null;
       var poly=new google.maps.Polygon({
         paths:path,fillColor:color,fillOpacity:0.25,
@@ -8012,8 +8012,8 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
   function exportarMapa(){
     var names=RM_GJ.features.map(function(f){return f.properties.nombre;});
     var rows=mensajeros.map(function(m,i){
-      var cs=names.filter(function(n){return asig[n]===m.id;});
-      var zs=zonas.filter(function(z){return z.mensajero_id===m.id;}).map(function(z){return z.nombre;});
+      var cs=names.filter(function(n){return String(asig[n])===String(m.id);});
+      var zs=zonas.filter(function(z){return String(z.mensajero_id)===String(m.id);}).map(function(z){return z.nombre;});
       return '<tr><td style="font-weight:700">'+m.nombre+'</td><td>'+(cs.join(', ')||'-')+'</td><td style="text-align:center">'+cs.length+'</td><td>'+(zs.join(', ')||'-')+'</td><td style="text-align:center">'+zs.length+'</td></tr>';
     }).join('');
     var lib=names.filter(function(n){return !asig[n]&&!NC_M.includes(n);});
@@ -8151,8 +8151,8 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
           ?React.createElement('div',{style:{padding:10,color:'rgba(255,255,255,0.3)',fontSize:11,textAlign:'center'}},'Sin mensajeros')
           :mensajeros.filter(function(m){return m.activo!==false;}).map(function(m,idx){
             var isAct=activoId===m.id;
-            var cnt=Object.values(asig).filter(function(v){return v===m.id;}).length;
-            var zCnt=zonas.filter(function(z){return z.mensajero_id===m.id;}).length;
+            var cnt=Object.values(asig).filter(function(v){return String(v)===String(m.id);}).length;
+            var zCnt=zonas.filter(function(z){return String(z.mensajero_id)===String(m.id);}).length;
             var mc=mColor(m,idx);
             return React.createElement('div',{key:m.id,
               onClick:function(){if(!dibujando){setActivoId(isAct?null:m.id);setPanelComuna(null);}},
@@ -8173,7 +8173,7 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
         zonas.length>0&&React.createElement(React.Fragment,null,
           React.createElement('div',{style:{fontSize:9,color:'rgba(243,156,18,0.6)',textTransform:'uppercase',letterSpacing:3,marginTop:12,marginBottom:6,fontFamily:'Bebas Neue',fontSize:11,borderBottom:'1px solid rgba(243,156,18,0.15)',paddingBottom:4}},'Zonas delimitadas'),
           zonas.map(function(zona){
-            var m=mensajeros.find(function(x){return x.id===zona.mensajero_id;});
+            var m=mensajeros.find(function(x){return String(x.id)===String(zona.mensajero_id);});
             return React.createElement('div',{key:zona.id,style:{display:'flex',alignItems:'center',gap:5,marginBottom:3,padding:'3px 4px',borderRadius:4,background:'rgba(243,156,18,.05)'}},
               React.createElement('span',{style:{flex:1,fontSize:'.68rem',color:'#d0c8a0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},
                 zona.nombre+(m?' · '+m.nombre.split(',')[0]:'')),
@@ -8218,7 +8218,7 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
       }},
         React.createElement('div',{style:{color:'#C8A84B',fontWeight:700,fontSize:'.9rem',marginBottom:10}},'📍 '+panelComuna),
         mensajeros.map(function(m,idx){
-          var isAsig=asig[panelComuna]===m.id;
+          var isAsig=String(asig[panelComuna])===String(m.id);
           var mc=mColor(m,idx);
           return React.createElement('button',{key:m.id,
             onClick:function(){
