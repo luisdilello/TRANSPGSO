@@ -462,7 +462,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785704826';
+window.__MODULES_VERSION = '1785710903';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1402,6 +1402,14 @@ function PestanasMensajero(_ref_pm){
     tabActiva==='datos'&&React.createElement('div',null,
       React.createElement('div',{className:'form-group'},
         React.createElement('label',{className:'form-label'},'Nombre'),
+        form.bloqueadoNombre?
+          React.createElement('div',null,
+            React.createElement('input',{className:'form-input',value:form.nombre,disabled:true,
+              style:{background:'var(--cream)',color:'var(--text-soft)',cursor:'not-allowed'}}),
+            React.createElement('div',{style:{marginTop:5,fontSize:11,color:'var(--text-soft)'}},
+              '🔒 Este mensajero tiene cuenta de usuario — el nombre se cambia desde Gesti\u00f3n de Usuarios.')
+          )
+        :
         React.createElement('input',{className:'form-input',value:form.nombre,autoFocus:true,
           onChange:function(e){setForm(function(f){return Object.assign({},f,{nombre:e.target.value});});}})
       ),
