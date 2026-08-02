@@ -128,7 +128,16 @@ const _useExpandido=useState({}),expandido=_useExpandido[0],setExpandido=_useExp
       const menActual=menMapActual[keyP];
       if(menActual){
         const tarifa=menActual.tarifa||p.tarifa||1200;
-        const bruto=p.envios*tarifa;
+        // Respetar tarifas por comuna si quedaron guardadas (ver calcularEnviosSemana)
+        let bruto;
+        if(p.enviosPorComuna && Object.keys(p.enviosPorComuna).length>0){
+          bruto=Object.keys(p.enviosPorComuna).reduce((sum,com)=>{
+            const tar=(p.tarsCom&&p.tarsCom[com]!==undefined)?p.tarsCom[com]:tarifa;
+            return sum+(p.enviosPorComuna[com]*tar);
+          },0);
+        } else {
+          bruto=p.envios*tarifa;
+        }
         const totalBruto=bruto+(p.ajuste||0)-(p.iva||0);
         const totalPagar=totalBruto+(p.extra||0)-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0);
         return{...p,nombre:menActual.nombre,tarifa,bruto,totalBruto,totalPagar};
@@ -143,10 +152,6 @@ const _useExpandido=useState({}),expandido=_useExpandido[0],setExpandido=_useExp
   }
   return buildPagos();
 }),pagos=_useState40[0],setPagos=_useState40[1];useEffect(()=>{lsSave('pagos_semana',pagos);},[pagos]);
-useEffect(()=>{
-  const g=pagos.find(p=>(p.nombre||'').toUpperCase().indexOf('GUSTAVO')!==-1);
-  if(g)console.log('[DEBUG3] pagos cambio - GUSTAVO bruto=',g.bruto,'envios=',g.envios,'hora=',new Date().toLocaleTimeString(),new Error().stack);
-},[pagos]);
 // ── Respaldo en Supabase de Pago Mensajeros (mismo patrón que Cierre de Mes) ──
 const _pagosCargados=useRef(false);
 const _usePagosListos=useState(false),pagosListos=_usePagosListos[0],setPagosListos=_usePagosListos[1];
@@ -312,19 +317,18 @@ useEffect(()=>{
         var enviosPorComuna=conteoDetalle[key]||{};
         var totalEnvios=Object.values(enviosPorComuna).reduce(function(a,b){return a+b;},0);
         var tarsCom=tarifasComunaMap[key]||tarifasComunaMapPrimerNombre[key.split(' ')[0]]||{};
-        if(key.indexOf('GUSTAVO')!==-1){
-          console.log('[DEBUG2] key=',key,'p.tarifa=',p.tarifa,'p.envios(antes)=',p.envios,'enviosPorComuna=',JSON.stringify(enviosPorComuna),'totalEnvios=',totalEnvios,'tarsCom=',JSON.stringify(tarsCom));
-        }
         // Calcular bruto usando tarifa específica por comuna
         var bruto=Object.keys(enviosPorComuna).reduce(function(sum,com){
           var tar=tarsCom[com]!==undefined?tarsCom[com]:(p.tarifa||1200);
           return sum+(enviosPorComuna[com]*tar);
         },0);
         if(totalEnvios===0){bruto=0;}
-        if(key.indexOf('GUSTAVO')!==-1){console.log('[DEBUG2] bruto final calculado=',bruto);}
         var totalBruto=bruto+(p.ajuste||0)-(p.iva||0);
         var totalPagar=totalBruto+(p.extra||0)-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0);
-        return Object.assign({},p,{envios:totalEnvios,bruto:bruto,totalBruto:totalBruto,totalPagar:totalPagar});
+        // Se guarda el detalle por comuna para que "Recalcular" (recalcAll) pueda
+        // recomputar el bruto respetando tarifas especiales por comuna, en vez de
+        // aplicar una tarifa plana.
+        return Object.assign({},p,{envios:totalEnvios,bruto:bruto,totalBruto:totalBruto,totalPagar:totalPagar,enviosPorComuna:enviosPorComuna,tarsCom:tarsCom});
       });
     });
     var total=Object.values(conteo).reduce(function(a,b){return a+b;},0);
@@ -352,7 +356,18 @@ function recalcAll(){
         const menActual=menMap[key];
         const nombre=menActual?menActual.nombre:p.nombre;
         const tarifa=menActual?menActual.tarifa:p.tarifa||1200;
-        const bruto=p.envios*tarifa;
+        // Si tenemos el detalle de envíos por comuna (cargado por "Calcular"),
+        // respetar las tarifas especiales por comuna en vez de aplicar una tarifa
+        // plana a todos los envíos (bug: Gustavo Román $9.100 en vez de $10.300).
+        let bruto;
+        if(p.enviosPorComuna && Object.keys(p.enviosPorComuna).length>0){
+          bruto=Object.keys(p.enviosPorComuna).reduce((sum,com)=>{
+            const tar=(p.tarsCom&&p.tarsCom[com]!==undefined)?p.tarsCom[com]:tarifa;
+            return sum+(p.enviosPorComuna[com]*tar);
+          },0);
+        } else {
+          bruto=p.envios*tarifa;
+        }
         const totalBruto=bruto+(p.ajuste||0)-(p.iva||0);
         const totalPagar=totalBruto+(p.extra||0)-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0);
         return{...p,nombre,tarifa,bruto,totalBruto,totalPagar};
