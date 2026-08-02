@@ -462,7 +462,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785710903';
+window.__MODULES_VERSION = '1785713426';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7585,6 +7585,33 @@ ComunaLabel.prototype.onRemove=function(){
   if(this.d&&this.d.parentNode)this.d.parentNode.removeChild(this.d);this.d=null;
 };
 
+// ── Carnet digital de mensajero ───────────────────────────
+// Pastilla flotante con el nombre del mensajero, en su color asignado, "parada" sobre
+// el centro de cada comuna que tiene a cargo. Si una comuna es compartida, cada mensajero
+// asignado recibe su propia pastilla apilada verticalmente para no superponerse.
+function MensajeroBadge(lat,lng,txt,color,offsetIdx){
+  this.p=new google.maps.LatLng(lat,lng);this.t=txt;this.color=color;this.offsetIdx=offsetIdx||0;this.d=null;
+}
+MensajeroBadge.prototype=Object.create(google.maps.OverlayView.prototype);
+MensajeroBadge.prototype.onAdd=function(){
+  var d=document.createElement('div');
+  d.style.cssText='position:absolute;pointer-events:none;transform:translate(-50%,-50%);'
+    +'font-family:Bebas Neue,Segoe UI,sans-serif;font-size:10.5px;font-weight:700;letter-spacing:0.5px;'
+    +'color:#1a1d13;white-space:nowrap;padding:2px 9px;border-radius:10px;'
+    +'box-shadow:0 2px 6px rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.5);z-index:450;';
+  d.style.background=this.color;
+  d.textContent=this.t;
+  this.d=d;this.getPanes().overlayLayer.appendChild(d);
+};
+MensajeroBadge.prototype.draw=function(){
+  var p=this.getProjection().fromLatLngToDivPixel(this.p);
+  this.d.style.left=p.x+'px';
+  this.d.style.top=(p.y+this.offsetIdx*17)+'px';
+};
+MensajeroBadge.prototype.onRemove=function(){
+  if(this.d&&this.d.parentNode)this.d.parentNode.removeChild(this.d);this.d=null;
+};
+
 // ── Componente MapaRutas ──────────────────────────────────
 function MapaRutas(props){
   var mensajeros=props.mensajeros||[];
@@ -7605,6 +7632,7 @@ function MapaRutas(props){
     return '#C8A84B';                                  // dorado (en_ruta/asignado/sin asignar)
   }
   var markersMensajerosRef=React.useRef({});
+  var mensajeroBadgesRef=React.useRef([]); // carnets digitales activos en el mapa
   var geocoderRef=React.useRef(null);
   var _ml=React.useState(false);var mapaListo=_ml[0];var setMapaListo=_ml[1];
   var _pf=React.useState('hoy');var pinFiltro=_pf[0];var setPinFiltro=_pf[1];
@@ -7912,8 +7940,144 @@ function MapaRutas(props){
     }
   },[dibujando]);
 
-  function mColor(m,idx){return m.color||COL_M[idx%COL_M.length];}
-function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);return r?parseInt(r[1],16)+','+parseInt(r[2],16)+','+parseInt(r[3],16):'200,168,75';}
+  // Color estable por mensajero: antes dependia de la posicion en el array que se
+  // estuviera recorriendo (idx), asi que el mismo mensajero salia con un color distinto
+  // en el listado del sidebar (filtrado) que en el panel de una comuna (sin filtrar).
+  // Ahora se calcula una sola vez a partir del id, ordenado, y es igual en todos lados.
+  var colorPorId=React.useMemo(function(){
+    var ordenados=mensajeros.slice().sort(function(a,b){
+      return String(a.id).localeCompare(String(b.id),undefined,{numeric:true});
+    });
+    var mapa={};
+    ordenados.forEach(function(m,i){mapa[m.id]=m.color||COL_M[i%COL_M.length];});
+    return mapa;
+  },[mensajeros]);
+  function mColor(m,idx){return m.color||colorPorId[m.id]||COL_M[(idx||0)%COL_M.length];}
+  // Búsqueda única del Mapa: filtra el listado de mensajeros en vivo, y al presionar Enter
+  // intenta ubicar lo escrito como código de envío o, si matchea un mensajero, centra el
+  // mapa en su posición GPS si la tiene activa.
+  var _busM=React.useState('');var busquedaMapa=_busM[0];var setBusquedaMapa=_busM[1];
+  var mensajerosFiltrados=React.useMemo(function(){
+    var q=busquedaMapa.trim().toLowerCase();
+    if(!q)return mensajeros;
+    return mensajeros.filter(function(m){return (m.nombre||'').toLowerCase().includes(q);});
+  },[mensajeros,busquedaMapa]);
+
+  // Ubica un envío en el mapa por dirección geocodificada al vuelo (no depende de que
+  // esté dentro del filtro de pines actual — busca aparte, sirve para cualquier envío).
+  function buscarYMostrarEnvio(e){
+    if(!e.direccion||!e.comuna){if(toastFn)toastFn('⚠ Ese envío no tiene dirección registrada');return;}
+    if(!mapObj.current||!geocoderRef.current){if(toastFn)toastFn('⚠ El mapa todavía está cargando');return;}
+    var existente=markersEnviosRef.current[e.codigo];
+    if(existente){
+      mapObj.current.panTo(existente.getPosition());
+      mapObj.current.setZoom(16);
+      google.maps.event.trigger(existente,'click');
+      return;
+    }
+    if(toastFn)toastFn('🔍 Buscando '+e.codigo+' en el mapa...');
+    var dir=(e.direccion||'').trim();
+    var com=(e.comuna||'').trim();
+    dir=dir.replace(/,?\s*(depto?|apt|of|piso|block|bl|dpto)[.\s]*[0-9a-z-]*/gi,'').trim();
+    var partsDir=dir.split(/\s+/);
+    var numIdx=partsDir.findIndex(function(p){return /^\d+$/.test(p);});
+    var calleCorta=numIdx>0?partsDir.slice(0,numIdx+1).join(' '):partsDir.slice(0,3).join(' ');
+    var addr=calleCorta+', '+com+', Santiago, Chile';
+    geocoderRef.current.geocode({address:addr,region:'CL'},function(results,status){
+      if(status==='OK'&&results[0]){
+        var pos=results[0].geometry.location;
+        mapObj.current.panTo(pos);
+        mapObj.current.setZoom(16);
+        var color=colorEstado(e.estado);
+        var marker=new google.maps.Marker({position:pos,map:mapObj.current,title:e.destinatario||e.codigo,zIndex:2000,
+          icon:{path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:color,fillOpacity:0.95,strokeColor:'#fff',strokeWeight:2},
+          animation:google.maps.Animation.BOUNCE});
+        setTimeout(function(){marker.setAnimation(null);},2100);
+        var iw=new google.maps.InfoWindow({content:'<div style="font-family:DM Sans,sans-serif;padding:8px;min-width:180px">'+
+          '<div style="font-weight:700;font-size:13px;margin-bottom:4px">'+(e.destinatario||'')+'</div>'+
+          '<div style="font-size:11px;color:#666;margin-bottom:2px">'+e.direccion+'</div>'+
+          '<div style="font-size:11px;color:#666;margin-bottom:6px">'+e.comuna+'</div>'+
+          '<div style="font-size:11px;font-weight:700;color:'+color+'">'+(e.estado||'').replace(/_/g,' ').toUpperCase()+'</div>'+
+          '<div style="font-size:10px;color:#999;margin-top:4px">'+e.codigo+'</div></div>'});
+        iw.open(mapObj.current,marker);
+        marker.addListener('click',function(){iw.open(mapObj.current,marker);});
+        markersEnviosRef.current[e.codigo]=marker;
+        if(toastFn)toastFn('📍 '+e.codigo+' localizado');
+      }else{
+        if(toastFn)toastFn('⚠ No se pudo ubicar la dirección de '+e.codigo+' en el mapa');
+      }
+    });
+  }
+
+  // Buscador único de la barra superior: primero intenta como código de envío exacto,
+  // si no, intenta como nombre de mensajero (lo resalta en el listado y, si tiene GPS
+  // activo ahora mismo, centra el mapa en su posición).
+  function buscarEnMapa(query){
+    var q=(query||'').trim();
+    if(!q)return;
+    var envioMatch=envios.find(function(e){return e.codigo&&String(e.codigo).toLowerCase()===q.toLowerCase();});
+    if(envioMatch){buscarYMostrarEnvio(envioMatch);return;}
+    var qn=q.toLowerCase();
+    var mMatch=mensajeros.find(function(m){return (m.nombre||'').toLowerCase().includes(qn);});
+    if(mMatch){
+      setActivoId(mMatch.id);
+      setPanelComuna(null);
+      var ubic=ubicaciones.find(function(u){return u.mensajero===mMatch.nombre;});
+      if(ubic&&mapObj.current){
+        mapObj.current.panTo({lat:parseFloat(ubic.lat),lng:parseFloat(ubic.lng)});
+        mapObj.current.setZoom(15);
+        var mk=markersMensajerosRef.current[mMatch.nombre];
+        if(mk)mk.iw.open(mapObj.current,mk.marker);
+        if(toastFn)toastFn('📍 '+mMatch.nombre+' localizado en el mapa');
+      }else{
+        if(toastFn)toastFn('◉ '+mMatch.nombre+' seleccionado — sin GPS activo ahora mismo');
+      }
+      return;
+    }
+    if(toastFn)toastFn('⚠ No se encontró "'+q+'" (ni como código de envío ni como mensajero)');
+  }
+// Centro aproximado de cada comuna (promedio de los puntos del polígono), calculado
+  // una sola vez a partir de RM_GJ — se usa para "parar" el carnet digital de cada
+  // mensajero encima de su zona asignada.
+  var comunaCentroids=React.useMemo(function(){
+    var mapa={};
+    RM_GJ.features.forEach(function(feat){
+      var n=feat.properties.nombre;
+      var geom=feat.geometry;
+      var coords=geom.type==='Polygon'?geom.coordinates[0]:
+        geom.coordinates.reduce(function(a,b){return b[0].length>a[0].length?b:a;})[0];
+      var sLat=0,sLng=0;
+      coords.forEach(function(c){sLng+=c[0];sLat+=c[1];});
+      mapa[n]={lat:sLat/coords.length,lng:sLng/coords.length};
+    });
+    return mapa;
+  },[]);
+
+  // Dibuja/actualiza los carnets digitales: uno por cada (comuna, mensajero) en asig,
+  // parado en el centro de esa comuna, en el color de su dueño. Si la comuna es
+  // compartida, se apilan verticalmente para no taparse entre ellos.
+  React.useEffect(function(){
+    if(!mapaListo||!mapObj.current)return;
+    mensajeroBadgesRef.current.forEach(function(b){b.setMap(null);});
+    mensajeroBadgesRef.current=[];
+    if(mapaTab!=='rutas')return; // solo tiene sentido en la pestaña de rutas, no en tracking
+    Object.keys(asig).forEach(function(comuna){
+      var ids=asig[comuna]||[];
+      var centro=comunaCentroids[comuna];
+      if(!centro||ids.length===0)return;
+      ids.forEach(function(id,i){
+        var m=mensajeros.find(function(x){return String(x.id)===String(id);});
+        if(!m)return;
+        var color=mColor(m);
+        var offset=i-(ids.length-1)/2;
+        var badge=new MensajeroBadge(centro.lat,centro.lng,m.nombre,color,offset);
+        badge.setMap(mapObj.current);
+        mensajeroBadgesRef.current.push(badge);
+      });
+    });
+  },[asig,mapaListo,mapaTab,mensajeros,colorPorId,comunaCentroids]);
+
+  function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);return r?parseInt(r[1],16)+','+parseInt(r[2],16)+','+parseInt(r[3],16):'200,168,75';}
 
   function mezclarColores(hexs){
     // Promedia los colores de todos los mensajeros que comparten una comuna,
@@ -8218,6 +8382,23 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
 
       React.createElement('div',{style:{padding:'14px 16px',textTransform:'uppercase',letterSpacing:4,color:'var(--gold)',borderBottom:'1px solid rgba(200,168,75,0.2)',fontFamily:'Bebas Neue',fontSize:18,background:'linear-gradient(135deg,rgba(200,168,75,0.08),transparent)',textShadow:'0 0 14px rgba(200,168,75,0.5)',boxShadow:'inset 0 -1px 0 rgba(200,168,75,0.1)'}},'⬡ Mapa de Rutas'),
 
+      // Buscador único: código de envío o nombre de mensajero
+      React.createElement('div',{style:{padding:'8px 10px',borderBottom:'1px solid rgba(200,168,75,0.15)',display:'flex',gap:5}},
+        React.createElement('input',{
+          className:'search-box',
+          placeholder:'🔍 Código de envío o mensajero...',
+          value:busquedaMapa,
+          onChange:function(e){setBusquedaMapa(e.target.value);},
+          onKeyDown:function(e){if(e.key==='Enter')buscarEnMapa(busquedaMapa);},
+          style:{flex:1,margin:0,fontSize:11,padding:'7px 10px',background:'rgba(255,255,255,0.04)',border:'1px solid rgba(200,168,75,0.2)',borderRadius:8,color:'#fff'}
+        }),
+        busquedaMapa&&React.createElement('button',{
+          onClick:function(){setBusquedaMapa('');},
+          title:'Limpiar',
+          style:{padding:'0 10px',borderRadius:8,border:'1px solid rgba(255,255,255,0.15)',background:'transparent',color:'rgba(255,255,255,0.5)',cursor:'pointer',fontSize:12}
+        },'✕')
+      ),
+
       // Stats
       React.createElement('div',{style:{display:'flex',gap:6,padding:'10px 10px',borderBottom:'1px solid rgba(200,168,75,0.15)'}},
         [['Comunas',totalAsig],['Zonas',zonas.length],['Libres',52-totalAsig]].map(function(item){
@@ -8262,10 +8443,12 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
       // Lista mensajeros
       React.createElement('div',{style:{flex:1,overflowY:'auto',padding:'8px 10px'}},
         cargando&&React.createElement('div',{style:{padding:10,color:'var(--gold)',fontSize:11,textAlign:'center',letterSpacing:2,fontFamily:'Bebas Neue'}},'Cargando...'),
-        React.createElement('div',{style:{fontSize:9,color:'rgba(200,168,75,0.5)',textTransform:'uppercase',letterSpacing:3,marginBottom:8,fontFamily:'Bebas Neue',fontSize:11,borderBottom:'1px solid rgba(200,168,75,0.1)',paddingBottom:6}},'Mensajeros activos'),
+        React.createElement('div',{style:{fontSize:9,color:'rgba(200,168,75,0.5)',textTransform:'uppercase',letterSpacing:3,marginBottom:8,fontFamily:'Bebas Neue',fontSize:11,borderBottom:'1px solid rgba(200,168,75,0.1)',paddingBottom:6}},'Mensajeros ('+mensajerosFiltrados.length+'/'+mensajeros.length+')'),
         mensajeros.length===0
           ?React.createElement('div',{style:{padding:10,color:'rgba(255,255,255,0.3)',fontSize:11,textAlign:'center'}},'Sin mensajeros')
-          :mensajeros.filter(function(m){return m.activo!==false;}).map(function(m,idx){
+          :mensajerosFiltrados.length===0
+          ?React.createElement('div',{style:{padding:10,color:'rgba(255,255,255,0.3)',fontSize:11,textAlign:'center'}},'Sin resultados para "'+busquedaMapa+'"')
+          :mensajerosFiltrados.map(function(m,idx){
             var isAct=activoId===m.id;
             var cnt=Object.values(asig).filter(function(v){return (v||[]).map(String).includes(String(m.id));}).length;
             var zCnt=zonas.filter(function(z){return String(z.mensajero_id)===String(m.id);}).length;
@@ -8273,13 +8456,15 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
             return React.createElement('div',{key:m.id,
               onClick:function(){if(!dibujando){setActivoId(isAct?null:m.id);setPanelComuna(null);}},
               style:{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:10,cursor:'pointer',marginBottom:4,
+                opacity:m.activo===false?0.55:1,
                 border:isAct?'1px solid '+mc:'1px solid rgba(255,255,255,0.04)',
                 background:isAct?'rgba('+hexToRgb(mc)+',0.12)':'rgba(255,255,255,0.02)',
                 boxShadow:isAct?'0 0 12px rgba('+hexToRgb(mc)+',0.25),inset 0 1px 0 rgba(255,255,255,0.05)':'none',
                 transition:'all 0.2s'}
             },
               React.createElement('div',{style:{width:10,height:10,borderRadius:'50%',background:mc,flexShrink:0,boxShadow:'0 0 6px '+mc}}),
-              React.createElement('span',{style:{flex:1,fontSize:11,fontWeight:isAct?700:500,color:isAct?'#fff':'rgba(255,255,255,0.7)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:0.5}},m.nombre),
+              React.createElement('span',{style:{flex:1,fontSize:11,fontWeight:isAct?700:500,color:isAct?'#fff':'rgba(255,255,255,0.7)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:0.5}},
+                m.nombre, m.activo===false&&React.createElement('span',{style:{fontSize:9,color:'rgba(255,255,255,0.35)',marginLeft:5}},'(pausado)')),
               cnt>0&&React.createElement('span',{style:{fontSize:9,color:mc,background:'rgba('+hexToRgb(mc)+',0.15)',border:'1px solid rgba('+hexToRgb(mc)+',0.3)',padding:'2px 6px',borderRadius:10,fontFamily:'JetBrains Mono',fontWeight:700}},cnt),
               zCnt>0&&React.createElement('span',{style:{fontSize:9,color:'#F39C12',background:'rgba(243,156,18,0.12)',border:'1px solid rgba(243,156,18,0.25)',padding:'2px 6px',borderRadius:10,fontFamily:'JetBrains Mono'}},zCnt+'z')
             );
@@ -8333,7 +8518,8 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
         borderRadius:10,padding:14,minWidth:210,zIndex:500,boxShadow:'0 4px 20px rgba(0,0,0,.7)'
       }},
         React.createElement('div',{style:{color:'#C8A84B',fontWeight:700,fontSize:'.9rem',marginBottom:10}},'📍 '+panelComuna),
-        mensajeros.map(function(m,idx){
+        mensajerosFiltrados.length===0&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.35)',marginBottom:8}},'Sin resultados para "'+busquedaMapa+'"'),
+        mensajerosFiltrados.map(function(m,idx){
           var isAsig=(asig[panelComuna]||[]).map(String).includes(String(m.id));
           var mc=mColor(m,idx);
           return React.createElement('button',{key:m.id,
