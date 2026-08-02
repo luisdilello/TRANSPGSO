@@ -462,7 +462,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785700414';
+window.__MODULES_VERSION = '1785704826';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -4044,7 +4044,7 @@ function ColectaRider(_ref_cr){
     // Actualizar estados locales
     setPaquetes(prev=>prev.map(p=>({...p,estado:err>0?'error':'ok'})));
     setGuardando(false);
-    playSound('ruta');
+    playSound('success');
     setFase('resumen');
     toast('✓ Colecta confirmada: '+ok+' paquetes en bodega');
   }
@@ -4393,7 +4393,7 @@ function AsignacionRider(_ref_ar){
     // Actualizar estados locales
     setPaquetes(prev=>prev.map(p=>({...p,estado:encontrados[p.codigo]?'asignado':'noexiste'})));
     setGuardando(false);
-    if(ok>0) playSound('ruta');
+    if(ok>0) playSound('success');
     setFinalizado(true);
     const msg=ok>0?'✓ '+ok+' en ruta'+(noExiste>0?' · '+noExiste+' no encontrados':'')+(err>0?' · '+err+' con error':''):'⚠ No se pudo confirmar — verifica conexión';
     toast(msg);
@@ -4615,7 +4615,7 @@ async function procesarEnvioEncontrado(data,cod){
   }
   try{
     await db.from('envios').update({estado:'en_ruta',mensajero:usuario.nombre,updated_at:new Date().toISOString()}).eq('codigo',data.codigo);
-    playSound('ruta');
+    playSound('success');
     const env={...data,estado:'en_ruta',mensajero:usuario.nombre};
     setModo('ok');
     setResultado({codigo:cod,envio:env});
@@ -5925,7 +5925,46 @@ useEffect(function(){
   setEnvios(dataFinal);
 }else{
   setEnvios([]);
-}}catch(e){console.warn('Error cargando envios:',e.message);setEnvios([]);}finally{setLoading(false);}}useEffect(()=>{
+}}catch(e){console.warn('Error cargando envios:',e.message);setEnvios([]);}finally{setLoading(false);}}
+  // ── Cargar mi ruta: toma de una sola vez todos los envios "libres" (en_bodega o
+  // sin_asignar) de las comunas que este mensajero tiene asignadas en el Mapa, y los
+  // pasa a el mismo. Es ADEMAS de las otras formas de cargar carga (escaneo, asignacion
+  // manual desde Gestion de Envios) — no las reemplaza.
+  const _cmr=useState(false), cargandoMiRuta=_cmr[0], setCargandoMiRuta=_cmr[1];
+  async function cargarMiRuta(){
+    if(!usuario.mensajero_id){
+      toast('⚠ Tu usuario no está vinculado a una ficha de mensajero — pedile a un Admin que lo revise.');
+      return;
+    }
+    setCargandoMiRuta(true);
+    try{
+      const{data:asigs,error:errAsig}=await db.from('asignaciones_mapa').select('comuna').eq('mensajero_id',String(usuario.mensajero_id));
+      if(errAsig)throw errAsig;
+      const comunas=(asigs||[]).map(a=>a.comuna);
+      if(comunas.length===0){
+        toast('⚠ No tenés comunas asignadas en el Mapa todavía.');
+        return;
+      }
+      const{data:tomados,error:errUpd}=await db.from('envios')
+        .update({estado:'en_ruta',mensajero:usuario.nombre})
+        .in('comuna',comunas)
+        .in('estado',['en_bodega','sin_asignar'])
+        .select('codigo');
+      if(errUpd)throw errUpd;
+      const n=(tomados||[]).length;
+      if(n===0){
+        toast('No hay paquetes nuevos en tu zona por ahora');
+      }else{
+        toast('✓ Cargaste '+n+' paquete'+(n===1?'':'s')+' de tu zona a tu ruta');
+        playSound('success');
+      }
+      await cargarEnvios();
+    }catch(e){
+      toast('⚠ Error cargando tu ruta: '+e.message);
+    }
+    setCargandoMiRuta(false);
+  }
+  useEffect(()=>{
   cargarEnvios();
   // Recargar cada 2 minutos para mantener datos frescos
   const interval=setInterval(cargarEnvios, 120000);
@@ -6016,7 +6055,7 @@ useEffect(function(){
     React.createElement('button',{onClick:()=>setShowAjustes(false),style:{width:'100%',marginTop:16,padding:'12px',borderRadius:10,border:'none',background:'rgba(255,255,255,0.06)',color:'rgba(255,255,255,0.5)',fontFamily:'Bebas Neue',fontSize:15,letterSpacing:1,cursor:'pointer'}},'Cerrar')
   )
 ),
-showScanner&&/*#__PURE__*/React.createElement(ScannerRider,{usuario:usuario,onScanSuccess:envioNuevo=>{setEnvios(prev=>{const existe=prev.find(e=>e.codigo===envioNuevo.codigo);if(existe)return prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e);return[envioNuevo,...prev];});setShowScanner(false);setEnvioActivo(envioNuevo);},onClose:()=>setShowScanner(false)}),/*#__PURE__*/React.createElement('div',{style:{position:'fixed',bottom:0,left:0,right:0,background:'var(--dark)',borderTop:'2px solid rgba(200,168,75,0.3)',display:'flex',alignItems:'stretch',zIndex:200,paddingBottom:'env(safe-area-inset-bottom,0px)'}},[{val:'envios',icon:'📦',label:'Envíos'},{val:'asignacion',icon:'📷',label:'Asignación'},{val:'scan',icon:'⚡',label:'Express'}].map(function(tab){var isActive=riderTab===tab.val;return React.createElement('button',{key:tab.val,onClick:function(){if(tab.val==='scan'){setShowScanner(true);return;}if(tab.val==='asignacion'){setShowAsignacion(true);return;}setRiderTab(tab.val);},style:{flex:1,padding:'8px 2px 6px',border:'none',cursor:'pointer',background:isActive?'rgba(200,168,75,0.12)':'transparent',borderTop:isActive?'2px solid var(--gold)':'2px solid transparent',display:'flex',flexDirection:'column',alignItems:'center',gap:2,transition:'all 0.15s'}},React.createElement('span',{style:{fontSize:20,lineHeight:1}},tab.icon),React.createElement('span',{style:{fontSize:9,color:isActive?'var(--gold)':'rgba(255,255,255,0.35)',fontWeight:700,letterSpacing:0.5,textTransform:'uppercase',marginTop:2}},tab.label));}),React.createElement('button',{key:'mas',onClick:()=>setShowMas(true),style:{flex:1,padding:'8px 2px 6px',border:'none',cursor:'pointer',background:showMas?'rgba(200,168,75,0.12)':'transparent',borderTop:showMas?'2px solid var(--gold)':'2px solid transparent',display:'flex',flexDirection:'column',alignItems:'center',gap:2}},React.createElement('span',{style:{fontSize:20,lineHeight:1}},'⬡'),React.createElement('span',{style:{fontSize:9,color:showMas?'var(--gold)':'rgba(255,255,255,0.35)',fontWeight:700,letterSpacing:0.5,textTransform:'uppercase',marginTop:2}},'Más'))),
+showScanner&&/*#__PURE__*/React.createElement(ScannerRider,{usuario:usuario,onScanSuccess:envioNuevo=>{setEnvios(prev=>{const existe=prev.find(e=>e.codigo===envioNuevo.codigo);if(existe)return prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e);return[envioNuevo,...prev];});setShowScanner(false);setEnvioActivo(envioNuevo);},onClose:()=>setShowScanner(false)}),/*#__PURE__*/React.createElement('div',{style:{position:'fixed',bottom:0,left:0,right:0,background:'var(--dark)',borderTop:'2px solid rgba(200,168,75,0.3)',display:'flex',alignItems:'stretch',zIndex:200,paddingBottom:'env(safe-area-inset-bottom,0px)'}},[{val:'envios',icon:'📦',label:'Envíos'},{val:'asignacion',icon:'📷',label:'Asignación'},{val:'scan',icon:'⚡',label:'Express'},{val:'miruta',icon:cargandoMiRuta?'⏳':'🚀',label:'Mi Ruta'}].map(function(tab){var isActive=riderTab===tab.val;return React.createElement('button',{key:tab.val,onClick:function(){if(tab.val==='scan'){setShowScanner(true);return;}if(tab.val==='asignacion'){setShowAsignacion(true);return;}if(tab.val==='miruta'){if(!cargandoMiRuta)cargarMiRuta();return;}setRiderTab(tab.val);},style:{flex:1,padding:'8px 2px 6px',border:'none',cursor:'pointer',background:isActive?'rgba(200,168,75,0.12)':'transparent',borderTop:isActive?'2px solid var(--gold)':'2px solid transparent',display:'flex',flexDirection:'column',alignItems:'center',gap:2,transition:'all 0.15s'}},React.createElement('span',{style:{fontSize:20,lineHeight:1}},tab.icon),React.createElement('span',{style:{fontSize:9,color:isActive?'var(--gold)':'rgba(255,255,255,0.35)',fontWeight:700,letterSpacing:0.5,textTransform:'uppercase',marginTop:2}},tab.label));}),React.createElement('button',{key:'mas',onClick:()=>setShowMas(true),style:{flex:1,padding:'8px 2px 6px',border:'none',cursor:'pointer',background:showMas?'rgba(200,168,75,0.12)':'transparent',borderTop:showMas?'2px solid var(--gold)':'2px solid transparent',display:'flex',flexDirection:'column',alignItems:'center',gap:2}},React.createElement('span',{style:{fontSize:20,lineHeight:1}},'⬡'),React.createElement('span',{style:{fontSize:9,color:showMas?'var(--gold)':'rgba(255,255,255,0.35)',fontWeight:700,letterSpacing:0.5,textTransform:'uppercase',marginTop:2}},'Más'))),
 showMas&&/*#__PURE__*/React.createElement('div',{onClick:()=>setShowMas(false),style:{position:'fixed',inset:0,background:'rgba(10,12,6,0.75)',WebkitBackdropFilter:'blur(4px)',backdropFilter:'blur(4px)',zIndex:500,display:'flex',alignItems:'flex-end'}},
   /*#__PURE__*/React.createElement('div',{onClick:e=>e.stopPropagation(),style:{width:'100%',background:'linear-gradient(180deg,#232619,#14150e)',borderTop:'1px solid rgba(200,168,75,0.4)',borderRadius:'20px 20px 0 0',padding:'20px 16px calc(20px + env(safe-area-inset-bottom,0px))',boxShadow:'0 -10px 40px rgba(200,168,75,0.15)'}},
     /*#__PURE__*/React.createElement('div',{style:{width:40,height:4,background:'rgba(200,168,75,0.3)',borderRadius:2,margin:'0 auto 18px'}}),
@@ -7278,7 +7317,7 @@ useEffect(()=>{try{const saved=localStorage.getItem('transpgso_v1_mensajeros');i
     }).catch(function(e){console.error('[avisos_admin] EXCEPCION:',e);});
     const canal=db.channel('avisos-admin-live').on('postgres_changes',{event:'INSERT',schema:'public',table:'avisos_admin'},function(payload){
       setAvisosAdmin(function(prev){return[payload.new,...prev];});
-      try{playSound('ruta');}catch(e){}
+      try{playSound('success');}catch(e){}
     }).subscribe();
     return function(){db.removeChannel(canal);};
   },[usuarioActivo]);
@@ -7472,22 +7511,38 @@ async function supaFetch(path,method,body){
 }
 
 async function cargarAsignaciones(){
+  // Una comuna ahora puede tener VARIOS mensajeros (para repartirse la carga entre
+  // 2 o mas riders). Por eso asig[comuna] es un ARRAY de mensajero_id, no un solo id.
   var data=await supaFetch('/rest/v1/asignaciones_mapa?select=*','GET');
   if(!data)return{};
   var obj={};
-  data.forEach(function(r){obj[r.comuna]=r.mensajero_id;});
+  data.forEach(function(r){
+    if(!obj[r.comuna])obj[r.comuna]=[];
+    if(!obj[r.comuna].includes(r.mensajero_id))obj[r.comuna].push(r.mensajero_id);
+  });
   return obj;
 }
 
 async function guardarAsignacion(comuna,mensajeroId,mensajeroNombre){
+  // Agrega este mensajero a la comuna SIN pisar a los demas que ya la tengan asignada.
   if(mensajeroId){
     await supaFetch('/rest/v1/asignaciones_mapa','POST',{
       comuna:comuna,mensajero_id:mensajeroId,mensajero_nombre:mensajeroNombre||'',
       updated_at:new Date().toISOString()
     });
   }else{
-    await supaFetch('/rest/v1/asignaciones_mapa?comuna=eq.'+encodeURIComponent(comuna),'DELETE');
+    await limpiarAsignacionesComuna(comuna);
   }
+}
+
+async function quitarAsignacion(comuna,mensajeroId){
+  // Saca a ESTE mensajero de la comuna, dejando intactos los demas que la compartan.
+  await supaFetch('/rest/v1/asignaciones_mapa?comuna=eq.'+encodeURIComponent(comuna)+'&mensajero_id=eq.'+encodeURIComponent(mensajeroId),'DELETE');
+}
+
+async function limpiarAsignacionesComuna(comuna){
+  // Saca a TODOS los mensajeros de la comuna de una vez.
+  await supaFetch('/rest/v1/asignaciones_mapa?comuna=eq.'+encodeURIComponent(comuna),'DELETE');
 }
 
 async function cargarZonas(){
@@ -7852,15 +7907,29 @@ function MapaRutas(props){
   function mColor(m,idx){return m.color||COL_M[idx%COL_M.length];}
 function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);return r?parseInt(r[1],16)+','+parseInt(r[2],16)+','+parseInt(r[3],16):'200,168,75';}
 
+  function mezclarColores(hexs){
+    // Promedia los colores de todos los mensajeros que comparten una comuna,
+    // para que se note visualmente que es distinta de una comuna de un solo dueño.
+    var r=0,g=0,b=0,n=0;
+    hexs.forEach(function(h){
+      var m=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h);
+      if(m){r+=parseInt(m[1],16);g+=parseInt(m[2],16);b+=parseInt(m[3],16);n++;}
+    });
+    if(!n)return'#C8A84B';
+    function h2(v){return Math.round(v/n).toString(16).padStart(2,'0');}
+    return'#'+h2(r)+h2(g)+h2(b);
+  }
+
   function getStyle(nombre){
     var esNC=NC_M.includes(nombre);
-    var mId=asigRef.current[nombre];
+    var mIds=asigRef.current[nombre]||[];
     var mens=mensajerosRef.current;
-    var m=mId?mens.find(function(x){return String(x.id)===String(mId);}):null;
-    var color=m?mColor(m,mens.indexOf(m)):null;
+    var asignados=mIds.map(function(id){return mens.find(function(x){return String(x.id)===String(id);});}).filter(Boolean);
+    var color=asignados.length?mezclarColores(asignados.map(function(m){return mColor(m,mens.indexOf(m));})):null;
+    var compartida=asignados.length>1;
     var curOp=opRef.current;
     if(esNC)return{fillColor:'#5a1010',fillOpacity:curOp*0.5,strokeColor:'#000',strokeWeight:1,strokeOpacity:0.8,clickable:false};
-    if(color)return{fillColor:color,fillOpacity:curOp,strokeColor:'#000',strokeWeight:1.5,strokeOpacity:0.9,clickable:true};
+    if(color)return{fillColor:color,fillOpacity:curOp,strokeColor:compartida?'#C8A84B':'#000',strokeWeight:compartida?3:1.5,strokeOpacity:0.9,clickable:true};
     return{fillColor:'#3A3D2E',fillOpacity:curOp*0.5,strokeColor:'#555',strokeWeight:1,strokeOpacity:0.8,clickable:true};
   }
 
@@ -7948,16 +8017,29 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
       if(NC_M.includes(n))return;
       var curActivo=activoIdRef.current;
       if(curActivo){
-        // Asignar directo y guardar en Supabase
+        // Pintar/despintar: si el mensajero activo YA tiene esta comuna, lo saca;
+        // si no la tiene, lo agrega SIN sacar a otros mensajeros que ya la compartan
+        // (una comuna puede repartirse entre varios).
         var mens=mensajerosRef.current;
         var m=mens.find(function(x){return x.id===curActivo;});
+        var yaAsignado=(asigRef.current[n]||[]).map(String).includes(String(curActivo));
         setAsigRef.current(function(prev){
           var next=Object.assign({},prev);
-          next[n]=curActivo;
+          var actuales=(next[n]||[]).slice();
+          if(yaAsignado){
+            next[n]=actuales.filter(function(id){return String(id)!==String(curActivo);});
+          }else{
+            next[n]=actuales.concat([curActivo]);
+          }
           return next;
         });
-        guardarAsignacion(n,curActivo,m?m.nombre:'');
-        if(toastFn)toastFn(n+' → '+(m?m.nombre:'')+ ' ✓');
+        if(yaAsignado){
+          quitarAsignacion(n,curActivo);
+          if(toastFn)toastFn(n+' — '+(m?m.nombre:'')+' quitado');
+        }else{
+          guardarAsignacion(n,curActivo,m?m.nombre:'');
+          if(toastFn)toastFn(n+' → '+(m?m.nombre:'')+ ' ✓');
+        }
       }else{
         setPanelComunaRef.current(n);
       }
@@ -8038,11 +8120,11 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
   function exportarMapa(){
     var names=RM_GJ.features.map(function(f){return f.properties.nombre;});
     var rows=mensajeros.map(function(m,i){
-      var cs=names.filter(function(n){return String(asig[n])===String(m.id);});
+      var cs=names.filter(function(n){return (asig[n]||[]).map(String).includes(String(m.id));});
       var zs=zonas.filter(function(z){return String(z.mensajero_id)===String(m.id);}).map(function(z){return z.nombre;});
       return '<tr><td style="font-weight:700">'+m.nombre+'</td><td>'+(cs.join(', ')||'-')+'</td><td style="text-align:center">'+cs.length+'</td><td>'+(zs.join(', ')||'-')+'</td><td style="text-align:center">'+zs.length+'</td></tr>';
     }).join('');
-    var lib=names.filter(function(n){return !asig[n]&&!NC_M.includes(n);});
+    var lib=names.filter(function(n){return (!asig[n]||asig[n].length===0)&&!NC_M.includes(n);});
     if(lib.length)rows+='<tr style="background:#fff8e8"><td colspan=2><i>Sin asignar ('+lib.length+')</i></td><td style="text-align:center">'+lib.length+'</td><td>-</td><td>0</td></tr>';
     var h='<html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;background:#FEF8EA;padding:30px;color:#3A3D2E}.header{display:flex;align-items:center;gap:14px;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid #C8A84B}.header img{width:60px;height:60px;border-radius:8px}.header h1{font-size:1.4rem;color:#C8A84B;font-weight:800}.header p{font-size:.8rem;color:#888;margin-top:3px}table{border-collapse:collapse;width:100%;margin-top:10px}th{background:#3A3D2E;color:#C8A84B;padding:9px 12px;text-align:left;font-size:.85rem}td{padding:8px 12px;border-bottom:1px solid #e0d8c0;font-size:.85rem}tr:nth-child(even){background:#f5eedc}</style></head><body>'
       +'<div class="header"><img src="'+LOGO_SRC+'"><div><h1>TRANSPGSO</h1><p>Mapa de Rutas · Región Metropolitana · '+new Date().toLocaleDateString('es-CL',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'</p></div></div>'
@@ -8177,7 +8259,7 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
           ?React.createElement('div',{style:{padding:10,color:'rgba(255,255,255,0.3)',fontSize:11,textAlign:'center'}},'Sin mensajeros')
           :mensajeros.filter(function(m){return m.activo!==false;}).map(function(m,idx){
             var isAct=activoId===m.id;
-            var cnt=Object.values(asig).filter(function(v){return String(v)===String(m.id);}).length;
+            var cnt=Object.values(asig).filter(function(v){return (v||[]).map(String).includes(String(m.id));}).length;
             var zCnt=zonas.filter(function(z){return String(z.mensajero_id)===String(m.id);}).length;
             var mc=mColor(m,idx);
             return React.createElement('div',{key:m.id,
@@ -8225,7 +8307,7 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
         React.createElement('button',{
           onClick:function(){
             if(!confirm('¿Limpiar asignaciones de comunas?'))return;
-            Object.keys(asig).forEach(function(c){guardarAsignacion(c,null);});
+            Object.keys(asig).forEach(function(c){limpiarAsignacionesComuna(c);});
             setAsig({});setActivoId(null);
           },
           style:{width:'100%',background:'linear-gradient(145deg,rgba(176,48,48,0.15),rgba(176,48,48,0.08))',border:'1px solid rgba(176,48,48,0.3)',color:'#ff8a80',padding:'8px',borderRadius:8,fontSize:10,cursor:'pointer',fontFamily:'Bebas Neue',letterSpacing:2,boxShadow:'2px 2px 6px rgba(0,0,0,0.3)'}
@@ -8244,22 +8326,28 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
       }},
         React.createElement('div',{style:{color:'#C8A84B',fontWeight:700,fontSize:'.9rem',marginBottom:10}},'📍 '+panelComuna),
         mensajeros.map(function(m,idx){
-          var isAsig=String(asig[panelComuna])===String(m.id);
+          var isAsig=(asig[panelComuna]||[]).map(String).includes(String(m.id));
           var mc=mColor(m,idx);
           return React.createElement('button',{key:m.id,
             onClick:function(){
+              // El panel queda abierto para poder sumar mas de un mensajero a la misma comuna.
               if(isAsig){
-                // Desasignar
-                setAsig(function(prev){var n=Object.assign({},prev);delete n[panelComuna];return n;});
-                guardarAsignacion(panelComuna,null);
-                if(toastFn)toastFn(panelComuna+' desasignado');
+                setAsig(function(prev){
+                  var n=Object.assign({},prev);
+                  n[panelComuna]=(n[panelComuna]||[]).filter(function(id){return String(id)!==String(m.id);});
+                  return n;
+                });
+                quitarAsignacion(panelComuna,m.id);
+                if(toastFn)toastFn(panelComuna+' — '+m.nombre+' quitado');
               }else{
-                // Asignar
-                setAsig(function(prev){var n=Object.assign({},prev);n[panelComuna]=m.id;return n;});
+                setAsig(function(prev){
+                  var n=Object.assign({},prev);
+                  n[panelComuna]=(n[panelComuna]||[]).concat([m.id]);
+                  return n;
+                });
                 guardarAsignacion(panelComuna,m.id,m.nombre);
                 if(toastFn)toastFn(panelComuna+' → '+m.nombre+' ✓');
               }
-              setPanelComuna(null);
             },
             style:{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'7px 10px',marginBottom:4,
               borderRadius:6,border:isAsig?'1px solid #C8A84B':'1px solid #3A3D2E',
@@ -8270,15 +8358,20 @@ function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(he
             isAsig&&React.createElement('span',{style:{marginLeft:'auto',color:'#C8A84B'}}, '✓')
           );
         }),
+        (asig[panelComuna]||[]).length>1&&React.createElement('div',{style:{fontSize:'.65rem',color:'rgba(255,255,255,0.4)',marginBottom:6,marginTop:2}},'Comuna compartida entre '+(asig[panelComuna]||[]).length+' mensajeros'),
         React.createElement('button',{
           onClick:function(){
             setAsig(function(prev){var n=Object.assign({},prev);delete n[panelComuna];return n;});
-            guardarAsignacion(panelComuna,null);
+            limpiarAsignacionesComuna(panelComuna);
             setPanelComuna(null);
             if(toastFn)toastFn(panelComuna+' desasignado');
           },
           style:{width:'100%',padding:'5px',marginTop:4,borderRadius:5,border:'1px solid #5a2020',background:'transparent',color:'#ff8a80',fontSize:'.7rem',cursor:'pointer'}
-        },'✕ Sin asignar'),
+        },'✕ Quitar todos'),
+        React.createElement('button',{
+          onClick:function(){setPanelComuna(null);},
+          style:{width:'100%',padding:'5px',marginTop:4,borderRadius:5,border:'1px solid #3A3D2E',background:'transparent',color:'rgba(255,255,255,0.5)',fontSize:'.7rem',cursor:'pointer'}
+        },'Cerrar'),
         React.createElement('button',{onClick:function(){setPanelComuna(null);},
           style:{width:'100%',padding:'5px',marginTop:3,borderRadius:5,border:'1px solid #3A3D2E',background:'transparent',color:'#888',fontSize:'.7rem',cursor:'pointer'}
         },'Cerrar')
