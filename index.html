@@ -1349,7 +1349,8 @@ function PestanasMensajero(_ref_pm){
     setCargando(true);
     db.from('tarifas_comunas')
       .select('*')
-      .ilike('mensajero_nombre',form.nombre)
+      // normNombre() para que la lectura calce con como se guarda en guardarTarifas() de abajo
+      .ilike('mensajero_nombre',normNombre(form.nombre))
       .then(function(r){
         var mapa={};
         (r.data||[]).forEach(function(t){mapa[t.comuna]=t.tarifa;});
@@ -4362,12 +4363,14 @@ function AsignacionRider(_ref_ar){
     try{
       const {data}=await db.from('envios').select('id,codigo,cliente,destinatario,telefono,direccion,comuna,fecha,estado,mensajero,monto,nota').in('codigo',codigos);
       if(data) data.forEach(r=>{ encontrados[r.codigo]=r; });
-      // Si no encontró alguno, buscar por ilike (código puede tener formato diferente)
+      // Si no encontró alguno, buscar por ilike (código puede tener formato diferente, ej. mayúsculas
+      // o guiones). Se exige coincidencia UNICA para evitar asociar el paquete equivocado cuando el
+      // código escaneado es substring de otro código real.
       for(const cod of codigos){
         if(!encontrados[cod]){
           try{
-            const {data:d2}=await db.from('envios').select('id,codigo,cliente,destinatario,telefono,direccion,comuna,fecha,estado,mensajero,monto,nota').ilike('codigo','%'+cod+'%').limit(1);
-            if(d2&&d2.length>0){encontrados[cod]=d2[0];}
+            const {data:d2}=await db.from('envios').select('id,codigo,cliente,destinatario,telefono,direccion,comuna,fecha,estado,mensajero,monto,nota').ilike('codigo','%'+cod+'%').limit(2);
+            if(d2&&d2.length===1){encontrados[cod]=d2[0];}
           }catch(e2){}
         }
       }
@@ -4378,7 +4381,10 @@ function AsignacionRider(_ref_ar){
       const data=encontrados[cod];
       if(data.estado==='entregado'||data.estado==='cancelado'){ err++; continue; }
       try{
-        await db.from('envios').update({estado:'en_ruta',mensajero:usuario.nombre}).eq('codigo',cod);
+        // OJO: usar data.codigo (el código real de la fila encontrada), no el 'cod' escaneado —
+        // cuando el match vino del fallback ilike, ambos pueden diferir y un .eq('codigo',cod)
+        // no actualizaba ninguna fila (0 filas afectadas, sin error) mostrando éxito falso.
+        await db.from('envios').update({estado:'en_ruta',mensajero:usuario.nombre}).eq('codigo',data.codigo);
         const env={...data,estado:'en_ruta',mensajero:usuario.nombre};
         if(onEnviosUpdate) onEnviosUpdate(env);
         ok++;
@@ -4753,16 +4759,18 @@ function GananciasRider(_ref_gr){
   useEffect(()=>{
     function cargarTarifa(){
       const nombre=(usuario.nombre||'').replace(/,\s*/g,' ').replace(/\s+/g,' ').trim().toUpperCase();
-      const primerNombre=nombre.split(' ')[0];
-      // Cargar todos los mensajeros de Supabase y buscar por nombre
-      db.from('mensajeros').select('tarifa,nombre').then(({data})=>{
-        console.log('[cargarTarifa] nombre rider:',nombre,'primerNombre:',primerNombre,'total mensajeros:',data&&data.length);
+      // Coincidencia EXACTA por id (preferido) o por nombre normalizado completo. El fallback
+      // por primer nombre traia la tarifa de OTRO mensajero cuando comparten primer nombre
+      // (ej. MARCOS GIOVACCHINI / MARCOS FUENTEALBA) — afectaba directamente el calculo de
+      // Ganancias del rider.
+      db.from('mensajeros').select('id,tarifa,nombre').then(({data})=>{
         if(data){
-          const match=data.find(m=>{
-            const mn=(m.nombre||'').replace(/,\s*/g,' ').replace(/\s+/g,' ').trim().toUpperCase();
-            return mn===nombre||mn.split(' ')[0]===primerNombre;
-          });
-          console.log('[cargarTarifa] match:',match);
+          const match=usuario.mensajero_id
+            ? data.find(m=>String(m.id)===String(usuario.mensajero_id))
+            : data.find(m=>{
+                const mn=(m.nombre||'').replace(/,\s*/g,' ').replace(/\s+/g,' ').trim().toUpperCase();
+                return mn===nombre;
+              });
           if(match&&match.tarifa) setTarifa(match.tarifa);
         }
       }).catch(()=>{
@@ -4771,7 +4779,7 @@ function GananciasRider(_ref_gr){
           const mensajerosLocal=JSON.parse(localStorage.getItem('transpgso_v2_mensajeros')||'[]');
           const match=mensajerosLocal.find(m=>{
             const mn=(m.nombre||'').replace(/,\s*/g,' ').trim().toUpperCase();
-            return mn===nombre||mn.includes(primerNombre)||nombre.includes(mn.split(' ')[0]);
+            return mn===nombre;
           });
           if(match&&match.tarifa) setTarifa(match.tarifa);
         }catch(e){}
@@ -4805,14 +4813,21 @@ function GananciasRider(_ref_gr){
           desde+=bloque;
           if(cancelado)return;
         }
-        if(!cancelado)setEnviosEntregados(acumulado);
-        // Tarifas especiales por comuna para este mensajero (mismo criterio que Pagos y Cobros)
+        // La consulta usa ilike por PRIMER nombre (evita bugs del .or() de PostgREST) y por
+        // eso puede traer entregas de otro mensajero con el mismo primer nombre (ej. "MARCOS
+        // GIOVACCHINI" y "MARCOS FUENTEALBA"). Se filtra a coincidencia EXACTA de nombre
+        // normalizado antes de mostrar ganancias — mismo criterio que RiderApp.cargarEnvios.
+        const acumuladoPropio=acumulado.filter(e=>normNombre(e.mensajero||'')===normNombre(usuario.nombre));
+        if(!cancelado)setEnviosEntregados(acumuladoPropio);
+        // Tarifas especiales por comuna para este mensajero (mismo criterio que Pagos y Cobros).
+        // Coincidencia EXACTA de nombre completo — el fallback por primer nombre traia tarifas
+        // de otro mensajero con el mismo primer nombre.
         const{data:tarData}=await db.from('tarifas_comunas').select('mensajero_nombre,comuna,tarifa');
         if(!cancelado&&tarData){
           const mapa={};
           tarData.forEach(t=>{
             const tn=(t.mensajero_nombre||'').replace(/,\s*/g,' ').trim().toUpperCase();
-            if(tn===nombre||tn.split(' ')[0]===primerNombre){
+            if(tn===nombre){
               mapa[(t.comuna||'').toUpperCase().trim()]=t.tarifa;
             }
           });
@@ -4928,13 +4943,16 @@ function GananciasRider(_ref_gr){
   const [extraAdmin,setExtraAdmin]=React.useState(0);
   React.useEffect(()=>{
     const nombre=usuario.nombre.trim().toUpperCase();
-    const primerNombre=nombre.split(' ')[0].split(',')[0];
-    db.from('mensajeros').select('tarifa_retiro,nombre').then(({data})=>{
+    // Coincidencia EXACTA por id (preferido) o nombre completo normalizado — ver nota en
+    // cargarTarifa mas arriba sobre el riesgo de colision por primer nombre.
+    db.from('mensajeros').select('id,tarifa_retiro,nombre').then(({data})=>{
       if(data){
-        const match=data.find(m=>{
-          const mn=(m.nombre||'').replace(/,\s*/g,' ').trim().toUpperCase();
-          return mn===nombre||mn.includes(primerNombre)||nombre.includes(mn.split(' ')[0]);
-        });
+        const match=usuario.mensajero_id
+          ? data.find(m=>String(m.id)===String(usuario.mensajero_id))
+          : data.find(m=>{
+              const mn=(m.nombre||'').replace(/,\s*/g,' ').trim().toUpperCase();
+              return mn===nombre;
+            });
         if(match&&match.tarifa_retiro)setTarifaRetiro(match.tarifa_retiro);
       }
     }).catch(()=>{
@@ -4942,7 +4960,7 @@ function GananciasRider(_ref_gr){
         const mens=JSON.parse(localStorage.getItem('transpgso_v2_mensajeros')||'[]');
         const match=mens.find(m=>{
           const mn=(m.nombre||'').replace(/,\s*/g,' ').trim().toUpperCase();
-          return mn===nombre||mn.includes(primerNombre)||nombre.includes(mn.split(' ')[0]);
+          return mn===nombre;
         });
         if(match?.tarifaRetiro)setTarifaRetiro(match.tarifaRetiro);
       }catch(e){}
@@ -4954,13 +4972,15 @@ function GananciasRider(_ref_gr){
      quedaban en 0 para el mensajero aunque el admin ya hubiera cargado el ajuste real. */
   React.useEffect(()=>{
     const nombre=usuario.nombre.trim().toUpperCase();
-    const primerNombre=nombre.split(' ')[0].split(',')[0];
     const hoy2=new Date();const lunes2=new Date(hoy2);lunes2.setDate(hoy2.getDate()-((hoy2.getDay()+6)%7));const sabado2=new Date(lunes2);sabado2.setDate(lunes2.getDate()+5);const fmt2=d=>d.toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric'});const semanaActualStr=`${fmt2(lunes2)} al ${fmt2(sabado2)}`;
     db.from('pagos_mensajeros_semanales').select('data').eq('semana',semanaActualStr).single().then(({data,error})=>{
       if(!error&&data&&data.data&&Array.isArray(data.data.pagos)){
+        // Coincidencia EXACTA de nombre normalizado — esta es la misma tabla del bug original
+        // de Pagos; un match por primer nombre le asignaria a un rider el extra/consumo de
+        // OTRO mensajero.
         const match=data.data.pagos.find(p=>{
           const pn=(p.nombre||'').replace(/,\s*/g,' ').trim().toUpperCase();
-          return pn===nombre||pn.includes(primerNombre)||nombre.includes(pn.split(' ')[0]);
+          return pn===nombre;
         });
         if(match){
           setExtraAdmin(match.extra||0);
