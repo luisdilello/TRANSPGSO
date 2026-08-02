@@ -184,6 +184,15 @@ useEffect(()=>{
     }
     _pagosCargados.current=true;
     if(!cancelado)setPagosListos(true);
+    // Auto-cálculo: apenas se termina de cargar el respaldo de esta semana,
+    // se recalcula automáticamente contra los envíos reales (mismo cálculo que
+    // el botón "Calcular"), así el admin nunca ve un número viejo/desactualizado
+    // sin tener que acordarse de apretar un botón. Los botones Calcular/Recalcular
+    // quedan disponibles como respaldo manual (ej. después de importar Excel o
+    // cambiar el roster de mensajeros activos).
+    if(!cancelado&&fechaInicio&&fechaFin){
+      calcularEnviosSemana();
+    }
   })();
   return()=>{cancelado=true;};
 },[semana]);
