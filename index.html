@@ -7431,7 +7431,16 @@ var SUPA_KEY_M='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── Supabase helpers ─────────────────────────────────────
 async function supaFetch(path,method,body){
-  var opts={method:method||'GET',headers:{'apikey':SUPA_KEY_M,'Authorization':'Bearer '+SUPA_KEY_M,'Content-Type':'application/json','Prefer':'return=representation'}};
+  // Usar el token de sesión real del usuario logueado (no la clave anon fija),
+  // para que estas llamadas viajen con auth.uid() y respeten RLS por rol.
+  var token=SUPA_KEY_M;
+  try{
+    var sess=await db.auth.getSession();
+    if(sess&&sess.data&&sess.data.session&&sess.data.session.access_token){
+      token=sess.data.session.access_token;
+    }
+  }catch(e){}
+  var opts={method:method||'GET',headers:{'apikey':SUPA_KEY_M,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'}};
   if(body)opts.body=JSON.stringify(body);
   try{var r=await fetch(SUPA_URL_M+path,opts);return r.ok?await r.json():null;}catch(e){return null;}
 }
