@@ -462,7 +462,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785681421';
+window.__MODULES_VERSION = '1785700414';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1254,8 +1254,8 @@ const _s7=useState(null),preview=_s7[0],setPreview=_s7[1];
 const fRef=useRef();
 async function cargar(){setLoading(true);try{const r=await db.storage.from('evidencias').list('',{limit:500});if(r.data){const mios=r.data.filter(f=>f.name&&f.name.startsWith(prefix));setDocs(mios.map(f=>{const p=f.name.replace(prefix,'').split('__');return{name:f.name,tipo:p[0]||'otro',vigencia:p[1]||'Vigente',obs:decodeURIComponent(p[2]||''),url:db.storage.from('evidencias').getPublicUrl(f.name).data.publicUrl};}));}setLoading(false);}catch(e){setLoading(false);}}
 useEffect(()=>{cargar();},[]);
-async function subir(file){if(!tipoSel){toast('\u26A0 Selecciona tipo');return;}setSubiendo(true);try{const ext=file.name.split('.').pop().toLowerCase();const fn=prefix+tipoSel+'__'+vig+'__'+encodeURIComponent(obs.slice(0,40))+'__'+Date.now()+'.'+ext;await db.storage.from('evidencias').upload(fn,file,{upsert:false,contentType:ext==='pdf'?'application/pdf':'image/jpeg'});toast('\u2713 Subido');setTipoSel(null);setObs('');setVig('Vigente');cargar();}catch(e){toast('\u26A0 '+e.message);}setSubiendo(false);}
-async function borrar(name){if(!window.confirm('\xBFEliminar?'))return;try{await db.storage.from('evidencias').remove([name]);setDocs(prev=>prev.filter(d=>d.name!==name));toast('Eliminado');}catch(e){toast('\u26A0 '+e.message);}}
+async function subir(file){if(!tipoSel){toast('\u26A0 Selecciona tipo');return;}setSubiendo(true);try{const ext=file.name.split('.').pop().toLowerCase();const fn=prefix+tipoSel+'__'+vig+'__'+encodeURIComponent(obs.slice(0,40))+'__'+Date.now()+'.'+ext;const{error}=await db.storage.from('evidencias').upload(fn,file,{upsert:false,contentType:ext==='pdf'?'application/pdf':'image/jpeg'});if(error)throw error;toast('\u2713 Subido');setTipoSel(null);setObs('');setVig('Vigente');cargar();}catch(e){toast('\u26A0 '+e.message);}setSubiendo(false);}
+async function borrar(name){if(!window.confirm('\xBFEliminar?'))return;try{const{error}=await db.storage.from('evidencias').remove([name]);if(error)throw error;setDocs(prev=>prev.filter(d=>d.name!==name));toast('Eliminado');}catch(e){toast('\u26A0 '+e.message);}}
 const vc=v=>v==='Vigente'?'#2e7d4f':v==='Por Vencer'?'#b07d10':v==='Vencido'?'#b03030':'#7a7d6a';
 const ti=t=>TIPOS.find(x=>x.key===t)||{label:t,icon:'\uD83D\uDCCE'};
 return React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.65)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}},
