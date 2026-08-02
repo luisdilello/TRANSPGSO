@@ -1,14 +1,45 @@
 (function(){
-var useState=React.useState;
-var lsLoad=window.__app.lsLoad;
+var useState=React.useState, useEffect=React.useEffect;
+var db=window.__app.db;
 function Analitica(){
-  var envios=lsLoad('gestion_envios',[]);
+  // Antes esta pantalla leia de localStorage('gestion_envios'), una copia que solo
+  // se mantiene al dia si el navegador visito la pantalla de Gestion de Envios
+  // recientemente. Si el admin entraba directo a Analitica (otro dispositivo, cache
+  // vacio/viejo, incognito) los KPIs podian salir en cero o desactualizados sin
+  // ningun aviso. Ahora se trae directo de Supabase, paginado, al entrar y con
+  // boton de actualizar manual.
+  var _en=useState([]),envios=_en[0],setEnvios=_en[1];
+  var _cg=useState(true),cargando=_cg[0],setCargando=_cg[1];
+  var _ua=useState(null),ultimaActualizacion=_ua[0],setUltimaActualizacion=_ua[1];
+  function cargarEnvios(){
+    setCargando(true);
+    (async function(){
+      try{
+        var COLS='id,codigo,cliente,comuna,fecha,estado,mensajero';
+        var rows=[];var offset=0;var BLOQUE=1000;
+        while(true){
+          var r=await db.from('envios').select(COLS).neq('estado','eliminado').range(offset,offset+BLOQUE-1);
+          if(r.error)throw r.error;
+          var data=r.data||[];
+          rows=rows.concat(data);
+          if(data.length<BLOQUE)break;
+          offset+=BLOQUE;
+        }
+        setEnvios(rows);
+        setUltimaActualizacion(new Date());
+      }catch(e){
+        console.warn('Analitica: error cargando envios desde Supabase:',e.message);
+      }
+      setCargando(false);
+    })();
+  }
+  useEffect(function(){cargarEnvios();},[]);
   var _f=useState('semana'),filtro=_f[0],setFiltro=_f[1];
   var _fd=useState(''),fechaDesde=_fd[0],setFechaDesde=_fd[1];
   var _fh=useState(''),fechaHasta=_fh[0],setFechaHasta=_fh[1];
   var hoy=new Date();
   function enRango(e){
-    var f=new Date((e.historial&&e.historial[0]?e.historial[0].fecha:null)||e.fecha||hoy);
+    var f=new Date(e.fecha||hoy);
     if(filtro==='hoy'){var s=new Date(hoy);s.setHours(0,0,0,0);var fin=new Date(hoy);fin.setHours(23,59,59,999);return f>=s&&f<=fin;}
     if(filtro==='semana'){var lun=new Date(hoy);lun.setDate(hoy.getDate()-((hoy.getDay()+6)%7));lun.setHours(0,0,0,0);return f>=lun;}
     if(filtro==='mes'){var ini=new Date(hoy.getFullYear(),hoy.getMonth(),1);return f>=ini;}
@@ -42,7 +73,9 @@ function Analitica(){
           React.createElement('input',{type:'date',value:fechaDesde,onChange:function(e){setFechaDesde(e.target.value);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}}),
           React.createElement('span',{style:{color:'var(--text-soft)',fontSize:12}},'al'),
           React.createElement('input',{type:'date',value:fechaHasta,onChange:function(e){setFechaHasta(e.target.value);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}})
-        )
+        ),
+        React.createElement('button',{style:btnStyle(false),disabled:cargando,onClick:cargarEnvios},cargando?'Actualizando...':'↺ Actualizar'),
+        ultimaActualizacion&&React.createElement('span',{style:{fontSize:10,color:'var(--text-soft)'}},'Datos al '+ultimaActualizacion.toLocaleTimeString('es-CL'))
       )
     ),
     React.createElement('div',{className:'stats-grid',style:{marginBottom:20}},

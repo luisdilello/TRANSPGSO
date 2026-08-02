@@ -462,7 +462,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785679267';
+window.__MODULES_VERSION = '1785680055';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -5804,10 +5804,11 @@ function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout,me
     navigator.serviceWorker.ready.then(reg=>reg.pushManager.getSubscription()).then(sub=>{if(sub)setNotifActivas(true);}).catch(()=>{});
   }
 },[]);useEffect(()=>{
-  const nombreActual=(usuario.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim();
-  db.from('mensajeros').select('optimizacion_ruta_activa').ilike('nombre','%'+nombreActual.split(' ')[0]+'%').limit(1).then(res=>{
-    if(res.data&&res.data.length>0)setRutaIAActiva(!!res.data[0].optimizacion_ruta_activa);
-  }).catch(()=>{});
+  if(usuario.mensajero_id){
+    db.from('mensajeros').select('optimizacion_ruta_activa').eq('id',usuario.mensajero_id).limit(1).then(res=>{
+      if(res.data&&res.data.length>0)setRutaIAActiva(!!res.data[0].optimizacion_ruta_activa);
+    }).catch(()=>{});
+  }
 },[]);useEffect(function(){var prev=document.body.style.background;var prevHtml=document.documentElement.style.background;document.body.style.background='#1a1d13';document.documentElement.style.background='#1a1d13';return function(){document.body.style.background=prev;document.documentElement.style.background=prevHtml;};},[]);
 // GPS Tracking - actualizar ubicación cada 30 segundos
 useEffect(function(){
@@ -5883,7 +5884,12 @@ useEffect(function(){
     const mapaEnvios={};
     (resPend.data||[]).forEach(function(e){mapaEnvios[e.codigo]=e;});
     (resHoy.data||[]).forEach(function(e){mapaEnvios[e.codigo]=e;});
-    const data=Object.values(mapaEnvios);
+    // La consulta a Supabase trae por coincidencia PARCIAL del primer nombre
+    // (.ilike %primerNombre%) para esquivar bugs del .or() de PostgREST. Eso trae
+    // de mas: si dos riders comparten primer nombre (ej. "MARCOS GIOVACCHINI" y
+    // "MARCOS FUENTEALBA"), cada uno veia y podia actualizar los envios del otro.
+    // Se filtra aqui a coincidencia EXACTA de nombre normalizado antes de mostrar nada.
+    const data=Object.values(mapaEnvios).filter(function(e){return normNombre(e.mensajero||'')===nombreRider;});
     if(error)throw error;
     if(data&&data.length>0){
   // Auto en_ruta: asignados → en_ruta
