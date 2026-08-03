@@ -462,7 +462,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785717295';
+window.__MODULES_VERSION = '1785764170';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7305,6 +7305,26 @@ function App(){useEffect(()=>{
   }).catch(function(){});
 },[]);
 useEffect(()=>{
+  // Mantener 'mensajeros' sincronizado en vivo (Realtime): si se crea, edita o pausa un
+  // mensajero desde otra pestaña, u ocurre una alta automática de ficha al crear un
+  // usuario Rider en Gestión de Usuarios, aparece acá sin necesidad de recargar la página.
+  function normalizarMensajeroRT(m){
+    return{...m,nombre:(m.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim(),optimizacionRutaActiva:!!m.optimizacion_ruta_activa,tarifaRetiro:m.tarifa_retiro||500};
+  }
+  const channelMens=db.channel('mensajeros-realtime').on('postgres_changes',{event:'*',schema:'public',table:'mensajeros'},payload=>{
+    if(payload.eventType==='INSERT'){
+      const nuevo=normalizarMensajeroRT(payload.new);
+      setMensajeros(prev=>prev.some(m=>String(m.id)===String(nuevo.id))?prev:[...prev,nuevo].sort((a,b)=>a.nombre.localeCompare(b.nombre)));
+    }else if(payload.eventType==='UPDATE'){
+      const act=normalizarMensajeroRT(payload.new);
+      setMensajeros(prev=>prev.map(m=>String(m.id)===String(act.id)?act:m));
+    }else if(payload.eventType==='DELETE'){
+      setMensajeros(prev=>prev.filter(m=>String(m.id)!==String(payload.old.id)));
+    }
+  }).subscribe();
+  return ()=>{db.removeChannel(channelMens);};
+},[]);
+useEffect(()=>{
   // Sincronizar clientes desde Supabase al iniciar (si la tabla existe y tiene datos)
   db.from('clientes').select('*').order('nombre').then(function(res){
     if(res.data){
@@ -7893,6 +7913,37 @@ function MapaRutas(props){
   },[ubicaciones,mapaListo]);
   var _b=React.useState(null);var activoId=_b[0];var setActivoId=_b[1];
   var _c=React.useState(null);var panelComuna=_c[0];var setPanelComuna=_c[1];
+  // Borrador local del panel de comuna: los toggles de mensajero NO escriben en Supabase
+  // al toque — solo cambian esta lista en memoria. Recien al presionar 'Confirmar
+  // cambios' se guarda de verdad. Antes cada click guardaba directo y era muy facil
+  // cambiar una comuna sin querer (error humano).
+  var _psel=React.useState([]);var panelSeleccion=_psel[0];var setPanelSeleccion=_psel[1];
+  React.useEffect(function(){
+    setPanelSeleccion((asig[panelComuna]||[]).map(String));
+  },[panelComuna]);
+  function togglePanelMensajero(id){
+    setPanelSeleccion(function(prev){
+      var arr=prev.map(String);
+      var sid=String(id);
+      return arr.includes(sid)?arr.filter(function(x){return x!==sid;}):arr.concat([sid]);
+    });
+  }
+  function confirmarCambiosComuna(){
+    var original=(asig[panelComuna]||[]).map(String);
+    var draft=panelSeleccion.map(String);
+    var agregados=draft.filter(function(id){return !original.includes(id);});
+    var quitados=original.filter(function(id){return !draft.includes(id);});
+    if(agregados.length===0&&quitados.length===0){setPanelComuna(null);return;}
+    var comunaConfirmada=panelComuna;
+    setAsig(function(prev){var n=Object.assign({},prev);n[comunaConfirmada]=draft.slice();return n;});
+    agregados.forEach(function(id){
+      var m=mensajeros.find(function(x){return String(x.id)===id;});
+      guardarAsignacion(comunaConfirmada,id,m?m.nombre:'');
+    });
+    quitados.forEach(function(id){quitarAsignacion(comunaConfirmada,id);});
+    if(toastFn)toastFn('✓ '+comunaConfirmada+' actualizado — '+agregados.length+' agregado'+(agregados.length===1?'':'s')+', '+quitados.length+' quitado'+(quitados.length===1?'':'s'));
+    setPanelComuna(null);
+  }
   var _d=React.useState(0.40);var op=_d[0];var setOp=_d[1];
   var _e=React.useState(false);var dibujando=_e[0];var setDibujando=_e[1];
   var _f=React.useState([]);var zonas=_f[0];var setZonas=_f[1];
@@ -8039,6 +8090,7 @@ function MapaRutas(props){
 // Centro aproximado de cada comuna (promedio de los puntos del polígono), calculado
   // una sola vez a partir de RM_GJ — se usa para "parar" el carnet digital de cada
   // mensajero encima de su zona asignada.
+  var _refAb=React.useState(false);var referenciaAbierta=_refAb[0];var setReferenciaAbierta=_refAb[1];
   var comunaCentroids=React.useMemo(function(){
     var mapa={};
     RM_GJ.features.forEach(function(feat){
@@ -8053,6 +8105,29 @@ function MapaRutas(props){
     return mapa;
   },[]);
 
+  // Centro promedio de TODAS las comunas asignadas a cada mensajero — se usa tanto para
+  // el carnet digital como para el click en la Referencia (centrar el mapa en su zona).
+  // Un solo lugar de calculo evita que las dos cosas queden desincronizadas entre si.
+  var centrosPorMensajero=React.useMemo(function(){
+    var porM={};
+    Object.keys(asig).forEach(function(comuna){
+      (asig[comuna]||[]).forEach(function(id){
+        if(!porM[id])porM[id]=[];
+        porM[id].push(comuna);
+      });
+    });
+    var centros={};
+    Object.keys(porM).forEach(function(id){
+      var sLat=0,sLng=0,n=0;
+      porM[id].forEach(function(c){
+        var centro=comunaCentroids[c];
+        if(centro){sLat+=centro.lat;sLng+=centro.lng;n++;}
+      });
+      if(n>0)centros[id]={lat:sLat/n,lng:sLng/n};
+    });
+    return centros;
+  },[asig,comunaCentroids]);
+
   // Dibuja/actualiza los carnets digitales: UN carnet por mensajero (no uno por cada
   // comuna que tiene) — se posiciona en el centro promedio de TODAS sus comunas
   // asignadas. La primera version ponia un carnet en cada comuna individual y cuando un
@@ -8064,28 +8139,31 @@ function MapaRutas(props){
     mensajeroBadgesRef.current.forEach(function(b){b.setMap(null);});
     mensajeroBadgesRef.current=[];
     if(mapaTab!=='rutas')return; // solo tiene sentido en la pestaña de rutas, no en tracking
-    var comunasPorMensajero={}; // id -> [comuna, comuna, ...]
-    Object.keys(asig).forEach(function(comuna){
-      (asig[comuna]||[]).forEach(function(id){
-        if(!comunasPorMensajero[id])comunasPorMensajero[id]=[];
-        comunasPorMensajero[id].push(comuna);
-      });
-    });
-    Object.keys(comunasPorMensajero).forEach(function(id){
+    Object.keys(centrosPorMensajero).forEach(function(id){
       var m=mensajeros.find(function(x){return String(x.id)===String(id);});
       if(!m)return;
-      var sLat=0,sLng=0,n=0;
-      comunasPorMensajero[id].forEach(function(c){
-        var centro=comunaCentroids[c];
-        if(centro){sLat+=centro.lat;sLng+=centro.lng;n++;}
-      });
-      if(n===0)return;
+      var centro=centrosPorMensajero[id];
       var color=mColor(m);
-      var badge=new MensajeroBadge(sLat/n,sLng/n,m.nombre,color,0);
+      var badge=new MensajeroBadge(centro.lat,centro.lng,m.nombre,color,0);
       badge.setMap(mapObj.current);
       mensajeroBadgesRef.current.push(badge);
     });
-  },[asig,mapaListo,mapaTab,mensajeros,colorPorId,comunaCentroids]);
+  },[centrosPorMensajero,mapaListo,mapaTab,mensajeros,colorPorId]);
+
+  // Centra el mapa en la zona de un mensajero (usado por la Referencia y podría
+  // reusarse en el listado del sidebar). Tambien lo marca como 'activo'.
+  function centrarEnMensajero(m){
+    setActivoId(m.id);
+    setPanelComuna(null);
+    var centro=centrosPorMensajero[String(m.id)];
+    if(centro&&mapObj.current){
+      mapObj.current.panTo(centro);
+      mapObj.current.setZoom(13);
+      if(toastFn)toastFn('📍 '+m.nombre+' — centrado en su zona');
+    }else{
+      if(toastFn)toastFn('◉ '+m.nombre+' seleccionado — todavía no tiene comunas asignadas');
+    }
+  }
 
   function hexToRgb(hex){var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);return r?parseInt(r[1],16)+','+parseInt(r[2],16)+','+parseInt(r[3],16):'200,168,75';}
 
@@ -8523,63 +8601,50 @@ function MapaRutas(props){
       React.createElement('div',{ref:mapRef,style:{width:'100%',height:'100%',minHeight:500}}),
 
       // Panel asignación comuna — FIX: botones explícitos en vez de onChange
-      panelComuna&&!panelZona&&React.createElement('div',{style:{
-        position:'absolute',top:10,right:10,background:'#22241a',border:'1px solid #C8A84B',
-        borderRadius:10,padding:14,minWidth:210,zIndex:500,boxShadow:'0 4px 20px rgba(0,0,0,.7)'
-      }},
+      panelComuna&&!panelZona&&(function(){
+        var original=(asig[panelComuna]||[]).map(String);
+        var draft=panelSeleccion.map(String);
+        var hayCambios=original.length!==draft.length||original.some(function(id){return !draft.includes(id);});
+        return React.createElement('div',{style:{
+          position:'absolute',top:10,right:10,background:'#22241a',border:'1px solid #C8A84B',
+          borderRadius:10,padding:14,minWidth:210,zIndex:500,boxShadow:'0 4px 20px rgba(0,0,0,.7)'
+        }},
         React.createElement('div',{style:{color:'#C8A84B',fontWeight:700,fontSize:'.9rem',marginBottom:10}},'📍 '+panelComuna),
         mensajerosFiltrados.length===0&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.35)',marginBottom:8}},'Sin resultados para "'+busquedaMapa+'"'),
         mensajerosFiltrados.map(function(m,idx){
-          var isAsig=(asig[panelComuna]||[]).map(String).includes(String(m.id));
+          var isSel=draft.includes(String(m.id));
           var mc=mColor(m,idx);
           return React.createElement('button',{key:m.id,
-            onClick:function(){
-              // El panel queda abierto para poder sumar mas de un mensajero a la misma comuna.
-              if(isAsig){
-                setAsig(function(prev){
-                  var n=Object.assign({},prev);
-                  n[panelComuna]=(n[panelComuna]||[]).filter(function(id){return String(id)!==String(m.id);});
-                  return n;
-                });
-                quitarAsignacion(panelComuna,m.id);
-                if(toastFn)toastFn(panelComuna+' — '+m.nombre+' quitado');
-              }else{
-                setAsig(function(prev){
-                  var n=Object.assign({},prev);
-                  n[panelComuna]=(n[panelComuna]||[]).concat([m.id]);
-                  return n;
-                });
-                guardarAsignacion(panelComuna,m.id,m.nombre);
-                if(toastFn)toastFn(panelComuna+' → '+m.nombre+' ✓');
-              }
-            },
+            onClick:function(){togglePanelMensajero(m.id);},
             style:{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'7px 10px',marginBottom:4,
-              borderRadius:6,border:isAsig?'1px solid #C8A84B':'1px solid #3A3D2E',
-              background:isAsig?'#3a3d2e':'transparent',color:'#FEF8EA',cursor:'pointer',fontSize:'.8rem',fontWeight:isAsig?700:400}
+              borderRadius:6,border:isSel?'1px solid #C8A84B':'1px solid #3A3D2E',
+              background:isSel?'#3a3d2e':'transparent',color:'#FEF8EA',cursor:'pointer',fontSize:'.8rem',fontWeight:isSel?700:400}
           },
             React.createElement('div',{style:{width:10,height:10,borderRadius:'50%',background:mc,flexShrink:0}}),
             m.nombre,
-            isAsig&&React.createElement('span',{style:{marginLeft:'auto',color:'#C8A84B'}}, '✓')
+            isSel&&React.createElement('span',{style:{marginLeft:'auto',color:'#C8A84B'}}, '✓')
           );
         }),
-        (asig[panelComuna]||[]).length>1&&React.createElement('div',{style:{fontSize:'.65rem',color:'rgba(255,255,255,0.4)',marginBottom:6,marginTop:2}},'Comuna compartida entre '+(asig[panelComuna]||[]).length+' mensajeros'),
+        draft.length>1&&React.createElement('div',{style:{fontSize:'.65rem',color:'rgba(255,255,255,0.4)',marginBottom:6,marginTop:2}},'Comuna compartida entre '+draft.length+' mensajeros'),
         React.createElement('button',{
-          onClick:function(){
-            setAsig(function(prev){var n=Object.assign({},prev);delete n[panelComuna];return n;});
-            limpiarAsignacionesComuna(panelComuna);
-            setPanelComuna(null);
-            if(toastFn)toastFn(panelComuna+' desasignado');
-          },
+          onClick:function(){setPanelSeleccion([]);},
           style:{width:'100%',padding:'5px',marginTop:4,borderRadius:5,border:'1px solid #5a2020',background:'transparent',color:'#ff8a80',fontSize:'.7rem',cursor:'pointer'}
         },'✕ Quitar todos'),
+        hayCambios&&React.createElement('div',{style:{fontSize:'.65rem',color:'#F39C12',marginTop:8,marginBottom:2,textAlign:'center'}},'⚠ Cambios sin guardar'),
+        React.createElement('button',{
+          onClick:confirmarCambiosComuna,
+          disabled:!hayCambios,
+          style:{width:'100%',padding:'8px',marginTop:4,borderRadius:6,border:'none',
+            background:hayCambios?'linear-gradient(145deg,#d4b050,#C8A84B,#a87d2a)':'rgba(255,255,255,0.06)',
+            color:hayCambios?'#1a1d13':'rgba(255,255,255,0.3)',fontSize:'.75rem',fontWeight:700,
+            cursor:hayCambios?'pointer':'not-allowed',letterSpacing:0.5}
+        },'✓ Confirmar cambios'),
         React.createElement('button',{
           onClick:function(){setPanelComuna(null);},
           style:{width:'100%',padding:'5px',marginTop:4,borderRadius:5,border:'1px solid #3A3D2E',background:'transparent',color:'rgba(255,255,255,0.5)',fontSize:'.7rem',cursor:'pointer'}
-        },'Cerrar'),
-        React.createElement('button',{onClick:function(){setPanelComuna(null);},
-          style:{width:'100%',padding:'5px',marginTop:3,borderRadius:5,border:'1px solid #3A3D2E',background:'transparent',color:'#888',fontSize:'.7rem',cursor:'pointer'}
-        },'Cerrar')
-      ),
+        },'Cancelar')
+        );
+      })(),
 
       // Panel zona nueva
       panelZona&&React.createElement('div',{style:{
@@ -8607,28 +8672,41 @@ function MapaRutas(props){
         )
       ),
 
-      // Leyenda
-      mensajeros.length>0&&React.createElement('div',{style:{position:'absolute',bottom:30,right:10,
+      // Leyenda / Referencia — minimizada por defecto (antes tapaba el mapa todo el
+      // tiempo aunque no se estuviera usando). Se despliega al tocarla, y cada mensajero
+      // es clickeable: centra el mapa en el promedio de sus comunas asignadas.
+      mensajeros.length>0&&(referenciaAbierta?React.createElement('div',{style:{position:'absolute',bottom:30,right:10,
         background:'linear-gradient(145deg,rgba(26,29,19,0.97),rgba(34,36,26,0.97))',
         border:'1px solid rgba(200,168,75,0.25)',borderRadius:12,
-        padding:'12px 14px',zIndex:100,maxWidth:180,
+        padding:'12px 14px',zIndex:100,maxWidth:190,maxHeight:280,overflowY:'auto',
         boxShadow:'8px 8px 24px rgba(0,0,0,0.5),-2px -2px 8px rgba(255,255,255,0.03)',
         backdropFilter:'blur(10px)'}},
-        React.createElement('div',{style:{
+        React.createElement('div',{onClick:function(){setReferenciaAbierta(false);},style:{
+          display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',
           color:'var(--gold)',fontFamily:'Bebas Neue',fontSize:12,letterSpacing:3,
           marginBottom:10,borderBottom:'1px solid rgba(200,168,75,0.15)',paddingBottom:6,
           textShadow:'0 0 8px rgba(200,168,75,0.4)'
-        }},'Referencia'),
-        mensajeros.filter(function(m){return m.activo!==false;}).slice(0,10).map(function(m,i){
-          var mc=mColor(m,i);
-          return React.createElement('div',{key:m.id,style:{display:'flex',alignItems:'center',gap:7,marginBottom:5}},
+        }},React.createElement('span',null,'Referencia'),React.createElement('span',{style:{fontSize:14}},'▾')),
+        mensajeros.slice().sort(function(a,b){return a.nombre.localeCompare(b.nombre);}).map(function(m){
+          var mc=mColor(m);
+          var tieneZona=!!centrosPorMensajero[String(m.id)];
+          return React.createElement('div',{key:m.id,onClick:function(){centrarEnMensajero(m);},
+            style:{display:'flex',alignItems:'center',gap:7,marginBottom:5,cursor:'pointer',
+              opacity:m.activo===false?0.5:1,padding:'2px 4px',borderRadius:5,
+              background:activoId===m.id?'rgba(200,168,75,0.12)':'transparent'}},
             React.createElement('div',{style:{width:10,height:10,borderRadius:'50%',background:mc,flexShrink:0,
               boxShadow:'0 0 6px '+mc+',0 0 12px rgba('+hexToRgb(mc)+',0.3)'}}),
             React.createElement('span',{style:{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
-              fontSize:10,color:'rgba(255,255,255,0.75)',letterSpacing:0.5}},m.nombre)
+              fontSize:10,color:'rgba(255,255,255,0.75)',letterSpacing:0.5,flex:1}},m.nombre),
+            tieneZona&&React.createElement('span',{style:{fontSize:9,color:'rgba(200,168,75,0.5)'}},'📍')
           );
         })
-      )
+      ):React.createElement('button',{onClick:function(){setReferenciaAbierta(true);},style:{
+        position:'absolute',bottom:30,right:10,zIndex:100,padding:'7px 12px',borderRadius:20,
+        border:'1px solid rgba(200,168,75,0.3)',background:'rgba(26,29,19,0.9)',color:'var(--gold)',
+        fontFamily:'Bebas Neue',fontSize:11,letterSpacing:1.5,cursor:'pointer',
+        boxShadow:'4px 4px 12px rgba(0,0,0,0.4)',backdropFilter:'blur(6px)'
+      }},'🎨 Referencia'))
     )
   ))  // cierra inner flex + wrapper rutas
   );
