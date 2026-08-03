@@ -462,7 +462,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785764170';
+window.__MODULES_VERSION = '1785765715';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8702,7 +8702,7 @@ function MapaRutas(props){
           );
         })
       ):React.createElement('button',{onClick:function(){setReferenciaAbierta(true);},style:{
-        position:'absolute',bottom:30,right:10,zIndex:100,padding:'7px 12px',borderRadius:20,
+        position:'absolute',bottom:85,right:10,zIndex:100,padding:'7px 12px',borderRadius:20,
         border:'1px solid rgba(200,168,75,0.3)',background:'rgba(26,29,19,0.9)',color:'var(--gold)',
         fontFamily:'Bebas Neue',fontSize:11,letterSpacing:1.5,cursor:'pointer',
         boxShadow:'4px 4px 12px rgba(0,0,0,0.4)',backdropFilter:'blur(6px)'
