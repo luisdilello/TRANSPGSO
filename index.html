@@ -462,7 +462,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785713426';
+window.__MODULES_VERSION = '1785717295';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8053,27 +8053,37 @@ function MapaRutas(props){
     return mapa;
   },[]);
 
-  // Dibuja/actualiza los carnets digitales: uno por cada (comuna, mensajero) en asig,
-  // parado en el centro de esa comuna, en el color de su dueño. Si la comuna es
-  // compartida, se apilan verticalmente para no taparse entre ellos.
+  // Dibuja/actualiza los carnets digitales: UN carnet por mensajero (no uno por cada
+  // comuna que tiene) — se posiciona en el centro promedio de TODAS sus comunas
+  // asignadas. La primera version ponia un carnet en cada comuna individual y cuando un
+  // mensajero tenia varias comunas vecinas se veia como si el nombre estuviera repetido/
+  // duplicado sobre el mapa (se veia como un bug). Con un solo carnet por persona,
+  // parado sobre el centro de su territorio, se lee mucho mas claro.
   React.useEffect(function(){
     if(!mapaListo||!mapObj.current)return;
     mensajeroBadgesRef.current.forEach(function(b){b.setMap(null);});
     mensajeroBadgesRef.current=[];
     if(mapaTab!=='rutas')return; // solo tiene sentido en la pestaña de rutas, no en tracking
+    var comunasPorMensajero={}; // id -> [comuna, comuna, ...]
     Object.keys(asig).forEach(function(comuna){
-      var ids=asig[comuna]||[];
-      var centro=comunaCentroids[comuna];
-      if(!centro||ids.length===0)return;
-      ids.forEach(function(id,i){
-        var m=mensajeros.find(function(x){return String(x.id)===String(id);});
-        if(!m)return;
-        var color=mColor(m);
-        var offset=i-(ids.length-1)/2;
-        var badge=new MensajeroBadge(centro.lat,centro.lng,m.nombre,color,offset);
-        badge.setMap(mapObj.current);
-        mensajeroBadgesRef.current.push(badge);
+      (asig[comuna]||[]).forEach(function(id){
+        if(!comunasPorMensajero[id])comunasPorMensajero[id]=[];
+        comunasPorMensajero[id].push(comuna);
       });
+    });
+    Object.keys(comunasPorMensajero).forEach(function(id){
+      var m=mensajeros.find(function(x){return String(x.id)===String(id);});
+      if(!m)return;
+      var sLat=0,sLng=0,n=0;
+      comunasPorMensajero[id].forEach(function(c){
+        var centro=comunaCentroids[c];
+        if(centro){sLat+=centro.lat;sLng+=centro.lng;n++;}
+      });
+      if(n===0)return;
+      var color=mColor(m);
+      var badge=new MensajeroBadge(sLat/n,sLng/n,m.nombre,color,0);
+      badge.setMap(mapObj.current);
+      mensajeroBadgesRef.current.push(badge);
     });
   },[asig,mapaListo,mapaTab,mensajeros,colorPorId,comunaCentroids]);
 
