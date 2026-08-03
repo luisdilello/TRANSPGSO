@@ -445,24 +445,11 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 </head>
 <body>
 <div id="root"></div>
-<div id="pwa-install-btn" style="display:none;position:fixed;bottom:20px;right:20px;
-  background:#C8A84B;color:#2b2e20;border:none;border-radius:12px;
-  padding:10px 16px;cursor:pointer;font-weight:700;font-size:13px;
-  box-shadow:0 4px 16px rgba(200,168,75,0.4);z-index:9998;
-  align-items:center;gap:8px;" onclick="
-  if(window._pwaPrompt){
-    window._pwaPrompt.prompt();
-    window._pwaPrompt.userChoice.then(function(r){
-      document.getElementById('pwa-install-btn').style.display='none';
-    });
-  }">
-  📲 Instalar App
-</div>
 <script>var LOGO_SRC = 'logo.jpg';</script>
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785765715';
+window.__MODULES_VERSION = '1785774047';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -522,15 +509,13 @@ function loadScriptOnce(key, src){
       });
   }
 
-    // PWA Install prompt for Android
+    // PWA Install prompt for Android — antes mostraba un botón flotando fijo en una
+    // esquina que tapaba otros elementos del mapa. Ahora solo guarda el prompt; el botón
+    // real vive integrado en el header de la app (ver App(), 'pwaInstalable').
   window.addEventListener('beforeinstallprompt', function(e){
     e.preventDefault();
     window._pwaPrompt = e;
-    // Show install button after app loads
-    setTimeout(function(){
-      var btn = document.getElementById('pwa-install-btn');
-      if(btn) btn.style.display = 'flex';
-    }, 3000);
+    window.dispatchEvent(new Event('pwa-instalable'));
   });
   
   // Fallback: if still loading after 20s, show error
@@ -7334,7 +7319,7 @@ useEffect(()=>{
     }
   }).catch(function(){});
 },[]);
-useEffect(()=>{try{const saved=localStorage.getItem('transpgso_v1_mensajeros');if(saved){const parsed=JSON.parse(saved);const nombres=parsed.map(m=>m.nombre);const hayDuplicados=new Set(nombres).size<nombres.length;const muchosMensajeros=parsed.length>40;const muchasTarifas1800=parsed.filter(m=>m.tarifa===1800).length>15;if(hayDuplicados||muchosMensajeros||muchasTarifas1800){['mensajeros','pagos_semana','cierre_semanas','cierre_colecta'].forEach(k=>{localStorage.removeItem('transpgso_v1_'+k);});console.log('Migración v2: duplicados eliminados');}}}catch(e){}},[]);const _useState100=useState('dashboard'),tab=_useState100[0],setTab=_useState100[1];const _useState101=useState(()=>lsLoad('clientes',INIT_CLIENTES)),clientes=_useState101[0],setClientes=_useState101[1];const _useState102=useState(()=>{const local=lsLoad('mensajeros',INIT_MENSAJEROS);return local.map(m=>({...m,nombre:(m.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim()}));
+useEffect(()=>{try{const saved=localStorage.getItem('transpgso_v1_mensajeros');if(saved){const parsed=JSON.parse(saved);const nombres=parsed.map(m=>m.nombre);const hayDuplicados=new Set(nombres).size<nombres.length;const muchosMensajeros=parsed.length>40;const muchasTarifas1800=parsed.filter(m=>m.tarifa===1800).length>15;if(hayDuplicados||muchosMensajeros||muchasTarifas1800){['mensajeros','pagos_semana','cierre_semanas','cierre_colecta'].forEach(k=>{localStorage.removeItem('transpgso_v1_'+k);});console.log('Migración v2: duplicados eliminados');}}}catch(e){}},[]);const _useState100=useState('dashboard'),tab=_useState100[0],setTab=_useState100[1];const _pwaInst=useState(false),pwaInstalable=_pwaInst[0],setPwaInstalable=_pwaInst[1];useEffect(function(){if(window._pwaPrompt)setPwaInstalable(true);function onPwaListo(){setPwaInstalable(true);}window.addEventListener('pwa-instalable',onPwaListo);return function(){window.removeEventListener('pwa-instalable',onPwaListo);};},[]);function instalarAppHeader(){if(window._pwaPrompt){window._pwaPrompt.prompt();window._pwaPrompt.userChoice.then(function(){setPwaInstalable(false);window._pwaPrompt=null;});}}const _useState101=useState(()=>lsLoad('clientes',INIT_CLIENTES)),clientes=_useState101[0],setClientes=_useState101[1];const _useState102=useState(()=>{const local=lsLoad('mensajeros',INIT_MENSAJEROS);return local.map(m=>({...m,nombre:(m.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim()}));
 }),mensajeros=_useState102[0],setMensajeros=_useState102[1];const _useState103=useState(()=>lsLoad('mensajerosDia',[])),mensajerosDia=_useState103[0],setMensajerosDia=_useState103[1];const _useState104=useState(()=>lsLoad('kpi',{fecha:'',totalPaquetes:0,entregados:0,enCamino:0,reprogramados:0,cancelados:0,obs:''})),kpi=_useState104[0],setKpi=_useState104[1];const _useState105=useState(null),toastMsg=_useState105[0],setToastMsg=_useState105[1];const _useState106=useState(()=>lsLoad('session_usuario',null)),usuarioActivo=_useState106[0],setUsuarioActivo=_useState106[1];const _useState107=useState(()=>lsLoad('session_perfil',null)),perfil=_useState107[0],setPerfil=_useState107[1];window.__app.perfil=perfil;const _useState108=useState(false),showManifiesto=_useState108[0],setShowManifiesto=_useState108[1];const _useState109=useState([]),enviosSupabase=_useState109[0],setEnviosSupabase=_useState109[1];const _usePermOp=useState({}),permisos=_usePermOp[0],setPermisos=_usePermOp[1];useEffect(()=>{db.from('permisos').select('*').then(res=>{if(res.data){const map={};res.data.forEach(p=>{map[p.rol+'|'+p.seccion]=p.permitido;});setPermisos(map);}}).catch(()=>{});},[]);function puedeVer(seccion){if(perfil&&perfil.esSuperAdmin)return true;const rolActual=perfil&&perfil.esAdmin?'admin':'operador';return permisos[rolActual+'|'+seccion]===true;}
   // ── Avisos en tiempo real cuando un cliente ingresa carga ──
   const _avAdmin=useState([]),avisosAdmin=_avAdmin[0],setAvisosAdmin=_avAdmin[1];
@@ -7474,7 +7459,7 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
     );
   })
 ),
-/*#__PURE__*/React.createElement("div",{className:"header"},/*#__PURE__*/React.createElement("div",{className:"logo"},/*#__PURE__*/React.createElement("img",{className:"logo-img",src:LOGO_SRC,alt:"TransPgso"}),/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{style:{fontFamily:"Bebas Neue",fontSize:22,letterSpacing:3,color:"var(--gold)",lineHeight:1}},"TRANSPGSO"),/*#__PURE__*/React.createElement("div",{className:"logo-sub"},"Centro de Operaciones"))),/*#__PURE__*/React.createElement("div",{className:"header-right"},/*#__PURE__*/React.createElement("div",{className:"header-date"},today()),/*#__PURE__*/React.createElement("button",{className:"btn-manifiesto",onClick:()=>setShowManifiesto(true)},"⎙ Manifiesto"),/*#__PURE__*/React.createElement("div",{className:"perfil-badge",onClick:()=>{if(!perfil.esAdmin)setPerfil(null);},title:perfil.esAdmin?"":"Cambiar mensajeros a supervisar",style:{cursor:perfil.esAdmin?'default':'pointer'}},perfil.nombre,/*#__PURE__*/React.createElement("span",{style:{fontFamily:'JetBrains Mono',fontSize:10,color:'var(--gold)'}},perfil.esSuperAdmin?'Super Admin':perfil.esAdmin?'Admin':'Operador'),!perfil.esAdmin&&!perfil.verTodo&&/*#__PURE__*/React.createElement("span",{style:{fontFamily:'JetBrains Mono',fontSize:10,opacity:0.8}},"\xB7 ",perfil.mensajerosIds.length," mens."),/*#__PURE__*/React.createElement("span",{style:{fontSize:10,opacity:0.6}},"\u21BA")),/*#__PURE__*/React.createElement("button",{onClick:()=>{if(window.confirm('¿Cerrar sesión?')){setUsuarioActivo(null);setPerfil(null);lsSave('session_usuario',null);lsSave('session_perfil',null);// NO limpiar datos — se mantienen para la próxima sesión
+/*#__PURE__*/React.createElement("div",{className:"header"},/*#__PURE__*/React.createElement("div",{className:"logo"},/*#__PURE__*/React.createElement("img",{className:"logo-img",src:LOGO_SRC,alt:"TransPgso"}),/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{style:{fontFamily:"Bebas Neue",fontSize:22,letterSpacing:3,color:"var(--gold)",lineHeight:1}},"TRANSPGSO"),/*#__PURE__*/React.createElement("div",{className:"logo-sub"},"Centro de Operaciones"))),/*#__PURE__*/React.createElement("div",{className:"header-right"},/*#__PURE__*/React.createElement("div",{className:"header-date"},today()),pwaInstalable&&/*#__PURE__*/React.createElement("button",{className:"btn-manifiesto",onClick:instalarAppHeader,style:{background:"linear-gradient(135deg,var(--gold),#a87d2a)",color:"var(--dark-deep)",border:"none"}},"📲 Instalar App"),/*#__PURE__*/React.createElement("button",{className:"btn-manifiesto",onClick:()=>setShowManifiesto(true)},"⎙ Manifiesto"),/*#__PURE__*/React.createElement("div",{className:"perfil-badge",onClick:()=>{if(!perfil.esAdmin)setPerfil(null);},title:perfil.esAdmin?"":"Cambiar mensajeros a supervisar",style:{cursor:perfil.esAdmin?'default':'pointer'}},perfil.nombre,/*#__PURE__*/React.createElement("span",{style:{fontFamily:'JetBrains Mono',fontSize:10,color:'var(--gold)'}},perfil.esSuperAdmin?'Super Admin':perfil.esAdmin?'Admin':'Operador'),!perfil.esAdmin&&!perfil.verTodo&&/*#__PURE__*/React.createElement("span",{style:{fontFamily:'JetBrains Mono',fontSize:10,opacity:0.8}},"\xB7 ",perfil.mensajerosIds.length," mens."),/*#__PURE__*/React.createElement("span",{style:{fontSize:10,opacity:0.6}},"\u21BA")),/*#__PURE__*/React.createElement("button",{onClick:()=>{if(window.confirm('¿Cerrar sesión?')){setUsuarioActivo(null);setPerfil(null);lsSave('session_usuario',null);lsSave('session_perfil',null);// NO limpiar datos — se mantienen para la próxima sesión
 }},style:{background:'none',border:'1px solid rgba(200,168,75,0.2)',borderRadius:6,cursor:'pointer',color:'rgba(200,168,75,0.6)',fontSize:10,padding:'4px 10px'},title:"Cerrar sesi\xF3n"},"Salir"),/*#__PURE__*/React.createElement("button",{onClick:()=>{if(window.confirm('¿Limpiar todos los datos guardados?')){lsClear();window.location.reload();}},style:{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,0.2)',fontSize:10,padding:'4px 8px'},title:"Limpiar cach\xE9"},"\uD83D\uDDD1"))),/*#__PURE__*/React.createElement("div",{className:"nav"},
   /*#__PURE__*/React.createElement(NavDropdown,{
     label:'Dashboard',
@@ -8607,24 +8592,26 @@ function MapaRutas(props){
         var hayCambios=original.length!==draft.length||original.some(function(id){return !draft.includes(id);});
         return React.createElement('div',{style:{
           position:'absolute',top:10,right:10,background:'#22241a',border:'1px solid #C8A84B',
-          borderRadius:10,padding:14,minWidth:210,zIndex:500,boxShadow:'0 4px 20px rgba(0,0,0,.7)'
+          borderRadius:10,padding:14,minWidth:210,maxHeight:'90vh',overflowY:'auto',zIndex:500,boxShadow:'0 4px 20px rgba(0,0,0,.7)'
         }},
         React.createElement('div',{style:{color:'#C8A84B',fontWeight:700,fontSize:'.9rem',marginBottom:10}},'📍 '+panelComuna),
-        mensajerosFiltrados.length===0&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.35)',marginBottom:8}},'Sin resultados para "'+busquedaMapa+'"'),
-        mensajerosFiltrados.map(function(m,idx){
-          var isSel=draft.includes(String(m.id));
-          var mc=mColor(m,idx);
-          return React.createElement('button',{key:m.id,
-            onClick:function(){togglePanelMensajero(m.id);},
-            style:{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'7px 10px',marginBottom:4,
-              borderRadius:6,border:isSel?'1px solid #C8A84B':'1px solid #3A3D2E',
-              background:isSel?'#3a3d2e':'transparent',color:'#FEF8EA',cursor:'pointer',fontSize:'.8rem',fontWeight:isSel?700:400}
-          },
-            React.createElement('div',{style:{width:10,height:10,borderRadius:'50%',background:mc,flexShrink:0}}),
-            m.nombre,
-            isSel&&React.createElement('span',{style:{marginLeft:'auto',color:'#C8A84B'}}, '✓')
-          );
-        }),
+        React.createElement('div',{style:{maxHeight:'42vh',overflowY:'auto',marginBottom:6,paddingRight:2}},
+          mensajerosFiltrados.length===0&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.35)',marginBottom:8}},'Sin resultados para "'+busquedaMapa+'"'),
+          mensajerosFiltrados.map(function(m,idx){
+            var isSel=draft.includes(String(m.id));
+            var mc=mColor(m,idx);
+            return React.createElement('button',{key:m.id,
+              onClick:function(){togglePanelMensajero(m.id);},
+              style:{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'7px 10px',marginBottom:4,
+                borderRadius:6,border:isSel?'1px solid #C8A84B':'1px solid #3A3D2E',
+                background:isSel?'#3a3d2e':'transparent',color:'#FEF8EA',cursor:'pointer',fontSize:'.8rem',fontWeight:isSel?700:400}
+            },
+              React.createElement('div',{style:{width:10,height:10,borderRadius:'50%',background:mc,flexShrink:0}}),
+              m.nombre,
+              isSel&&React.createElement('span',{style:{marginLeft:'auto',color:'#C8A84B'}}, '✓')
+            );
+          })
+        ),
         draft.length>1&&React.createElement('div',{style:{fontSize:'.65rem',color:'rgba(255,255,255,0.4)',marginBottom:6,marginTop:2}},'Comuna compartida entre '+draft.length+' mensajeros'),
         React.createElement('button',{
           onClick:function(){setPanelSeleccion([]);},
