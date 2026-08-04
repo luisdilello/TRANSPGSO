@@ -449,7 +449,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785863111';
+window.__MODULES_VERSION = '1785865541';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -2335,7 +2335,11 @@ const ESTADOS_ENVIO=[
   {val:'entregado',label:'Entregado',color:'#2e7d4f',bg:'rgba(46,125,79,0.1)'},
   {val:'reprogramado',label:'Reprogramado',color:'#9c27b0',bg:'rgba(156,39,176,0.1)'},
   {val:'cancelado',label:'Cancelado',color:'#b03030',bg:'rgba(176,48,48,0.1)'},
-  {val:'siniestro',label:'Siniestro',color:'#e65100',bg:'rgba(230,81,0,0.1)'}
+  {val:'siniestro',label:'Siniestro',color:'#e65100',bg:'rgba(230,81,0,0.1)'},
+  // 'Retorno' — envío que volvió a la bodega correspondiente (tras cancelado/siniestro/etc).
+  // Solo lo puede colocar un admin o super admin (ver filtro en modules/gestion-envios.js);
+  // no está en ESTADOS_RIDER asi que un mensajero nunca lo ve ni lo puede tocar desde el celular.
+  {val:'retorno',label:'Retorno',color:'#7a5c1a',bg:'rgba(122,92,26,0.12)',icon:'↩️',soloAdmin:true}
 ];function estadoInfo(val){return ESTADOS_ENVIO.find(e=>e.val===val)||ESTADOS_ENVIO[0];}function estadoBadge(val){const info=estadoInfo(val);return/*#__PURE__*/React.createElement("span",{style:{padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,letterSpacing:0.5,background:info.bg,color:info.color,whiteSpace:'nowrap'}},info.label);}function Etiquetas(_ref22){var _document$querySelect1;let clientes=_ref22.clientes;const logoSrc=((_document$querySelect1=document.querySelector('.logo-img'))==null?void 0:_document$querySelect1.src)||'';const clientesActivos=clientes.filter(c=>c.activo);const newEnvio=()=>{var _clientesActivos$;return{id:Date.now(),codigo:generarCodigo(),tipoCliente:'registrado',cliente:((_clientesActivos$=clientesActivos[0])==null?void 0:_clientesActivos$.nombre)||'',rutRemitente:'',fecha:fechaHoyCL(),destinatario:'',telefono:'',direccion:'',comuna:'',referencia:'',monto:0,enUnCambio:false,nota:''};};const _useState50=useState([newEnvio()]),envios=_useState50[0],setEnvios=_useState50[1];const _useState51=useState(0),selected=_useState51[0],setSelected=_useState51[1];const _useState52=useState('form'),vista=_useState52[0],setVista=_useState52[1];const _useState53=useState(false),showHistorial=_useState53[0],setShowHistorial=_useState53[1];const historialEtiquetas=useMemo(()=>{const all=lsLoad('gestion_envios',[]);return all.filter(e=>e.fuente==='etiqueta').slice(0,50);},[]);function updateEnvio(idx,field,val){setEnvios(prev=>prev.map((e,i)=>i===idx?{...e,[field]:val}:e));}function addEnvio(){setEnvios(prev=>[...prev,{...newEnvio(),codigo:peekCodigo()}]);setSelected(envios.length);}function removeEnvio(idx){if(envios.length===1)return;setEnvios(prev=>prev.filter((_,i)=>i!==idx));setSelected(Math.max(0,idx-1));}function regenCodigo(idx){updateEnvio(idx,'codigo',generarCodigo());}const env=envios[selected]||envios[0];async function imprimirEtiquetas(listaOriginal){const lista=listaOriginal.map(e=>({...e,codigo:confirmarCodigo()}));setEnvios(prev=>{const updated=[...prev];listaOriginal.forEach((orig,i)=>{const idx=updated.findIndex(u=>u.id===orig.id);if(idx>=0)updated[idx]={...updated[idx],codigo:lista[i].codigo};});return updated;});// Guardar en Supabase y localStorage
 const localEnvios=lsLoad('gestion_envios',[]);for(const e of lista){try{const envioData={codigo:e.codigo,cliente:e.cliente||'',destinatario:e.destinatario||'',telefono:e.telefono||'',direccion:e.direccion||'',comuna:e.comuna||'',referencia:e.referencia||'',fecha:fechaHoyCL(),estado:'en_bodega',mensajero:'',monto:e.monto||0,en_un_cambio:e.enUnCambio||false,nota:e.nota||'',fuente:'etiqueta'};await db.from('envios').upsert(envioData,{onConflict:'codigo'});if(!localEnvios.find(x=>x.codigo===e.codigo)){localEnvios.unshift({...envioData,id:Date.now()+Math.random(),enUnCambio:e.enUnCambio||false,historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:'Etiqueta impresa'}],_synced:true});}}catch(err){console.warn('Error guardando etiqueta:',err.message);}}lsSave('gestion_envios',localEnvios);const win=window.open('','_blank','width=500,height=700');const etiquetasHTML=lista.map(e=>{const qrData=`CODIGO:${e.codigo}|CLIENTE:${e.cliente}|DEST:${e.destinatario}|DIR:${e.direccion}|COM:${e.comuna}|TEL:${e.telefono}|MONTO:${e.monto||0}|COD:${e.enUnCambio?'SI':'NO'}`;return`
       <div class="etiqueta">
@@ -3021,8 +3025,11 @@ const ESTADO_FLUJO={
   'reprogramado':{siguientes:['en_ruta','cancelado'],label:'Reprogramado',icon:'📅',color:'#b07d10'},
   'pendiente_retiro':{siguientes:['en_ruta','cancelado'],label:'Pend.Retiro',icon:'📦',color:'#7a7d6a'},
   'entregado':   {siguientes:['en_bodega'],label:'Entregado',icon:'✅',color:'#2e7d4f',terminal:true},
-  'siniestro':   {siguientes:['en_bodega'],label:'Siniestro',icon:'⚠️',color:'#b03030',terminal:true},
-  'cancelado':   {siguientes:['en_bodega'],label:'Cancelado', icon:'❌',color:'#b03030',terminal:true},
+  'siniestro':   {siguientes:['en_bodega','retorno'],label:'Siniestro',icon:'⚠️',color:'#b03030',terminal:true},
+  'cancelado':   {siguientes:['en_bodega','retorno'],label:'Cancelado', icon:'❌',color:'#b03030',terminal:true},
+  // Confirma que el paquete volvió físicamente a la bodega correspondiente. Solo admin/superadmin
+  // lo puede asignar (no aparece en ESTADOS_RIDER ni en ningún flujo del mensajero).
+  'retorno':     {siguientes:['en_bodega'],label:'Retorno',icon:'↩️',color:'#7a5c1a',terminal:true},
 };
 function estadoEsTerminal(estado){return ESTADO_FLUJO[estado]?.terminal===true;}
 function estadoPermitido(actual,nuevo,esAdmin){
