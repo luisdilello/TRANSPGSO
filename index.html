@@ -449,7 +449,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785861556';
+window.__MODULES_VERSION = '1785861866';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8320,8 +8320,11 @@ function MapaRutas(props){
 
     map.data.addListener('mouseover',function(e){
       if(dibujandoRef.current)return;
-      if(!NC_M.includes(e.feature.getProperty('nombre')))
-        map.data.overrideStyle(e.feature,{strokeColor:'#C8A84B',strokeWeight:3});
+      // Antes las 5 comunas de NC_M (no asignables) se salteaban el brillo del hover,
+      // por eso se veian 'apagadas' al pasar el mouse comparadas con el resto — ahora
+      // todas las comunas brillan igual, sea o no asignable (el click para asignar sigue
+      // sin funcionar en esas 5, eso no cambió).
+      map.data.overrideStyle(e.feature,{strokeColor:'#C8A84B',strokeWeight:3});
     });
     map.data.addListener('mouseout',function(e){map.data.revertStyle(e.feature);});
 
