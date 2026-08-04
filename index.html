@@ -449,7 +449,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785862235';
+window.__MODULES_VERSION = '1785863111';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8202,11 +8202,11 @@ function MapaRutas(props){
     var compartida=asignados.length>1;
     var curOp=opRef.current;
     if(esNC)return{fillColor:'#5a1010',fillOpacity:curOp*0.5,strokeColor:'#000',strokeWeight:1,strokeOpacity:0.8,clickable:false};
-    // El borde de 'compartida' NO puede ser el mismo dorado que usa el hover — si no, al
-    // pasar el mouse por una comuna compartida no se nota ningún cambio (ya estaba
-    // 'iluminada' de por sí). Ahora compartida usa blanco, y el hover (mouseover, más
-    // abajo) sigue siendo el único que usa dorado, asi que siempre se nota el cambio.
-    if(color)return{fillColor:color,fillOpacity:curOp,strokeColor:compartida?'#ffffff':'#000',strokeWeight:compartida?3:1.5,strokeOpacity:0.95,clickable:true};
+    // El borde NO lleva un color/grosor especial para 'compartida' — todas las comunas
+    // asignadas se ven igual (borde negro fino), lo que distingue a una compartida es el
+    // color de relleno mezclado (mezclarColores, arriba). Asi el dorado del hover (mas
+    // abajo) es siempre el unico borde especial y se nota en cualquier comuna por igual.
+    if(color)return{fillColor:color,fillOpacity:curOp,strokeColor:'#000',strokeWeight:1.5,strokeOpacity:0.95,clickable:true};
     return{fillColor:'#3A3D2E',fillOpacity:curOp*0.5,strokeColor:'#555',strokeWeight:1,strokeOpacity:0.8,clickable:true};
   }
 
