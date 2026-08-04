@@ -449,7 +449,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785861866';
+window.__MODULES_VERSION = '1785862235';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8202,7 +8202,11 @@ function MapaRutas(props){
     var compartida=asignados.length>1;
     var curOp=opRef.current;
     if(esNC)return{fillColor:'#5a1010',fillOpacity:curOp*0.5,strokeColor:'#000',strokeWeight:1,strokeOpacity:0.8,clickable:false};
-    if(color)return{fillColor:color,fillOpacity:curOp,strokeColor:compartida?'#C8A84B':'#000',strokeWeight:compartida?3:1.5,strokeOpacity:0.9,clickable:true};
+    // El borde de 'compartida' NO puede ser el mismo dorado que usa el hover — si no, al
+    // pasar el mouse por una comuna compartida no se nota ningún cambio (ya estaba
+    // 'iluminada' de por sí). Ahora compartida usa blanco, y el hover (mouseover, más
+    // abajo) sigue siendo el único que usa dorado, asi que siempre se nota el cambio.
+    if(color)return{fillColor:color,fillOpacity:curOp,strokeColor:compartida?'#ffffff':'#000',strokeWeight:compartida?3:1.5,strokeOpacity:0.95,clickable:true};
     return{fillColor:'#3A3D2E',fillOpacity:curOp*0.5,strokeColor:'#555',strokeWeight:1,strokeOpacity:0.8,clickable:true};
   }
 
@@ -8324,7 +8328,7 @@ function MapaRutas(props){
       // por eso se veian 'apagadas' al pasar el mouse comparadas con el resto — ahora
       // todas las comunas brillan igual, sea o no asignable (el click para asignar sigue
       // sin funcionar en esas 5, eso no cambió).
-      map.data.overrideStyle(e.feature,{strokeColor:'#C8A84B',strokeWeight:3});
+      map.data.overrideStyle(e.feature,{strokeColor:'#C8A84B',strokeWeight:4});
     });
     map.data.addListener('mouseout',function(e){map.data.revertStyle(e.feature);});
 
