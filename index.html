@@ -449,7 +449,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785774047';
+window.__MODULES_VERSION = '1785860745';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8113,27 +8113,55 @@ function MapaRutas(props){
     return centros;
   },[asig,comunaCentroids]);
 
-  // Dibuja/actualiza los carnets digitales: UN carnet por mensajero (no uno por cada
-  // comuna que tiene) — se posiciona en el centro promedio de TODAS sus comunas
-  // asignadas. La primera version ponia un carnet en cada comuna individual y cuando un
-  // mensajero tenia varias comunas vecinas se veia como si el nombre estuviera repetido/
-  // duplicado sobre el mapa (se veia como un bug). Con un solo carnet por persona,
-  // parado sobre el centro de su territorio, se lee mucho mas claro.
+  // Dibuja/actualiza los carnets digitales. Regla:
+  // - Comuna con UN solo dueño: no se pinta un carnet por cada una de esas comunas (si no,
+  //   con varias comunas vecinas exclusivas el nombre se repetia como si fuera un bug).
+  //   En su lugar se junta un solo carnet 'base' por mensajero, en el promedio de todas
+  //   sus comunas exclusivas.
+  // - Comuna COMPARTIDA (2+ dueños): ahí sí se pinta un carnet por cada dueño, apilados
+  //   uno debajo del otro justo en el centro de ESA comuna, para que se vea claramente
+  //   quiénes la comparten — esto es lo que pediste explícitamente.
   React.useEffect(function(){
     if(!mapaListo||!mapObj.current)return;
     mensajeroBadgesRef.current.forEach(function(b){b.setMap(null);});
     mensajeroBadgesRef.current=[];
     if(mapaTab!=='rutas')return; // solo tiene sentido en la pestaña de rutas, no en tracking
-    Object.keys(centrosPorMensajero).forEach(function(id){
-      var m=mensajeros.find(function(x){return String(x.id)===String(id);});
+    var comunasExclusivasPorMensajero={}; // id -> [comuna,...] (solo comunas de un unico dueño)
+    Object.keys(asig).forEach(function(comuna){
+      var ids=(asig[comuna]||[]).map(String);
+      var centro=comunaCentroids[comuna];
+      if(!centro||ids.length===0)return;
+      if(ids.length===1){
+        var soloId=ids[0];
+        if(!comunasExclusivasPorMensajero[soloId])comunasExclusivasPorMensajero[soloId]=[];
+        comunasExclusivasPorMensajero[soloId].push(comuna);
+      }else{
+        ids.forEach(function(id,i){
+          var m=mensajeros.find(function(x){return String(x.id)===id;});
+          if(!m)return;
+          var color=mColor(m);
+          var offset=i-(ids.length-1)/2;
+          var badge=new MensajeroBadge(centro.lat,centro.lng,m.nombre,color,offset);
+          badge.setMap(mapObj.current);
+          mensajeroBadgesRef.current.push(badge);
+        });
+      }
+    });
+    Object.keys(comunasExclusivasPorMensajero).forEach(function(id){
+      var m=mensajeros.find(function(x){return String(x.id)===id;});
       if(!m)return;
-      var centro=centrosPorMensajero[id];
+      var sLat=0,sLng=0,n=0;
+      comunasExclusivasPorMensajero[id].forEach(function(c){
+        var centro=comunaCentroids[c];
+        if(centro){sLat+=centro.lat;sLng+=centro.lng;n++;}
+      });
+      if(n===0)return;
       var color=mColor(m);
-      var badge=new MensajeroBadge(centro.lat,centro.lng,m.nombre,color,0);
+      var badge=new MensajeroBadge(sLat/n,sLng/n,m.nombre,color,0);
       badge.setMap(mapObj.current);
       mensajeroBadgesRef.current.push(badge);
     });
-  },[centrosPorMensajero,mapaListo,mapaTab,mensajeros,colorPorId]);
+  },[asig,comunaCentroids,mapaListo,mapaTab,mensajeros,colorPorId]);
 
   // Centra el mapa en la zona de un mensajero (usado por la Referencia y podría
   // reusarse en el listado del sidebar). Tambien lo marca como 'activo'.
