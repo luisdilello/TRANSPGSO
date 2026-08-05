@@ -449,7 +449,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785874113';
+window.__MODULES_VERSION = '1785968716';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1237,10 +1237,21 @@ const _s5=useState('Vigente'),vig=_s5[0],setVig=_s5[1];
 const _s6=useState(''),obs=_s6[0],setObs=_s6[1];
 const _s7=useState(null),preview=_s7[0],setPreview=_s7[1];
 const fRef=useRef();
-async function cargar(){setLoading(true);try{const r=await db.storage.from('evidencias').list('',{limit:500});if(r.data){const mios=r.data.filter(f=>f.name&&f.name.startsWith(prefix));setDocs(mios.map(f=>{const p=f.name.replace(prefix,'').split('__');return{name:f.name,tipo:p[0]||'otro',vigencia:p[1]||'Vigente',obs:decodeURIComponent(p[2]||''),url:db.storage.from('evidencias').getPublicUrl(f.name).data.publicUrl};}));}setLoading(false);}catch(e){setLoading(false);}}
+async function cargar(){setLoading(true);try{const r=await db.storage.from('documentos-mensajeros').list('',{limit:500});if(r.data){const mios=r.data.filter(f=>f.name&&f.name.startsWith(prefix));
+      // Bucket privado (a diferencia de 'evidencias'): la URL no es publica, se firma al vuelo
+      // con vencimiento de 6h. Los documentos de identidad de un mensajero no deben quedar
+      // accesibles para cualquiera que adivine o guarde el link.
+      const conUrl=await Promise.all(mios.map(async f=>{
+        const p=f.name.replace(prefix,'').split('__');
+        let url='';
+        try{const s=await db.storage.from('documentos-mensajeros').createSignedUrl(f.name,21600);url=(s&&s.data&&s.data.signedUrl)||'';}catch(se){}
+        return{name:f.name,tipo:p[0]||'otro',vigencia:p[1]||'Vigente',obs:decodeURIComponent(p[2]||''),url};
+      }));
+      setDocs(conUrl);
+    }setLoading(false);}catch(e){setLoading(false);}}
 useEffect(()=>{cargar();},[]);
-async function subir(file){if(!tipoSel){toast('\u26A0 Selecciona tipo');return;}setSubiendo(true);try{const ext=file.name.split('.').pop().toLowerCase();const fn=prefix+tipoSel+'__'+vig+'__'+encodeURIComponent(obs.slice(0,40))+'__'+Date.now()+'.'+ext;const{error}=await db.storage.from('evidencias').upload(fn,file,{upsert:false,contentType:ext==='pdf'?'application/pdf':'image/jpeg'});if(error)throw error;toast('\u2713 Subido');setTipoSel(null);setObs('');setVig('Vigente');cargar();}catch(e){toast('\u26A0 '+e.message);}setSubiendo(false);}
-async function borrar(name){if(!window.confirm('\xBFEliminar?'))return;try{const{error}=await db.storage.from('evidencias').remove([name]);if(error)throw error;setDocs(prev=>prev.filter(d=>d.name!==name));toast('Eliminado');}catch(e){toast('\u26A0 '+e.message);}}
+async function subir(file){if(!tipoSel){toast('\u26A0 Selecciona tipo');return;}setSubiendo(true);try{const ext=file.name.split('.').pop().toLowerCase();const fn=prefix+tipoSel+'__'+vig+'__'+encodeURIComponent(obs.slice(0,40))+'__'+Date.now()+'.'+ext;const{error}=await db.storage.from('documentos-mensajeros').upload(fn,file,{upsert:false,contentType:ext==='pdf'?'application/pdf':'image/jpeg'});if(error)throw error;toast('\u2713 Subido');setTipoSel(null);setObs('');setVig('Vigente');cargar();}catch(e){toast('\u26A0 '+e.message);}setSubiendo(false);}
+async function borrar(name){if(!window.confirm('\xBFEliminar?'))return;try{const{error}=await db.storage.from('documentos-mensajeros').remove([name]);if(error)throw error;setDocs(prev=>prev.filter(d=>d.name!==name));toast('Eliminado');}catch(e){toast('\u26A0 '+e.message);}}
 const vc=v=>v==='Vigente'?'#2e7d4f':v==='Por Vencer'?'#b07d10':v==='Vencido'?'#b03030':'#7a7d6a';
 const ti=t=>TIPOS.find(x=>x.key===t)||{label:t,icon:'\uD83D\uDCCE'};
 return React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.65)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}},
@@ -7919,6 +7930,12 @@ function MapaRutas(props){
     });
   },[ubicaciones,mapaListo]);
   var _b=React.useState(null);var activoId=_b[0];var setActivoId=_b[1];
+  // Estado separado de activoId: 'solo localizar' (Referencia / buscador) NO debe armar el
+  // modo de asignación instantánea por click en el mapa (ese modo es SOLO el de la lista del
+  // sidebar, que tiene su propio aviso '◉ NOMBRE — TOCA UNA COMUNA' siempre visible). Antes
+  // ambos compartían activoId, asi que localizar a alguien desde Referencia o el buscador
+  // dejaba armado sin querer el click-para-asignar en el mapa.
+  var _cId=React.useState(null);var centradoId=_cId[0];var setCentradoId=_cId[1];
   var _c=React.useState(null);var panelComuna=_c[0];var setPanelComuna=_c[1];
   // Borrador local del panel de comuna: los toggles de mensajero NO escriben en Supabase
   // al toque — solo cambian esta lista en memoria. Recien al presionar 'Confirmar
@@ -8078,8 +8095,7 @@ function MapaRutas(props){
     var qn=q.toLowerCase();
     var mMatch=mensajeros.find(function(m){return (m.nombre||'').toLowerCase().includes(qn);});
     if(mMatch){
-      setActivoId(mMatch.id);
-      setPanelComuna(null);
+      setCentradoId(mMatch.id);
       var ubic=ubicaciones.find(function(u){return u.mensajero===mMatch.nombre;});
       if(ubic&&mapObj.current){
         mapObj.current.panTo({lat:parseFloat(ubic.lat),lng:parseFloat(ubic.lng)});
@@ -8188,8 +8204,7 @@ function MapaRutas(props){
   // Centra el mapa en la zona de un mensajero (usado por la Referencia y podría
   // reusarse en el listado del sidebar). Tambien lo marca como 'activo'.
   function centrarEnMensajero(m){
-    setActivoId(m.id);
-    setPanelComuna(null);
+    setCentradoId(m.id);
     var centro=centrosPorMensajero[String(m.id)];
     if(centro&&mapObj.current){
       mapObj.current.panTo(centro);
@@ -8737,7 +8752,7 @@ function MapaRutas(props){
           return React.createElement('div',{key:m.id,onClick:function(){centrarEnMensajero(m);},
             style:{display:'flex',alignItems:'center',gap:7,marginBottom:5,cursor:'pointer',
               opacity:m.activo===false?0.5:1,padding:'2px 4px',borderRadius:5,
-              background:activoId===m.id?'rgba(200,168,75,0.12)':'transparent'}},
+              background:centradoId===m.id?'rgba(200,168,75,0.12)':'transparent'}},
             React.createElement('div',{style:{width:10,height:10,borderRadius:'50%',background:mc,flexShrink:0,
               boxShadow:'0 0 6px '+mc+',0 0 12px rgba('+hexToRgb(mc)+',0.3)'}}),
             React.createElement('span',{style:{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
