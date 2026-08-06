@@ -449,7 +449,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1785968716';
+window.__MODULES_VERSION = '1786045882';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -2652,7 +2652,7 @@ function ImportarPDFColecta(_ref_ipdf){
     });
   }
 
-  async function parsearPDF(file){
+  async function parsearPDF(file,onProgress){
     var meses={ENE:'01',FEB:'02',MAR:'03',ABR:'04',MAY:'05',JUN:'06',JUL:'07',AGO:'08',SEP:'09',OCT:'10',NOV:'11',DIC:'12'};
     var NO_COMUNA=/^(RESIDENCIAL|FLEX|ANILLO|DISTRIBUIDOR|PUNTO|Pack|Venta|Envio|Avenida|Recorta|Color|Unidad|Led|ZONA|SECTOR|NORTE|SUR|ESTE|ORIENTE|PONIENTE|CENTRO)/i;
     var arrayBuffer=await new Promise(function(res,rej){var r=new FileReader();r.onload=function(e){res(e.target.result);};r.onerror=rej;r.readAsArrayBuffer(file);});
@@ -2661,6 +2661,7 @@ function ImportarPDFColecta(_ref_ipdf){
     var totalPags=pdfDoc.numPages;
     var envios=[];
     for(var i=1;i<=totalPags;i++){
+      if(onProgress)onProgress(i,totalPags);
       try{
         var page=await pdfDoc.getPage(i);
         var tc=await page.getTextContent();
@@ -2697,7 +2698,8 @@ function ImportarPDFColecta(_ref_ipdf){
       setProgreso('Procesando '+arch.nombre+' ('+(ai+1)+'/'+archivos.length+')...');
       setArchivos(function(prev){return prev.map(function(a,idx){return idx===ai?{...a,estado:'procesando'}:a;});});
       try{
-        var envios=await parsearPDF(arch.file);
+        var capturedAiP=ai;
+        var envios=await parsearPDF(arch.file,function(pagAct,pagTotal){setProgreso('Procesando '+arch.nombre+' ('+(capturedAiP+1)+'/'+archivos.length+') \u00b7 p\u00e1gina '+pagAct+'/'+pagTotal+'...');});
         // Subir a Supabase
         for(var bi=0;bi<envios.length;bi+=BATCH){
           // Verificar cuáles ya existen
