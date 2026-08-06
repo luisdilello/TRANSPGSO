@@ -11,6 +11,18 @@ const _usDocU=useState(null),docsUsuario=_usDocU[0],setDocsUsuario=_usDocU[1];
 var _vcState=React.useState(null);var verClaveUser=_vcState[0];var setVerClaveUser=_vcState[1];
 var _ncState=React.useState('');var nuevaClave=_ncState[0];var setNuevaClave=_ncState[1];
 
+// supabase-js solo expone un mensaje generico ('Edge Function returned a non-2xx
+// status code') cuando una Edge Function responde con error - el motivo real (ej.
+// 'ese email ya esta en uso') viene en el cuerpo JSON de la respuesta, en error.context.
+async function extraerErrorEdge(error){
+  try{
+    if(error&&error.context&&typeof error.context.json==='function'){
+      const body=await error.context.json();
+      if(body&&body.error)return body.error;
+    }
+  }catch(_e){}
+  return(error&&error.message)||'Error desconocido';
+}
 function verClave(u){setVerClaveUser(u);setNuevaClave('');}
 
 async function guardarNuevaClave(){
@@ -20,7 +32,7 @@ async function guardarNuevaClave(){
     // con la clave nueva, porque la contraseña real vive en Supabase Auth. Ahora se llama
     // a la Edge Function admin-users (usa permisos de servicio) para cambiarla de verdad.
     const{data,error}=await db.functions.invoke('admin-users',{body:{action:'reset_password',usuarioId:verClaveUser.id,nuevaClave}});
-    if(error||(data&&data.error))throw new Error((data&&data.error)||error.message);
+    if(error||(data&&data.error))throw new Error((data&&data.error)||await extraerErrorEdge(error));
     setUsuarios(function(prev){return prev.map(function(u){
       return u.id===verClaveUser.id?Object.assign({},u,{clave:nuevaClave}):u;
     });});
@@ -77,11 +89,11 @@ function abrirEditar(u){if(u.rol==='superadmin'&&!esSuperAdmin){toast('Solo el S
     // Email y clave SI son credenciales de acceso real (Supabase Auth) — van por la Edge Function
     if(emailNuevo!==(editando.email||'').toLowerCase().trim()){
       const{data:d1,error:e1}=await db.functions.invoke('admin-users',{body:{action:'update_email',usuarioId:editando.id,nuevoEmail:emailNuevo}});
-      if(e1||(d1&&d1.error))throw new Error((d1&&d1.error)||e1.message);
+      if(e1||(d1&&d1.error))throw new Error((d1&&d1.error)||await extraerErrorEdge(e1));
     }
     if(form.clave){
       const{data:d2,error:e2}=await db.functions.invoke('admin-users',{body:{action:'reset_password',usuarioId:editando.id,nuevaClave:form.clave}});
-      if(e2||(d2&&d2.error))throw new Error((d2&&d2.error)||e2.message);
+      if(e2||(d2&&d2.error))throw new Error((d2&&d2.error)||await extraerErrorEdge(e2));
     }
     // Sincronizar nombre con la ficha de mensajero (pagos) y con el historial guardado como
     // texto libre en el resto del sistema — Gestión de Usuarios manda, el resto se alinea solo.
@@ -110,7 +122,7 @@ function abrirEditar(u){if(u.rol==='superadmin'&&!esSuperAdmin){toast('Solo el S
     // la fila en 'usuarios' — antes esto solo insertaba la fila y el usuario nuevo
     // nunca podia loguearse.
     const{data,error}=await db.functions.invoke('admin-users',{body:{action:'create',nombre:form.nombre,email:emailNuevo,clave:form.clave,rol:form.rol,mensajero_id:mensajeroIdFinal,cliente_nombre:form.cliente_nombre||null}});
-    if(error||(data&&data.error))throw new Error((data&&data.error)||error.message);
+    if(error||(data&&data.error))throw new Error((data&&data.error)||await extraerErrorEdge(error));
     toast('✓ Usuario creado — ya puede entrar con su email y clave');
   }
   setShowForm(false);cargarUsuarios();
