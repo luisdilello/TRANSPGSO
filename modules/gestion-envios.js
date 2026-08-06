@@ -95,7 +95,7 @@ const msg=conCodigo>0&&sinCodigo>0?`✓ ${nuevos.length} envíos cargados · ${c
       const arrayBuffer=e.target.result;
       if(!window.pdfjsLib){throw new Error('pdf.js no cargado. Recarga la página.');}
       window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      const pdfDoc=await window.pdfjsLib.getDocument({data:arrayBuffer}).promise;
+      const pdfDoc=await conTimeout(window.pdfjsLib.getDocument({data:arrayBuffer}).promise,30000,'cargar documento PDF');
       const totalPags=pdfDoc.numPages;
       setProgresoPDF('📄 PDF cargado · '+totalPags+' páginas · Extrayendo datos...');
       const envios=[];
@@ -105,9 +105,9 @@ const msg=conCodigo>0&&sinCodigo>0?`✓ ${nuevos.length} envíos cargados · ${c
             await new Promise(r=>setTimeout(r,0)); // yield al browser para re-render
           }
         try{
-          const page=await pdfDoc.getPage(i);
+          const page=await conTimeout(pdfDoc.getPage(i),20000,'getPage pág '+i);
           // Extraer texto
-          const tc=await page.getTextContent();
+          const tc=await conTimeout(page.getTextContent(),20000,'getTextContent pág '+i);
           const lineas=[];
           let lastY=-1,linea='';
           tc.items.forEach(it=>{
@@ -181,7 +181,7 @@ const msg=conCodigo>0&&sinCodigo>0?`✓ ${nuevos.length} envíos cargados · ${c
               const vp=page.getViewport({scale:1.5});
               const cv=document.createElement('canvas');
               cv.width=vp.width;cv.height=vp.height;
-              await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+              await conTimeout(page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise,15000,'render pág '+i);
               foto_etiqueta=cv.toDataURL('image/jpeg',0.72);
               cv.width=0;cv.height=0; // liberar memoria
               foto_etiqueta=await subirFotoStorage(foto_etiqueta,codigo,'etq','etiquetas');

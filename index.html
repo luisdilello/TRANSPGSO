@@ -449,7 +449,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1786045882';
+window.__MODULES_VERSION = '1786049429';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -746,11 +746,17 @@ function base64ToBlob(base64){
   while(n--){u8arr[n]=bstr.charCodeAt(n);}
   return new Blob([u8arr],{type:mime});
 }
+function conTimeout(promesa,ms,etiqueta){
+  return Promise.race([
+    Promise.resolve(promesa),
+    new Promise(function(_,rej){setTimeout(function(){rej(new Error('Tiempo agotado ('+ms+'ms): '+etiqueta));},ms);})
+  ]);
+}
 async function subirFotoStorage(base64,codigo,tag,carpeta){
   try{
     const blob=base64ToBlob(base64);
     const fn=(carpeta||'entregas')+'/'+codigo+'_'+tag+'_'+Date.now()+'.jpg';
-    const {error}=await db.storage.from('evidencias').upload(fn,blob,{upsert:true,contentType:'image/jpeg'});
+    const {error}=await conTimeout(db.storage.from('evidencias').upload(fn,blob,{upsert:true,contentType:'image/jpeg'}),15000,'subida foto '+codigo);
     if(error){console.warn('Storage upload error:',error.message);return base64;} // fallback: si falla la subida, al menos no se pierde la foto
     const {data}=db.storage.from('evidencias').getPublicUrl(fn);
     return (data&&data.publicUrl)||base64;
@@ -2657,14 +2663,14 @@ function ImportarPDFColecta(_ref_ipdf){
     var NO_COMUNA=/^(RESIDENCIAL|FLEX|ANILLO|DISTRIBUIDOR|PUNTO|Pack|Venta|Envio|Avenida|Recorta|Color|Unidad|Led|ZONA|SECTOR|NORTE|SUR|ESTE|ORIENTE|PONIENTE|CENTRO)/i;
     var arrayBuffer=await new Promise(function(res,rej){var r=new FileReader();r.onload=function(e){res(e.target.result);};r.onerror=rej;r.readAsArrayBuffer(file);});
     window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    var pdfDoc=await window.pdfjsLib.getDocument({data:arrayBuffer}).promise;
+    var pdfDoc=await conTimeout(window.pdfjsLib.getDocument({data:arrayBuffer}).promise,30000,'cargar documento PDF');
     var totalPags=pdfDoc.numPages;
     var envios=[];
     for(var i=1;i<=totalPags;i++){
       if(onProgress)onProgress(i,totalPags);
       try{
-        var page=await pdfDoc.getPage(i);
-        var tc=await page.getTextContent();
+        var page=await conTimeout(pdfDoc.getPage(i),20000,'getPage p\u00e1g '+i);
+        var tc=await conTimeout(page.getTextContent(),20000,'getTextContent p\u00e1g '+i);
         var lineas=[],lastY=-1,linea='';
         tc.items.forEach(function(it){var y=Math.round(it.transform[5]);if(lastY!==-1&&Math.abs(y-lastY)>3){lineas.push(linea.trim());linea='';}linea+=it.str;lastY=y;});
         if(linea.trim())lineas.push(linea.trim());
@@ -2679,10 +2685,10 @@ function ImportarPDFColecta(_ref_ipdf){
         if(flexIdx>=0&&!comuna){for(var ci=flexIdx+1;ci<lineas.length&&ci<flexIdx+8;ci++){var c=lineas[ci]?lineas[ci].trim():'';if(!c)continue;var esMayus=c===c.toUpperCase()&&/[A-ZÁÉÍÓÚÑ]/.test(c);var esZona=/\s+(ESTE|NORTE|SUR|ORIENTE|PONIENTE|CENTRO|ANILLO)$/.test(c);if(esMayus&&c.length>3&&!NO_COMUNA.test(c)&&!esZona&&!/^\d/.test(c)){comuna=c;break;}}}
         if(codigo&&codigo.length>=8){
           var foto_etiqueta=null;
-          try{var vp=page.getViewport({scale:1.5});var cv=document.createElement('canvas');cv.width=vp.width;cv.height=vp.height;await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;foto_etiqueta=cv.toDataURL('image/jpeg',0.72);cv.width=0;cv.height=0;foto_etiqueta=await subirFotoStorage(foto_etiqueta,codigo,'etq','etiquetas');}catch(re){}
+          try{var vp=page.getViewport({scale:1.5});var cv=document.createElement('canvas');cv.width=vp.width;cv.height=vp.height;await conTimeout(page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise,15000,'render p\u00e1g '+i);foto_etiqueta=cv.toDataURL('image/jpeg',0.72);cv.width=0;cv.height=0;foto_etiqueta=await subirFotoStorage(foto_etiqueta,codigo,'etq','etiquetas');}catch(re){console.warn('PDF Flex: foto p\u00e1g '+i+' omitida -',re.message);}
           envios.push({codigo,cliente:clientePDF,destinatario,direccion,referencia,comuna,fecha:fechaHoyCL(),estado:'en_bodega',mensajero:'',monto:0,nota:referencia||'',fuente:'flex',telefono:'',foto_etiqueta,historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:'Importado desde PDF Flex'}]});
         }
-      }catch(pe){}
+      }catch(pe){console.warn('PDF Flex: p\u00e1gina '+i+' omitida -',pe.message);}
     }
     return envios;
   }
@@ -2699,29 +2705,29 @@ function ImportarPDFColecta(_ref_ipdf){
       setArchivos(function(prev){return prev.map(function(a,idx){return idx===ai?{...a,estado:'procesando'}:a;});});
       try{
         var capturedAiP=ai;
-        var envios=await parsearPDF(arch.file,function(pagAct,pagTotal){setProgreso('Procesando '+arch.nombre+' ('+(capturedAiP+1)+'/'+archivos.length+') \u00b7 p\u00e1gina '+pagAct+'/'+pagTotal+'...');});
+        var envios=await conTimeout(parsearPDF(arch.file,function(pagAct,pagTotal){setProgreso('Procesando '+arch.nombre+' ('+(capturedAiP+1)+'/'+archivos.length+') \u00b7 p\u00e1gina '+pagAct+'/'+pagTotal+'...');}),240000,'PDF completo '+arch.nombre);
         // Subir a Supabase
         for(var bi=0;bi<envios.length;bi+=BATCH){
           // Verificar cuáles ya existen
           var codigos=envios.slice(bi,bi+BATCH).map(function(env){return env.codigo;});
           var existentes=new Set();
-          try{var _ex=await db.from('envios').select('codigo').in('codigo',codigos);if(_ex.data)_ex.data.forEach(function(r){existentes.add(r.codigo);});}catch(e){}
+          try{var _ex=await conTimeout(db.from('envios').select('codigo').in('codigo',codigos),20000,'verificar duplicados');if(_ex.data)_ex.data.forEach(function(r){existentes.add(r.codigo);});}catch(e){}
           // Insertar nuevos
           var nuevos=envios.slice(bi,bi+BATCH).filter(function(env){return!existentes.has(env.codigo);}).map(function(env){return{codigo:env.codigo,cliente:env.cliente,destinatario:env.destinatario,telefono:env.telefono,direccion:env.direccion,comuna:env.comuna,referencia:env.referencia||'',fecha:env.fecha,estado:env.estado,mensajero:env.mensajero,monto:env.monto,en_un_cambio:false,nota:env.nota,fuente:env.fuente,foto_etiqueta:env.foto_etiqueta||null};});
-          if(nuevos.length>0){try{await db.from('envios').insert(nuevos);}catch(ue){}}
+          if(nuevos.length>0){try{await conTimeout(db.from('envios').insert(nuevos),20000,'insertar envios');}catch(ue){}}
           // Actualizar existentes solo campos vacíos
           var existentesArr=envios.slice(bi,bi+BATCH).filter(function(env){return existentes.has(env.codigo);});
           for(var ei=0;ei<existentesArr.length;ei++){
             var env=existentesArr[ei];
             try{
-              var _cur=await db.from('envios').select('comuna,destinatario,direccion,foto_etiqueta').eq('codigo',env.codigo).single();
+              var _cur=await conTimeout(db.from('envios').select('comuna,destinatario,direccion,foto_etiqueta').eq('codigo',env.codigo).single(),15000,'leer envio existente');
               if(_cur.data){
                 var upd={};
                 if(!_cur.data.comuna&&env.comuna)upd.comuna=env.comuna;
                 if(!_cur.data.destinatario&&env.destinatario)upd.destinatario=env.destinatario;
                 if(!_cur.data.direccion&&env.direccion)upd.direccion=env.direccion;
                 if(!_cur.data.foto_etiqueta&&env.foto_etiqueta)upd.foto_etiqueta=env.foto_etiqueta;
-                if(Object.keys(upd).length>0)await db.from('envios').update(upd).eq('codigo',env.codigo);
+                if(Object.keys(upd).length>0)await conTimeout(db.from('envios').update(upd).eq('codigo',env.codigo),15000,'actualizar envio existente');
               }
             }catch(ue){}
           }
@@ -2732,11 +2738,12 @@ function ImportarPDFColecta(_ref_ipdf){
       }catch(err){
         var capturedAi2=ai;
         setArchivos(function(prev){return prev.map(function(a,idx){return idx===capturedAi2?{...a,estado:'error'}:a;});});
+        toast('⚠ '+arch.nombre+': '+(err&&err.message?err.message:'error desconocido')+' · salté este archivo y seguí con el resto');
       }
     }
     setResultado({total:totalEnvios,cliente:clientePDF});
     setProgreso('');setProcesando(false);
-    toast('✓ '+totalEnvios+' envíos importados desde '+archivos.length+' PDFs · '+clientePDF);
+    if(totalEnvios>0)toast('✓ '+totalEnvios+' envíos importados desde '+archivos.length+' PDFs · '+clientePDF);
   }
 
   return /*#__PURE__*/React.createElement('div',null,
