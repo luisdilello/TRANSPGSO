@@ -98,6 +98,35 @@ body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--text);
 
 /* MAIN */
 .main{padding:28px 32px;padding-bottom:max(28px,calc(env(safe-area-inset-bottom) + 16px));}
+html,body{overflow-x:hidden;max-width:100vw;}
+.nav-mobile-toggle{display:none;}
+@media(max-width:760px){
+  .header{height:auto;min-height:60px;padding:10px 14px;padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right));flex-wrap:wrap;row-gap:8px;}
+  .logo{gap:8px;}
+  .logo-img{width:36px;height:36px;}
+  .brand-title{font-size:15px!important;letter-spacing:1.5px!important;}
+  .logo-sub{font-size:8px;letter-spacing:1.5px;}
+  .header-right{gap:6px;flex-wrap:wrap;justify-content:flex-end;flex:1;}
+  .header-date{display:none;}
+  .btn-manifiesto{padding:6px 10px;font-size:11px;}
+  .perfil-badge{padding:4px 8px;font-size:10px;gap:4px;}
+  .btn-salir{padding:4px 8px!important;font-size:9px!important;}
+  .btn-clear-cache{display:none!important;}
+  .nav-mobile-toggle{display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:8px;color:var(--gold);font-size:16px;cursor:pointer;order:-1;}
+  .nav{display:none;flex-direction:column;align-items:stretch;overflow:visible;position:fixed;top:60px;left:0;right:0;bottom:0;background:linear-gradient(180deg,#3a3d2e,#2b2e20);z-index:500;padding:6px 0;overflow-y:auto;-webkit-overflow-scrolling:touch;box-shadow:0 12px 24px rgba(0,0,0,0.4);}
+  .nav.nav-open{display:flex;}
+  .nav-btn{width:100%;text-align:left;padding:15px 20px;font-size:12px;border-bottom:1px solid rgba(255,255,255,0.06);}
+  .nav-btn.active{border-bottom:1px solid rgba(255,255,255,0.06);background:rgba(200,168,75,0.08);}
+  .nav-dropdown{display:block;width:100%;}
+  .nav-dropdown-toggle{width:100%;text-align:left;}
+  .nav-dropdown-menu{display:none;position:static;box-shadow:none;border:none;border-top:1px solid rgba(255,255,255,0.08);border-radius:0;min-width:0;background:rgba(0,0,0,0.18);}
+  .nav-dropdown.open .nav-dropdown-menu{display:block;}
+  .nav-dropdown-item{padding:13px 34px;}
+  .main{padding:16px 14px;padding-bottom:max(16px,calc(env(safe-area-inset-bottom) + 16px));}
+  .modal{padding:18px;border-radius:14px;}
+  .table-wrap table{min-width:560px;}
+}
+
 
 /* STAT CARDS 3D */
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px;}
@@ -449,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1786123892';
+window.__MODULES_VERSION = '1786135244';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7368,7 +7397,7 @@ useEffect(()=>{
   }).catch(function(){});
 },[]);
 useEffect(()=>{try{const saved=localStorage.getItem('transpgso_v1_mensajeros');if(saved){const parsed=JSON.parse(saved);const nombres=parsed.map(m=>m.nombre);const hayDuplicados=new Set(nombres).size<nombres.length;const muchosMensajeros=parsed.length>40;const muchasTarifas1800=parsed.filter(m=>m.tarifa===1800).length>15;if(hayDuplicados||muchosMensajeros||muchasTarifas1800){['mensajeros','pagos_semana','cierre_semanas','cierre_colecta'].forEach(k=>{localStorage.removeItem('transpgso_v1_'+k);});console.log('Migración v2: duplicados eliminados');}}}catch(e){}},[]);const _useState100=useState('dashboard'),tab=_useState100[0],setTab=_useState100[1];const _pwaInst=useState(false),pwaInstalable=_pwaInst[0],setPwaInstalable=_pwaInst[1];useEffect(function(){if(window._pwaPrompt)setPwaInstalable(true);function onPwaListo(){setPwaInstalable(true);}window.addEventListener('pwa-instalable',onPwaListo);return function(){window.removeEventListener('pwa-instalable',onPwaListo);};},[]);function instalarAppHeader(){if(window._pwaPrompt){window._pwaPrompt.prompt();window._pwaPrompt.userChoice.then(function(){setPwaInstalable(false);window._pwaPrompt=null;});}}const _useState101=useState(()=>lsLoad('clientes',INIT_CLIENTES)),clientes=_useState101[0],setClientes=_useState101[1];const _useState102=useState(()=>{const local=lsLoad('mensajeros',INIT_MENSAJEROS);return local.map(m=>({...m,nombre:(m.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim()}));
-}),mensajeros=_useState102[0],setMensajeros=_useState102[1];const _useState103=useState(()=>lsLoad('mensajerosDia',[])),mensajerosDia=_useState103[0],setMensajerosDia=_useState103[1];const _useState104=useState(()=>lsLoad('kpi',{fecha:'',totalPaquetes:0,entregados:0,enCamino:0,reprogramados:0,cancelados:0,obs:''})),kpi=_useState104[0],setKpi=_useState104[1];const _useState105=useState(null),toastMsg=_useState105[0],setToastMsg=_useState105[1];const _useState106=useState(()=>lsLoad('session_usuario',null)),usuarioActivo=_useState106[0],setUsuarioActivo=_useState106[1];const _useState107=useState(()=>lsLoad('session_perfil',null)),perfil=_useState107[0],setPerfil=_useState107[1];window.__app.perfil=perfil;const _useState108=useState(false),showManifiesto=_useState108[0],setShowManifiesto=_useState108[1];const _useState109=useState([]),enviosSupabase=_useState109[0],setEnviosSupabase=_useState109[1];const _usePermOp=useState({}),permisos=_usePermOp[0],setPermisos=_usePermOp[1];useEffect(()=>{db.from('permisos').select('*').then(res=>{if(res.data){const map={};res.data.forEach(p=>{map[p.rol+'|'+p.seccion]=p.permitido;});setPermisos(map);}}).catch(()=>{});},[]);function puedeVer(seccion){if(perfil&&perfil.esSuperAdmin)return true;const rolActual=perfil&&perfil.esAdmin?'admin':'operador';return permisos[rolActual+'|'+seccion]===true;}
+}),mensajeros=_useState102[0],setMensajeros=_useState102[1];const _useState103=useState(()=>lsLoad('mensajerosDia',[])),mensajerosDia=_useState103[0],setMensajerosDia=_useState103[1];const _useState104=useState(()=>lsLoad('kpi',{fecha:'',totalPaquetes:0,entregados:0,enCamino:0,reprogramados:0,cancelados:0,obs:''})),kpi=_useState104[0],setKpi=_useState104[1];const _useState105=useState(null),toastMsg=_useState105[0],setToastMsg=_useState105[1];const _useState106=useState(()=>lsLoad('session_usuario',null)),usuarioActivo=_useState106[0],setUsuarioActivo=_useState106[1];const _useState107=useState(()=>lsLoad('session_perfil',null)),perfil=_useState107[0],setPerfil=_useState107[1];window.__app.perfil=perfil;const _useState108=useState(false),showManifiesto=_useState108[0],setShowManifiesto=_useState108[1];const _useStateNavMob=useState(false),navMobileOpen=_useStateNavMob[0],setNavMobileOpen=_useStateNavMob[1];const _useState109=useState([]),enviosSupabase=_useState109[0],setEnviosSupabase=_useState109[1];const _usePermOp=useState({}),permisos=_usePermOp[0],setPermisos=_usePermOp[1];useEffect(()=>{db.from('permisos').select('*').then(res=>{if(res.data){const map={};res.data.forEach(p=>{map[p.rol+'|'+p.seccion]=p.permitido;});setPermisos(map);}}).catch(()=>{});},[]);function puedeVer(seccion){if(perfil&&perfil.esSuperAdmin)return true;const rolActual=perfil&&perfil.esAdmin?'admin':'operador';return permisos[rolActual+'|'+seccion]===true;}function irA(id){setTab(id);setNavMobileOpen(false);}
   // ── Avisos en tiempo real cuando un cliente ingresa carga ──
   const _avAdmin=useState([]),avisosAdmin=_avAdmin[0],setAvisosAdmin=_avAdmin[1];
   useEffect(()=>{
@@ -7507,8 +7536,8 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
     );
   })
 ),
-/*#__PURE__*/React.createElement("div",{className:"header"},/*#__PURE__*/React.createElement("div",{className:"logo"},/*#__PURE__*/React.createElement("img",{className:"logo-img",src:LOGO_SRC,alt:"TransPgso"}),/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{style:{fontFamily:"Bebas Neue",fontSize:22,letterSpacing:3,color:"var(--gold)",lineHeight:1}},"TRANSPGSO"),/*#__PURE__*/React.createElement("div",{className:"logo-sub"},"Centro de Operaciones"))),/*#__PURE__*/React.createElement("div",{className:"header-right"},/*#__PURE__*/React.createElement("div",{className:"header-date"},today()),pwaInstalable&&/*#__PURE__*/React.createElement("button",{className:"btn-manifiesto",onClick:instalarAppHeader,style:{background:"linear-gradient(135deg,var(--gold),#a87d2a)",color:"var(--dark-deep)",border:"none"}},"📲 Instalar App"),/*#__PURE__*/React.createElement("button",{className:"btn-manifiesto",onClick:()=>setShowManifiesto(true)},"⎙ Manifiesto"),/*#__PURE__*/React.createElement("div",{className:"perfil-badge",onClick:()=>{if(!perfil.esAdmin)setPerfil(null);},title:perfil.esAdmin?"":"Cambiar mensajeros a supervisar",style:{cursor:perfil.esAdmin?'default':'pointer'}},perfil.nombre,/*#__PURE__*/React.createElement("span",{style:{fontFamily:'JetBrains Mono',fontSize:10,color:'var(--gold)'}},perfil.esSuperAdmin?'Super Admin':perfil.esAdmin?'Admin':'Operador'),!perfil.esAdmin&&!perfil.verTodo&&/*#__PURE__*/React.createElement("span",{style:{fontFamily:'JetBrains Mono',fontSize:10,opacity:0.8}},"\xB7 ",perfil.mensajerosIds.length," mens."),/*#__PURE__*/React.createElement("span",{style:{fontSize:10,opacity:0.6}},"\u21BA")),/*#__PURE__*/React.createElement("button",{onClick:()=>{if(window.confirm('¿Cerrar sesión?')){setUsuarioActivo(null);setPerfil(null);lsSave('session_usuario',null);lsSave('session_perfil',null);// NO limpiar datos — se mantienen para la próxima sesión
-}},style:{background:'none',border:'1px solid rgba(200,168,75,0.2)',borderRadius:6,cursor:'pointer',color:'rgba(200,168,75,0.6)',fontSize:10,padding:'4px 10px'},title:"Cerrar sesi\xF3n"},"Salir"),/*#__PURE__*/React.createElement("button",{onClick:()=>{if(window.confirm('¿Limpiar todos los datos guardados?')){lsClear();window.location.reload();}},style:{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,0.2)',fontSize:10,padding:'4px 8px'},title:"Limpiar cach\xE9"},"\uD83D\uDDD1"))),/*#__PURE__*/React.createElement("div",{className:"nav"},
+/*#__PURE__*/React.createElement("div",{className:"header"},/*#__PURE__*/React.createElement("div",{className:"logo"},/*#__PURE__*/React.createElement("img",{className:"logo-img",src:LOGO_SRC,alt:"TransPgso"}),/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{className:"brand-title",style:{fontFamily:"Bebas Neue",fontSize:22,letterSpacing:3,color:"var(--gold)",lineHeight:1}},"TRANSPGSO"),/*#__PURE__*/React.createElement("div",{className:"logo-sub"},"Centro de Operaciones"))),/*#__PURE__*/React.createElement("div",{className:"header-right"},React.createElement("button",{className:"nav-mobile-toggle",onClick:()=>setNavMobileOpen(o=>!o),"aria-label":"Menu"},navMobileOpen?"✕":"☰"),/*#__PURE__*/React.createElement("div",{className:"header-date"},today()),pwaInstalable&&/*#__PURE__*/React.createElement("button",{className:"btn-manifiesto",onClick:instalarAppHeader,style:{background:"linear-gradient(135deg,var(--gold),#a87d2a)",color:"var(--dark-deep)",border:"none"}},"📲 Instalar App"),/*#__PURE__*/React.createElement("button",{className:"btn-manifiesto",onClick:()=>setShowManifiesto(true)},"⎙ Manifiesto"),/*#__PURE__*/React.createElement("div",{className:"perfil-badge",onClick:()=>{if(!perfil.esAdmin)setPerfil(null);},title:perfil.esAdmin?"":"Cambiar mensajeros a supervisar",style:{cursor:perfil.esAdmin?'default':'pointer'}},perfil.nombre,/*#__PURE__*/React.createElement("span",{style:{fontFamily:'JetBrains Mono',fontSize:10,color:'var(--gold)'}},perfil.esSuperAdmin?'Super Admin':perfil.esAdmin?'Admin':'Operador'),!perfil.esAdmin&&!perfil.verTodo&&/*#__PURE__*/React.createElement("span",{style:{fontFamily:'JetBrains Mono',fontSize:10,opacity:0.8}},"\xB7 ",perfil.mensajerosIds.length," mens."),/*#__PURE__*/React.createElement("span",{style:{fontSize:10,opacity:0.6}},"\u21BA")),/*#__PURE__*/React.createElement("button",{onClick:()=>{if(window.confirm('¿Cerrar sesión?')){setUsuarioActivo(null);setPerfil(null);lsSave('session_usuario',null);lsSave('session_perfil',null);// NO limpiar datos — se mantienen para la próxima sesión
+}},className:"btn-salir",style:{background:'none',border:'1px solid rgba(200,168,75,0.2)',borderRadius:6,cursor:'pointer',color:'rgba(200,168,75,0.6)',fontSize:10,padding:'4px 10px'},title:"Cerrar sesi\xF3n"},"Salir"),/*#__PURE__*/React.createElement("button",{onClick:()=>{if(window.confirm('¿Limpiar todos los datos guardados?')){lsClear();window.location.reload();}},className:"btn-clear-cache",style:{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,0.2)',fontSize:10,padding:'4px 8px'},title:"Limpiar cach\xE9"},"\uD83D\uDDD1"))),/*#__PURE__*/React.createElement("div",{className:'nav'+(navMobileOpen?' nav-open':'')},
   /*#__PURE__*/React.createElement(NavDropdown,{
     label:'Dashboard',
     active:tab==='dashboard'||tab==='analitica',
@@ -7516,10 +7545,10 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
       {id:'dashboard',label:'Dashboard'},
       {id:'analitica',label:'Analítica'}
     ],
-    tab:tab,setTab:setTab
+    tab:tab,setTab:irA
   }),
-  /*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='envios'?'active':''}`,onClick:()=>setTab('envios')},'Envíos'),
-  puedeVer('consulta-express')&&/*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='consulta-express'?'active':''}`,onClick:()=>setTab('consulta-express')},'🔍 Consulta Express'),
+  /*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='envios'?'active':''}`,onClick:()=>irA('envios')},'Envíos'),
+  puedeVer('consulta-express')&&/*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='consulta-express'?'active':''}`,onClick:()=>irA('consulta-express')},'🔍 Consulta Express'),
   (puedeVer('colecta-admin')||puedeVer('etiquetas'))&&/*#__PURE__*/React.createElement(NavDropdown,{
     label:'Colecta',
     active:tab==='colecta-admin'||tab==='etiquetas',
@@ -7527,9 +7556,9 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
       ...(puedeVer('colecta-admin')?[{id:'colecta-admin',label:'Lector/Scanner'}]:[]),
       ...(puedeVer('etiquetas')?[{id:'etiquetas',label:'Envíos Manuales'}]:[])
     ],
-    tab:tab,setTab:setTab
+    tab:tab,setTab:irA
   }),
-  puedeVer('pagos')&&/*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='pagos'?'active':''}`,onClick:()=>setTab('pagos')},'Pagos y Cobros'),
+  puedeVer('pagos')&&/*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='pagos'?'active':''}`,onClick:()=>irA('pagos')},'Pagos y Cobros'),
   (puedeVer('mensajeros')||puedeVer('clientes')||puedeVer('usuarios')||puedeVer('mapa-rutas')||puedeVer('comunicados')||(perfil!=null&&perfil.esSuperAdmin))&&/*#__PURE__*/React.createElement(NavDropdown,{
     label:'Administración',
     active:tab==='mensajeros'||tab==='clientes'||tab==='usuarios'||tab==='mapa-rutas'||tab==='comunicados'||tab==='permisos',
@@ -7541,9 +7570,9 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
       ...(puedeVer('comunicados')?[{id:'comunicados',label:'Comunicados'}]:[]),
       ...(perfil!=null&&perfil.esSuperAdmin?[{id:'permisos',label:'Permisos'}]:[])
     ],
-    tab:tab,setTab:setTab
+    tab:tab,setTab:irA
   }),
-  puedeVer('cierre')&&/*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='cierre'?'active':''}`,onClick:()=>setTab('cierre')},'Cierre Mes')
+  puedeVer('cierre')&&/*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='cierre'?'active':''}`,onClick:()=>irA('cierre')},'Cierre Mes')
 ),/*#__PURE__*/React.createElement("div",{className:"main"},tab==='dashboard'&&/*#__PURE__*/React.createElement(Dashboard,{kpi:kpiVista,mensajerosDia:mensajerosDiaVista,db:db,enviosLocales:enviosGestion,clientes:clientes}),tab==='envios'&&(gestionEnviosReady?/*#__PURE__*/React.createElement(GestionEnvios,{mensajeros:mensajeros,clientes:clientes,toast:toast,usuario:usuarioActivo,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Envios...")),tab==='consulta-express'&&(consultaExpressReady?/*#__PURE__*/React.createElement(ConsultaExpress,{toast:toast}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Consulta Express...")),tab==='importar'&&/*#__PURE__*/React.createElement(ImportarExcel,{mensajeros:mensajeros,setMensajeros:setMensajeros,setMensajerosDia:setMensajerosDia,setKpi:setKpi,toast:toast}),tab==='kpi-men'&&/*#__PURE__*/React.createElement(KpiMensajeros,{mensajerosDia:mensajerosDiaVista,setMensajerosDia:setMensajerosDia}),tab==='analitica'&&(analiticaReady?/*#__PURE__*/React.createElement(Analitica,null):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Analitica...")),puedeVer('etiquetas')&&tab==='etiquetas'&&/*#__PURE__*/React.createElement(Etiquetas,{clientes:clientes}),puedeVer('pagos')&&tab==='pagos'&&(pagosMensajerosReady?/*#__PURE__*/React.createElement(PagosMensajeros,{mensajeros:mensajeros,mensajerosDia:mensajerosDiaVista,esAdmin:perfil==null?void 0:perfil.esAdmin,toast:toast,clientes:clientes}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Pagos Mensajeros...")),puedeVer('colecta-admin')&&tab==='colecta-admin'&&(colectaAdminReady?React.createElement(ColectaAdmin,{clientes:clientes,mensajeros:mensajeros,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}):React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Colecta Admin...")),puedeVer('cierre')&&tab==='cierre'&&(cierreMesReady?/*#__PURE__*/React.createElement(CierreMes,{clientes:clientes,mensajeros:mensajeros,esAdmin:perfil==null?void 0:perfil.esAdmin,toast:toast}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Cierre de Mes...")),puedeVer('usuarios')&&tab==='usuarios'&&(gestionUsuariosReady?/*#__PURE__*/React.createElement(GestionUsuarios,{toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Usuarios...")),puedeVer('clientes')&&tab==='clientes'&&(gestionClientesReady?/*#__PURE__*/React.createElement(GestionClientes,{clientes:clientes,setClientes:setClientes,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Clientes...")),puedeVer('mensajeros')&&tab==='mensajeros'&&(gestionMensajerosReady?/*#__PURE__*/React.createElement(GestionMensajeros,{mensajeros:mensajeros,setMensajeros:setMensajeros,mensajerosDia:mensajerosDiaVista,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Mensajeros...")),perfil!=null&&perfil.esSuperAdmin&&tab==='permisos'&&/*#__PURE__*/React.createElement(Permisos,{permisos:permisos,setPermisos:setPermisos,toast:toast})),puedeVer('comunicados')&&tab==='comunicados'&&/*#__PURE__*/React.createElement(Comunicados,{mensajeros:mensajeros,toast:toast}),puedeVer('mapa-rutas')&&tab==='mapa-rutas'&&/*#__PURE__*/React.createElement(MapaRutas,{mensajeros:mensajeros,toast:toast,db:db,envios:enviosGestion||[]}),toastMsg&&/*#__PURE__*/React.createElement(Toast,{msg:toastMsg,onClose:()=>setToastMsg(null)}),showManifiesto&&/*#__PURE__*/React.createElement(ManifiestoExport,{mensajerosDia:mensajerosDiaVista,clientes:clientes,kpi:kpiVista,esAdmin:perfil==null?void 0:perfil.esAdmin,onClose:()=>setShowManifiesto(false)}));}
 // ══════════════════════════════════════════════════════════
 // MapaRutas v3 — fixes: persistencia, panel, dibujo
