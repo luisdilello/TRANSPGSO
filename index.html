@@ -449,7 +449,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1786050280';
+window.__MODULES_VERSION = '1786117614';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -6403,7 +6403,7 @@ const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localSto
   React.useEffect(function(){
     var cancelado=false;
     function cargar(){
-      db.from('envios').select('codigo,destinatario,direccion,comuna,estado,fecha').eq('cliente',nombreCliente).neq('estado','eliminado').then(function(res){
+      db.from('envios').select('codigo,destinatario,direccion,comuna,estado,fecha,lat,lng').eq('cliente',nombreCliente).neq('estado','eliminado').then(function(res){
         if(!cancelado&&res.data)setEnvios(res.data);
       }).catch(function(){});
     }
@@ -6448,6 +6448,9 @@ const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localSto
         marker.addListener('click',function(){info.open(map,marker);});
         markersRef.current[e.codigo]=marker;
       }
+      // Coordenadas ya guardadas en la base (geocodificadas antes, por este cliente o por
+      // el staff) — se usan directo, sin volver a llamar a Google ni esperar nada.
+      if(e.lat&&e.lng){var locGuardada={lat:e.lat,lng:e.lng};coordsCacheRef.current[e.codigo]=locGuardada;ponerPin(locGuardada);return;}
       var cached=coordsCacheRef.current[e.codigo];
       if(cached){ponerPin(cached);return;}
       delay+=250;
@@ -6457,6 +6460,9 @@ const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localSto
             var loc={lat:results[0].geometry.location.lat(),lng:results[0].geometry.location.lng()};
             coordsCacheRef.current[e.codigo]=loc;
             ponerPin(loc);
+            // Se guarda en la base para que la próxima vez (recarga, u otro que abra este
+            // mismo mapa) no tenga que volver a geocodificar esta dirección.
+            db.rpc('guardar_coords_envio',{p_codigo:e.codigo,p_lat:loc.lat,p_lng:loc.lng}).catch(function(){});
           }
         });
       },delay);
