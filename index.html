@@ -478,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION='1786215004';
+window.__MODULES_VERSION='1786215379';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -4460,11 +4460,26 @@ function AsignacionRider(_ref_ar){
         }
       }
     }catch(e){}
-    // Actualizar los que existen
+    // Actualizar los que existen — SOLO se puede asignar/reasignar un paquete que esté en bodega.
+    // Si está en cualquier otro estado (en ruta con otro mensajero, entregado, cancelado, reprogramado,
+    // siniestro, pendiente de retiro) se rechaza y se guarda el motivo para mostrárselo al mensajero.
+    const motivos={};
     for(const cod of codigos){
       if(!encontrados[cod]){ noExiste++; continue; }
       const data=encontrados[cod];
-      if(data.estado==='entregado'||data.estado==='cancelado'){ err++; continue; }
+      if(data.estado!=='en_bodega'){
+        err++;
+        const MOTIVOS_ESTADO={
+          entregado:'Ya fue entregado',
+          cancelado:'Está cancelado',
+          siniestro:'Marcado como siniestro',
+          en_ruta:'En ruta con '+(data.mensajero||'otro mensajero'),
+          reprogramado:'Reprogramado'+(data.mensajero?' · asignado a '+data.mensajero:''),
+          pendiente_retiro:'Pendiente de retiro, no está en bodega'
+        };
+        motivos[cod]=MOTIVOS_ESTADO[data.estado]||('Estado actual: '+data.estado);
+        continue;
+      }
       try{
         // OJO: usar data.codigo (el código real de la fila encontrada), no el 'cod' escaneado —
         // cuando el match vino del fallback ilike, ambos pueden diferir y un .eq('codigo',cod)
@@ -4473,30 +4488,39 @@ function AsignacionRider(_ref_ar){
         const env={...data,estado:'en_ruta',mensajero:usuario.nombre};
         if(onEnviosUpdate) onEnviosUpdate(env);
         ok++;
-      }catch(e){ err++; }
+      }catch(e){ err++; motivos[cod]='Error de conexión al asignar'; }
     }
     // Actualizar estados locales
-    setPaquetes(prev=>prev.map(p=>({...p,estado:encontrados[p.codigo]?'asignado':'noexiste'})));
+    setPaquetes(prev=>prev.map(p=>({...p,estado:!encontrados[p.codigo]?'noexiste':motivos[p.codigo]?'rechazado':'asignado',motivo:motivos[p.codigo]||null})));
     setGuardando(false);
     if(ok>0) playSound('success');
     setFinalizado(true);
-    const msg=ok>0?'✓ '+ok+' en ruta'+(noExiste>0?' · '+noExiste+' no encontrados':'')+(err>0?' · '+err+' con error':''):'⚠ No se pudo confirmar — verifica conexión';
+    const msg=ok>0?'✓ '+ok+' en ruta'+(noExiste>0?' · '+noExiste+' no encontrados':'')+(err>0?' · '+err+' rechazados':''):'⚠ No se pudo confirmar — verifica conexión';
     toast(msg);
   }
 
-  if(finalizado) return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif',alignItems:'center',justifyContent:'center',padding:24}},
-    React.createElement('div',{style:{fontSize:56,marginBottom:12}},'🚴'),
+  if(finalizado){
+    const rechazados=paquetes.filter(p=>p.estado==='rechazado');
+    return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif',alignItems:'center',padding:24,overflowY:'auto'}},
+    React.createElement('div',{style:{fontSize:56,marginTop:20,marginBottom:12}},'🚴'),
     React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:26,color:'var(--gold)',letterSpacing:2,marginBottom:4}},'RUTA CARGADA'),
     React.createElement('div',{style:{fontSize:14,color:'rgba(255,255,255,0.5)',marginBottom:24}},'Listo para salir a entregar'),
-    React.createElement('div',{style:{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(200,168,75,0.2)',borderRadius:12,padding:20,marginBottom:24,width:'100%',maxWidth:340}},
-      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12,textAlign:'center'}},
-        [{label:'En Ruta',val:paquetes.filter(p=>p.estado==='asignado').length,color:'var(--gold)'},{label:'No encontrados',val:paquetes.filter(p=>p.estado==='noexiste').length,color:'#b03030'},{label:'Total',val:paquetes.length,color:'#fff'}].map((s,i)=>
-          React.createElement('div',{key:i},React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:28,color:s.color}},s.val),React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.4)'}},s.label))
+    React.createElement('div',{style:{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(200,168,75,0.2)',borderRadius:12,padding:20,marginBottom:rechazados.length>0?16:24,width:'100%',maxWidth:340}},
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:8,textAlign:'center'}},
+        [{label:'En Ruta',val:paquetes.filter(p=>p.estado==='asignado').length,color:'var(--gold)'},{label:'Rechazados',val:rechazados.length,color:'#b03030'},{label:'No encontrados',val:paquetes.filter(p=>p.estado==='noexiste').length,color:'#b07d10'},{label:'Total',val:paquetes.length,color:'#fff'}].map((s,i)=>
+          React.createElement('div',{key:i},React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:24,color:s.color}},s.val),React.createElement('div',{style:{fontSize:9,color:'rgba(255,255,255,0.4)'}},s.label))
         )
       )
     ),
-    React.createElement('button',{onClick:onClose,style:{width:'100%',maxWidth:340,padding:'14px',borderRadius:10,border:'none',background:'linear-gradient(135deg,var(--gold),#a87d2a)',color:'var(--dark-deep)',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,cursor:'pointer'}},'IR A MIS ENVÍOS')
-  );
+    rechazados.length>0&&React.createElement('div',{style:{background:'rgba(176,48,48,0.08)',border:'1px solid rgba(176,48,48,0.3)',borderRadius:12,padding:14,marginBottom:24,width:'100%',maxWidth:340}},
+      React.createElement('div',{style:{fontSize:11,fontWeight:700,color:'#ff8080',letterSpacing:1,textTransform:'uppercase',marginBottom:8}},'⚠ No se pudieron asignar'),
+      rechazados.map((p,i)=>React.createElement('div',{key:i,style:{padding:'6px 0',borderTop:i>0?'1px solid rgba(255,255,255,0.08)':'none'}},
+        React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:12,color:'#fff',fontWeight:700}},p.codigo),
+        React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.6)',marginTop:1}},p.motivo)
+      ))
+    ),
+    React.createElement('button',{onClick:onClose,style:{width:'100%',maxWidth:340,padding:'14px',borderRadius:10,border:'none',background:'linear-gradient(135deg,var(--gold),#a87d2a)',color:'var(--dark-deep)',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,cursor:'pointer',marginBottom:20}},'IR A MIS ENVÍOS')
+  );}
 
   return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
     React.createElement('div',{style:{background:'var(--dark)',padding:'10px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'2px solid var(--gold)',flexShrink:0}},
