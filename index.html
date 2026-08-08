@@ -478,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1786207792';
+window.__MODULES_VERSION='1786209044';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -6097,6 +6097,10 @@ useEffect(function(){
       },style:{width:'100%',padding:'14px',borderRadius:10,border:'1.5px solid '+(notifActivas?'rgba(46,125,79,0.4)':'rgba(200,168,75,0.4)'),background:notifActivas?'rgba(46,125,79,0.08)':'rgba(200,168,75,0.08)',color:notifActivas?'var(--success)':'var(--gold)',fontWeight:700,fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8}},notifActivas?'🔔 Notificaciones Activadas':'🔕 Activar Notificaciones')
     ),
     // Borrar caché
+    React.createElement('div',{style:{marginBottom:16}},
+      React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)',letterSpacing:1.5,textTransform:'uppercase',marginBottom:10}},'App'),
+      React.createElement(InstallHelp,null)
+    ),
     React.createElement('div',{style:{marginBottom:12}},
       React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)',letterSpacing:1.5,textTransform:'uppercase',marginBottom:10}},'Datos locales'),
       React.createElement('button',{onClick:()=>{
