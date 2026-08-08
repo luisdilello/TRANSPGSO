@@ -74,7 +74,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--text);
 .rider-sticky{position:-webkit-sticky!important;position:sticky!important;top:0!important;z-index:200!important;}
 
 /* HEADER */
-.header{position:sticky;top:0;z-index:100;background:linear-gradient(135deg,#2b2e20,#3a3d2e);border-bottom:3px solid var(--gold);padding:0 32px;padding-left:max(32px,env(safe-area-inset-left));padding-right:max(32px,env(safe-area-inset-right));display:flex;align-items:center;justify-content:space-between;height:80px;box-shadow:0 6px 24px rgba(43,46,32,0.45),inset 0 1px 0 rgba(255,255,255,0.06);}
+.header{position:sticky;top:0;z-index:100;background:linear-gradient(135deg,#2b2e20,#3a3d2e);border-bottom:3px solid var(--gold);padding:0 32px;padding-left:max(32px,env(safe-area-inset-left));padding-right:max(32px,env(safe-area-inset-right));padding-top:env(safe-area-inset-top);display:flex;align-items:center;justify-content:space-between;height:calc(80px + env(safe-area-inset-top));box-shadow:0 6px 24px rgba(43,46,32,0.45),inset 0 1px 0 rgba(255,255,255,0.06);}
 .header-right{display:flex;align-items:center;gap:12px;}
 .logo{display:flex;align-items:center;gap:14px;}
 .logo-img{width:64px;height:64px;border-radius:4px;object-fit:contain;box-shadow:3px 3px 8px rgba(0,0,0,0.3);}
@@ -101,7 +101,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--text);
 html,body{overflow-x:hidden;max-width:100vw;}
 .nav-mobile-toggle{display:none;}
 @media(max-width:760px){
-  .header{height:auto;min-height:60px;padding:10px 14px;padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right));flex-wrap:wrap;row-gap:8px;}
+  .header{height:auto;min-height:60px;padding:10px 14px;padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right));padding-top:max(10px,calc(env(safe-area-inset-top) + 8px));flex-wrap:wrap;row-gap:8px;}
   .logo{gap:8px;}
   .logo-img{width:36px;height:36px;}
   .brand-title{font-size:15px!important;letter-spacing:1.5px!important;}
@@ -112,8 +112,8 @@ html,body{overflow-x:hidden;max-width:100vw;}
   .perfil-badge{padding:4px 8px;font-size:10px;gap:4px;}
   .btn-salir{padding:4px 8px!important;font-size:9px!important;}
   .btn-clear-cache{display:none!important;}
-  .nav-mobile-toggle{display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:8px;color:var(--gold);font-size:16px;cursor:pointer;order:-1;}
-  .nav{display:none;flex-direction:column;align-items:stretch;overflow:visible;position:fixed;top:60px;left:0;right:0;bottom:0;background:linear-gradient(180deg,#3a3d2e,#2b2e20);z-index:500;padding:6px 0;overflow-y:auto;-webkit-overflow-scrolling:touch;box-shadow:0 12px 24px rgba(0,0,0,0.4);}
+  .nav-mobile-toggle{display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:8px;color:var(--gold);font-size:16px;cursor:pointer;order:-1;flex-shrink:0;}
+  .nav{display:none;flex-direction:column;align-items:stretch;overflow:visible;position:static;left:auto;right:auto;bottom:auto;background:linear-gradient(180deg,#3a3d2e,#2b2e20);z-index:500;padding:6px 0;max-height:75vh;overflow-y:auto;-webkit-overflow-scrolling:touch;box-shadow:0 12px 24px rgba(0,0,0,0.4);}
   .nav.nav-open{display:flex;}
   .nav-btn{width:100%;text-align:left;padding:15px 20px;font-size:12px;border-bottom:1px solid rgba(255,255,255,0.06);}
   .nav-btn.active{border-bottom:1px solid rgba(255,255,255,0.06);background:rgba(200,168,75,0.08);}
@@ -478,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1786136018';
+window.__MODULES_VERSION = '1786198892';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
