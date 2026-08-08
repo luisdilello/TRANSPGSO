@@ -95,7 +95,7 @@ const filtrados=mensajeros.filter(m=>m.nombre.toLowerCase().includes(search.toLo
   if(!/^[A-ZÁÉÍÓÚÜÑ ]+$/.test(nombreFinal)){toast('⚠ Solo letras mayúsculas, sin comas ni símbolos');return;}
   if(modal==='add'){
     try{
-      const{data:inserted,error:errIns}=await db.from('mensajeros').insert({nombre:nombreFinal,activo:true,tarifa:+form.tarifa,tarifa_retiro:+form.tarifaRetiro||500}).select().single();
+      const{data:inserted,error:errIns}=await db.from('mensajeros').insert({nombre:nombreFinal,activo:true,tarifa:+form.tarifa,tarifa_retiro:+form.tarifaRetiro||500,ver_ganancias:false}).select().single();
       if(errIns){toast('⚠ Error: '+errIns.message);}
       else{
         setMensajeros(prev=>[...prev,{id:inserted.id,nombre:nombreFinal,activo:true,tarifa:+form.tarifa,tarifaRetiro:+form.tarifaRetiro||500}]);

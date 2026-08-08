@@ -78,7 +78,7 @@ function abrirEditar(u){if(u.rol==='superadmin'&&!esSuperAdmin){toast('Solo el S
     // propósito), se crea una ficha nueva automáticamente en vez de dejarlo sin tarifas.
     let mensajeroIdFinal=form.mensajero_id||null;
     if(form.rol==='rider'&&!mensajeroIdFinal){
-      const{data:nuevoM,error:errM}=await db.from('mensajeros').insert({nombre:normNombre(form.nombre),activo:true,tarifa:1800,tarifa_retiro:500}).select().single();
+      const{data:nuevoM,error:errM}=await db.from('mensajeros').insert({nombre:normNombre(form.nombre),activo:true,tarifa:1800,tarifa_retiro:500,ver_ganancias:false}).select().single();
       if(errM)throw errM;
       mensajeroIdFinal=nuevoM.id;
     }
@@ -110,7 +110,7 @@ function abrirEditar(u){if(u.rol==='superadmin'&&!esSuperAdmin){toast('Solo el S
     // de alta a mano, y el nombre nace ya sincronizado.
     let mensajeroIdFinal=form.mensajero_id||null;
     if(form.rol==='rider'&&!mensajeroIdFinal){
-      const{data:nuevoM,error:errM}=await db.from('mensajeros').insert({nombre:normNombre(form.nombre),activo:true,tarifa:1800,tarifa_retiro:500}).select().single();
+      const{data:nuevoM,error:errM}=await db.from('mensajeros').insert({nombre:normNombre(form.nombre),activo:true,tarifa:1800,tarifa_retiro:500,ver_ganancias:false}).select().single();
       if(errM)throw errM;
       mensajeroIdFinal=nuevoM.id;
     }else if(form.rol==='rider'&&mensajeroIdFinal){
