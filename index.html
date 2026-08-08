@@ -478,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION = '1786200099';
+window.__MODULES_VERSION = '1786207278';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -5883,17 +5883,20 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     )
   );
 }
-function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout,mensajeros=_ref32.mensajeros||[];const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87bp=useState(null),clienteRetiroPresel=_useState87bp[0],setClienteRetiroPresel=_useState87bp[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const _useRIA=useState(false),rutaIAActiva=_useRIA[0],setRutaIAActiva=_useRIA[1];const _useSRIA=useState(false),showRutaIA=_useSRIA[0],setShowRutaIA=_useSRIA[1];const _useMas=useState(false),showMas=_useMas[0],setShowMas=_useMas[1];const _useNotif=useState(false),notifActivas=_useNotif[0],setNotifActivas=_useNotif[1];const _useShowAv=useState(false),showAvisos=_useShowAv[0],setShowAvisos=_useShowAv[1];const _useBusq=useState(''),busquedaEnvio=_useBusq[0],setBusquedaEnvio=_useBusq[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);};useEffect(()=>{
+function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout,mensajeros=_ref32.mensajeros||[];const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87bp=useState(null),clienteRetiroPresel=_useState87bp[0],setClienteRetiroPresel=_useState87bp[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const _useRIA=useState(false),rutaIAActiva=_useRIA[0],setRutaIAActiva=_useRIA[1];const _useSRIA=useState(false),showRutaIA=_useSRIA[0],setShowRutaIA=_useSRIA[1];const _useVG=useState(true),verGanancias=_useVG[0],setVerGanancias=_useVG[1];const _useMas=useState(false),showMas=_useMas[0],setShowMas=_useMas[1];const _useNotif=useState(false),notifActivas=_useNotif[0],setNotifActivas=_useNotif[1];const _useShowAv=useState(false),showAvisos=_useShowAv[0],setShowAvisos=_useShowAv[1];const _useBusq=useState(''),busquedaEnvio=_useBusq[0],setBusquedaEnvio=_useBusq[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);};useEffect(()=>{
   if('serviceWorker' in navigator){
     navigator.serviceWorker.ready.then(reg=>reg.pushManager.getSubscription()).then(sub=>{if(sub)setNotifActivas(true);}).catch(()=>{});
   }
 },[]);useEffect(()=>{
   if(usuario.mensajero_id){
-    db.from('mensajeros').select('optimizacion_ruta_activa').eq('id',usuario.mensajero_id).limit(1).then(res=>{
-      if(res.data&&res.data.length>0)setRutaIAActiva(!!res.data[0].optimizacion_ruta_activa);
+    db.from('mensajeros').select('optimizacion_ruta_activa,ver_ganancias').eq('id',usuario.mensajero_id).limit(1).then(res=>{
+      if(res.data&&res.data.length>0){
+        setRutaIAActiva(!!res.data[0].optimizacion_ruta_activa);
+        setVerGanancias(res.data[0].ver_ganancias!==false);
+      }
     }).catch(()=>{});
   }
-},[]);useEffect(function(){var prev=document.body.style.background;var prevHtml=document.documentElement.style.background;document.body.style.background='#1a1d13';document.documentElement.style.background='#1a1d13';return function(){document.body.style.background=prev;document.documentElement.style.background=prevHtml;};},[]);
+},[]);useEffect(()=>{if(!verGanancias&&riderTab==='ganancias')setRiderTab('envios');},[verGanancias]);useEffect(function(){var prev=document.body.style.background;var prevHtml=document.documentElement.style.background;document.body.style.background='#1a1d13';document.documentElement.style.background='#1a1d13';return function(){document.body.style.background=prev;document.documentElement.style.background=prevHtml;};},[]);
 // GPS Tracking - actualizar ubicación cada 30 segundos
 useEffect(function(){
   var watchId=null;
@@ -6072,7 +6075,7 @@ useEffect(function(){
         )
       );
   });
-})())),riderTab==='retiros'&&/*#__PURE__*/React.createElement(RetirosRider,{usuario:usuario,onColectaRetiro:function(){setShowColecta(true);}}),riderTab==='ganancias'&&/*#__PURE__*/React.createElement(GananciasRider,{usuario:usuario,envios:envios,colectasKey:'colecta_rider_'+usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase()}),showColecta&&/*#__PURE__*/React.createElement(ColectaErrorBoundary,null,React.createElement(ColectaRider,{key:'colecta-fixed',usuario:usuario,clientes:lsLoad('clientes',[]),toast:toast,clientePresel:clienteRetiroPresel,onClose:function(){
+})())),riderTab==='retiros'&&/*#__PURE__*/React.createElement(RetirosRider,{usuario:usuario,onColectaRetiro:function(){setShowColecta(true);}}),riderTab==='ganancias'&&verGanancias&&/*#__PURE__*/React.createElement(GananciasRider,{usuario:usuario,envios:envios,colectasKey:'colecta_rider_'+usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase()}),showColecta&&/*#__PURE__*/React.createElement(ColectaErrorBoundary,null,React.createElement(ColectaRider,{key:'colecta-fixed',usuario:usuario,clientes:lsLoad('clientes',[]),toast:toast,clientePresel:clienteRetiroPresel,onClose:function(){
           setShowColecta(false);
           setClienteRetiroPresel(null);
           if(riderTab==='colecta') setRiderTab('retiros');
@@ -6124,7 +6127,7 @@ showMas&&/*#__PURE__*/React.createElement('div',{onClick:()=>setShowMas(false),s
   /*#__PURE__*/React.createElement('div',{onClick:e=>e.stopPropagation(),style:{width:'100%',background:'linear-gradient(180deg,#232619,#14150e)',borderTop:'1px solid rgba(200,168,75,0.4)',borderRadius:'20px 20px 0 0',padding:'20px 16px calc(20px + env(safe-area-inset-bottom,0px))',boxShadow:'0 -10px 40px rgba(200,168,75,0.15)'}},
     /*#__PURE__*/React.createElement('div',{style:{width:40,height:4,background:'rgba(200,168,75,0.3)',borderRadius:2,margin:'0 auto 18px'}}),
     /*#__PURE__*/React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}},
-      [{val:'ganancias',icon:'💰',label:'Ganancias'},{val:'colecta',icon:'📥',label:'Colecta'},...(rutaIAActiva?[{val:'ruta',icon:'🧭',label:'Ruta'}]:[]),{val:'avisos',icon:'📢',label:'Avisos'},{val:'retiros',icon:'🚚',label:'Retiros'},{val:'ajustes',icon:'⚙',label:'Ajustes'}].map(item=>
+      [...(verGanancias?[{val:'ganancias',icon:'💰',label:'Ganancias'}]:[]),{val:'colecta',icon:'📥',label:'Colecta'},...(rutaIAActiva?[{val:'ruta',icon:'🧭',label:'Ruta'}]:[]),{val:'avisos',icon:'📢',label:'Avisos'},{val:'retiros',icon:'🚚',label:'Retiros'},{val:'ajustes',icon:'⚙',label:'Ajustes'}].map(item=>
         React.createElement('button',{key:item.val,onClick:()=>{setShowMas(false);if(item.val==='colecta'){setShowColecta(true);return;}if(item.val==='ajustes'){setShowAjustes(true);return;}if(item.val==='ruta'){setShowRutaIA(true);return;}if(item.val==='avisos'){setShowAvisos(true);return;}setRiderTab(item.val);},style:{display:'flex',flexDirection:'column',alignItems:'center',gap:8,padding:'16px 8px',borderRadius:14,border:'1px solid rgba(200,168,75,0.15)',background:'rgba(200,168,75,0.05)',cursor:'pointer'}},
           React.createElement('span',{style:{fontSize:26,filter:'drop-shadow(0 0 8px rgba(200,168,75,0.4))'}},item.icon),
           React.createElement('span',{style:{fontSize:10.5,color:'rgba(255,255,255,0.75)',fontWeight:700,letterSpacing:0.5,textTransform:'uppercase'}},item.label)
@@ -7360,7 +7363,7 @@ function App(){useEffect(()=>{
   // Sincronizar mensajeros desde Supabase y normalizar nombres al iniciar
   db.from('mensajeros').select('*').order('nombre').then(function(res){
     if(res.data){
-      var normMens=res.data.map(function(m){return{...m,nombre:(m.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim(),optimizacionRutaActiva:!!m.optimizacion_ruta_activa,tarifaRetiro:m.tarifa_retiro||500};});
+      var normMens=res.data.map(function(m){return{...m,nombre:(m.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim(),optimizacionRutaActiva:!!m.optimizacion_ruta_activa,verGanancias:m.ver_ganancias!==false,tarifaRetiro:m.tarifa_retiro||500};});
       setMensajeros(normMens);
       lsSave('mensajeros',normMens);
     }
@@ -7371,7 +7374,7 @@ useEffect(()=>{
   // mensajero desde otra pestaña, u ocurre una alta automática de ficha al crear un
   // usuario Rider en Gestión de Usuarios, aparece acá sin necesidad de recargar la página.
   function normalizarMensajeroRT(m){
-    return{...m,nombre:(m.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim(),optimizacionRutaActiva:!!m.optimizacion_ruta_activa,tarifaRetiro:m.tarifa_retiro||500};
+    return{...m,nombre:(m.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim(),optimizacionRutaActiva:!!m.optimizacion_ruta_activa,verGanancias:m.ver_ganancias!==false,tarifaRetiro:m.tarifa_retiro||500};
   }
   const channelMens=db.channel('mensajeros-realtime').on('postgres_changes',{event:'*',schema:'public',table:'mensajeros'},payload=>{
     if(payload.eventType==='INSERT'){
