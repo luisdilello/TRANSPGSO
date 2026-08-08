@@ -6,6 +6,10 @@ function GestionUsuarios(_ref13){let toast=_ref13.toast,esAdmin=_ref13.esAdmin,e
 // de Rider y para saber que ficha de 'mensajeros' hay que mantener sincronizada con este nombre.
 const _msjMen=useState([]),mensajerosDb=_msjMen[0],setMensajerosDb=_msjMen[1];
 useEffect(()=>{db.from('mensajeros').select('id,nombre,activo').order('nombre').then(({data})=>{if(data)setMensajerosDb(data);});},[]);
+// Ficha de cliente vinculada al usuario (rol Cliente) — igual que con mensajeros, se usa
+// para sugerir clientes existentes y para saber si hay que crear la ficha automáticamente.
+const _cliDb=useState([]),clientesDb=_cliDb[0],setClientesDb=_cliDb[1];
+useEffect(()=>{db.from('clientes').select('id,nombre,activo').order('nombre').then(({data})=>{if(data)setClientesDb(data);});},[]);
 const _usDocU=useState(null),docsUsuario=_usDocU[0],setDocsUsuario=_usDocU[1];
 // Estado modal clave
 var _vcState=React.useState(null);var verClaveUser=_vcState[0];var setVerClaveUser=_vcState[1];
@@ -71,7 +75,19 @@ async function sincronizarNombreMensajero(mensajeroId,nombreViejo,nombreNuevo){
     toast('⚠ El usuario se guardó, pero no se pudo sincronizar el nombre en el resto del sistema: '+e.message);
   }
 }
-function abrirEditar(u){if(u.rol==='superadmin'&&!esSuperAdmin){toast('Solo el Super Admin puede editar a otro Super Admin');return;}setForm({nombre:u.nombre,email:u.email,clave:'',rol:u.rol,activo:u.activo,mensajero_id:u.mensajero_id||''});setEditando(u);setShowForm(true);}async function guardar(){if(!form.nombre||!form.email||(!editando&&!form.clave)){toast('⚠ Completa nombre, email y clave');return;}if(!form.email.includes('@')){toast('⚠ Email inválido');return;}if(form.rol==='superadmin'&&!esSuperAdmin){toast('No puedes asignar el rol Super Admin');return;}if(editando&&editando.rol==='superadmin'&&!esSuperAdmin){toast('Solo el Super Admin puede modificar a otro Super Admin');return;}setGuardando(true);try{
+function abrirEditar(u){if(u.rol==='superadmin'&&!esSuperAdmin){toast('Solo el Super Admin puede editar a otro Super Admin');return;}setForm({nombre:u.nombre,email:u.email,clave:'',rol:u.rol,activo:u.activo,mensajero_id:u.mensajero_id||''});setEditando(u);setShowForm(true);}// Si el rol es Cliente y el nombre escrito no coincide con ninguna ficha existente en
+// 'clientes', se crea una nueva automáticamente (igual que con la ficha de mensajero de
+// un Rider) — así el admin no tiene que ir primero a Gestión de Clientes a darla de alta.
+async function resolverClienteFicha(nombreCliente){
+  const nombreNorm=(nombreCliente||'').trim().toUpperCase();
+  if(!nombreNorm)return;
+  const existente=clientesDb.find(function(c){return(c.nombre||'').trim().toUpperCase()===nombreNorm;});
+  if(existente)return;
+  const{error:errCli}=await db.from('clientes').insert({nombre:nombreNorm,activo:true});
+  if(errCli)throw errCli;
+  setClientesDb(function(prev){return[...prev,{nombre:nombreNorm,activo:true}].sort(function(a,b){return a.nombre.localeCompare(b.nombre);});});
+}
+async function guardar(){if(!form.nombre||!form.email||(!editando&&!form.clave)){toast('⚠ Completa nombre, email y clave');return;}if(!form.email.includes('@')){toast('⚠ Email inválido');return;}if(!form.rol){toast('⚠ Selecciona un rol');return;}if(form.rol==='cliente'&&!(form.cliente_nombre||'').trim()){toast('⚠ Escribe el nombre del cliente');return;}if(form.rol==='superadmin'&&!esSuperAdmin){toast('No puedes asignar el rol Super Admin');return;}if(editando&&editando.rol==='superadmin'&&!esSuperAdmin){toast('Solo el Super Admin puede modificar a otro Super Admin');return;}setGuardando(true);try{
   const emailNuevo=form.email.toLowerCase().trim();
   if(editando){
     // Si es Rider y el admin dejó el selector de ficha en blanco (por ej. la desvinculó a
@@ -81,6 +97,9 @@ function abrirEditar(u){if(u.rol==='superadmin'&&!esSuperAdmin){toast('Solo el S
       const{data:nuevoM,error:errM}=await db.from('mensajeros').insert({nombre:normNombre(form.nombre),activo:true,tarifa:1800,tarifa_retiro:500,ver_ganancias:false}).select().single();
       if(errM)throw errM;
       mensajeroIdFinal=nuevoM.id;
+    }
+    if(form.rol==='cliente'){
+      await resolverClienteFicha(form.cliente_nombre);
     }
     // Datos de perfil (no-credenciales) se siguen guardando directo en la tabla
     const datosUpdate={nombre:normNombre(form.nombre),email:emailNuevo,rol:form.rol,activo:form.activo,mensajero_id:mensajeroIdFinal,cliente_nombre:form.cliente_nombre||null};
@@ -118,6 +137,9 @@ function abrirEditar(u){if(u.rol==='superadmin'&&!esSuperAdmin){toast('Solo el S
       // pero aún no tenía cuenta) — se renombra para que quede igual al usuario nuevo.
       await sincronizarNombreMensajero(mensajeroIdFinal, null, normNombre(form.nombre));
     }
+    if(form.rol==='cliente'){
+      await resolverClienteFicha(form.cliente_nombre);
+    }
     // Alta de usuario: la Edge Function crea la cuenta REAL en Supabase Auth ademas de
     // la fila en 'usuarios' — antes esto solo insertaba la fila y el usuario nuevo
     // nunca podia loguearse.
@@ -132,7 +154,7 @@ const mensajerosDisponibles=mensajerosDb.filter(m=>!idsMensajeroVinculados.has(m
   /*#__PURE__*/React.createElement("input",{className:"form-input",
     placeholder:"JUAN PEREZ",
     value:form.nombre,
-    onChange:e=>{var v=e.target.value.toUpperCase().replace(/,/g,'').replace(/[^A-ZÁÉÍÓÚÜÑ ]/g,'');setForm(f=>({...f,nombre:v}));}
+    onChange:e=>{var v=e.target.value.toUpperCase().replace(/,/g,'').replace(/[^A-Z0-9ÁÉÍÓÚÜÑ ]/g,'');setForm(f=>({...f,nombre:v}));}
   }),
   /*#__PURE__*/React.createElement("div",{style:{marginTop:5,fontSize:11,fontWeight:700,
     color:form.nombre.trim().split(' ').filter(Boolean).length===2?'#2e7d4f':'#b03030'}},
@@ -142,9 +164,10 @@ const mensajerosDisponibles=mensajerosDb.filter(m=>!idsMensajeroVinculados.has(m
     '⚠ Solo 1 nombre y 1 apellido, sin comas'
   )
 ))),/*#__PURE__*/React.createElement("div",{className:"form-group"},/*#__PURE__*/React.createElement("label",{className:"form-label"},"Email (se usa para entrar)"),/*#__PURE__*/React.createElement("input",{className:"form-input",type:"email",placeholder:"usuario@transpgso.cl",value:form.email,onChange:e=>setForm(f=>({...f,email:e.target.value}))})),/*#__PURE__*/React.createElement("div",{className:"form-row"},/*#__PURE__*/React.createElement("div",{className:"form-group"},/*#__PURE__*/React.createElement("label",{className:"form-label"},"Contrase\xF1a"),/*#__PURE__*/React.createElement("input",{className:"form-input",placeholder:editando?"Dejar en blanco para mantener la actual":"M\xEDnimo 6 caracteres",value:form.clave,onChange:e=>setForm(f=>({...f,clave:e.target.value}))})),/*#__PURE__*/React.createElement("div",{className:"form-group"},/*#__PURE__*/React.createElement("label",{className:"form-label"},"Estado"),/*#__PURE__*/React.createElement("select",{className:"form-input",value:form.activo?'true':'false',onChange:e=>setForm(f=>({...f,activo:e.target.value==='true'}))},/*#__PURE__*/React.createElement("option",{value:"true"},"Activo"),/*#__PURE__*/React.createElement("option",{value:"false"},"Pausado")))),form.rol==='cliente'&&/*#__PURE__*/React.createElement("div",{className:"form-group",style:{marginBottom:16}},
-  /*#__PURE__*/React.createElement("label",{className:"form-label"},"Nombre del Cliente (debe coincidir exactamente)"),
-  /*#__PURE__*/React.createElement("input",{className:"form-input",placeholder:"Ej: PBCLIS EXPRESS",value:form.cliente_nombre||'',onChange:e=>setForm(f=>({...f,cliente_nombre:e.target.value.toUpperCase()}))}),
-  /*#__PURE__*/React.createElement("div",{style:{fontSize:11,color:'var(--text-soft)',marginTop:4}},"Este nombre debe coincidir con el campo Cliente en los envíos para que pueda ver su carga.")
+  /*#__PURE__*/React.createElement("label",{className:"form-label"},"Nombre del Cliente"),
+  /*#__PURE__*/React.createElement("input",{className:"form-input",list:"clientes-datalist",placeholder:"Ej: PBCLIS EXPRESS",value:form.cliente_nombre||'',onChange:e=>setForm(f=>({...f,cliente_nombre:e.target.value.toUpperCase()}))}),
+  /*#__PURE__*/React.createElement("datalist",{id:"clientes-datalist"},clientesDb.map(c=>/*#__PURE__*/React.createElement("option",{key:c.id,value:c.nombre}))),
+  /*#__PURE__*/React.createElement("div",{style:{fontSize:11,color:'var(--text-soft)',marginTop:4}},"Si el nombre ya existe en Clientes se vincula a esa ficha; si no existe, se crea automáticamente al guardar.")
 ),
 form.rol==='rider'&&/*#__PURE__*/React.createElement("div",{className:"form-group",style:{marginBottom:16}},/*#__PURE__*/React.createElement("label",{className:"form-label"},"Ficha de pagos (mensajero)"),/*#__PURE__*/React.createElement("select",{className:"form-input",value:form.mensajero_id||'',onChange:e=>setForm(f=>({...f,mensajero_id:e.target.value}))},/*#__PURE__*/React.createElement("option",{value:""},editando&&editando.mensajero_id?'— Crear una ficha nueva (se deja de usar la actual) —':'— Crear una ficha nueva automáticamente —'),mensajerosDisponibles.map(m=>/*#__PURE__*/React.createElement("option",{key:m.id,value:m.id},m.nombre+(m.activo?'':' (pausado)')))),/*#__PURE__*/React.createElement("div",{style:{fontSize:11,color:'var(--text-soft)',marginTop:4}},"Ahí se configuran sus tarifas por entrega, retiro y comuna. Si dejas esta opción vacía se crea una ficha nueva automáticamente con el mismo nombre.")),form.rol==='rider'&&/*#__PURE__*/React.createElement("div",{className:"info-banner",style:{marginBottom:16}},"El Rider entrará al sistema con este email y clave, y ver\xE1 directamente su app m\xF3vil con sus env\xEDos asignados."),/*#__PURE__*/React.createElement("div",{className:"modal-actions"},/*#__PURE__*/React.createElement("button",{className:"btn-secondary",onClick:()=>setShowForm(false)},"Cancelar"),/*#__PURE__*/React.createElement("button",{className:"btn-primary",onClick:guardar,disabled:guardando},guardando?'Guardando...':editando?'Guardar Cambios':'Crear Usuario'))));}
 window.GestionUsuarios = GestionUsuarios;
