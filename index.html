@@ -478,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION='1786216786';
+window.__MODULES_VERSION='1786217019';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7418,7 +7418,7 @@ function NavDropdown(_ref_nd){
 // Dependencias compartidas para los modulos con carga diferida (lazy-load). Ver /modules/*.js
 window.__app = {
   db, lsLoad, lsSave, exportToExcel, ExportBtn, ImportarPDFColecta, fechaHoyCL,
-  AdminEditarEnvio, COMUNAS_CHILE, ESTADOS_ENVIO, FotosEntregaConRecarga, Modal,
+  AdminEditarEnvio, COMUNAS_CHILE, ESTADOS_ENVIO, FotosEntregaConRecarga, Modal, matchComuna,
   confirmarCodigo, crearEntradaHistorial, diasDesdeFecha, esEnvioAtrasado, estadoBadge,
   estadoInfo, imprimirFotoEtiqueta, normalizarNombre, playSound, subirFotoStorage,
   Badge, COMUNAS_RM_LIST, DocumentosMensajero, KpiBar, PestanasMensajero,
