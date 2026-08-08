@@ -478,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION='1786220117';
+window.__MODULES_VERSION='1786222604';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -6540,7 +6540,7 @@ const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localSto
       if(e.lat&&e.lng){var locGuardada={lat:e.lat,lng:e.lng};coordsCacheRef.current[e.codigo]=locGuardada;ponerPin(locGuardada);return;}
       var cached=coordsCacheRef.current[e.codigo];
       if(cached){ponerPin(cached);return;}
-      delay+=250;
+      delay+=60;
       setTimeout(function(){
         geocoder.geocode({address:e.direccion+', '+(e.comuna||'')+', Santiago, Chile'},function(results,status){
           if(status==='OK'&&results&&results[0]){
@@ -7929,7 +7929,7 @@ function MapaRutas(props){
             }
           });
         geocodTimeoutsRef.current.push(_tid);
-        },i*200); // 200ms entre cada geocodificación para evitar límite
+        },i*60); // 60ms entre cada geocodificación (suficientemente rápido y bajo el límite de Google)
       });
     }
 
