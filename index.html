@@ -478,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION='1786217019';
+window.__MODULES_VERSION='1786218676';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3107,7 +3107,7 @@ const ESTADO_FLUJO={
   'sin_asignar': {siguientes:['en_ruta'],label:'Sin Asignar', icon:'⬜',color:'#7a7d6a'},
   'asignado':    {siguientes:['en_ruta'],label:'Asignado',    icon:'📋',color:'#b07d10'},
   'en_ruta':     {siguientes:['entregado','reprogramado','cancelado','siniestro','pendiente_retiro'],label:'En Ruta',icon:'🚴',color:'#C8A84B'},
-  'reprogramado':{siguientes:['en_ruta','cancelado'],label:'Reprogramado',icon:'📅',color:'#b07d10'},
+  'reprogramado':{siguientes:['en_ruta','entregado','cancelado'],label:'Reprogramado',icon:'📅',color:'#b07d10'},
   'pendiente_retiro':{siguientes:['en_ruta','cancelado'],label:'Pend.Retiro',icon:'📦',color:'#7a7d6a'},
   'entregado':   {siguientes:['en_bodega'],label:'Entregado',icon:'✅',color:'#2e7d4f',terminal:true},
   'siniestro':   {siguientes:['en_bodega','retorno'],label:'Siniestro',icon:'⚠️',color:'#b03030',terminal:true},
