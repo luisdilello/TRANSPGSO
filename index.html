@@ -478,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION='1786213161';
+window.__MODULES_VERSION='1786214182';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -2760,13 +2760,23 @@ function ImportarPDFColecta(_ref_ipdf){
           for(var ei=0;ei<existentesArr.length;ei++){
             var env=existentesArr[ei];
             try{
-              var _cur=await conTimeout(db.from('envios').select('comuna,destinatario,direccion,foto_etiqueta').eq('codigo',env.codigo).single(),15000,'leer envio existente');
+              var _cur=await conTimeout(db.from('envios').select('comuna,destinatario,direccion,foto_etiqueta,fecha,estado').eq('codigo',env.codigo).single(),15000,'leer envio existente');
               if(_cur.data){
                 var upd={};
-                if(!_cur.data.comuna&&env.comuna)upd.comuna=env.comuna;
-                if(!_cur.data.destinatario&&env.destinatario)upd.destinatario=env.destinatario;
-                if(!_cur.data.direccion&&env.direccion)upd.direccion=env.direccion;
-                if(!_cur.data.foto_etiqueta&&env.foto_etiqueta)upd.foto_etiqueta=env.foto_etiqueta;
+                // MercadoLibre Flex reutiliza códigos de envíos antiguos ya cerrados (entregado/cancelado)
+                // para paquetes nuevos en otra fecha. Si la fecha del PDF no coincide con la guardada,
+                // es un paquete distinto reusando el código: se refresca todo y se reabre en bodega.
+                if(env.fecha&&_cur.data.fecha&&env.fecha!==_cur.data.fecha){
+                  upd={cliente:env.cliente,destinatario:env.destinatario,telefono:env.telefono,direccion:env.direccion,
+                    comuna:env.comuna,referencia:env.referencia||'',fecha:env.fecha,estado:'en_bodega',mensajero:'',
+                    monto:env.monto,nota:env.nota,fuente:env.fuente};
+                  if(env.foto_etiqueta)upd.foto_etiqueta=env.foto_etiqueta;
+                }else{
+                  if(!_cur.data.comuna&&env.comuna)upd.comuna=env.comuna;
+                  if(!_cur.data.destinatario&&env.destinatario)upd.destinatario=env.destinatario;
+                  if(!_cur.data.direccion&&env.direccion)upd.direccion=env.direccion;
+                  if(!_cur.data.foto_etiqueta&&env.foto_etiqueta)upd.foto_etiqueta=env.foto_etiqueta;
+                }
                 if(Object.keys(upd).length>0)await conTimeout(db.from('envios').update(upd).eq('codigo',env.codigo),15000,'actualizar envio existente');
               }
             }catch(ue){}
