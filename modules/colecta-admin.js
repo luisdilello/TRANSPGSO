@@ -1,7 +1,7 @@
 (function(){
 var useState=React.useState;
 var ImportarPDFColecta=window.__app.ImportarPDFColecta, db=window.__app.db, fechaHoyCL=window.__app.fechaHoyCL, lsLoad=window.__app.lsLoad;
-function ColectaAdmin(_ref_ca){var clientes=_ref_ca.clientes,mensajeros=_ref_ca.mensajeros,toast=_ref_ca.toast,esAdmin=_ref_ca.esAdmin;
+function ColectaAdmin(_ref_ca){var clientes=_ref_ca.clientes,mensajeros=_ref_ca.mensajeros,toast=_ref_ca.toast,esAdmin=_ref_ca.esAdmin,usuarioAdmin=_ref_ca.usuario;var nombreAdmin=(usuarioAdmin&&usuarioAdmin.nombre)||'Admin';
   var hoy=fechaHoyCL();
   var _t=useState('lector'),subTab=_t[0],setSubTab=_t[1];
   var _f=useState(hoy),filtroFecha=_f[0],setFiltroFecha=_f[1];
@@ -140,14 +140,15 @@ async function guardarLoteScanner(){
     });
     var r=await db.from('envios').upsert(inserts,{onConflict:'codigo'});
     if(r.error)throw new Error(r.error.message);
-    // También registrar en historial
+    // También registrar en historial - quién y por qué medio (panel admin, lector fisico)
     var hist=scanList.map(function(e){
       return{
         codigo_envio:e.codigo,
         estado:'en_bodega',
         nota:'Ingresado por lector en bodega',
-        usuario:'Admin',
-        fecha:ts
+        usuario:nombreAdmin,
+        canal:'panel_admin',
+        created_at:ts
       };
     });
     await db.from('historial_envios').insert(hist).then(function(){});
@@ -397,7 +398,7 @@ async function guardarColecta(){
     subTab==='pdf'&&/*#__PURE__*/React.createElement('div',{className:'panel',style:{maxWidth:700}},
       /*#__PURE__*/React.createElement('div',{className:'panel-title'},'Importar PDF Flex'),
       /*#__PURE__*/React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginBottom:16}},'Sube el PDF de MercadoLibre Flex. El sistema extrae los envíos automáticamente y los agrega a Gestión de Envíos.'),
-      /*#__PURE__*/React.createElement(ImportarPDFColecta,{clientes:clientes,toast:toast,db:db})
+      /*#__PURE__*/React.createElement(ImportarPDFColecta,{clientes:clientes,toast:toast,db:db,usuario:nombreAdmin})
     ),
     subTab==='historial'&&React.createElement('div',null,
       loading?React.createElement('div',{className:'empty-state'},'Cargando...'):
