@@ -478,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786285990'1786243267';
+window.__MODULES_VERSION=1786287400'1786243267';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -986,29 +986,40 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
   const porCliente={};
   filtrados.forEach(e=>{const c=e.cliente||'Sin cliente';if(!porCliente[c])porCliente[c]={total:0,entregado:0,en_ruta:0,sin_asignar:0,cancelado:0};porCliente[c].total++;porCliente[c][e.estado]=(porCliente[c][e.estado]||0)+1;});
   const clientesSort=Object.entries(porCliente).sort((a,b)=>b[1].total-a[1].total);
-  // Resumen de colecta por turno (AM=Turno 1, PM=Turno 2)
+  // Resumen de colecta: TODO lo ingresado por cliente en el período, sin importar la modalidad (Excel, Retiro, Colecta app, Etiqueta).
+  // Turno 1/2 solo aplica a lo registrado vía la función Colecta de la app (única modalidad con hora AM/PM real); el resto solo suma al Total.
   const porColecta={};
-  filtrados.filter(e=>(e.fuente||'').indexOf('colecta')===0).forEach(e=>{
+  filtrados.forEach(e=>{
     const c=e.cliente||'Sin cliente';
     if(!porColecta[c])porColecta[c]={turno1:0,turno2:0,total:0,fecha:e.fecha};
-    if((e.fuente||'').slice(-3)==='_PM')porColecta[c].turno2++;else porColecta[c].turno1++;
+    if((e.fuente||'').indexOf('colecta')===0){
+      if((e.fuente||'').slice(-3)==='_PM')porColecta[c].turno2++;else porColecta[c].turno1++;
+    }
     porColecta[c].total++;
     if((e.fecha||'')>(porColecta[c].fecha||''))porColecta[c].fecha=e.fecha;
   });
   const colectaSort=Object.entries(porColecta).sort((a,b)=>b[1].total-a[1].total);
   function buildManifiestoColecta(cli){
-    const envs=filtrados.filter(e=>e.cliente===cli&&(e.fuente||'').indexOf('colecta')===0).sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'')||((a.fuente||'').slice(-3)).localeCompare((b.fuente||'').slice(-3)));
+    function modalidadInfo(e){
+      const f=(e.fuente||'').toLowerCase();
+      if(f.indexOf('colecta')===0)return f.slice(-3)==='_pm'?{label:'Colecta PM',bg:'#E3F2FD',fg:'#1565C0'}:{label:'Colecta AM',bg:'#FFF3E0',fg:'#E65100'};
+      if(f.indexOf('retiro')===0)return{label:'Retiro',bg:'#F1F8F1',fg:'#2E7D32'};
+      if(f.indexOf('etiqueta')===0)return{label:'Etiqueta',bg:'#F3E8FD',fg:'#7B1FA2'};
+      if(f.indexOf('flex')===0)return{label:'Excel',bg:'#FDF8EC',fg:'#A0842A'};
+      return{label:f?f.charAt(0).toUpperCase()+f.slice(1):'Otro',bg:'#F0F0EC',fg:'#7a7d6a'};
+    }
+    const envs=filtrados.filter(e=>e.cliente===cli).sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'')||(a.fuente||'').localeCompare(b.fuente||''));
     const periodoLabel=periodo==='hoy'?'Hoy '+hoy:periodo==='semana'?'Semana '+lunesStr+' al '+hoy:periodo==='mes'?mesFiltro:periodo==='rango'?(desde||'...')+' al '+(hasta||'...'):'Todo el período';
-    const t1=envs.filter(e=>(e.fuente||'').slice(-3)!=='_PM').length;
-    const t2=envs.filter(e=>(e.fuente||'').slice(-3)==='_PM').length;
+    const t1=envs.filter(e=>(e.fuente||'').indexOf('colecta')===0&&(e.fuente||'').slice(-3)!=='_PM').length;
+    const t2=envs.filter(e=>(e.fuente||'').indexOf('colecta')===0&&(e.fuente||'').slice(-3)==='_PM').length;
     const logoSrc=(document.querySelector('.logo-img')?.src)||'';
     const filas=envs.map((e,i)=>{
-      const turno=(e.fuente||'').slice(-3)==='_PM'?'PM':'AM';
+      const mi=modalidadInfo(e);
       return '<tr style="background:'+(i%2===0?'#fff':'#FAFAF7')+'">'
         +'<td style="padding:6px 8px;color:#9a9d8a;font-size:9px">'+(i+1)+'</td>'
         +'<td style="padding:6px 8px;font-family:monospace;font-weight:700;color:#A0842A;font-size:10px">'+(e.codigo||'—')+'</td>'
         +'<td style="padding:6px 8px;font-size:10px">'+(e.fecha||'—')+'</td>'
-        +'<td style="padding:6px 8px;text-align:center"><span style="padding:1px 8px;border-radius:10px;font-size:9px;font-weight:700;background:'+(turno==='AM'?'#FFF3E0':'#E3F2FD')+';color:'+(turno==='AM'?'#E65100':'#1565C0')+'">'+turno+'</span></td>'
+        +'<td style="padding:6px 8px;text-align:center"><span style="padding:1px 8px;border-radius:10px;font-size:9px;font-weight:700;background:'+mi.bg+';color:'+mi.fg+'">'+mi.label+'</span></td>'
         +'<td style="padding:6px 8px;font-size:10px">'+(e.destinatario||'—')+'</td>'
         +'<td style="padding:6px 8px;font-size:10px">'+(e.direccion||'—')+(e.comuna?', '+e.comuna:'')+'</td>'
         +'<td style="padding:6px 8px;font-size:10px">'+(e.mensajero||'—').replace(/,\s*/g,' ')+'</td>'
@@ -1032,13 +1043,14 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
       +'<div class="header"><div class="brand">'+(logoSrc?'<img src="'+logoSrc+'" alt="">':'')+'<div><div class="brand-name">TRANSPGSO</div><div class="brand-sub">LAST MILE DELIVERY</div><div style="margin-top:5px"><span class="badge">MANIFIESTO DE COLECTA</span></div></div></div>'
       +'<div style="text-align:right"><div style="font-size:13px;font-weight:700;color:#3A3D2E">'+periodoLabel+'</div><div style="margin-top:3px;font-size:13px">Cliente: <strong>'+cli+'</strong></div></div></div>'
       +'<div style="padding:0 16px 16px">'
-      +(envs.length===0?'<div style="text-align:center;padding:30px;color:#9a9d8a">Sin colectas registradas en este período.</div>'
-        :'<table><thead><tr><th>#</th><th>Código</th><th>Fecha</th><th>Turno</th><th>Destinatario</th><th>Dirección</th><th>Mensajero</th></tr></thead><tbody>'+filas+'</tbody></table>')
+      +(envs.length===0?'<div style="text-align:center;padding:30px;color:#9a9d8a">Sin envíos registrados en este período.</div>'
+        :'<table><thead><tr><th>#</th><th>Código</th><th>Fecha</th><th>Modalidad</th><th>Destinatario</th><th>Dirección</th><th>Mensajero</th></tr></thead><tbody>'+filas+'</tbody></table>')
       +'<div class="resumen">'
-      +'<div class="res-item"><div class="res-val">'+t1+'</div><div class="res-lbl">Turno 1 (AM)</div></div>'
-      +'<div class="res-item"><div class="res-val">'+t2+'</div><div class="res-lbl">Turno 2 (PM)</div></div>'
+      +'<div class="res-item"><div class="res-val">'+t1+'</div><div class="res-lbl">Colecta App AM</div></div>'
+      +'<div class="res-item"><div class="res-val">'+t2+'</div><div class="res-lbl">Colecta App PM</div></div>'
       +'<div class="res-item" style="border-right:none"><div class="res-val" style="color:#C8A84B">'+envs.length+'</div><div class="res-lbl">Total Paquetes</div></div>'
       +'</div>'
+      +'<div style="margin-top:8px;font-size:9px;color:#9a9d8a;text-align:center">* Colecta App AM/PM solo cuenta lo ingresado con la función Colecta del celular. El total incluye además Excel, Retiro y Etiqueta manual (ver columna Modalidad).</div>'
       +'<div class="footer"><span>TransPgso SpA</span><span>Generado: '+new Date().toLocaleString('es-CL')+'</span><span>'+envs.length+' paquetes</span></div>'
       +'</div></body></html>';
   }
@@ -1272,6 +1284,7 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
           style:{padding:'6px 14px',borderRadius:8,border:'1px solid var(--gold)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',fontWeight:700,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}
         },'📥 Descargar Todos ('+colectaSort.length+')')
       ),
+      React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginBottom:10,marginTop:-6}},'💡 "Paquetes" = todo lo ingresado ese día por cualquier vía (Excel, Retiro, Colecta app, Etiqueta). "Turno 1/2" solo cuenta lo registrado con la función Colecta del celular — por eso puede ser menor que el total.'),
       colectaSort.length===0
         ?React.createElement('div',{style:{color:'var(--text-soft)',fontSize:13,textAlign:'center',padding:'20px 0'}},'Sin colectas en este período')
         :React.createElement('div',{className:'table-wrap'},
