@@ -478,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION='1786236675';
+window.__MODULES_VERSION='1786238945';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -4875,6 +4875,9 @@ function CalendarioEntregasRider(_ref_cal){
   const _sc1=useState([]),entregas=_sc1[0],setEntregas=_sc1[1];
   const _sc2=useState(true),cargando=_sc2[0],setCargando=_sc2[1];
   const _sc3=useState(()=>{const d=new Date();d.setDate(1);d.setHours(0,0,0,0);return d;}),mesVisible=_sc3[0],setMesVisible=_sc3[1];
+  const _sc4=useState(null),diaSeleccionado=_sc4[0],setDiaSeleccionado=_sc4[1];
+  const _sc5=useState([]),detalleDia=_sc5[0],setDetalleDia=_sc5[1];
+  const _sc6=useState(false),cargandoDetalle=_sc6[0],setCargandoDetalle=_sc6[1];
 
   useEffect(()=>{
     let cancelado=false;
@@ -4923,6 +4926,36 @@ function CalendarioEntregasRider(_ref_cal){
   },[entregas]);
 
   const maxDia=useMemo(()=>Object.values(conteoPorDia).reduce((a,b)=>Math.max(a,b),0),[conteoPorDia]);
+  const codigosPorDia=useMemo(()=>{
+    const mapa={};
+    entregas.forEach(e=>{
+      const key=localDateStr(fechaEntrega(e));
+      if(!mapa[key])mapa[key]=[];
+      mapa[key].push(e.codigo);
+    });
+    return mapa;
+  },[entregas]);
+
+  // Al elegir un día, se trae el detalle completo (destinatario, dirección, fotos) SOLO para
+  // los códigos de ese día — el historial liviano ya nos dice exactamente cuáles son, así que
+  // no hay riesgo de desalinearse con el conteo mostrado en la grilla por temas de huso horario.
+  useEffect(()=>{
+    if(!diaSeleccionado){setDetalleDia([]);return;}
+    let cancelado=false;
+    const codigos=codigosPorDia[diaSeleccionado]||[];
+    if(codigos.length===0){setDetalleDia([]);return;}
+    setCargandoDetalle(true);
+    db.from('envios').select('codigo,destinatario,direccion,comuna,telefono,nota,monto,updated_at,foto_etiqueta')
+      .in('codigo',codigos)
+      .then(({data})=>{
+        if(cancelado)return;
+        const ordenado=(data||[]).slice().sort((a,b)=>new Date(b.updated_at||0)-new Date(a.updated_at||0));
+        setDetalleDia(ordenado);
+      }).catch(()=>{if(!cancelado)setDetalleDia([]);})
+      .finally(()=>{if(!cancelado)setCargandoDetalle(false);});
+    return()=>{cancelado=true;};
+  },[diaSeleccionado]);
+
 
   const semanas=useMemo(()=>{
     const anio=mesVisible.getFullYear();
@@ -5008,7 +5041,7 @@ function CalendarioEntregasRider(_ref_cal){
       semanas.map((semana,wi)=>{
         const totalSemana=semana.reduce((a,d)=>a+d.count,0);
         return React.createElement('div',{key:wi,style:{display:'grid',gridTemplateColumns:'repeat(7,1fr) 40px',gap:4,marginBottom:4}},
-          semana.map((dia,di)=>React.createElement('div',{key:di,style:{aspectRatio:'1',borderRadius:8,background:colorIntensidad(dia.count),border:dia.esHoy?'2px solid var(--gold)':'1px solid rgba(255,255,255,0.05)',opacity:dia.enMes?1:0.3,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:42}},
+          semana.map((dia,di)=>React.createElement('div',{key:di,onClick:dia.count>0?()=>setDiaSeleccionado(dia.fechaStr):undefined,style:{aspectRatio:'1',borderRadius:8,background:colorIntensidad(dia.count),border:dia.esHoy?'2px solid var(--gold)':'1px solid rgba(255,255,255,0.05)',opacity:dia.enMes?1:0.3,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:42,cursor:dia.count>0?'pointer':'default'}},
             React.createElement('div',{style:{fontSize:10,color:dia.enMes?'rgba(255,255,255,0.5)':'rgba(255,255,255,0.25)',fontWeight:600}},dia.fecha.getDate()),
             dia.count>0&&React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:15,color:dia.enMes?'#fff':'rgba(255,255,255,0.4)',lineHeight:1,marginTop:2}},dia.count)
           )),
@@ -5019,7 +5052,49 @@ function CalendarioEntregasRider(_ref_cal){
       })
     ),
     cargando&&React.createElement('div',{style:{textAlign:'center',padding:20,color:'rgba(255,255,255,0.4)',fontSize:12}},'Cargando entregas...'),
-    !cargando&&entregas.length===0&&React.createElement('div',{style:{textAlign:'center',padding:'20px 30px',color:'rgba(255,255,255,0.4)',fontSize:12}},'Aún no hay entregas registradas.')
+    !cargando&&entregas.length===0&&React.createElement('div',{style:{textAlign:'center',padding:'20px 30px',color:'rgba(255,255,255,0.4)',fontSize:12}},'Aún no hay entregas registradas.'),
+    diaSeleccionado&&React.createElement(DiaDetalleModal,{
+      fecha:diaSeleccionado,
+      entregas:detalleDia,
+      cargando:cargandoDetalle,
+      onClose:()=>setDiaSeleccionado(null)
+    })
+  );
+}
+
+function DiaDetalleModal(_ref_dd){
+  let fecha=_ref_dd.fecha,entregas=_ref_dd.entregas,cargando=_ref_dd.cargando,onClose=_ref_dd.onClose;
+  const _ex=useState(null),expandido=_ex[0],setExpandido=_ex[1];
+  const fechaFmt=new Date(fecha+'T12:00:00').toLocaleDateString('es-CL',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  return React.createElement('div',{onClick:onClose,style:{position:'fixed',inset:0,background:'rgba(10,12,6,0.8)',zIndex:600,display:'flex',alignItems:'flex-end',WebkitBackdropFilter:'blur(4px)',backdropFilter:'blur(4px)'}},
+    React.createElement('div',{onClick:e=>e.stopPropagation(),style:{width:'100%',maxHeight:'85vh',overflowY:'auto',background:'linear-gradient(180deg,#232619,#14150e)',borderTop:'1px solid rgba(200,168,75,0.4)',borderRadius:'20px 20px 0 0',padding:'20px 16px calc(20px + env(safe-area-inset-bottom,0px))',boxShadow:'0 -10px 40px rgba(200,168,75,0.15)'}},
+      React.createElement('div',{style:{width:40,height:4,background:'rgba(200,168,75,0.3)',borderRadius:2,margin:'0 auto 16px'}}),
+      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,color:'var(--gold)',letterSpacing:1.5,textTransform:'capitalize',marginBottom:2}},fechaFmt),
+      React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.4)',marginBottom:16}},entregas.length+' entrega'+(entregas.length===1?'':'s')+' este día · toca una para ver las fotos'),
+      cargando&&React.createElement('div',{style:{textAlign:'center',padding:20,color:'rgba(255,255,255,0.4)',fontSize:12}},'Cargando detalle...'),
+      !cargando&&entregas.map(function(e){
+        const abierto=expandido===e.codigo;
+        const hora=e.updated_at?new Date(e.updated_at).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}):'';
+        return React.createElement('div',{key:e.codigo,style:{background:'rgba(255,255,255,0.04)',borderRadius:12,marginBottom:10,border:'1px solid rgba(200,168,75,0.15)',overflow:'hidden'}},
+          React.createElement('button',{onClick:()=>setExpandido(abierto?null:e.codigo),style:{width:'100%',textAlign:'left',padding:'12px 14px',background:'none',border:'none',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}},
+            React.createElement('div',{style:{flex:1,minWidth:0}},
+              React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:10,color:'var(--gold)',marginBottom:3}},e.codigo+(hora?' · '+hora:'')),
+              React.createElement('div',{style:{fontWeight:700,fontSize:14,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},e.destinatario||'—'),
+              React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.5)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},(e.direccion||'—')+(e.comuna?', '+e.comuna:''))
+            ),
+            React.createElement('span',{style:{color:'var(--gold)',fontSize:16,flexShrink:0}},abierto?'▲':'▼')
+          ),
+          abierto&&React.createElement('div',{style:{padding:'0 14px 14px'}},
+            e.telefono&&React.createElement('a',{href:'tel:'+e.telefono,style:{display:'inline-flex',alignItems:'center',gap:6,background:'rgba(46,125,79,0.15)',color:'#2e7d4f',padding:'5px 10px',borderRadius:8,fontSize:11,fontWeight:700,textDecoration:'none',marginBottom:8}},'📞 '+e.telefono),
+            e.monto>0&&React.createElement('div',{style:{fontSize:12,color:'#e88',fontWeight:700,marginBottom:8}},'💵 Cobro contra entrega: $'+e.monto.toLocaleString('es-CL')),
+            e.nota&&React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.5)',fontStyle:'italic',marginBottom:10}},'📌 '+e.nota),
+            React.createElement(FotosEntregaConRecarga,{codigo:e.codigo,fotoEtiquetaInicial:e.foto_etiqueta})
+          )
+        );
+      }),
+      !cargando&&entregas.length===0&&React.createElement('div',{style:{textAlign:'center',padding:'20px 0',color:'rgba(255,255,255,0.4)',fontSize:12}},'No se encontró el detalle de este día.'),
+      React.createElement('button',{onClick:onClose,style:{width:'100%',marginTop:8,padding:'12px',borderRadius:10,border:'none',background:'rgba(255,255,255,0.06)',color:'rgba(255,255,255,0.5)',fontFamily:'Bebas Neue',fontSize:15,letterSpacing:1,cursor:'pointer'}},'Cerrar')
+    )
   );
 }
 
