@@ -478,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION='1786223366';
+window.__MODULES_VERSION='1786234711';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7798,6 +7798,13 @@ function MapaRutas(props){
   var mensajeroBadgesRef=React.useRef([]); // carnets digitales activos en el mapa
   var geocoderRef=React.useRef(null);
   var _ml=React.useState(false);var mapaListo=_ml[0];var setMapaListo=_ml[1];
+  var _im=React.useState(window.innerWidth<=768);var isMobile=_im[0];var setIsMobile=_im[1];
+  var _pa=React.useState(window.innerWidth>768);var panelAbierto=_pa[0];var setPanelAbierto=_pa[1];
+  React.useEffect(function(){
+    function onResize(){setIsMobile(window.innerWidth<=768);}
+    window.addEventListener('resize',onResize);
+    return function(){window.removeEventListener('resize',onResize);};
+  },[]);
   var _pf=React.useState('hoy');var pinFiltro=_pf[0];var setPinFiltro=_pf[1];
   var _pfe=React.useState('todos');var estadoFiltroPin=_pfe[0];var setEstadoFiltroPin=_pfe[1];
   var _ps=React.useState(true);var pinsVisible=_ps[0];var setPinsVisible=_ps[1];
@@ -8682,9 +8689,15 @@ function MapaRutas(props){
           est.label);
       })
     ),
-    React.createElement('div',{style:{display:'flex',flex:1,overflow:'hidden'}},
+    React.createElement('div',{style:{display:'flex',flex:1,overflow:'hidden',flexDirection:isMobile?'column':'row'}},
+    // ── Botón colapsar panel (solo móvil) ─────────────────
+    isMobile&&React.createElement('button',{onClick:function(){setPanelAbierto(function(v){return !v;});},
+      style:{flexShrink:0,width:'100%',padding:'8px 14px',background:'linear-gradient(135deg,#2b2e20,#1e2118)',
+      border:'none',borderBottom:'2px solid rgba(200,168,75,0.25)',color:'var(--gold)',fontFamily:'Bebas Neue',
+      fontSize:13,letterSpacing:2,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8}},
+      panelAbierto?'▴ OCULTAR PANEL — VER MAPA COMPLETO':'▾ MOSTRAR PANEL Y FILTROS'),
     // ── SIDEBAR ──────────────────────────────────────────
-    React.createElement('div',{style:{width:225,flexShrink:0,background:'linear-gradient(180deg,#2b2e20,#1e2118)',borderRight:'2px solid rgba(200,168,75,0.2)',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'4px 0 12px rgba(0,0,0,0.3)'}},
+    React.createElement('div',{style:isMobile?{width:'100%',flexShrink:0,background:'linear-gradient(180deg,#2b2e20,#1e2118)',borderBottom:'2px solid rgba(200,168,75,0.2)',display:panelAbierto?'flex':'none',flexDirection:'column',overflow:'auto',maxHeight:'45vh',boxShadow:'0 4px 12px rgba(0,0,0,0.3)'}:{width:225,flexShrink:0,background:'linear-gradient(180deg,#2b2e20,#1e2118)',borderRight:'2px solid rgba(200,168,75,0.2)',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'4px 0 12px rgba(0,0,0,0.3)'}},
 
       React.createElement('div',{style:{padding:'14px 16px',textTransform:'uppercase',letterSpacing:4,color:'var(--gold)',borderBottom:'1px solid rgba(200,168,75,0.2)',fontFamily:'Bebas Neue',fontSize:18,background:'linear-gradient(135deg,rgba(200,168,75,0.08),transparent)',textShadow:'0 0 14px rgba(200,168,75,0.5)',boxShadow:'inset 0 -1px 0 rgba(200,168,75,0.1)'}},'⬡ Mapa de Rutas'),
 
