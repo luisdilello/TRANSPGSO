@@ -478,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786315233;
+window.__MODULES_VERSION=1786316979;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -796,6 +796,21 @@ function procesarConcurrencia(items,worker,concurrencia){
     if(n===0){resolve(resultados);return;}
     for(var w=0;w<n;w++)lanzarSiguiente();
   });
+}
+// Estados desde los cuales CUALQUIER mensajero puede adquirir un paquete escaneandolo.
+// reprogramado/cancelado/siniestro/pendiente_retiro/sin_asignar deben pasar primero por un admin (-> en_bodega).
+var ESTADOS_ADQUIRIBLES_ESCANEO=['en_bodega','en_ruta','asignado'];
+function motivoNoAdquirible(estado,mensajeroActual){
+  var MOTIVOS={
+    entregado:'Ya fue entregado',
+    cancelado:'Cancelado, un admin debe pasarlo a bodega/retorno antes de re-despachar',
+    siniestro:'Marcado como siniestro, un admin debe pasarlo a bodega/retorno antes de re-despachar',
+    reprogramado:'Reprogramado, un admin debe pasarlo a bodega antes de re-despachar'+(mensajeroActual?' (estaba con '+mensajeroActual+')':''),
+    pendiente_retiro:'Pendiente de retiro, no esta en bodega',
+    sin_asignar:'Sin asignar, un admin debe pasarlo a bodega antes de re-despachar',
+    retorno:'En retorno a bodega, un admin debe procesarlo'
+  };
+  return MOTIVOS[estado]||('Estado actual: '+estado+', requiere gestion de un admin');
 }
 async function subirFotoStorage(base64,codigo,tag,carpeta){
   try{
@@ -4484,19 +4499,27 @@ function ColectaRider(_ref_cr){
     setGuardando(true);
     const ts=new Date().toISOString();
     const clienteNombre=clienteSel?.nombre||clienteSel||'Sin cliente';
-    let ok=0,err=0;
+    let ok=0,err=0,bloqueados=0;
     const codigos=paquetes.map(p=>p.codigo);
-    // Buscar cuáles ya existen
-    let existentes=new Set();
+    // Buscar cuáles ya existen (con su estado actual, para no pisar piezas que requieren admin)
+    let existentes=new Map();
     try{
-      const {data}=await db.from('envios').select('codigo').in('codigo',codigos);
-      if(data) data.forEach(r=>existentes.add(r.codigo));
+      const {data}=await db.from('envios').select('codigo,estado,mensajero').in('codigo',codigos);
+      if(data) data.forEach(r=>existentes.set(r.codigo,r));
     }catch(e){}
+    const bloqueadosSet=new Set();
     // Procesar cada paquete
     const updates=[];
     const inserts=[];
     for(const p of paquetes){
       if(existentes.has(p.codigo)){
+        const ex=existentes.get(p.codigo);
+        if(!ESTADOS_ADQUIRIBLES_ESCANEO.includes(ex.estado)){
+          // No se puede re-adquirir por Colecta: debe pasar primero por un admin (ver motivoNoAdquirible)
+          bloqueados++;
+          bloqueadosSet.add(p.codigo);
+          continue;
+        }
         updates.push(p.codigo);
       } else {
         const d=p.datos||{};
@@ -4546,11 +4569,11 @@ function ColectaRider(_ref_cr){
       }catch(e){ err+=inserts.length; }
     }
     // Actualizar estados locales
-    setPaquetes(prev=>prev.map(p=>({...p,estado:err>0?'error':'ok'})));
+    setPaquetes(prev=>prev.map(p=>({...p,estado:bloqueadosSet.has(p.codigo)?'error':(err>0?'error':'ok'),motivo:bloqueadosSet.has(p.codigo)?'Requiere admin (no está en bodega/en ruta)':null})));
     setGuardando(false);
-    playSound('success');
+    playSound(bloqueados>0?'error':'success');
     setFase('resumen');
-    toast('✓ Colecta confirmada: '+ok+' paquetes en bodega');
+    toast(bloqueados>0?'⚠ '+ok+' cargados · '+bloqueados+' requieren revisión de un admin (no estaban en bodega/en ruta)':'✓ Colecta confirmada: '+ok+' paquetes en bodega');
   }
 
   const clientesActivos=(clientes||[]).filter(c=>c.activo!==false);
@@ -4887,25 +4910,18 @@ function AsignacionRider(_ref_ar){
     for(const cod of codigos){
       if(!encontrados[cod]){ noExiste++; continue; }
       const data=encontrados[cod];
-      if(data.estado!=='en_bodega'){
+      if(!ESTADOS_ADQUIRIBLES_ESCANEO.includes(data.estado)){
         err++;
-        const MOTIVOS_ESTADO={
-          entregado:'Ya fue entregado',
-          cancelado:'Está cancelado',
-          siniestro:'Marcado como siniestro',
-          en_ruta:'En ruta con '+(data.mensajero||'otro mensajero'),
-          reprogramado:'Reprogramado'+(data.mensajero?' · asignado a '+data.mensajero:''),
-          pendiente_retiro:'Pendiente de retiro, no está en bodega'
-        };
-        motivos[cod]=MOTIVOS_ESTADO[data.estado]||('Estado actual: '+data.estado);
+        motivos[cod]=motivoNoAdquirible(data.estado,data.mensajero);
         continue;
       }
       try{
         // OJO: usar data.codigo (el código real de la fila encontrada), no el 'cod' escaneado —
         // cuando el match vino del fallback ilike, ambos pueden diferir y un .eq('codigo',cod)
         // no actualizaba ninguna fila (0 filas afectadas, sin error) mostrando éxito falso.
+        const eraDeOtro=data.mensajero&&normNombre(data.mensajero)!==normNombre(usuario.nombre)&&(data.estado==='en_ruta'||data.estado==='asignado');
         await db.from('envios').update({estado:'en_ruta',mensajero:usuario.nombre}).eq('codigo',data.codigo);
-        sbRegistrarHistorial(data.codigo,'en_ruta','Auto-asignado por escaneo',usuario.nombre,'app_mensajero');
+        sbRegistrarHistorial(data.codigo,'en_ruta',eraDeOtro?'Reasignado por escaneo (antes: '+data.mensajero+')':'Auto-asignado por escaneo',usuario.nombre,'app_mensajero');
         const env={...data,estado:'en_ruta',mensajero:usuario.nombre};
         if(onEnviosUpdate) onEnviosUpdate(env);
         ok++;
@@ -5137,21 +5153,16 @@ async function procesarCodigo(codigo){
 }
 
 async function procesarEnvioEncontrado(data,cod){
-  if(data.estado==='entregado'||data.estado==='cancelado'){
+  if(!ESTADOS_ADQUIRIBLES_ESCANEO.includes(data.estado)){
     playSound('error');
-    setModo('terminal');
-    setResultado({codigo:cod,msg:'Estado terminal: '+data.estado.toUpperCase()+'. Contacta al admin.',envio:data});
-    return;
-  }
-  if(data.mensajero&&normNombre(data.mensajero)!==normNombre(usuario.nombre)&&(data.estado==='en_ruta'||data.estado==='reprogramado')){
-    playSound('error');
-    setModo('ocupado');
-    setResultado({codigo:cod,msg:'Este paquete ya está asignado a '+data.mensajero+'. Si es un error, avisa al administrador.',envio:data});
+    setModo('bloqueado');
+    setResultado({codigo:cod,msg:motivoNoAdquirible(data.estado,data.mensajero)+'.',envio:data});
     return;
   }
   try{
+    const eraDeOtro=data.mensajero&&normNombre(data.mensajero)!==normNombre(usuario.nombre)&&(data.estado==='en_ruta'||data.estado==='asignado');
     await db.from('envios').update({estado:'en_ruta',mensajero:usuario.nombre,updated_at:new Date().toISOString()}).eq('codigo',data.codigo);
-    sbRegistrarHistorial(data.codigo,'en_ruta','Auto-asignado por escaneo',usuario.nombre,'app_mensajero');
+    sbRegistrarHistorial(data.codigo,'en_ruta',eraDeOtro?'Reasignado por escaneo (antes: '+data.mensajero+')':'Auto-asignado por escaneo',usuario.nombre,'app_mensajero');
     playSound('success');
     const env={...data,estado:'en_ruta',mensajero:usuario.nombre};
     setModo('ok');
@@ -5181,7 +5192,7 @@ function enviarManual(){
   procesarCodigo(cod);
 }
 
-const esResultado=['buscando','ok','error','noexiste','terminal','ocupado'].includes(modo);
+const esResultado=['buscando','ok','error','noexiste','terminal','ocupado','bloqueado'].includes(modo);
 
 return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
 
@@ -5271,9 +5282,9 @@ return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0
   ),
 
   // Vistas error/noexiste/terminal
-  ['error','noexiste','terminal','ocupado'].includes(modo)&&resultado&&React.createElement('div',{style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:24}},
-    React.createElement('div',{style:{fontSize:56,marginBottom:8}},modo==='terminal'?'🚫':modo==='ocupado'?'📦':'❌'),
-    React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,color:'#b03030',letterSpacing:2,marginBottom:8}},modo==='terminal'?'ESTADO TERMINAL':modo==='ocupado'?'YA ASIGNADO':modo==='noexiste'?'CÓDIGO NO ENCONTRADO':'ERROR'),
+  ['error','noexiste','terminal','ocupado','bloqueado'].includes(modo)&&resultado&&React.createElement('div',{style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:24}},
+    React.createElement('div',{style:{fontSize:56,marginBottom:8}},modo==='terminal'?'🚫':modo==='ocupado'?'📦':modo==='bloqueado'?'🔒':'❌'),
+    React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,color:'#b03030',letterSpacing:2,marginBottom:8}},modo==='terminal'?'ESTADO TERMINAL':modo==='ocupado'?'YA ASIGNADO':modo==='bloqueado'?'REQUIERE ADMIN':modo==='noexiste'?'CÓDIGO NO ENCONTRADO':'ERROR'),
     React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:11,color:'rgba(255,255,255,0.4)',marginBottom:12}},resultado.codigo),
     React.createElement('div',{style:{background:'rgba(176,48,48,0.1)',border:'1px solid rgba(176,48,48,0.3)',borderRadius:10,padding:14,marginBottom:24,fontSize:13,color:'rgba(255,255,255,0.7)',textAlign:'center',maxWidth:360}},resultado.msg),
     React.createElement('div',{style:{display:'flex',gap:12,width:'100%',maxWidth:360}},
