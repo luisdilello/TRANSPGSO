@@ -478,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786243988'1786243267';
+window.__MODULES_VERSION=1786285990'1786243267';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -996,6 +996,52 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
     if((e.fecha||'')>(porColecta[c].fecha||''))porColecta[c].fecha=e.fecha;
   });
   const colectaSort=Object.entries(porColecta).sort((a,b)=>b[1].total-a[1].total);
+  function buildManifiestoColecta(cli){
+    const envs=filtrados.filter(e=>e.cliente===cli&&(e.fuente||'').indexOf('colecta')===0).sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'')||((a.fuente||'').slice(-3)).localeCompare((b.fuente||'').slice(-3)));
+    const periodoLabel=periodo==='hoy'?'Hoy '+hoy:periodo==='semana'?'Semana '+lunesStr+' al '+hoy:periodo==='mes'?mesFiltro:periodo==='rango'?(desde||'...')+' al '+(hasta||'...'):'Todo el período';
+    const t1=envs.filter(e=>(e.fuente||'').slice(-3)!=='_PM').length;
+    const t2=envs.filter(e=>(e.fuente||'').slice(-3)==='_PM').length;
+    const logoSrc=(document.querySelector('.logo-img')?.src)||'';
+    const filas=envs.map((e,i)=>{
+      const turno=(e.fuente||'').slice(-3)==='_PM'?'PM':'AM';
+      return '<tr style="background:'+(i%2===0?'#fff':'#FAFAF7')+'">'
+        +'<td style="padding:6px 8px;color:#9a9d8a;font-size:9px">'+(i+1)+'</td>'
+        +'<td style="padding:6px 8px;font-family:monospace;font-weight:700;color:#A0842A;font-size:10px">'+(e.codigo||'—')+'</td>'
+        +'<td style="padding:6px 8px;font-size:10px">'+(e.fecha||'—')+'</td>'
+        +'<td style="padding:6px 8px;text-align:center"><span style="padding:1px 8px;border-radius:10px;font-size:9px;font-weight:700;background:'+(turno==='AM'?'#FFF3E0':'#E3F2FD')+';color:'+(turno==='AM'?'#E65100':'#1565C0')+'">'+turno+'</span></td>'
+        +'<td style="padding:6px 8px;font-size:10px">'+(e.destinatario||'—')+'</td>'
+        +'<td style="padding:6px 8px;font-size:10px">'+(e.direccion||'—')+(e.comuna?', '+e.comuna:'')+'</td>'
+        +'<td style="padding:6px 8px;font-size:10px">'+(e.mensajero||'—').replace(/,\s*/g,' ')+'</td>'
+        +'</tr>';
+    }).join('');
+    return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Manifiesto Colecta '+cli+'</title><style>'
+      +'*{margin:0;padding:0;box-sizing:border-box;}body{font-family:"Segoe UI",Arial,sans-serif;font-size:12px;color:#2d2d2d;}'
+      +'.header{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:3px solid #C8A84B;}'
+      +'.brand{display:flex;align-items:center;gap:10px;}.brand img{width:44px;height:44px;object-fit:cover;border-radius:5px;}'
+      +'.brand-name{font-size:18px;font-weight:900;letter-spacing:3px;color:#3A3D2E;}.brand-sub{font-size:9px;color:#7a7d6a;letter-spacing:2px;}'
+      +'.badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:9px;font-weight:700;background:#FEF8EA;color:#C8A84B;border:1px solid #C8A84B;}'
+      +'table{width:100%;border-collapse:collapse;margin-top:10px;}'
+      +'thead tr{background:#3A3D2E;color:#C8A84B;}th{padding:7px 8px;text-align:left;font-size:9px;letter-spacing:1px;text-transform:uppercase;}'
+      +'tbody td{border-bottom:1px solid #e8e8e0;}'
+      +'.resumen{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #e8e8e0;border-radius:5px;overflow:hidden;margin-top:14px;}'
+      +'.res-item{padding:10px;text-align:center;background:#FEF8EA;border-right:1px solid #e8e8e0;}'
+      +'.res-val{font-size:20px;font-weight:900;color:#3A3D2E;}.res-lbl{font-size:8px;color:#7a7d6a;letter-spacing:1px;text-transform:uppercase;margin-top:1px;}'
+      +'.footer{margin-top:14px;padding:12px 16px;border-top:1px solid #e8e8e0;display:flex;justify-content:space-between;font-size:9px;color:#9a9d8a;}'
+      +'@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}'
+      +'</style></head><body>'
+      +'<div class="header"><div class="brand">'+(logoSrc?'<img src="'+logoSrc+'" alt="">':'')+'<div><div class="brand-name">TRANSPGSO</div><div class="brand-sub">LAST MILE DELIVERY</div><div style="margin-top:5px"><span class="badge">MANIFIESTO DE COLECTA</span></div></div></div>'
+      +'<div style="text-align:right"><div style="font-size:13px;font-weight:700;color:#3A3D2E">'+periodoLabel+'</div><div style="margin-top:3px;font-size:13px">Cliente: <strong>'+cli+'</strong></div></div></div>'
+      +'<div style="padding:0 16px 16px">'
+      +(envs.length===0?'<div style="text-align:center;padding:30px;color:#9a9d8a">Sin colectas registradas en este período.</div>'
+        :'<table><thead><tr><th>#</th><th>Código</th><th>Fecha</th><th>Turno</th><th>Destinatario</th><th>Dirección</th><th>Mensajero</th></tr></thead><tbody>'+filas+'</tbody></table>')
+      +'<div class="resumen">'
+      +'<div class="res-item"><div class="res-val">'+t1+'</div><div class="res-lbl">Turno 1 (AM)</div></div>'
+      +'<div class="res-item"><div class="res-val">'+t2+'</div><div class="res-lbl">Turno 2 (PM)</div></div>'
+      +'<div class="res-item" style="border-right:none"><div class="res-val" style="color:#C8A84B">'+envs.length+'</div><div class="res-lbl">Total Paquetes</div></div>'
+      +'</div>'
+      +'<div class="footer"><span>TransPgso SpA</span><span>Generado: '+new Date().toLocaleString('es-CL')+'</span><span>'+envs.length+' paquetes</span></div>'
+      +'</div></body></html>';
+  }
   // Por mensajero (top 5)
   const porMen={};
   filtrados.filter(e=>e.mensajero).forEach(e=>{const m=e.mensajero.replace(/,\s*/g,' ');if(!porMen[m])porMen[m]={nombre:m,total:0,entregado:0};porMen[m].total++;if(e.estado==='entregado')porMen[m].entregado++;});
@@ -1202,8 +1248,29 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
     ),
       // ── RESUMEN DE COLECTA (por turno) ──
     React.createElement('div',{className:'panel'},
-      React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}},
-        React.createElement('div',{className:'panel-title',style:{margin:0}},'Resumen de Colecta')
+      React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14,flexWrap:'wrap',gap:8}},
+        React.createElement('div',{className:'panel-title',style:{margin:0}},'Resumen de Colecta'),
+        colectaSort.length>0&&React.createElement('button',{
+          onClick:()=>{
+            const n=colectaSort.length;
+            colectaSort.forEach(([cli],i)=>{
+              setTimeout(()=>{
+                const html=buildManifiestoColecta(cli);
+                const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+                const url=URL.createObjectURL(blob);
+                const a=document.createElement('a');
+                a.href=url;
+                a.download='Manifiesto_Colecta_'+cli.replace(/[^a-zA-Z0-9]/g,'_')+'_'+hoy+'.html';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(()=>URL.revokeObjectURL(url),10000);
+              },i*400);
+            });
+            setTimeout(()=>alert('✓ '+n+' manifiesto'+(n>1?'s':'')+' de colecta descargado'+(n>1?'s':'')+'.\nAbre cada archivo e imprime (Ctrl+P) para guardar como PDF.'),n*400+300);
+          },
+          style:{padding:'6px 14px',borderRadius:8,border:'1px solid var(--gold)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',fontWeight:700,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}
+        },'📥 Descargar Todos ('+colectaSort.length+')')
       ),
       colectaSort.length===0
         ?React.createElement('div',{style:{color:'var(--text-soft)',fontSize:13,textAlign:'center',padding:'20px 0'}},'Sin colectas en este período')
@@ -1214,7 +1281,8 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
               React.createElement('th',null,'Turno 1'),
               React.createElement('th',null,'Turno 2'),
               React.createElement('th',null,'Paquetes'),
-              React.createElement('th',null,'Fecha Colecta')
+              React.createElement('th',null,'Fecha Colecta'),
+              React.createElement('th',null,'Manifiesto')
             )),
             React.createElement('tbody',null,colectaSort.map(([cli,d])=>
               React.createElement('tr',{key:cli},
@@ -1222,7 +1290,18 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
                 React.createElement('td',{className:'mono'},d.turno1||'—'),
                 React.createElement('td',{className:'mono'},d.turno2||'—'),
                 React.createElement('td',{className:'mono',style:{fontWeight:700}},d.total),
-                React.createElement('td',{className:'mono'},d.fecha||'—')
+                React.createElement('td',{className:'mono'},d.fecha||'—'),
+                React.createElement('td',null,
+                  React.createElement('button',{
+                    onClick:()=>{
+                      const html=buildManifiestoColecta(cli);
+                      const win=window.open('','_blank','width=900,height=700');
+                      win.document.write(html);
+                      win.document.close();
+                    },
+                    style:{padding:'5px 10px',borderRadius:6,border:'1px solid var(--gold)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',fontWeight:700,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}
+                  },'📄 Manifiesto')
+                )
               )
             )),
             React.createElement('tfoot',null,React.createElement('tr',null,
@@ -1230,6 +1309,7 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
               React.createElement('td',{className:'mono',style:{fontWeight:700}},colectaSort.reduce((a,pair)=>a+pair[1].turno1,0)),
               React.createElement('td',{className:'mono',style:{fontWeight:700}},colectaSort.reduce((a,pair)=>a+pair[1].turno2,0)),
               React.createElement('td',{className:'mono',style:{fontWeight:700}},colectaSort.reduce((a,pair)=>a+pair[1].total,0)),
+              React.createElement('td',null),
               React.createElement('td',null)
             ))
           )
