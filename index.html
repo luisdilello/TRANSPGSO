@@ -478,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION='1786238945';
+window.__MODULES_VERSION='1786239762';
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -4890,16 +4890,18 @@ function CalendarioEntregasRider(_ref_cal){
         let desde=0;
         const bloque=1000;
         while(true){
+          // Se trae TODO lo asignado al rider (cualquier estado), no solo lo entregado —
+          // así se puede calcular efectividad (entregados / total asignado) por día.
           const{data,error}=await db.from('envios').select('codigo,fecha,estado,mensajero,updated_at')
-            .eq('estado','entregado').ilike('mensajero','%'+primerNombre+'%')
-            .order('updated_at',{ascending:false}).range(desde,desde+bloque-1);
+            .ilike('mensajero','%'+primerNombre+'%')
+            .order('fecha',{ascending:false}).range(desde,desde+bloque-1);
           if(error||!data||data.length===0)break;
           acumulado=acumulado.concat(data);
           if(data.length<bloque)break;
           desde+=bloque;
           if(cancelado)return;
         }
-        // Mismo criterio de coincidencia exacta que Ganancias — evita mezclar entregas de
+        // Mismo criterio de coincidencia exacta que Ganancias — evita mezclar envíos de
         // otro mensajero que comparte primer nombre (ej. MARCOS GIOVACCHINI / MARCOS FUENTEALBA).
         const propio=acumulado.filter(e=>normNombre(e.mensajero||'')===normNombre(usuario.nombre));
         if(!cancelado)setEntregas(propio);
@@ -4914,38 +4916,42 @@ function CalendarioEntregasRider(_ref_cal){
     const dt=d?new Date(d):new Date();
     return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
   }
-  function fechaEntrega(e){return new Date(e.updated_at||e.fecha||0);}
+  // La fecha de referencia para agrupar es la del propio envío (columna 'fecha', el día en que
+  // se asignó/salió a ruta) — el mismo criterio que ya usa el Dashboard para "Top Mensajeros"
+  // (total asignado vs. entregado), así los números de este calendario calzan con el admin.
+  function fechaAsignacion(e){return e.fecha||localDateStr(e.updated_at);}
 
   const conteoPorDia=useMemo(()=>{
     const mapa={};
     entregas.forEach(e=>{
-      const key=localDateStr(fechaEntrega(e));
-      mapa[key]=(mapa[key]||0)+1;
+      const key=fechaAsignacion(e);
+      if(!mapa[key])mapa[key]={total:0,entregado:0};
+      mapa[key].total++;
+      if(e.estado==='entregado')mapa[key].entregado++;
     });
     return mapa;
   },[entregas]);
 
-  const maxDia=useMemo(()=>Object.values(conteoPorDia).reduce((a,b)=>Math.max(a,b),0),[conteoPorDia]);
   const codigosPorDia=useMemo(()=>{
     const mapa={};
     entregas.forEach(e=>{
-      const key=localDateStr(fechaEntrega(e));
+      const key=fechaAsignacion(e);
       if(!mapa[key])mapa[key]=[];
       mapa[key].push(e.codigo);
     });
     return mapa;
   },[entregas]);
 
-  // Al elegir un día, se trae el detalle completo (destinatario, dirección, fotos) SOLO para
-  // los códigos de ese día — el historial liviano ya nos dice exactamente cuáles son, así que
-  // no hay riesgo de desalinearse con el conteo mostrado en la grilla por temas de huso horario.
+  // Al elegir un día, se trae el detalle completo (destinatario, dirección, fotos, estado) SOLO
+  // para los códigos de ese día — el historial liviano ya nos dice exactamente cuáles son, así
+  // que no hay riesgo de desalinearse con lo mostrado en la grilla.
   useEffect(()=>{
     if(!diaSeleccionado){setDetalleDia([]);return;}
     let cancelado=false;
     const codigos=codigosPorDia[diaSeleccionado]||[];
     if(codigos.length===0){setDetalleDia([]);return;}
     setCargandoDetalle(true);
-    db.from('envios').select('codigo,destinatario,direccion,comuna,telefono,nota,monto,updated_at,foto_etiqueta')
+    db.from('envios').select('codigo,destinatario,direccion,comuna,telefono,nota,monto,estado,updated_at,foto_etiqueta')
       .in('codigo',codigos)
       .then(({data})=>{
         if(cancelado)return;
@@ -4955,7 +4961,6 @@ function CalendarioEntregasRider(_ref_cal){
       .finally(()=>{if(!cancelado)setCargandoDetalle(false);});
     return()=>{cancelado=true;};
   },[diaSeleccionado]);
-
 
   const semanas=useMemo(()=>{
     const anio=mesVisible.getFullYear();
@@ -4973,12 +4978,14 @@ function CalendarioEntregasRider(_ref_cal){
       const semana=[];
       for(let i=0;i<7;i++){
         const fechaStr=localDateStr(cursor);
+        const d=conteoPorDia[fechaStr]||{total:0,entregado:0};
         semana.push({
           fecha:new Date(cursor),
           fechaStr,
           enMes:cursor.getMonth()===mes,
           esHoy:fechaStr===hoyStr,
-          count:conteoPorDia[fechaStr]||0
+          total:d.total,
+          entregado:d.entregado
         });
         cursor.setDate(cursor.getDate()+1);
       }
@@ -4990,19 +4997,23 @@ function CalendarioEntregasRider(_ref_cal){
   const totalMes=useMemo(()=>{
     const anio=mesVisible.getFullYear();
     const mes=mesVisible.getMonth();
-    let total=0,dias=0;
+    let total=0,entregado=0,dias=0;
     Object.keys(conteoPorDia).forEach(k=>{
       const d=new Date(k+'T00:00:00');
-      if(d.getFullYear()===anio&&d.getMonth()===mes){total+=conteoPorDia[k];dias++;}
+      if(d.getFullYear()===anio&&d.getMonth()===mes){
+        total+=conteoPorDia[k].total;
+        entregado+=conteoPorDia[k].entregado;
+        if(conteoPorDia[k].total>0)dias++;
+      }
     });
-    return{total,dias};
+    return{total,entregado,dias,efectividad:total>0?entregado/total:0};
   },[conteoPorDia,mesVisible]);
 
-  function colorIntensidad(count){
-    if(count===0)return'rgba(255,255,255,0.03)';
-    const ratio=maxDia>0?count/maxDia:0;
-    const alpha=0.18+ratio*0.55;
-    return'rgba(200,168,75,'+alpha.toFixed(2)+')';
+  function colorEfectividad(total,entregado){
+    if(total===0)return{bg:'rgba(255,255,255,0.03)',border:'rgba(255,255,255,0.05)',texto:'rgba(255,255,255,0.4)'};
+    const ratio=entregado/total;
+    const c=barColor(ratio); // '#2e7d4f' / '#C8A84B' / '#b03030' — mismo criterio que el resto del sistema
+    return{bg:c+'26',border:c+'55',texto:c}; // 26/55 = alpha hex ~15%/33%
   }
 
   const nombresMes=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -5012,7 +5023,7 @@ function CalendarioEntregasRider(_ref_cal){
   return React.createElement('div',{style:{flex:1,overflowY:'auto',background:'var(--dark-deep)',color:'#fff',fontFamily:'DM Sans,sans-serif',paddingBottom:20}},
     React.createElement('div',{style:{background:'var(--dark)',padding:'16px',borderBottom:'2px solid var(--gold)',marginBottom:16}},
       React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:22,color:'var(--gold)',letterSpacing:2,marginBottom:2}},'MIS ENTREGAS'),
-      React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)',letterSpacing:1}},cargando?'Cargando historial...':'Calendario de entregas por día')
+      React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)',letterSpacing:1}},cargando?'Cargando historial...':'Entregadas / asignadas por día')
     ),
     React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 14px',marginBottom:14}},
       React.createElement('button',{onClick:()=>setMesVisible(m=>{const n=new Date(m);n.setMonth(n.getMonth()-1);return n;}),style:{background:'rgba(255,255,255,0.08)',border:'none',color:'var(--gold)',fontSize:18,width:38,height:38,borderRadius:10,cursor:'pointer'}},'‹'),
@@ -5021,32 +5032,38 @@ function CalendarioEntregasRider(_ref_cal){
     ),
     React.createElement('div',{style:{margin:'0 14px 16px',background:'linear-gradient(135deg,rgba(200,168,75,0.15),rgba(200,168,75,0.05))',border:'2px solid rgba(200,168,75,0.4)',borderRadius:14,padding:'16px 20px',display:'flex',justifyContent:'space-around',textAlign:'center'}},
       React.createElement('div',null,
-        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:32,color:'var(--gold)',lineHeight:1}},totalMes.total),
-        React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.5)',letterSpacing:1,marginTop:4,textTransform:'uppercase'}},'Entregas del mes')
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:28,color:'var(--gold)',lineHeight:1}},totalMes.entregado+'/'+totalMes.total),
+        React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.5)',letterSpacing:1,marginTop:4,textTransform:'uppercase'}},'Entregadas / mes')
       ),
       React.createElement('div',null,
-        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:32,color:'#fff',lineHeight:1}},totalMes.dias),
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:28,color:barColor(totalMes.efectividad),lineHeight:1}},pct(totalMes.efectividad)),
+        React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.5)',letterSpacing:1,marginTop:4,textTransform:'uppercase'}},'Efectividad')
+      ),
+      React.createElement('div',null,
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:28,color:'#fff',lineHeight:1}},totalMes.dias),
         React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.5)',letterSpacing:1,marginTop:4,textTransform:'uppercase'}},'Días trabajados')
-      ),
-      React.createElement('div',null,
-        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:32,color:'#fff',lineHeight:1}},totalMes.dias>0?Math.round(totalMes.total/totalMes.dias):0),
-        React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.5)',letterSpacing:1,marginTop:4,textTransform:'uppercase'}},'Promedio/día')
       )
     ),
     React.createElement('div',{style:{padding:'0 10px'}},
-      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr) 40px',gap:4,marginBottom:4}},
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr) 52px',gap:4,marginBottom:4}},
         diasSemana.map((d,i)=>React.createElement('div',{key:i,style:{textAlign:'center',fontSize:10,color:'rgba(255,255,255,0.4)',fontWeight:700,letterSpacing:1}},d)),
-        React.createElement('div',{style:{textAlign:'center',fontSize:9,color:'rgba(200,168,75,0.6)',fontWeight:700}},'TOT')
+        React.createElement('div',{style:{textAlign:'center',fontSize:9,color:'rgba(200,168,75,0.6)',fontWeight:700}},'SEMANA')
       ),
       semanas.map((semana,wi)=>{
-        const totalSemana=semana.reduce((a,d)=>a+d.count,0);
-        return React.createElement('div',{key:wi,style:{display:'grid',gridTemplateColumns:'repeat(7,1fr) 40px',gap:4,marginBottom:4}},
-          semana.map((dia,di)=>React.createElement('div',{key:di,onClick:dia.count>0?()=>setDiaSeleccionado(dia.fechaStr):undefined,style:{aspectRatio:'1',borderRadius:8,background:colorIntensidad(dia.count),border:dia.esHoy?'2px solid var(--gold)':'1px solid rgba(255,255,255,0.05)',opacity:dia.enMes?1:0.3,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:42,cursor:dia.count>0?'pointer':'default'}},
-            React.createElement('div',{style:{fontSize:10,color:dia.enMes?'rgba(255,255,255,0.5)':'rgba(255,255,255,0.25)',fontWeight:600}},dia.fecha.getDate()),
-            dia.count>0&&React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:15,color:dia.enMes?'#fff':'rgba(255,255,255,0.4)',lineHeight:1,marginTop:2}},dia.count)
-          )),
-          React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',borderRadius:8,background:totalSemana>0?'rgba(200,168,75,0.15)':'rgba(255,255,255,0.03)',border:'1px solid rgba(200,168,75,0.2)'}},
-            React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:15,color:'var(--gold)'}},totalSemana)
+        const totalSemana=semana.reduce((a,d)=>a+d.total,0);
+        const entregadoSemana=semana.reduce((a,d)=>a+d.entregado,0);
+        const efSemana=totalSemana>0?entregadoSemana/totalSemana:0;
+        return React.createElement('div',{key:wi,style:{display:'grid',gridTemplateColumns:'repeat(7,1fr) 52px',gap:4,marginBottom:4}},
+          semana.map((dia,di)=>{
+            const col=colorEfectividad(dia.total,dia.entregado);
+            return React.createElement('div',{key:di,onClick:dia.total>0?()=>setDiaSeleccionado(dia.fechaStr):undefined,style:{aspectRatio:'1',borderRadius:8,background:col.bg,border:dia.esHoy?'2px solid var(--gold)':'1px solid '+col.border,opacity:dia.enMes?1:0.3,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:46,cursor:dia.total>0?'pointer':'default'}},
+              React.createElement('div',{style:{fontSize:10,color:dia.enMes?'rgba(255,255,255,0.5)':'rgba(255,255,255,0.25)',fontWeight:600}},dia.fecha.getDate()),
+              dia.total>0&&React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:13,color:dia.enMes?col.texto:'rgba(255,255,255,0.4)',lineHeight:1,marginTop:2}},dia.entregado+'/'+dia.total)
+            );
+          }),
+          React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',borderRadius:8,background:totalSemana>0?barColor(efSemana)+'26':'rgba(255,255,255,0.03)',border:'1px solid '+(totalSemana>0?barColor(efSemana)+'55':'rgba(255,255,255,0.05)')}},
+            React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:13,color:totalSemana>0?barColor(efSemana):'rgba(255,255,255,0.3)',lineHeight:1}},entregadoSemana+'/'+totalSemana),
+            totalSemana>0&&React.createElement('div',{style:{fontSize:8,color:barColor(efSemana),marginTop:2,fontWeight:700}},pct(efSemana))
           )
         );
       })
@@ -5070,7 +5087,7 @@ function DiaDetalleModal(_ref_dd){
     React.createElement('div',{onClick:e=>e.stopPropagation(),style:{width:'100%',maxHeight:'85vh',overflowY:'auto',background:'linear-gradient(180deg,#232619,#14150e)',borderTop:'1px solid rgba(200,168,75,0.4)',borderRadius:'20px 20px 0 0',padding:'20px 16px calc(20px + env(safe-area-inset-bottom,0px))',boxShadow:'0 -10px 40px rgba(200,168,75,0.15)'}},
       React.createElement('div',{style:{width:40,height:4,background:'rgba(200,168,75,0.3)',borderRadius:2,margin:'0 auto 16px'}}),
       React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,color:'var(--gold)',letterSpacing:1.5,textTransform:'capitalize',marginBottom:2}},fechaFmt),
-      React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.4)',marginBottom:16}},entregas.length+' entrega'+(entregas.length===1?'':'s')+' este día · toca una para ver las fotos'),
+      React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.4)',marginBottom:16}},entregas.length+' envío'+(entregas.length===1?'':'s')+' asignado'+(entregas.length===1?'':'s')+' este día · toca uno para ver el detalle'),
       cargando&&React.createElement('div',{style:{textAlign:'center',padding:20,color:'rgba(255,255,255,0.4)',fontSize:12}},'Cargando detalle...'),
       !cargando&&entregas.map(function(e){
         const abierto=expandido===e.codigo;
@@ -5078,7 +5095,10 @@ function DiaDetalleModal(_ref_dd){
         return React.createElement('div',{key:e.codigo,style:{background:'rgba(255,255,255,0.04)',borderRadius:12,marginBottom:10,border:'1px solid rgba(200,168,75,0.15)',overflow:'hidden'}},
           React.createElement('button',{onClick:()=>setExpandido(abierto?null:e.codigo),style:{width:'100%',textAlign:'left',padding:'12px 14px',background:'none',border:'none',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}},
             React.createElement('div',{style:{flex:1,minWidth:0}},
-              React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:10,color:'var(--gold)',marginBottom:3}},e.codigo+(hora?' · '+hora:'')),
+              React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6,marginBottom:3}},
+                React.createElement('span',{style:{fontFamily:'JetBrains Mono',fontSize:10,color:'var(--gold)'}},e.codigo+(hora?' · '+hora:'')),
+                React.createElement('span',{style:{fontSize:9,fontWeight:700,padding:'1px 7px',borderRadius:10,background:estadoInfo(e.estado).color+'26',color:estadoInfo(e.estado).color}},estadoInfo(e.estado).label)
+              ),
               React.createElement('div',{style:{fontWeight:700,fontSize:14,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},e.destinatario||'—'),
               React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.5)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},(e.direccion||'—')+(e.comuna?', '+e.comuna:''))
             ),
