@@ -478,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786313340;
+window.__MODULES_VERSION=1786315233;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -6677,15 +6677,18 @@ useEffect(function(){
     const apellido=partes[1]||partes[0];
     // Traer todos los no-terminados y filtrar por nombre en JS para evitar bugs del .or() en Supabase
     const hoy=fechaHoyCL();
-    const hace2Dias=new Date();hace2Dias.setDate(hace2Dias.getDate()-2);
-    const inicioHoy=hace2Dias.toISOString();
-    // Pendientes: siempre visibles | Entregados/cancelados: actualizados hoy (no importa la fecha original del envío)
+    const inicioHoyDate=new Date();inicioHoyDate.setHours(0,0,0,0);
+    const inicioHoyISO=inicioHoyDate.toISOString();
+    // Pendientes / Cancelados / Siniestro: SIEMPRE visibles hasta que se resuelvan, sin importar cuantos dias pasen.
+    // Un cancelado o siniestro sigue fisicamente en poder del mensajero hasta que un admin confirme que volvio
+    // a bodega (estado "Retorno", solo lo puede poner un admin) - por eso no se ocultan solos, a diferencia de Entregado.
+    // Entregados: solo los de HOY - se limpian a las 12am (medianoche), no importa la hora exacta de la entrega.
     const [resPend,resHoy]=await Promise.all([
       db.from('envios').select('id,codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,fuente,peso,updated_at')
         .or('estado.eq.asignado,estado.eq.en_ruta,estado.eq.reprogramado,estado.eq.cancelado,estado.eq.siniestro')
         .ilike('mensajero','%'+primerNombre+'%').order('fecha',{ascending:false}).limit(500),
       db.from('envios').select('id,codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,fuente,peso,updated_at')
-        .gte('updated_at',inicioHoy).or('estado.eq.entregado,estado.eq.cancelado,estado.eq.siniestro,estado.eq.reprogramado,estado.eq.en_ruta').ilike('mensajero','%'+primerNombre+'%').order('fecha',{ascending:false}).limit(500)
+        .eq('estado','entregado').gte('updated_at',inicioHoyISO).ilike('mensajero','%'+primerNombre+'%').order('fecha',{ascending:false}).limit(500)
     ]);
     const error=resPend.error||resHoy.error;
     // Combinar sin duplicados
