@@ -478,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786308660;
+window.__MODULES_VERSION=1786310302;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7626,6 +7626,7 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios}){
         var totalPags=pdfDoc.numPages;
         setProgresoPDF('📄 PDF cargado · '+totalPags+' páginas · Extrayendo datos...');
         var enviosPDF=[];
+        var pendientesFotoPortal=[]; // {envioObj,dataUrlFoto} - se suben todas juntas en paralelo al final
         var NO_COMUNA=/^(RESIDENCIAL|FLEX|ANILLO|DISTRIBUIDOR|PUNTO|Pack|Venta|Envio|Avenida|Quilicura|Recorta|Color|Unidad|Led|ZONA|SECTOR|NORTE|SUR|ESTE|ORIENTE|PONIENTE|CENTRO)/i;
         for(var i=1;i<=totalPags;i++){
           if(i%10===0||i===1){setProgresoPDF('⚙ Procesando página '+i+' / '+totalPags+'...');await new Promise(function(r){setTimeout(r,0);});}
@@ -7669,18 +7670,28 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios}){
               }
             }
             if(!codigo)continue;
-            var foto_etiqueta=null;
+            var dataUrlFotoPortal=null;
             try{
               var vp=page.getViewport({scale:1.5});
               var cv=document.createElement('canvas');
               cv.width=vp.width;cv.height=vp.height;
               await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
-              foto_etiqueta=cv.toDataURL('image/jpeg',0.72);
+              dataUrlFotoPortal=cv.toDataURL('image/jpeg',0.72);
               cv.width=0;cv.height=0;
-              foto_etiqueta=await subirFotoStorage(foto_etiqueta,codigo,'etq','etiquetas');
             }catch(re){console.warn('Error render pág '+i,re);}
-            enviosPDF.push({codigo:codigo,destinatario:destinatario,direccion:direccion,comuna:comuna.toUpperCase(),referencia:referencia,telefono:'',monto:0,foto_etiqueta:foto_etiqueta});
+            var envioObjPortal={codigo:codigo,destinatario:destinatario,direccion:direccion,comuna:comuna.toUpperCase(),referencia:referencia,telefono:'',monto:0,foto_etiqueta:null};
+            enviosPDF.push(envioObjPortal);
+            if(dataUrlFotoPortal)pendientesFotoPortal.push({envioObj:envioObjPortal,dataUrlFoto:dataUrlFotoPortal});
           }catch(pe){console.warn('Error página '+i+':',pe.message);}
+        }
+        // Subir todas las fotos en paralelo (6 a la vez) en vez de una por una - mismo fix de rendimiento
+        // que se aplicó a Importar PDF de Colecta Admin.
+        if(pendientesFotoPortal.length>0){
+          setProgresoPDF('📤 Subiendo '+pendientesFotoPortal.length+' fotos de etiqueta...');
+          await procesarConcurrencia(pendientesFotoPortal,async function(item){
+            try{item.envioObj.foto_etiqueta=await subirFotoStorage(item.dataUrlFoto,item.envioObj.codigo,'etq','etiquetas');}
+            catch(re){console.warn('Error subiendo foto '+item.envioObj.codigo,re);}
+          },6);
         }
         setProcesandoPDF(false);setProgresoPDF('');
         if(!enviosPDF.length){setMsg('⚠ No se encontraron envíos en el PDF');return;}
@@ -7695,9 +7706,9 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios}){
     if(!previewPDF.length)return;
     setGuardando(true);setMsg('Procesando '+previewPDF.length+' envíos...');
     var creados=0;var errores=0;
-    for(var i=0;i<previewPDF.length;i++){
+    // Upserts en paralelo (8 a la vez) en vez de uno por uno - mismo fix de rendimiento que Importar PDF de Colecta Admin
+    await procesarConcurrencia(previewPDF,async function(r){
       try{
-        var r=previewPDF[i];
         var nuevo={codigo:r.codigo,cliente:nombreCliente,destinatario:r.destinatario,telefono:r.telefono,direccion:r.direccion,comuna:r.comuna,referencia:r.referencia,monto:r.monto,fecha:fechaHoyCL(),estado:'en_bodega',mensajero:'',nota:r.referencia?'Ref: '+r.referencia:'',fuente:'externo',foto_etiqueta:r.foto_etiqueta,historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:'PDF cargado por '+nombreCliente}]};
         await db.from('envios').upsert({codigo:nuevo.codigo,cliente:nuevo.cliente,destinatario:nuevo.destinatario,telefono:nuevo.telefono,direccion:nuevo.direccion,comuna:nuevo.comuna,referencia:nuevo.referencia,monto:nuevo.monto,fecha:nuevo.fecha,estado:nuevo.estado,mensajero:'',nota:nuevo.nota,fuente:'externo',foto_etiqueta:nuevo.foto_etiqueta},{onConflict:'codigo'});
         var local2=lsLoad('gestion_envios',[]);lsSave('gestion_envios',[nuevo,...local2]);
@@ -7705,7 +7716,7 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios}){
         setSeleccionados(function(p){return[...p,nuevo.codigo];});
         creados++;
       }catch(e){errores++;}
-    }
+    },8);
     var notifs2=JSON.parse(localStorage.getItem('transpgso_v2_notificaciones')||'[]');
     notifs2.unshift({id:Date.now(),tipo:'carga_pdf',cliente:nombreCliente,cantidad:creados,fecha:new Date().toISOString(),leida:false});
     localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifs2.slice(0,100)));
