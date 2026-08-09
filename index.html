@@ -478,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786306509;
+window.__MODULES_VERSION=1786308660;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -780,6 +780,22 @@ function conTimeout(promesa,ms,etiqueta){
     Promise.resolve(promesa),
     new Promise(function(_,rej){setTimeout(function(){rej(new Error('Tiempo agotado ('+ms+'ms): '+etiqueta));},ms);})
   ]);
+}
+// Ejecuta 'worker' sobre cada item de 'items' con un máximo de 'concurrencia' en paralelo a la vez
+// (en vez de uno por uno). Usado para no hacer 300 subidas/consultas secuenciales en importaciones grandes.
+function procesarConcurrencia(items,worker,concurrencia){
+  return new Promise(function(resolve){
+    var resultados=new Array(items.length);
+    var idx=0,activos=0,terminado=false;
+    function lanzarSiguiente(){
+      if(idx>=items.length){if(activos===0&&!terminado){terminado=true;resolve(resultados);}return;}
+      var miIdx=idx++;activos++;
+      Promise.resolve(worker(items[miIdx],miIdx)).then(function(r){resultados[miIdx]=r;},function(){resultados[miIdx]=null;}).then(function(){activos--;lanzarSiguiente();});
+    }
+    var n=Math.min(concurrencia,items.length)||0;
+    if(n===0){resolve(resultados);return;}
+    for(var w=0;w<n;w++)lanzarSiguiente();
+  });
 }
 async function subirFotoStorage(base64,codigo,tag,carpeta){
   try{
@@ -3088,6 +3104,7 @@ function ImportarPDFColecta(_ref_ipdf){
     var pdfDoc=await conTimeout(window.pdfjsLib.getDocument({data:arrayBuffer}).promise,30000,'cargar documento PDF');
     var totalPags=pdfDoc.numPages;
     var envios=[];
+    var pendientesFoto=[]; // {envioObj,dataUrl} - las fotos se suben todas juntas en paralelo al final, no una por una
     for(var i=1;i<=totalPags;i++){
       if(onProgress)onProgress(i,totalPags);
       try{
@@ -3106,11 +3123,22 @@ function ImportarPDFColecta(_ref_ipdf){
         });
         if(flexIdx>=0&&!comuna){for(var ci=flexIdx+1;ci<lineas.length&&ci<flexIdx+8;ci++){var c=lineas[ci]?lineas[ci].trim():'';if(!c)continue;var esMayus=c===c.toUpperCase()&&/[A-ZÁÉÍÓÚÑ]/.test(c);var esZona=/\s+(ESTE|NORTE|SUR|ORIENTE|PONIENTE|CENTRO|ANILLO)$/.test(c);if(esMayus&&c.length>3&&!NO_COMUNA.test(c)&&!esZona&&!/^\d/.test(c)){comuna=matchComuna(c);break;}}}
         if(codigo&&codigo.length>=8){
-          var foto_etiqueta=null;
-          try{var vp=page.getViewport({scale:1.5});var cv=document.createElement('canvas');cv.width=vp.width;cv.height=vp.height;await conTimeout(page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise,15000,'render p\u00e1g '+i);foto_etiqueta=cv.toDataURL('image/jpeg',0.72);cv.width=0;cv.height=0;foto_etiqueta=await subirFotoStorage(foto_etiqueta,codigo,'etq','etiquetas');}catch(re){console.warn('PDF Flex: foto p\u00e1g '+i+' omitida -',re.message);}
-          envios.push({codigo,cliente:clientePDF,destinatario,direccion,referencia,comuna,fecha:fechaHoyCL(),estado:'en_bodega',mensajero:'',monto:0,nota:referencia||'',fuente:'flex',telefono:'',foto_etiqueta,historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:'Importado desde PDF Flex'}]});
+          var dataUrlFoto=null;
+          try{var vp=page.getViewport({scale:1.5});var cv=document.createElement('canvas');cv.width=vp.width;cv.height=vp.height;await conTimeout(page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise,15000,'render p\u00e1g '+i);dataUrlFoto=cv.toDataURL('image/jpeg',0.72);cv.width=0;cv.height=0;}catch(re){console.warn('PDF Flex: foto p\u00e1g '+i+' omitida -',re.message);}
+          var envioObj={codigo,cliente:clientePDF,destinatario,direccion,referencia,comuna,fecha:fechaHoyCL(),estado:'en_bodega',mensajero:'',monto:0,nota:referencia||'',fuente:'flex',telefono:'',foto_etiqueta:null,historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:'Importado desde PDF Flex'}]};
+          envios.push(envioObj);
+          if(dataUrlFoto)pendientesFoto.push({envioObj,dataUrlFoto});
         }
       }catch(pe){console.warn('PDF Flex: p\u00e1gina '+i+' omitida -',pe.message);}
+    }
+    // Subir todas las fotos en paralelo (6 a la vez) en vez de una por una - esto era el cuello de botella
+    // real con PDFs grandes: 300 páginas = 300 subidas secuenciales de ~1-2s cada una = varios minutos.
+    if(pendientesFoto.length>0){
+      if(onProgress)onProgress(totalPags,totalPags);
+      await procesarConcurrencia(pendientesFoto,async function(item){
+        try{item.envioObj.foto_etiqueta=await subirFotoStorage(item.dataUrlFoto,item.envioObj.codigo,'etq','etiquetas');}
+        catch(re){console.warn('PDF Flex: subida foto '+item.envioObj.codigo+' omitida -',re.message);}
+      },6);
     }
     return envios;
   }
@@ -3132,37 +3160,38 @@ function ImportarPDFColecta(_ref_ipdf){
         for(var bi=0;bi<envios.length;bi+=BATCH){
           // Verificar cuáles ya existen
           var codigos=envios.slice(bi,bi+BATCH).map(function(env){return env.codigo;});
-          var existentes=new Set();
-          try{var _ex=await conTimeout(db.from('envios').select('codigo').in('codigo',codigos),20000,'verificar duplicados');if(_ex.data)_ex.data.forEach(function(r){existentes.add(r.codigo);});}catch(e){}
+          var existentesMap=new Map();
+          try{var _ex=await conTimeout(db.from('envios').select('codigo,comuna,destinatario,direccion,foto_etiqueta,fecha,estado').in('codigo',codigos),20000,'verificar duplicados');if(_ex.data)_ex.data.forEach(function(r){existentesMap.set(r.codigo,r);});}catch(e){}
+          var existentes=existentesMap;
           // Insertar nuevos
           var nuevos=envios.slice(bi,bi+BATCH).filter(function(env){return!existentes.has(env.codigo);}).map(function(env){return{codigo:env.codigo,cliente:env.cliente,destinatario:env.destinatario,telefono:env.telefono,direccion:env.direccion,comuna:env.comuna,referencia:env.referencia||'',fecha:env.fecha,estado:env.estado,mensajero:env.mensajero,monto:env.monto,en_un_cambio:false,nota:env.nota,fuente:env.fuente,foto_etiqueta:env.foto_etiqueta||null};});
           if(nuevos.length>0){try{await conTimeout(db.from('envios').insert(nuevos),20000,'insertar envios');}catch(ue){}}
-          // Actualizar existentes solo campos vacíos
+          // Actualizar existentes solo campos vacíos - ya tenemos sus datos del select de arriba,
+          // no hace falta leer de nuevo uno por uno. Las actualizaciones van en paralelo (8 a la vez).
           var existentesArr=envios.slice(bi,bi+BATCH).filter(function(env){return existentes.has(env.codigo);});
-          for(var ei=0;ei<existentesArr.length;ei++){
-            var env=existentesArr[ei];
+          await procesarConcurrencia(existentesArr,async function(env){
             try{
-              var _cur=await conTimeout(db.from('envios').select('comuna,destinatario,direccion,foto_etiqueta,fecha,estado').eq('codigo',env.codigo).single(),15000,'leer envio existente');
-              if(_cur.data){
+              var curData=existentesMap.get(env.codigo);
+              if(curData){
                 var upd={};
                 // MercadoLibre Flex reutiliza códigos de envíos antiguos ya cerrados (entregado/cancelado)
                 // para paquetes nuevos en otra fecha. Si la fecha del PDF no coincide con la guardada,
                 // es un paquete distinto reusando el código: se refresca todo y se reabre en bodega.
-                if(env.fecha&&_cur.data.fecha&&env.fecha!==_cur.data.fecha){
+                if(env.fecha&&curData.fecha&&env.fecha!==curData.fecha){
                   upd={cliente:env.cliente,destinatario:env.destinatario,telefono:env.telefono,direccion:env.direccion,
                     comuna:env.comuna,referencia:env.referencia||'',fecha:env.fecha,estado:'en_bodega',mensajero:'',
                     monto:env.monto,nota:env.nota,fuente:env.fuente};
                   if(env.foto_etiqueta)upd.foto_etiqueta=env.foto_etiqueta;
                 }else{
-                  if(!_cur.data.comuna&&env.comuna)upd.comuna=env.comuna;
-                  if(!_cur.data.destinatario&&env.destinatario)upd.destinatario=env.destinatario;
-                  if(!_cur.data.direccion&&env.direccion)upd.direccion=env.direccion;
-                  if(!_cur.data.foto_etiqueta&&env.foto_etiqueta)upd.foto_etiqueta=env.foto_etiqueta;
+                  if(!curData.comuna&&env.comuna)upd.comuna=env.comuna;
+                  if(!curData.destinatario&&env.destinatario)upd.destinatario=env.destinatario;
+                  if(!curData.direccion&&env.direccion)upd.direccion=env.direccion;
+                  if(!curData.foto_etiqueta&&env.foto_etiqueta)upd.foto_etiqueta=env.foto_etiqueta;
                 }
                 if(Object.keys(upd).length>0)await conTimeout(db.from('envios').update(upd).eq('codigo',env.codigo),15000,'actualizar envio existente');
               }
             }catch(ue){}
-          }
+          },8);
         }
         totalEnvios+=envios.length;
         var capturedAi=ai;var capturedTotal=envios.length;
