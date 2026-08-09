@@ -478,7 +478,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786290464;
+window.__MODULES_VERSION=1786300699;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -4609,10 +4609,11 @@ function ColectaRider(_ref_cr){
   if(showRetiroMasivo) return React.createElement(RetiroMasivoRider,{usuario:usuario,clientes:clientes,toast:toast,onClose:function(){setShowRetiroMasivo(false);}});
 if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
     React.createElement('div',{style:{background:'var(--dark)',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'2px solid var(--gold)',flexShrink:0}},
-      React.createElement('div',null,React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,color:'var(--gold)',letterSpacing:2}},'COLECTA'),React.createElement('button',{onClick:function(){setShowRetiroMasivo(true);},style:{fontSize:10,padding:'3px 10px',borderRadius:20,border:'1px solid rgba(200,168,75,0.5)',background:'rgba(200,168,75,0.1)',color:'var(--gold)',cursor:'pointer',fontWeight:700,letterSpacing:1,marginTop:4,display:'block'}},'🚛 RETIRO MASIVO')),
+      React.createElement('div',null,React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,color:'var(--gold)',letterSpacing:2}},'COLECTA')),
       React.createElement('button',{onClick:onClose,style:{background:'none',border:'1px solid rgba(255,255,255,0.2)',borderRadius:8,color:'rgba(255,255,255,0.6)',padding:'8px 14px',cursor:'pointer',fontSize:13}},'✕ Cerrar')
     ),
     React.createElement('div',{style:{flex:1,overflowY:'auto',padding:20}},
+      React.createElement('button',{onClick:function(){setShowRetiroMasivo(true);},style:{width:'100%',padding:'16px',borderRadius:10,border:'2px solid var(--gold)',background:'rgba(200,168,75,0.12)',color:'var(--gold)',cursor:'pointer',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,marginBottom:24,display:'flex',alignItems:'center',justifyContent:'center',gap:8}},'🚛 RETIRO MASIVO'),
       React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'rgba(255,255,255,0.4)',marginBottom:12}},'TURNO'),
       React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:24}},
         ['AM','PM'].map(t=>React.createElement('button',{key:t,onClick:()=>setTurno(t),style:{padding:'16px',borderRadius:10,border:'2px solid '+(turno===t?'var(--gold)':'rgba(255,255,255,0.1)'),background:turno===t?'rgba(200,168,75,0.12)':'rgba(255,255,255,0.04)',color:turno===t?'var(--gold)':'rgba(255,255,255,0.5)',fontFamily:'Bebas Neue',fontSize:22,letterSpacing:3,cursor:'pointer'}},t,' ',t==='AM'?'🌅':'🌆'))
