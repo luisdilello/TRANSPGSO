@@ -55,7 +55,7 @@ const _prodsCargado=useRef(false);
 React.useEffect(()=>{
   (async()=>{
     try{
-      const{data}=await db.from('configuracion').select('valor').eq('clave','productos_venta').single();
+      const{data}=await db.from('configuracion').select('valor').eq('clave','productos_venta').maybeSingle();
       if(data&&Array.isArray(data.valor)&&data.valor.length>0)setProductosLocal(data.valor);
     }catch(e){}
     _prodsCargado.current=true;
