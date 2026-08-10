@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786381850;
+window.__MODULES_VERSION=1786382218;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3044,9 +3044,9 @@ const ESTADOS_ENVIO=[
       .slabel{font-size:7px;color:#7a7d6a;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:3px;}
       @media print{
         body{background:#fff;padding:0;gap:0;display:block;}
-        .etiqueta{border:none;margin:0;width:100mm;height:150mm;min-height:150mm;page-break-after:always;page-break-inside:avoid;}
+        .etiqueta{border:none;margin:0;width:94mm;height:144mm;min-height:0;page-break-after:always;page-break-inside:avoid;}
         .etiqueta:last-child{page-break-after:auto;}
-        @page{size:100mm 150mm;margin:0;}
+        @page{size:100mm 150mm;margin:3mm;}
       }
     </style>
     </head><body>
@@ -8027,9 +8027,9 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios}){
       .slabel{font-size:7px;color:#7a7d6a;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:3px;}
       @media print{
         body{background:#fff;padding:0;gap:0;display:block;}
-        .etiqueta{border:none;margin:0;width:100mm;height:150mm;min-height:150mm;page-break-after:always;page-break-inside:avoid;}
+        .etiqueta{border:none;margin:0;width:94mm;height:144mm;min-height:0;page-break-after:always;page-break-inside:avoid;}
         .etiqueta:last-child{page-break-after:auto;}
-        @page{size:100mm 150mm;margin:0;}
+        @page{size:100mm 150mm;margin:3mm;}
       }
     </style>
     </head><body>
