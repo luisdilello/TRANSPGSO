@@ -473,6 +473,20 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 .cc-generate-btn{padding:15px 28px;border-radius:12px;border:none;font-weight:800;font-size:14px;letter-spacing:0.5px;cursor:pointer;background:linear-gradient(145deg,#d4b050,var(--gold),#a87d2a);color:var(--dark-deep);box-shadow:4px 6px 14px rgba(200,168,75,0.4),inset 0 1px 0 rgba(255,255,255,0.4);transition:all 0.2s;}
 .cc-generate-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:5px 10px 20px rgba(200,168,75,0.5),inset 0 1px 0 rgba(255,255,255,0.4);}
 .cc-generate-btn:disabled{cursor:default;opacity:0.6;}
+.cc-legend{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:16px;padding:10px 14px;background:rgba(43,46,32,0.03);border-radius:10px;font-size:11px;color:var(--text-mid);}
+.cc-legend-item{display:flex;align-items:center;gap:6px;}
+.cc-legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 2px rgba(255,255,255,0.6);}
+.cc-day.cobrado::after{content:'';position:absolute;inset:0;border-radius:14px;background-image:repeating-linear-gradient(135deg,rgba(43,46,32,0.05) 0 6px,transparent 6px 12px);pointer-events:none;}
+.cc-day-cobrado-badge{position:absolute;top:5px;left:6px;font-size:11px;z-index:1;filter:drop-shadow(0 1px 1px rgba(0,0,0,0.25));}
+.cc-week-total{display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Bebas Neue';color:var(--text-soft);font-size:15px;background:rgba(43,46,32,0.03);border-radius:10px;min-height:78px;}
+.cc-week-total span{font-size:8px;letter-spacing:1px;text-transform:uppercase;font-family:'DM Sans';font-weight:700;margin-top:2px;}
+.cc-recibos-toggle{padding:9px 18px;border-radius:22px;border:1px solid var(--border);background:linear-gradient(145deg,#fff,#f0e8d0);color:var(--text-mid);font-weight:800;font-size:11px;letter-spacing:0.5px;cursor:pointer;box-shadow:3px 3px 8px rgba(43,46,32,0.08);transition:all 0.2s;}
+.cc-recibos-toggle:hover{border-color:var(--gold);color:var(--gold);}
+.cc-recibos-panel{margin-top:14px;animation:slideUp 0.25s ease;}
+.cc-recibo-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-radius:12px;background:linear-gradient(145deg,#ffffff,#fdf6e8);border:1px solid rgba(200,168,75,0.15);margin-bottom:8px;transition:all 0.15s;}
+.cc-recibo-row:hover{border-color:rgba(200,168,75,0.4);transform:translateX(2px);}
+.cc-recibo-del{background:none;border:1px solid rgba(176,48,48,0.25);color:var(--danger);border-radius:8px;width:30px;height:30px;cursor:pointer;font-size:13px;flex-shrink:0;transition:all 0.15s;}
+.cc-recibo-del:hover{background:rgba(176,48,48,0.08);}
 </style>
 
 <style>
@@ -517,7 +531,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786324774;
+window.__MODULES_VERSION=1786328509;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1025,7 +1039,7 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
                       win.document.close();
 }
 function CalendarioCobros(_ref_cc){
-  let clientes=_ref_cc.clientes||[];
+  let clientes=_ref_cc.clientes||[],usuario=_ref_cc.usuario,toast=_ref_cc.toast||function(){};
   const clientesActivos=useMemo(()=>(clientes||[]).filter(c=>c.activo!==false).slice().sort((a,b)=>a.nombre.localeCompare(b.nombre)),[clientes]);
   const _ccS1=useState(''),clienteSel=_ccS1[0],setClienteSel=_ccS1[1];
   useEffect(()=>{if(!clienteSel&&clientesActivos.length>0)setClienteSel(clientesActivos[0].nombre);},[clientesActivos]);
@@ -1034,6 +1048,34 @@ function CalendarioCobros(_ref_cc){
   const _ccS4=useState(()=>{const d=new Date();d.setDate(1);d.setHours(0,0,0,0);return d;}),mesVisible=_ccS4[0],setMesVisible=_ccS4[1];
   const _ccS5=useState(()=>new Set()),diasSeleccionados=_ccS5[0],setDiasSeleccionados=_ccS5[1];
   const _ccS6=useState(false),generando=_ccS6[0],setGenerando=_ccS6[1];
+  const _ccS7=useState([]),recibosEmitidos=_ccS7[0],setRecibosEmitidos=_ccS7[1];
+  const _ccS8=useState(false),cargandoRecibos=_ccS8[0],setCargandoRecibos=_ccS8[1];
+  const _ccS9=useState(false),mostrarRecibos=_ccS9[0],setMostrarRecibos=_ccS9[1];
+
+  const diasCobrados=useMemo(()=>{
+    const set=new Set();
+    recibosEmitidos.forEach(r=>(r.dias||[]).forEach(d=>set.add(d)));
+    return set;
+  },[recibosEmitidos]);
+
+  function cargarRecibos(cliente){
+    if(!cliente){setRecibosEmitidos([]);return;}
+    setCargandoRecibos(true);
+    db.from('recibos_cobro').select('id,dias,periodo_label,total_envios,total_entregados,efectividad,generado_por,created_at')
+      .eq('cliente',cliente).order('created_at',{ascending:false}).then(function(res){
+        setRecibosEmitidos((res&&res.data)||[]);
+        setCargandoRecibos(false);
+      }).catch(function(){setRecibosEmitidos([]);setCargandoRecibos(false);});
+  }
+  useEffect(()=>{cargarRecibos(clienteSel);},[clienteSel]);
+
+  async function borrarRecibo(id){
+    try{
+      await db.from('recibos_cobro').delete().eq('id',id);
+      setRecibosEmitidos(prev=>prev.filter(r=>r.id!==id));
+      toast('✓ Recibo eliminado del historial');
+    }catch(e){toast('⚠ Error al eliminar: '+e.message);}
+  }
 
   useEffect(()=>{
     if(!clienteSel)return;
@@ -1072,9 +1114,12 @@ function CalendarioCobros(_ref_cc){
     const mapa={};
     envios.forEach(e=>{
       const key=fechaEnvio(e);
-      if(!mapa[key])mapa[key]={total:0,entregado:0};
+      if(!mapa[key])mapa[key]={total:0,entregado:0,reprogramado:0,cancelado:0,siniestro:0};
       mapa[key].total++;
       if(e.estado==='entregado')mapa[key].entregado++;
+      else if(e.estado==='reprogramado')mapa[key].reprogramado++;
+      else if(e.estado==='cancelado')mapa[key].cancelado++;
+      else if(e.estado==='siniestro')mapa[key].siniestro++;
     });
     return mapa;
   },[envios]);
@@ -1095,8 +1140,8 @@ function CalendarioCobros(_ref_cc){
       const semana=[];
       for(let i=0;i<7;i++){
         const fechaStr=localDateStr(cursor);
-        const d=conteoPorDia[fechaStr]||{total:0,entregado:0};
-        semana.push({fecha:new Date(cursor),fechaStr,enMes:cursor.getMonth()===mes,esHoy:fechaStr===hoyStr,total:d.total,entregado:d.entregado});
+        const d=conteoPorDia[fechaStr]||{total:0,entregado:0,reprogramado:0,cancelado:0,siniestro:0};
+        semana.push({fecha:new Date(cursor),fechaStr,enMes:cursor.getMonth()===mes,esHoy:fechaStr===hoyStr,total:d.total,entregado:d.entregado,reprogramado:d.reprogramado,cancelado:d.cancelado,siniestro:d.siniestro});
         cursor.setDate(cursor.getDate()+1);
       }
       semanasArr.push(semana);
@@ -1184,6 +1229,19 @@ function CalendarioCobros(_ref_cc){
         periodoLabel=diasOrdenados.length+' días seleccionados ('+diasOrdenados.map(fmtCorto).join(', ')+')';
       }
       await generarReciboCobro(clienteSel,enviosSel,periodoLabel,cliData);
+      try{
+        await db.from('recibos_cobro').insert({
+          cliente:clienteSel,
+          dias:diasOrdenados,
+          periodo_label:periodoLabel,
+          total_envios:resumenSeleccion.total,
+          total_entregados:resumenSeleccion.entregado,
+          efectividad:resumenSeleccion.efectividad,
+          generado_por:(usuario&&usuario.nombre)||'Super Admin'
+        });
+        cargarRecibos(clienteSel);
+        setDiasSeleccionados(new Set());
+      }catch(e2){console.warn('Error registrando recibo en historial:',e2.message);}
     }finally{
       setGenerando(false);
     }
@@ -1237,21 +1295,33 @@ function CalendarioCobros(_ref_cc){
       React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}},
         React.createElement('button',{className:'cc-quickbtn',onClick:seleccionarMes},'☑ Seleccionar mes completo'),
         React.createElement('button',{className:'cc-quickbtn',onClick:seleccionarUltimos15},'🕒 Últimos 15 días'),
-        diasSeleccionados.size>0&&React.createElement('button',{className:'cc-quickbtn clear',onClick:limpiarSeleccion},'✕ Limpiar selección ('+diasSeleccionados.size+')')
+        diasSeleccionados.size>0&&React.createElement('button',{className:'cc-quickbtn clear',onClick:limpiarSeleccion},'✕ Limpiar selección ('+diasSeleccionados.size+')'),
+        React.createElement('button',{className:'cc-recibos-toggle',onClick:()=>setMostrarRecibos(v=>!v)},(mostrarRecibos?'▲':'▼')+' 🧾 Recibos emitidos ('+recibosEmitidos.length+')')
       ),
-      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:6,marginBottom:6}},
-        diasSemana.map((d,i)=>React.createElement('div',{key:i,style:{textAlign:'center',fontSize:12,color:'var(--text-soft)',fontWeight:700,letterSpacing:1}},d))
+      React.createElement('div',{className:'cc-legend'},
+        React.createElement('div',{className:'cc-legend-item'},React.createElement('span',{className:'cc-legend-dot',style:{background:'#2e7d4f'}}),'Efectividad ≥ 95%'),
+        React.createElement('div',{className:'cc-legend-item'},React.createElement('span',{className:'cc-legend-dot',style:{background:'#C8A84B'}}),'≥ 85%'),
+        React.createElement('div',{className:'cc-legend-item'},React.createElement('span',{className:'cc-legend-dot',style:{background:'#b03030'}}),'< 85%'),
+        React.createElement('div',{className:'cc-legend-item'},'🧾','Ya incluido en un recibo'),
+        React.createElement('div',{className:'cc-legend-item'},'✓','Seleccionado')
+      ),
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr) 64px',gap:6,marginBottom:6}},
+        diasSemana.map((d,i)=>React.createElement('div',{key:i,style:{textAlign:'center',fontSize:12,color:'var(--text-soft)',fontWeight:700,letterSpacing:1}},d)),
+        React.createElement('div',{style:{textAlign:'center',fontSize:9,color:'var(--text-soft)',fontWeight:700,letterSpacing:1}},'SEM.')
       ),
       semanas.map((semana,wi)=>
-        React.createElement('div',{key:wi,style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:6,marginBottom:6}},
+        React.createElement('div',{key:wi,style:{display:'grid',gridTemplateColumns:'repeat(7,1fr) 64px',gap:6,marginBottom:6}},
           semana.map((dia,di)=>{
             const col=colorEfectividad(dia.total,dia.entregado);
             const sel=diasSeleccionados.has(dia.fechaStr);
             const tieneDatos=dia.total>0;
-            const claseDia='cc-day'+(tieneDatos?' has-data':'')+(dia.esHoy&&!sel?' today':'')+(sel?' selected':'');
+            const yaCobrado=diasCobrados.has(dia.fechaStr);
+            const claseDia='cc-day'+(tieneDatos?' has-data':'')+(dia.esHoy&&!sel?' today':'')+(sel?' selected':'')+(yaCobrado&&!sel?' cobrado':'');
+            const titulo=tieneDatos?(dia.fecha.toLocaleDateString('es-CL')+'\nTotal: '+dia.total+'\nEntregados: '+dia.entregado+'\nReprogramados: '+dia.reprogramado+'\nCancelados: '+dia.cancelado+(dia.siniestro?'\nSiniestros: '+dia.siniestro:'')+(yaCobrado?'\n🧾 Ya incluido en un recibo emitido':'')):undefined;
             return React.createElement('div',{
               key:di,
               className:claseDia,
+              title:titulo,
               onClick:tieneDatos?()=>toggleDia(dia.fechaStr):undefined,
               style:{
                 background:sel?'linear-gradient(145deg,#d4b050,var(--gold),#a87d2a)':(tieneDatos?'linear-gradient(145deg,'+col.texto+'26,'+col.texto+'0d)':'linear-gradient(145deg,#fff,var(--cream))'),
@@ -1261,14 +1331,32 @@ function CalendarioCobros(_ref_cc){
               }
             },
               sel&&React.createElement('div',{className:'cc-day-check'},'✓'),
+              yaCobrado&&!sel&&React.createElement('div',{className:'cc-day-cobrado-badge'},'🧾'),
               React.createElement('div',{className:'cc-daynum',style:{color:sel?'#fff':(dia.enMes?'var(--text-soft)':'rgba(0,0,0,0.2)')}},dia.fecha.getDate()),
               tieneDatos&&React.createElement('div',{className:'cc-daycount',style:{color:sel?'#fff':(dia.enMes?col.texto:'rgba(0,0,0,0.2)')}},dia.entregado+'/'+dia.total)
             );
-          })
+          }),
+          React.createElement('div',{className:'cc-week-total'},
+            semana.reduce((a,d)=>a+d.total,0),
+            React.createElement('span',null,'paq.')
+          )
         )
       ),
       cargando&&React.createElement('div',{style:{textAlign:'center',padding:20,color:'var(--text-soft)',fontSize:12}},'Cargando historial de '+clienteSel+'...'),
-      !cargando&&envios.length===0&&React.createElement('div',{style:{textAlign:'center',padding:'20px 30px',color:'var(--text-soft)',fontSize:12}},'Sin envíos registrados para este cliente.')
+      !cargando&&envios.length===0&&React.createElement('div',{style:{textAlign:'center',padding:'20px 30px',color:'var(--text-soft)',fontSize:12}},'Sin envíos registrados para este cliente.'),
+      mostrarRecibos&&React.createElement('div',{className:'cc-recibos-panel'},
+        cargandoRecibos&&React.createElement('div',{style:{textAlign:'center',padding:16,color:'var(--text-soft)',fontSize:12}},'Cargando recibos...'),
+        !cargandoRecibos&&recibosEmitidos.length===0&&React.createElement('div',{style:{textAlign:'center',padding:16,color:'var(--text-soft)',fontSize:12}},'Aún no se ha generado ningún recibo para '+clienteSel+'.'),
+        !cargandoRecibos&&recibosEmitidos.map(r=>React.createElement('div',{key:r.id,className:'cc-recibo-row'},
+          React.createElement('div',null,
+            React.createElement('div',{style:{fontWeight:700,fontSize:13,color:'var(--dark)'}},r.periodo_label||((r.dias||[]).length+' días')),
+            React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginTop:2}},
+              'Emitido '+new Date(r.created_at).toLocaleDateString('es-CL')+' por '+(r.generado_por||'—')+' · '+r.total_entregados+'/'+r.total_envios+' entregados · '+pct(r.efectividad||0)
+            )
+          ),
+          React.createElement('button',{className:'cc-recibo-del',onClick:()=>{if(confirm('¿Eliminar este recibo del historial? Los días quedarán marcados como no cobrados nuevamente.'))borrarRecibo(r.id);}},'🗑')
+        ))
+      )
     ),
     diasSeleccionados.size>0&&React.createElement('div',{className:'cc-selectionbar'},
       React.createElement('div',{style:{display:'flex',gap:26,flexWrap:'wrap'}},
@@ -8419,7 +8507,7 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
     tab:tab,setTab:irA
   }),
   puedeVer('cierre')&&/*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='cierre'?'active':''}`,onClick:()=>irA('cierre')},'Cierre Mes')
-),/*#__PURE__*/React.createElement("div",{className:"main"},tab==='dashboard'&&/*#__PURE__*/React.createElement(Dashboard,{kpi:kpiVista,mensajerosDia:mensajerosDiaVista,db:db,enviosLocales:enviosGestion,clientes:clientes}),tab==='envios'&&(gestionEnviosReady?/*#__PURE__*/React.createElement(GestionEnvios,{mensajeros:mensajeros,clientes:clientes,toast:toast,usuario:usuarioActivo,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Envios...")),tab==='consulta-express'&&(consultaExpressReady?/*#__PURE__*/React.createElement(ConsultaExpress,{toast:toast}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Consulta Express...")),tab==='importar'&&/*#__PURE__*/React.createElement(ImportarExcel,{mensajeros:mensajeros,setMensajeros:setMensajeros,setMensajerosDia:setMensajerosDia,setKpi:setKpi,toast:toast}),tab==='kpi-men'&&/*#__PURE__*/React.createElement(KpiMensajeros,{mensajerosDia:mensajerosDiaVista,setMensajerosDia:setMensajerosDia}),tab==='analitica'&&(analiticaReady?/*#__PURE__*/React.createElement(Analitica,null):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Analitica...")),puedeVer('etiquetas')&&tab==='etiquetas'&&/*#__PURE__*/React.createElement(Etiquetas,{clientes:clientes}),puedeVer('pagos')&&tab==='pagos'&&(pagosMensajerosReady?/*#__PURE__*/React.createElement(PagosMensajeros,{mensajeros:mensajeros,mensajerosDia:mensajerosDiaVista,esAdmin:perfil==null?void 0:perfil.esAdmin,toast:toast,clientes:clientes}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Pagos Mensajeros...")),puedeVer('colecta-admin')&&tab==='colecta-admin'&&(colectaAdminReady?React.createElement(ColectaAdmin,{clientes:clientes,mensajeros:mensajeros,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin,usuario:usuarioActivo}):React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Colecta Admin...")),puedeVer('cierre')&&tab==='cierre'&&(cierreMesReady?/*#__PURE__*/React.createElement(CierreMes,{clientes:clientes,mensajeros:mensajeros,esAdmin:perfil==null?void 0:perfil.esAdmin,toast:toast}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Cierre de Mes...")),puedeVer('usuarios')&&tab==='usuarios'&&(gestionUsuariosReady?/*#__PURE__*/React.createElement(GestionUsuarios,{toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Usuarios...")),puedeVer('clientes')&&tab==='clientes'&&(gestionClientesReady?/*#__PURE__*/React.createElement(GestionClientes,{clientes:clientes,setClientes:setClientes,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Clientes...")),puedeVer('mensajeros')&&tab==='mensajeros'&&(gestionMensajerosReady?/*#__PURE__*/React.createElement(GestionMensajeros,{mensajeros:mensajeros,setMensajeros:setMensajeros,mensajerosDia:mensajerosDiaVista,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Mensajeros...")),perfil!=null&&perfil.esSuperAdmin&&tab==='permisos'&&/*#__PURE__*/React.createElement(Permisos,{permisos:permisos,setPermisos:setPermisos,toast:toast}),perfil!=null&&perfil.esSuperAdmin&&tab==='calendario-cobros'&&/*#__PURE__*/React.createElement(CalendarioCobros,{clientes:clientes})),puedeVer('comunicados')&&tab==='comunicados'&&/*#__PURE__*/React.createElement(Comunicados,{mensajeros:mensajeros,toast:toast}),puedeVer('mapa-rutas')&&tab==='mapa-rutas'&&/*#__PURE__*/React.createElement(MapaRutas,{mensajeros:mensajeros,toast:toast,db:db,envios:enviosGestion||[]}),toastMsg&&/*#__PURE__*/React.createElement(Toast,{msg:toastMsg,onClose:()=>setToastMsg(null)}),showManifiesto&&/*#__PURE__*/React.createElement(ManifiestoExport,{mensajerosDia:mensajerosDiaVista,clientes:clientes,kpi:kpiVista,esAdmin:perfil==null?void 0:perfil.esAdmin,onClose:()=>setShowManifiesto(false)}));}
+),/*#__PURE__*/React.createElement("div",{className:"main"},tab==='dashboard'&&/*#__PURE__*/React.createElement(Dashboard,{kpi:kpiVista,mensajerosDia:mensajerosDiaVista,db:db,enviosLocales:enviosGestion,clientes:clientes}),tab==='envios'&&(gestionEnviosReady?/*#__PURE__*/React.createElement(GestionEnvios,{mensajeros:mensajeros,clientes:clientes,toast:toast,usuario:usuarioActivo,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Envios...")),tab==='consulta-express'&&(consultaExpressReady?/*#__PURE__*/React.createElement(ConsultaExpress,{toast:toast}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Consulta Express...")),tab==='importar'&&/*#__PURE__*/React.createElement(ImportarExcel,{mensajeros:mensajeros,setMensajeros:setMensajeros,setMensajerosDia:setMensajerosDia,setKpi:setKpi,toast:toast}),tab==='kpi-men'&&/*#__PURE__*/React.createElement(KpiMensajeros,{mensajerosDia:mensajerosDiaVista,setMensajerosDia:setMensajerosDia}),tab==='analitica'&&(analiticaReady?/*#__PURE__*/React.createElement(Analitica,null):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Analitica...")),puedeVer('etiquetas')&&tab==='etiquetas'&&/*#__PURE__*/React.createElement(Etiquetas,{clientes:clientes}),puedeVer('pagos')&&tab==='pagos'&&(pagosMensajerosReady?/*#__PURE__*/React.createElement(PagosMensajeros,{mensajeros:mensajeros,mensajerosDia:mensajerosDiaVista,esAdmin:perfil==null?void 0:perfil.esAdmin,toast:toast,clientes:clientes}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Pagos Mensajeros...")),puedeVer('colecta-admin')&&tab==='colecta-admin'&&(colectaAdminReady?React.createElement(ColectaAdmin,{clientes:clientes,mensajeros:mensajeros,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin,usuario:usuarioActivo}):React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Colecta Admin...")),puedeVer('cierre')&&tab==='cierre'&&(cierreMesReady?/*#__PURE__*/React.createElement(CierreMes,{clientes:clientes,mensajeros:mensajeros,esAdmin:perfil==null?void 0:perfil.esAdmin,toast:toast}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Cierre de Mes...")),puedeVer('usuarios')&&tab==='usuarios'&&(gestionUsuariosReady?/*#__PURE__*/React.createElement(GestionUsuarios,{toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Usuarios...")),puedeVer('clientes')&&tab==='clientes'&&(gestionClientesReady?/*#__PURE__*/React.createElement(GestionClientes,{clientes:clientes,setClientes:setClientes,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Clientes...")),puedeVer('mensajeros')&&tab==='mensajeros'&&(gestionMensajerosReady?/*#__PURE__*/React.createElement(GestionMensajeros,{mensajeros:mensajeros,setMensajeros:setMensajeros,mensajerosDia:mensajerosDiaVista,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Mensajeros...")),perfil!=null&&perfil.esSuperAdmin&&tab==='permisos'&&/*#__PURE__*/React.createElement(Permisos,{permisos:permisos,setPermisos:setPermisos,toast:toast}),perfil!=null&&perfil.esSuperAdmin&&tab==='calendario-cobros'&&/*#__PURE__*/React.createElement(CalendarioCobros,{clientes:clientes,usuario:usuarioActivo,toast:toast})),puedeVer('comunicados')&&tab==='comunicados'&&/*#__PURE__*/React.createElement(Comunicados,{mensajeros:mensajeros,toast:toast}),puedeVer('mapa-rutas')&&tab==='mapa-rutas'&&/*#__PURE__*/React.createElement(MapaRutas,{mensajeros:mensajeros,toast:toast,db:db,envios:enviosGestion||[]}),toastMsg&&/*#__PURE__*/React.createElement(Toast,{msg:toastMsg,onClose:()=>setToastMsg(null)}),showManifiesto&&/*#__PURE__*/React.createElement(ManifiestoExport,{mensajerosDia:mensajerosDiaVista,clientes:clientes,kpi:kpiVista,esAdmin:perfil==null?void 0:perfil.esAdmin,onClose:()=>setShowManifiesto(false)}));}
 // ══════════════════════════════════════════════════════════
 // MapaRutas v3 — fixes: persistencia, panel, dibujo
 // ══════════════════════════════════════════════════════════
