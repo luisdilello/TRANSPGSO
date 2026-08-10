@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786382507;
+window.__MODULES_VERSION=1786382968;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3922,12 +3922,12 @@ function RetiroMasivoRider(_ref_rm){
 
   async function iniciarScanner(){
     try{
-      var stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}});
-      if(videoRef.current){
-        videoRef.current.srcObject=stream;
-        await videoRef.current.play();
-      }
       if('BarcodeDetector' in window){
+        var stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}});
+        if(videoRef.current){
+          videoRef.current.srcObject=stream;
+          await videoRef.current.play();
+        }
         var det=new BarcodeDetector({formats:['qr_code','code_128','code_39','ean_13','ean_8','upc_a','upc_e','itf','data_matrix','pdf417']});
         var canvas=document.createElement('canvas');
         var timer=setInterval(async function(){
@@ -3948,9 +3948,14 @@ function RetiroMasivoRider(_ref_rm){
         },150);
         scannerRef.current={timer,stream};
       }else if(window.ZXing&&window.ZXing.BrowserMultiFormatReader){
-        // Fallback para iOS Safari que no tiene BarcodeDetector
+        // Fallback para iOS Safari: el nativo BarcodeDetector no existe o (en versiones nuevas
+        // de Safari) existe pero no detecta nada de forma confiable. Igual que en Colecta y
+        // Asignación, dejamos que ZXing maneje la cámara con decodeFromConstraints en vez de
+        // decodeFromVideoElement — con un stream ya adjunto de antemano, ZXing no siempre
+        // engancha bien los frames en iOS y el escáner se queda "mirando" sin detectar nada.
         var zxReader=new window.ZXing.BrowserMultiFormatReader(new Map(),{delayBetweenScanAttempts:200});
-        zxReader.decodeFromVideoElement(videoRef.current,function(result,err){
+        scannerRef.current={zxReader};
+        zxReader.decodeFromConstraints({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}},videoRef.current,function(result,err){
           if(!result||procesandoRef.current) return;
           procesandoRef.current=true;
           var raw=result.getText().trim();
@@ -3964,7 +3969,6 @@ function RetiroMasivoRider(_ref_rm){
           }
           setTimeout(function(){procesandoRef.current=false;},1200);
         });
-        scannerRef.current={zxReader,stream};
       }else{
         toast('⚠ Scanner no disponible en este dispositivo');
         detenerScanner();
