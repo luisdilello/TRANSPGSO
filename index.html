@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786396209;
+window.__MODULES_VERSION=1786396505;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -2978,7 +2978,12 @@ const ESTADOS_ENVIO=[
   // 'Retorno' — envío que volvió a la bodega correspondiente (tras cancelado/siniestro/etc).
   // Solo lo puede colocar un admin o super admin (ver filtro en modules/gestion-envios.js);
   // no está en ESTADOS_RIDER asi que un mensajero nunca lo ve ni lo puede tocar desde el celular.
-  {val:'retorno',label:'Retorno',color:'#7a5c1a',bg:'rgba(122,92,26,0.12)',icon:'↩️',soloAdmin:true}
+  {val:'retorno',label:'Retorno',color:'#7a5c1a',bg:'rgba(122,92,26,0.12)',icon:'↩️',soloAdmin:true},
+  // Paquete cancelado que ya está físicamente de vuelta en bodega — distingue este caso de un
+  // 'cancelado' que el mensajero aún trae consigo. Solo lo puede colocar personal administrativo
+  // (mismo mecanismo que 'retorno': no aparece en ESTADOS_RIDER, filtrado por soloAdmin en
+  // modules/gestion-envios.js).
+  {val:'en_bodega_cancelado',label:'En Bodega Cancelado',color:'#a15c1a',bg:'rgba(161,92,26,0.12)',icon:'📦❌',soloAdmin:true}
 ];function estadoInfo(val){return ESTADOS_ENVIO.find(e=>e.val===val)||ESTADOS_ENVIO[0];}function estadoBadge(val){const info=estadoInfo(val);return/*#__PURE__*/React.createElement("span",{style:{padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,letterSpacing:0.5,background:info.bg,color:info.color,whiteSpace:'nowrap'}},info.label);}function abrirVentanaEtiquetas(lista,logoSrc){const win=window.open('','_blank','width=500,height=700');const etiquetasHTML=lista.map(e=>{const qrData=`CODIGO:${e.codigo}|CLIENTE:${e.cliente}|DEST:${e.destinatario}|DIR:${e.direccion}|COM:${e.comuna}|TEL:${e.telefono}|MONTO:${e.monto||0}|COD:${e.enUnCambio?'SI':'NO'}`;return`
       <div class="etiqueta">
         <div class="hdr">
@@ -3755,10 +3760,13 @@ const ESTADO_FLUJO={
   'reprogramado':{siguientes:['en_ruta','entregado','cancelado'],label:'Reprogramado',icon:'📅',color:'#b07d10'},
   'entregado':   {siguientes:['en_bodega'],label:'Entregado',icon:'✅',color:'#2e7d4f',terminal:true},
   'siniestro':   {siguientes:['en_bodega','retorno'],label:'Siniestro',icon:'⚠️',color:'#b03030',terminal:true},
-  'cancelado':   {siguientes:['en_bodega','retorno'],label:'Cancelado', icon:'❌',color:'#b03030',terminal:true},
+  'cancelado':   {siguientes:['en_bodega','retorno','en_bodega_cancelado'],label:'Cancelado', icon:'❌',color:'#b03030',terminal:true},
   // Confirma que el paquete volvió físicamente a la bodega correspondiente. Solo admin/superadmin
   // lo puede asignar (no aparece en ESTADOS_RIDER ni en ningún flujo del mensajero).
   'retorno':     {siguientes:['en_bodega'],label:'Retorno',icon:'↩️',color:'#7a5c1a',terminal:true},
+  // Cancelado + ya está en bodega. Solo admin/superadmin lo puede asignar (no aparece en
+  // ESTADOS_RIDER ni en ningún flujo del mensajero).
+  'en_bodega_cancelado': {siguientes:['en_bodega'],label:'En Bodega Cancelado',icon:'📦❌',color:'#a15c1a',terminal:true},
 };
 function estadoEsTerminal(estado){return ESTADO_FLUJO[estado]?.terminal===true;}
 function estadoPermitido(actual,nuevo,esAdmin){
