@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786388569;
+window.__MODULES_VERSION=1786396209;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -5155,11 +5155,12 @@ function AsignacionRider(_ref_ar){
 
   if(finalizado){
     const rechazados=paquetes.filter(p=>p.estado==='rechazado');
+    const noEncontrados=paquetes.filter(p=>p.estado==='noexiste');
     return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif',alignItems:'center',padding:24,overflowY:'auto'}},
     React.createElement('div',{style:{fontSize:56,marginTop:20,marginBottom:12}},'🚴'),
     React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:26,color:'var(--gold)',letterSpacing:2,marginBottom:4}},'RUTA CARGADA'),
     React.createElement('div',{style:{fontSize:14,color:'rgba(255,255,255,0.5)',marginBottom:24}},'Listo para salir a entregar'),
-    React.createElement('div',{style:{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(200,168,75,0.2)',borderRadius:12,padding:20,marginBottom:rechazados.length>0?16:24,width:'100%',maxWidth:340}},
+    React.createElement('div',{style:{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(200,168,75,0.2)',borderRadius:12,padding:20,marginBottom:(rechazados.length>0||noEncontrados.length>0)?16:24,width:'100%',maxWidth:340}},
       React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:8,textAlign:'center'}},
         [{label:'En Ruta',val:paquetes.filter(p=>p.estado==='asignado').length,color:'var(--gold)'},{label:'Rechazados',val:rechazados.length,color:'#b03030'},{label:'No encontrados',val:paquetes.filter(p=>p.estado==='noexiste').length,color:'#b07d10'},{label:'Total',val:paquetes.length,color:'#fff'}].map((s,i)=>
           React.createElement('div',{key:i},React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:24,color:s.color}},s.val),React.createElement('div',{style:{fontSize:9,color:'rgba(255,255,255,0.4)'}},s.label))
@@ -5171,6 +5172,13 @@ function AsignacionRider(_ref_ar){
       rechazados.map((p,i)=>React.createElement('div',{key:i,style:{padding:'6px 0',borderTop:i>0?'1px solid rgba(255,255,255,0.08)':'none'}},
         React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:12,color:'#fff',fontWeight:700}},p.codigo),
         React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.6)',marginTop:1}},p.motivo)
+      ))
+    ),
+    noEncontrados.length>0&&React.createElement('div',{style:{background:'rgba(176,125,16,0.08)',border:'1px solid rgba(176,125,16,0.3)',borderRadius:12,padding:14,marginBottom:24,width:'100%',maxWidth:340}},
+      React.createElement('div',{style:{fontSize:11,fontWeight:700,color:'#e0b040',letterSpacing:1,textTransform:'uppercase',marginBottom:8}},'⚠ Código no registrado en el sistema'),
+      noEncontrados.map((p,i)=>React.createElement('div',{key:i,style:{padding:'6px 0',borderTop:i>0?'1px solid rgba(255,255,255,0.08)':'none'}},
+        React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:12,color:'#fff',fontWeight:700}},p.codigo),
+        React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.6)',marginTop:1}},'No existe ningún envío con este código')
       ))
     ),
     React.createElement('button',{onClick:onClose,style:{width:'100%',maxWidth:340,padding:'14px',borderRadius:10,border:'none',background:'linear-gradient(135deg,var(--gold),#a87d2a)',color:'var(--dark-deep)',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,cursor:'pointer',marginBottom:20}},'IR A MIS ENVÍOS')
