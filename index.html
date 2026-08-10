@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786374941;
+window.__MODULES_VERSION=1786378350;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3315,7 +3315,7 @@ function ImportarPDFColecta(_ref_ipdf){
           var mCod=l.match(/Envio[:\s]+(\d[\d\s]{5,})/i);if(mCod&&!codigo)codigo=mCod[1].replace(/\s+/g,'');
           if(/FLEX/i.test(l))flexIdx=idx;
           var mDir=l.match(/^Direcci[oó]n[:\s]+(.+)/i);if(mDir&&!direccion)direccion=mDir[1].trim();
-          var mRef=l.match(/^Referencia[:\s]+(.+)/i);if(mRef){var rv=mRef[1].replace(/^Referencia[:\s]*/i,'').trim();if(rv)referencia=referencia?referencia+' '+rv:rv;}
+          var mRef=l.match(/^Referencia[:\s]+(.+)/i);if(mRef){var rv=mRef[1].replace(/^Referencia[:\s]*/i,'').trim();if(rv&&referencia.indexOf(rv)===-1)referencia=referencia?referencia+' '+rv:rv;}
           var mDest=l.match(/^Destinatario[:\s]+(.+)/i);if(mDest&&!destinatario)destinatario=mDest[1].replace(/\([^)]*\)/g,'').trim();
         });
         if(flexIdx>=0&&!comuna){for(var ci=flexIdx+1;ci<lineas.length&&ci<flexIdx+8;ci++){var c=lineas[ci]?lineas[ci].trim():'';if(!c)continue;var esMayus=c===c.toUpperCase()&&/[A-ZÁÉÍÓÚÑ]/.test(c);var esZona=/\s+(ESTE|NORTE|SUR|ORIENTE|PONIENTE|CENTRO|ANILLO)$/.test(c);if(esMayus&&c.length>3&&!NO_COMUNA.test(c)&&!esZona&&!/^\d/.test(c)){comuna=matchComuna(c);break;}}}
