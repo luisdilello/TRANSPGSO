@@ -434,6 +434,45 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
   .tp-node{width:40px;height:40px;}
   .tp-node svg{width:17px;height:17px;}
 }
+
+/* ── CALENDARIO DE COBROS: rediseño con textura + numeros grandes ── */
+@keyframes ccPop{0%{transform:scale(0.6);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
+@keyframes ccRing{0%,100%{box-shadow:0 0 0 0 rgba(200,168,75,0.45)}50%{box-shadow:0 0 0 6px rgba(200,168,75,0)}}
+@keyframes ccFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.cc-panel{position:relative;overflow:hidden;background:linear-gradient(160deg,#ffffff 0%,#fdf6e8 60%,#faf0d8 100%);}
+.cc-panel::before{content:'';position:absolute;inset:0;background-image:radial-gradient(rgba(43,46,32,0.055) 1px,transparent 1px);background-size:15px 15px;opacity:0.7;pointer-events:none;}
+.cc-panel::after{content:'';position:absolute;top:-60px;right:-60px;width:220px;height:220px;background:radial-gradient(circle,rgba(200,168,75,0.16),transparent 70%);pointer-events:none;}
+.cc-panel>*{position:relative;z-index:1;}
+.cc-clientbar{display:flex;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wrap;background:linear-gradient(145deg,#ffffff,#fdf6e8);border:1px solid rgba(200,168,75,0.25);border-radius:16px;padding:12px 18px;box-shadow:5px 5px 14px rgba(43,46,32,0.08),-2px -2px 8px rgba(255,255,255,0.9);}
+.cc-avatar{width:42px;height:42px;border-radius:12px;background:linear-gradient(145deg,#3a3d2e,#2b2e20);color:var(--gold);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:16px;letter-spacing:1px;flex-shrink:0;box-shadow:3px 3px 8px rgba(43,46,32,0.25),inset 0 1px 0 rgba(255,255,255,0.08);}
+.cc-clientbar select{padding:10px 16px;border-radius:10px;border:1px solid var(--gold-border);background:linear-gradient(145deg,#fff,#fdf6e8);font-size:14px;font-weight:700;color:var(--dark);min-width:220px;cursor:pointer;box-shadow:inset 2px 2px 4px rgba(43,46,32,0.06);outline:none;}
+.cc-hero-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px;}
+@media (max-width:760px){.cc-hero-grid{grid-template-columns:1fr;}}
+.cc-hero-card{position:relative;border-radius:18px;padding:20px 20px 18px;overflow:hidden;box-shadow:6px 8px 18px rgba(43,46,32,0.14),-2px -2px 8px rgba(255,255,255,0.6);transition:transform 0.25s cubic-bezier(.2,.8,.2,1),box-shadow 0.25s;cursor:default;}
+.cc-hero-card:hover{transform:translateY(-4px);box-shadow:8px 14px 26px rgba(43,46,32,0.2),-2px -2px 8px rgba(255,255,255,0.6);}
+.cc-hero-card::before{content:'';position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,0.5) 1px,transparent 1px);background-size:12px 12px;opacity:0.35;pointer-events:none;}
+.cc-hero-icon{position:absolute;top:14px;right:16px;font-size:22px;opacity:0.85;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.15));animation:ccFloat 4s ease-in-out infinite;}
+.cc-hero-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:800;opacity:0.75;margin-bottom:6px;position:relative;z-index:1;}
+.cc-hero-num{font-family:'Bebas Neue';font-size:44px;line-height:1;letter-spacing:1px;position:relative;z-index:1;}
+.cc-hero-bar{margin-top:12px;height:5px;border-radius:3px;background:rgba(0,0,0,0.08);overflow:hidden;position:relative;z-index:1;}
+.cc-hero-bar>div{height:100%;border-radius:3px;transition:width 0.6s cubic-bezier(.2,.8,.2,1);}
+.cc-quickbtn{padding:9px 18px;border-radius:22px;border:1px solid var(--gold-border);background:linear-gradient(145deg,#fff,#fdf6e8);color:var(--gold);font-weight:800;font-size:11px;letter-spacing:0.5px;cursor:pointer;box-shadow:3px 3px 8px rgba(43,46,32,0.08);transition:all 0.2s;}
+.cc-quickbtn:hover{transform:translateY(-2px);box-shadow:4px 6px 12px rgba(200,168,75,0.25);border-color:var(--gold);}
+.cc-quickbtn.clear{color:var(--text-soft);border-color:var(--border);background:#fff;}
+.cc-day{aspect-ratio:1;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:68px;position:relative;transition:transform 0.18s cubic-bezier(.2,.8,.2,1),box-shadow 0.18s;}
+.cc-day.has-data{cursor:pointer;}
+.cc-day.has-data:hover{transform:translateY(-3px) scale(1.04);box-shadow:4px 8px 16px rgba(43,46,32,0.18);z-index:2;}
+.cc-day.today{animation:ccRing 2.4s ease-in-out infinite;}
+.cc-day.selected{animation:ccPop 0.3s ease;}
+.cc-day-check{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--dark-deep);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;box-shadow:2px 2px 6px rgba(0,0,0,0.3),0 0 0 2px #fff;}
+.cc-daynum{font-size:10px;font-weight:800;position:relative;z-index:1;}
+.cc-daycount{font-family:'Bebas Neue';font-size:19px;line-height:1;margin-top:3px;position:relative;z-index:1;}
+.cc-selectionbar{position:sticky;bottom:16px;margin-top:18px;background:rgba(255,255,255,0.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(200,168,75,0.4);border-radius:18px;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;box-shadow:0 10px 32px rgba(43,46,32,0.2);animation:slideUp 0.3s ease;}
+.cc-selectionbar-num{font-family:'Bebas Neue';font-size:30px;line-height:1;}
+.cc-selectionbar-label{font-size:9px;color:var(--text-soft);letter-spacing:1.5px;text-transform:uppercase;font-weight:700;margin-top:2px;}
+.cc-generate-btn{padding:15px 28px;border-radius:12px;border:none;font-weight:800;font-size:14px;letter-spacing:0.5px;cursor:pointer;background:linear-gradient(145deg,#d4b050,var(--gold),#a87d2a);color:var(--dark-deep);box-shadow:4px 6px 14px rgba(200,168,75,0.4),inset 0 1px 0 rgba(255,255,255,0.4);transition:all 0.2s;}
+.cc-generate-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:5px 10px 20px rgba(200,168,75,0.5),inset 0 1px 0 rgba(255,255,255,0.4);}
+.cc-generate-btn:disabled{cursor:default;opacity:0.6;}
 </style>
 
 <style>
@@ -478,7 +517,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786319115;
+window.__MODULES_VERSION=1786323830;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1153,64 +1192,77 @@ function CalendarioCobros(_ref_cc){
   const nombresMes=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const diasSemana=['L','M','M','J','V','S','D'];
   const esMesActual=mesVisible.getFullYear()===new Date().getFullYear()&&mesVisible.getMonth()===new Date().getMonth();
+  const diasEnMes=new Date(mesVisible.getFullYear(),mesVisible.getMonth()+1,0).getDate();
+  const efColor=barColor(totalMes.efectividad);
+  const iniciales=(clienteSel||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
 
   return React.createElement('div',null,
     React.createElement('div',{className:'section-head'},React.createElement('div',{className:'section-title'},'Calendario ',React.createElement('span',null,'de Cobros'))),
     React.createElement('div',{className:'info-banner'},'🔒 Solo visible para Super Admin. Marca los días que quieras cobrarle a un cliente (no tienen que ser seguidos) y genera un Recibo de Cobro consolidado con esos días.'),
-    React.createElement('div',{style:{display:'flex',gap:10,alignItems:'center',marginBottom:16,flexWrap:'wrap'}},
-      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:2,color:'var(--text-soft)'}},'CLIENTE:'),
-      React.createElement('select',{value:clienteSel,onChange:e=>setClienteSel(e.target.value),style:{padding:'8px 14px',borderRadius:8,border:'1px solid var(--gold)',fontSize:13,fontWeight:600,color:'var(--dark)',minWidth:220}},
-        clientesActivos.map(c=>React.createElement('option',{key:c.nombre,value:c.nombre},c.nombre))
+    React.createElement('div',{className:'cc-clientbar'},
+      React.createElement('div',{className:'cc-avatar'},iniciales),
+      React.createElement('div',null,
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:11,letterSpacing:2,color:'var(--text-soft)',marginBottom:4}},'CLIENTE SELECCIONADO'),
+        React.createElement('select',{value:clienteSel,onChange:e=>setClienteSel(e.target.value)},
+          clientesActivos.map(c=>React.createElement('option',{key:c.nombre,value:c.nombre},c.nombre))
+        )
       )
     ),
-    React.createElement('div',{className:'panel'},
-      React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 4px',marginBottom:14}},
+    React.createElement('div',{className:'cc-hero-grid'},
+      React.createElement('div',{className:'cc-hero-card',style:{background:'linear-gradient(160deg,rgba(200,168,75,0.22),rgba(200,168,75,0.05))',border:'1px solid rgba(200,168,75,0.3)'}},
+        React.createElement('div',{className:'cc-hero-icon'},'📦'),
+        React.createElement('div',{className:'cc-hero-label',style:{color:'var(--text-mid)'}},'Entregadas / mes'),
+        React.createElement('div',{className:'cc-hero-num',style:{color:'var(--dark-deep)'}},totalMes.entregado+'/'+totalMes.total),
+        React.createElement('div',{className:'cc-hero-bar'},React.createElement('div',{style:{width:(totalMes.total>0?totalMes.entregado/totalMes.total*100:0)+'%',background:'linear-gradient(90deg,var(--gold),#a87d2a)'}}))
+      ),
+      React.createElement('div',{className:'cc-hero-card',style:{background:'linear-gradient(160deg,'+efColor+'26,'+efColor+'0d)',border:'1px solid '+efColor+'55'}},
+        React.createElement('div',{className:'cc-hero-icon'},'🎯'),
+        React.createElement('div',{className:'cc-hero-label',style:{color:efColor}},'Efectividad'),
+        React.createElement('div',{className:'cc-hero-num',style:{color:efColor}},pct(totalMes.efectividad)),
+        React.createElement('div',{className:'cc-hero-bar'},React.createElement('div',{style:{width:(totalMes.efectividad*100)+'%',background:efColor}}))
+      ),
+      React.createElement('div',{className:'cc-hero-card',style:{background:'linear-gradient(160deg,#3a3d2e,#2b2e20)',border:'1px solid rgba(200,168,75,0.25)'}},
+        React.createElement('div',{className:'cc-hero-icon'},'📅'),
+        React.createElement('div',{className:'cc-hero-label',style:{color:'rgba(200,168,75,0.8)'}},'Días con movimiento'),
+        React.createElement('div',{className:'cc-hero-num',style:{color:'#fff'}},totalMes.dias),
+        React.createElement('div',{className:'cc-hero-bar',style:{background:'rgba(255,255,255,0.12)'}},React.createElement('div',{style:{width:(diasEnMes>0?totalMes.dias/diasEnMes*100:0)+'%',background:'var(--gold)'}}))
+      )
+    ),
+    React.createElement('div',{className:'cc-panel panel'},
+      React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 4px',marginBottom:16}},
         React.createElement('button',{onClick:()=>setMesVisible(m=>{const n=new Date(m);n.setMonth(n.getMonth()-1);return n;}),style:{background:'var(--cream)',border:'1px solid var(--border)',color:'var(--gold)',fontSize:18,width:38,height:38,borderRadius:10,cursor:'pointer'}},'‹'),
-        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1.5,color:'var(--dark)'}},nombresMes[mesVisible.getMonth()]+' '+mesVisible.getFullYear()),
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:2,color:'var(--dark)'}},nombresMes[mesVisible.getMonth()]+' '+mesVisible.getFullYear()),
         React.createElement('button',{onClick:()=>setMesVisible(m=>{const n=new Date(m);n.setMonth(n.getMonth()+1);return n;}),disabled:esMesActual,style:{background:'var(--cream)',border:'1px solid var(--border)',color:esMesActual?'rgba(200,168,75,0.3)':'var(--gold)',fontSize:18,width:38,height:38,borderRadius:10,cursor:esMesActual?'default':'pointer'}},'›')
       ),
-      React.createElement('div',{style:{display:'flex',justifyContent:'space-around',textAlign:'center',background:'rgba(200,168,75,0.08)',border:'1px solid rgba(200,168,75,0.3)',borderRadius:12,padding:'14px 18px',marginBottom:16}},
-        React.createElement('div',null,
-          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:24,color:'var(--gold)'}},totalMes.entregado+'/'+totalMes.total),
-          React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',letterSpacing:1,textTransform:'uppercase',marginTop:2}},'Entregadas / mes')
-        ),
-        React.createElement('div',null,
-          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:24,color:barColor(totalMes.efectividad)}},pct(totalMes.efectividad)),
-          React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',letterSpacing:1,textTransform:'uppercase',marginTop:2}},'Efectividad')
-        ),
-        React.createElement('div',null,
-          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:24,color:'var(--dark)'}},totalMes.dias),
-          React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',letterSpacing:1,textTransform:'uppercase',marginTop:2}},'Días con movimiento')
-        )
+      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}},
+        React.createElement('button',{className:'cc-quickbtn',onClick:seleccionarMes},'☑ Seleccionar mes completo'),
+        React.createElement('button',{className:'cc-quickbtn',onClick:seleccionarUltimos15},'🕒 Últimos 15 días'),
+        diasSeleccionados.size>0&&React.createElement('button',{className:'cc-quickbtn clear',onClick:limpiarSeleccion},'✕ Limpiar selección ('+diasSeleccionados.size+')')
       ),
-      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}},
-        React.createElement('button',{onClick:seleccionarMes,style:{padding:'6px 14px',borderRadius:20,border:'1px solid var(--gold)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',fontWeight:700,fontSize:11,cursor:'pointer'}},'Seleccionar mes completo'),
-        React.createElement('button',{onClick:seleccionarUltimos15,style:{padding:'6px 14px',borderRadius:20,border:'1px solid var(--gold)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',fontWeight:700,fontSize:11,cursor:'pointer'}},'Últimos 15 días'),
-        diasSeleccionados.size>0&&React.createElement('button',{onClick:limpiarSeleccion,style:{padding:'6px 14px',borderRadius:20,border:'1px solid var(--border)',background:'#fff',color:'var(--text-soft)',fontWeight:700,fontSize:11,cursor:'pointer'}},'✕ Limpiar selección ('+diasSeleccionados.size+')')
-      ),
-      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:4,marginBottom:4}},
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:6,marginBottom:6}},
         diasSemana.map((d,i)=>React.createElement('div',{key:i,style:{textAlign:'center',fontSize:10,color:'var(--text-soft)',fontWeight:700,letterSpacing:1}},d))
       ),
       semanas.map((semana,wi)=>
-        React.createElement('div',{key:wi,style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:4,marginBottom:4}},
+        React.createElement('div',{key:wi,style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:6,marginBottom:6}},
           semana.map((dia,di)=>{
             const col=colorEfectividad(dia.total,dia.entregado);
             const sel=diasSeleccionados.has(dia.fechaStr);
+            const tieneDatos=dia.total>0;
+            const claseDia='cc-day'+(tieneDatos?' has-data':'')+(dia.esHoy&&!sel?' today':'')+(sel?' selected':'');
             return React.createElement('div',{
               key:di,
-              onClick:dia.total>0?()=>toggleDia(dia.fechaStr):undefined,
+              className:claseDia,
+              onClick:tieneDatos?()=>toggleDia(dia.fechaStr):undefined,
               style:{
-                aspectRatio:'1',borderRadius:8,
-                background:sel?'var(--gold)':col.bg,
-                border:sel?'2px solid var(--dark)':(dia.esHoy?'2px solid var(--gold)':'1px solid '+col.border),
-                opacity:dia.enMes?1:0.3,
-                display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
-                minHeight:52,cursor:dia.total>0?'pointer':'default',position:'relative'
+                background:sel?'linear-gradient(145deg,#d4b050,var(--gold),#a87d2a)':(tieneDatos?'linear-gradient(145deg,'+col.texto+'26,'+col.texto+'0d)':'linear-gradient(145deg,#fff,var(--cream))'),
+                border:sel?'none':(dia.esHoy?'2px solid var(--gold)':'1px solid '+(tieneDatos?col.texto+'40':'var(--border)')),
+                boxShadow:sel?'3px 4px 12px rgba(200,168,75,0.45)':(tieneDatos?'2px 3px 8px rgba(43,46,32,0.06)':'inset 1px 1px 3px rgba(43,46,32,0.04)'),
+                opacity:dia.enMes?1:0.3
               }
             },
-              sel&&React.createElement('div',{style:{position:'absolute',top:3,right:4,fontSize:10,color:'#fff'}},'✓'),
-              React.createElement('div',{style:{fontSize:10,color:sel?'#fff':(dia.enMes?'var(--text-soft)':'rgba(0,0,0,0.2)'),fontWeight:600}},dia.fecha.getDate()),
-              dia.total>0&&React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:13,color:sel?'#fff':(dia.enMes?col.texto:'rgba(0,0,0,0.2)'),lineHeight:1,marginTop:2}},dia.entregado+'/'+dia.total)
+              sel&&React.createElement('div',{className:'cc-day-check'},'✓'),
+              React.createElement('div',{className:'cc-daynum',style:{color:sel?'#fff':(dia.enMes?'var(--text-soft)':'rgba(0,0,0,0.2)')}},dia.fecha.getDate()),
+              tieneDatos&&React.createElement('div',{className:'cc-daycount',style:{color:sel?'#fff':(dia.enMes?col.texto:'rgba(0,0,0,0.2)')}},dia.entregado+'/'+dia.total)
             );
           })
         )
@@ -1218,22 +1270,22 @@ function CalendarioCobros(_ref_cc){
       cargando&&React.createElement('div',{style:{textAlign:'center',padding:20,color:'var(--text-soft)',fontSize:12}},'Cargando historial de '+clienteSel+'...'),
       !cargando&&envios.length===0&&React.createElement('div',{style:{textAlign:'center',padding:'20px 30px',color:'var(--text-soft)',fontSize:12}},'Sin envíos registrados para este cliente.')
     ),
-    diasSeleccionados.size>0&&React.createElement('div',{style:{position:'sticky',bottom:16,marginTop:16,background:'#fff',border:'2px solid var(--gold)',borderRadius:14,padding:'16px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:16,flexWrap:'wrap',boxShadow:'0 6px 20px rgba(0,0,0,0.12)'}},
-      React.createElement('div',{style:{display:'flex',gap:20,flexWrap:'wrap'}},
+    diasSeleccionados.size>0&&React.createElement('div',{className:'cc-selectionbar'},
+      React.createElement('div',{style:{display:'flex',gap:26,flexWrap:'wrap'}},
         React.createElement('div',null,
-          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,color:'var(--dark)'}},diasSeleccionados.size),
-          React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)',letterSpacing:1,textTransform:'uppercase'}},'Días seleccionados')
+          React.createElement('div',{className:'cc-selectionbar-num',style:{color:'var(--dark)'}},diasSeleccionados.size),
+          React.createElement('div',{className:'cc-selectionbar-label'},'Días seleccionados')
         ),
         React.createElement('div',null,
-          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,color:'var(--gold)'}},resumenSeleccion.entregado+'/'+resumenSeleccion.total),
-          React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)',letterSpacing:1,textTransform:'uppercase'}},'Entregados / Recibidos')
+          React.createElement('div',{className:'cc-selectionbar-num',style:{color:'var(--gold)'}},resumenSeleccion.entregado+'/'+resumenSeleccion.total),
+          React.createElement('div',{className:'cc-selectionbar-label'},'Entregados / Recibidos')
         ),
         React.createElement('div',null,
-          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,color:barColor(resumenSeleccion.efectividad)}},pct(resumenSeleccion.efectividad)),
-          React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)',letterSpacing:1,textTransform:'uppercase'}},'Efectividad')
+          React.createElement('div',{className:'cc-selectionbar-num',style:{color:barColor(resumenSeleccion.efectividad)}},pct(resumenSeleccion.efectividad)),
+          React.createElement('div',{className:'cc-selectionbar-label'},'Efectividad')
         )
       ),
-      React.createElement('button',{onClick:generarRecibo,disabled:generando,style:{padding:'12px 24px',borderRadius:10,border:'none',background:generando?'var(--border)':'linear-gradient(135deg,var(--gold),#a87d2a)',color:generando?'var(--text-soft)':'#1a1d13',fontWeight:700,fontSize:13,cursor:generando?'default':'pointer',whiteSpace:'nowrap'}},generando?'Generando...':'📄 Generar Recibo de Cobro')
+      React.createElement('button',{className:'cc-generate-btn',onClick:generarRecibo,disabled:generando},generando?'Generando...':'📄 Generar Recibo de Cobro')
     )
   );
 }
