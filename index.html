@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786378350;
+window.__MODULES_VERSION=1786379187;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3310,21 +3310,36 @@ function ImportarPDFColecta(_ref_ipdf){
         var lineas=[],lastY=-1,linea='';
         tc.items.forEach(function(it){var y=Math.round(it.transform[5]);if(lastY!==-1&&Math.abs(y-lastY)>3){lineas.push(linea.trim());linea='';}linea+=it.str;lastY=y;});
         if(linea.trim())lineas.push(linea.trim());
-        var codigo='',destinatario='',direccion='',referencia='',comuna='',flexIdx=-1;
-        lineas.forEach(function(l,idx){
-          var mCod=l.match(/Envio[:\s]+(\d[\d\s]{5,})/i);if(mCod&&!codigo)codigo=mCod[1].replace(/\s+/g,'');
-          if(/FLEX/i.test(l))flexIdx=idx;
-          var mDir=l.match(/^Direcci[oó]n[:\s]+(.+)/i);if(mDir&&!direccion)direccion=mDir[1].trim();
-          var mRef=l.match(/^Referencia[:\s]+(.+)/i);if(mRef){var rv=mRef[1].replace(/^Referencia[:\s]*/i,'').trim();if(rv&&referencia.indexOf(rv)===-1)referencia=referencia?referencia+' '+rv:rv;}
-          var mDest=l.match(/^Destinatario[:\s]+(.+)/i);if(mDest&&!destinatario)destinatario=mDest[1].replace(/\([^)]*\)/g,'').trim();
+        // Una página puede traer 1, 2 o 3 etiquetas lado a lado (columnas). Cada línea que empieza
+        // un nuevo "Envio:" marca el inicio de una etiqueta distinta - partimos en bloques (uno por
+        // etiqueta) para no perder ni mezclar los datos de las columnas siguientes con la primera.
+        var bloques=[],bloqueActual=[];
+        lineas.forEach(function(l){
+          if(/Envio[:\s]+\d/i.test(l)&&bloqueActual.length>0){bloques.push(bloqueActual);bloqueActual=[];}
+          bloqueActual.push(l);
         });
-        if(flexIdx>=0&&!comuna){for(var ci=flexIdx+1;ci<lineas.length&&ci<flexIdx+8;ci++){var c=lineas[ci]?lineas[ci].trim():'';if(!c)continue;var esMayus=c===c.toUpperCase()&&/[A-ZÁÉÍÓÚÑ]/.test(c);var esZona=/\s+(ESTE|NORTE|SUR|ORIENTE|PONIENTE|CENTRO|ANILLO)$/.test(c);if(esMayus&&c.length>3&&!NO_COMUNA.test(c)&&!esZona&&!/^\d/.test(c)){comuna=matchComuna(c);break;}}}
-        if(codigo&&codigo.length>=8){
+        if(bloqueActual.length>0)bloques.push(bloqueActual);
+        var envioObjsPagina=[];
+        bloques.forEach(function(bloqueLineas){
+          var codigo='',destinatario='',direccion='',referencia='',comuna='',flexIdx=-1;
+          bloqueLineas.forEach(function(l,idx){
+            var mCod=l.match(/Envio[:\s]+(\d[\d\s]{5,})/i);if(mCod&&!codigo)codigo=mCod[1].replace(/\s+/g,'');
+            if(/FLEX/i.test(l))flexIdx=idx;
+            var mDir=l.match(/^Direcci[oó]n[:\s]+(.+)/i);if(mDir&&!direccion)direccion=mDir[1].trim();
+            var mRef=l.match(/^Referencia[:\s]+(.+)/i);if(mRef){var rv=mRef[1].replace(/^Referencia[:\s]*/i,'').trim();if(rv&&referencia.indexOf(rv)===-1)referencia=referencia?referencia+' '+rv:rv;}
+            var mDest=l.match(/^Destinatario[:\s]+(.+)/i);if(mDest&&!destinatario)destinatario=mDest[1].replace(/\([^)]*\)/g,'').trim();
+          });
+          if(flexIdx>=0&&!comuna){for(var ci=flexIdx+1;ci<bloqueLineas.length&&ci<flexIdx+8;ci++){var c=bloqueLineas[ci]?bloqueLineas[ci].trim():'';if(!c)continue;var esMayus=c===c.toUpperCase()&&/[A-ZÁÉÍÓÚÑ]/.test(c);var esZona=/\s+(ESTE|NORTE|SUR|ORIENTE|PONIENTE|CENTRO|ANILLO)$/.test(c);if(esMayus&&c.length>3&&!NO_COMUNA.test(c)&&!esZona&&!/^\d/.test(c)){comuna=matchComuna(c);break;}}}
+          if(codigo&&codigo.length>=8){
+            var envioObj={codigo,cliente:clientePDF,destinatario,direccion,referencia,comuna,fecha:fechaHoyCL(),estado:'en_bodega',mensajero:'',monto:0,nota:referencia||'',fuente:'flex',telefono:'',foto_etiqueta:null,historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:'Importado desde PDF Flex'}]};
+            envios.push(envioObj);
+            envioObjsPagina.push(envioObj);
+          }
+        });
+        if(envioObjsPagina.length>0){
           var dataUrlFoto=null;
           try{var vp=page.getViewport({scale:1.5});var cv=document.createElement('canvas');cv.width=vp.width;cv.height=vp.height;await conTimeout(page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise,15000,'render p\u00e1g '+i);dataUrlFoto=cv.toDataURL('image/jpeg',0.72);cv.width=0;cv.height=0;}catch(re){console.warn('PDF Flex: foto p\u00e1g '+i+' omitida -',re.message);}
-          var envioObj={codigo,cliente:clientePDF,destinatario,direccion,referencia,comuna,fecha:fechaHoyCL(),estado:'en_bodega',mensajero:'',monto:0,nota:referencia||'',fuente:'flex',telefono:'',foto_etiqueta:null,historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:'Importado desde PDF Flex'}]};
-          envios.push(envioObj);
-          if(dataUrlFoto)pendientesFoto.push({envioObj,dataUrlFoto});
+          if(dataUrlFoto)envioObjsPagina.forEach(function(eo){pendientesFoto.push({envioObj:eo,dataUrlFoto});});
         }
       }catch(pe){console.warn('PDF Flex: p\u00e1gina '+i+' omitida -',pe.message);}
     }
