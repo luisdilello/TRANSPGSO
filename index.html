@@ -459,14 +459,14 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 .cc-quickbtn{padding:9px 18px;border-radius:22px;border:1px solid var(--gold-border);background:linear-gradient(145deg,#fff,#fdf6e8);color:var(--gold);font-weight:800;font-size:11px;letter-spacing:0.5px;cursor:pointer;box-shadow:3px 3px 8px rgba(43,46,32,0.08);transition:all 0.2s;}
 .cc-quickbtn:hover{transform:translateY(-2px);box-shadow:4px 6px 12px rgba(200,168,75,0.25);border-color:var(--gold);}
 .cc-quickbtn.clear{color:var(--text-soft);border-color:var(--border);background:#fff;}
-.cc-day{aspect-ratio:1;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:68px;position:relative;transition:transform 0.18s cubic-bezier(.2,.8,.2,1),box-shadow 0.18s;}
+.cc-day{aspect-ratio:1;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:78px;position:relative;transition:transform 0.18s cubic-bezier(.2,.8,.2,1),box-shadow 0.18s;}
 .cc-day.has-data{cursor:pointer;}
 .cc-day.has-data:hover{transform:translateY(-3px) scale(1.04);box-shadow:4px 8px 16px rgba(43,46,32,0.18);z-index:2;}
 .cc-day.today{animation:ccRing 2.4s ease-in-out infinite;}
 .cc-day.selected{animation:ccPop 0.3s ease;}
-.cc-day-check{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--dark-deep);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;box-shadow:2px 2px 6px rgba(0,0,0,0.3),0 0 0 2px #fff;}
-.cc-daynum{font-size:10px;font-weight:800;position:relative;z-index:1;}
-.cc-daycount{font-family:'Bebas Neue';font-size:19px;line-height:1;margin-top:3px;position:relative;z-index:1;}
+.cc-day-check{position:absolute;top:-7px;right:-7px;width:23px;height:23px;border-radius:50%;background:var(--dark-deep);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;box-shadow:2px 2px 6px rgba(0,0,0,0.3),0 0 0 2px #fff;}
+.cc-daynum{font-size:13px;font-weight:800;position:relative;z-index:1;}
+.cc-daycount{font-family:'Bebas Neue';font-size:29px;line-height:1;margin-top:4px;position:relative;z-index:1;letter-spacing:0.5px;}
 .cc-selectionbar{position:sticky;bottom:16px;margin-top:18px;background:rgba(255,255,255,0.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(200,168,75,0.4);border-radius:18px;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;box-shadow:0 10px 32px rgba(43,46,32,0.2);animation:slideUp 0.3s ease;}
 .cc-selectionbar-num{font-family:'Bebas Neue';font-size:30px;line-height:1;}
 .cc-selectionbar-label{font-size:9px;color:var(--text-soft);letter-spacing:1.5px;text-transform:uppercase;font-weight:700;margin-top:2px;}
@@ -517,7 +517,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786323830;
+window.__MODULES_VERSION=1786324774;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1240,7 +1240,7 @@ function CalendarioCobros(_ref_cc){
         diasSeleccionados.size>0&&React.createElement('button',{className:'cc-quickbtn clear',onClick:limpiarSeleccion},'✕ Limpiar selección ('+diasSeleccionados.size+')')
       ),
       React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:6,marginBottom:6}},
-        diasSemana.map((d,i)=>React.createElement('div',{key:i,style:{textAlign:'center',fontSize:10,color:'var(--text-soft)',fontWeight:700,letterSpacing:1}},d))
+        diasSemana.map((d,i)=>React.createElement('div',{key:i,style:{textAlign:'center',fontSize:12,color:'var(--text-soft)',fontWeight:700,letterSpacing:1}},d))
       ),
       semanas.map((semana,wi)=>
         React.createElement('div',{key:wi,style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:6,marginBottom:6}},
