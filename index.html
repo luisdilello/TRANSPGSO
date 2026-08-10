@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786367688;
+window.__MODULES_VERSION=1786374941;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -4700,7 +4700,7 @@ function ColectaRider(_ref_cr){
         inserts.push({
           codigo:p.codigo,
           cliente:clienteNombre,
-          estado:'en_ruta',
+          estado:'en_bodega',
           fuente:'colecta_'+turno,
           mensajero:normNombre(usuario.nombre),
           destinatario:d.destinatario||'',
@@ -4722,7 +4722,7 @@ function ColectaRider(_ref_cr){
       try{
         const pActual=paquetes.find(pp=>pp.codigo===cod);
         const dActual=pActual?.datos||{};
-        const updateFields={estado:'en_ruta',mensajero:normNombre(usuario.nombre),fuente:'colecta_'+turno,actualizado_en:ts};
+        const updateFields={estado:'en_bodega',mensajero:normNombre(usuario.nombre),fuente:'colecta_'+turno,actualizado_en:ts};
         if(dActual.destinatario) updateFields.destinatario=dActual.destinatario;
         if(dActual.direccion) updateFields.direccion=dActual.direccion;
         if(dActual.telefono) updateFields.telefono=dActual.telefono;
@@ -4733,13 +4733,13 @@ function ColectaRider(_ref_cr){
         codigosUpdateOk.push(cod);
       }catch(e){ err++; }
     }
-    if(codigosUpdateOk.length>0)sbRegistrarHistorialLote(codigosUpdateOk,'en_ruta','Colecta '+turno+' (ya estaba en el sistema)',usuario.nombre,'app_mensajero');
+    if(codigosUpdateOk.length>0)sbRegistrarHistorialLote(codigosUpdateOk,'en_bodega','Colecta '+turno+' (ya estaba en el sistema)',usuario.nombre,'app_mensajero');
     // Bulk insert nuevos
     if(inserts.length>0){
       try{
         const {error}=await db.from('envios').insert(inserts);
         if(error){ console.error('Insert error:',error.message,error.details); err+=inserts.length; }
-        else{ok+=inserts.length;sbRegistrarHistorialLote(inserts.map(function(e){return e.codigo;}),'en_ruta','Colecta '+turno,usuario.nombre,'app_mensajero');}
+        else{ok+=inserts.length;sbRegistrarHistorialLote(inserts.map(function(e){return e.codigo;}),'en_bodega','Colecta '+turno,usuario.nombre,'app_mensajero');}
       }catch(e){ err+=inserts.length; }
     }
     // Actualizar estados locales
