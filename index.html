@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786381324;
+window.__MODULES_VERSION=1786381850;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3004,7 +3004,7 @@ const ESTADOS_ENVIO=[
           </div>
         </div>
         <div class="section-qr">
-          <div id="qr_${e.id}" class="qr-box" style="width:110px;height:110px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:8px;color:#b0a888;line-height:1.3;">${e.codigo}</div>
+          <div id="qr_${e.id}" class="qr-box" style="width:170px;height:170px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:8px;color:#b0a888;line-height:1.3;">${e.codigo}</div>
           <div style="flex:1">
             <div style="font-size:7px;color:#7a7d6a;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px">Escanea el QR para ver detalles</div>
             <div style="font-family:monospace;font-size:10px;letter-spacing:2px;color:#4a4d3a;text-align:center;font-weight:700;margin-top:2px">${e.codigo}</div>
@@ -3017,11 +3017,12 @@ const ESTADOS_ENVIO=[
         </div>
       </div>`;}).join('');const qrScripts=lista.map(e=>`
       try{
+        document.getElementById('qr_${e.id}').innerHTML='';
         new QRCode(document.getElementById('qr_${e.id}'),{
           text:'${JSON.stringify({codigo:e.codigo,destinatario:e.destinatario,direccion:e.direccion,comuna:e.comuna,cliente:e.cliente}).replace(/'/g,"\\'")}',
-          width:76,height:76,colorDark:'#2b2e20',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M
+          width:150,height:150,colorDark:'#2b2e20',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M
         });
-      }catch(err){document.getElementById('qr_${e.id}').innerHTML='<div style="width:76px;height:76px;background:#f0e8d0"></div>';}
+      }catch(err){document.getElementById('qr_${e.id}').innerHTML='<div style="width:150px;height:150px;background:#f0e8d0"></div>';}
     `).join('\n');win.document.write(`<!DOCTYPE html><html><head>
     <meta charset="UTF-8"/><title>Etiquetas TransPgso</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
@@ -3036,7 +3037,7 @@ const ESTADOS_ENVIO=[
       .cliente-bar{background:#C8A84B;padding:6px 13px;display:flex;justify-content:space-between;align-items:center;}
       .section-dest{padding:11px 13px;border-bottom:1px dashed #e0d8c0;}
       .section-dir{padding:9px 13px;border-bottom:1px dashed #e0d8c0;}
-      .section-qr{padding:9px 13px;display:flex;align-items:center;gap:13px;flex:1;}
+      .section-qr{padding:9px 13px;display:flex;align-items:flex-start;gap:16px;flex:1;}
       .qr-box{background:#fff;border:1px solid #e0d8c0;border-radius:5px;padding:3px;flex-shrink:0;}
       .barcode{font-family:monospace;font-size:22px;letter-spacing:-1px;color:#2b2e20;line-height:1;margin-bottom:3px;}
       .footer{background:#f9f5eb;border-top:1px solid #e0d8c0;padding:5px 13px;display:flex;justify-content:space-between;font-size:8px;color:#7a7d6a;}
@@ -7984,7 +7985,7 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios}){
           </div>
         </div>
         <div class="section-qr">
-          <div id="qr_${e.id}" class="qr-box" style="width:110px;height:110px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:8px;color:#b0a888;line-height:1.3;">${e.codigo}</div>
+          <div id="qr_${e.id}" class="qr-box" style="width:170px;height:170px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:8px;color:#b0a888;line-height:1.3;">${e.codigo}</div>
           <div style="flex:1">
             <div style="font-size:7px;color:#7a7d6a;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px">Escanea el QR para ver detalles</div>
             <div style="font-family:monospace;font-size:10px;letter-spacing:2px;color:#4a4d3a;text-align:center;font-weight:700;margin-top:2px">${e.codigo}</div>
@@ -7998,11 +7999,12 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios}){
       </div>`;}).join('');
     const qrScripts=lista.map(e=>`
       try{
+        document.getElementById('qr_${e.id}').innerHTML='';
         new QRCode(document.getElementById('qr_${e.id}'),{
           text:'${JSON.stringify({codigo:e.codigo,destinatario:e.destinatario,direccion:e.direccion,comuna:e.comuna,cliente:e.cliente}).replace(/'/g,"\\'")}',
-          width:76,height:76,colorDark:'#2b2e20',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M
+          width:150,height:150,colorDark:'#2b2e20',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M
         });
-      }catch(err){document.getElementById('qr_${e.id}').innerHTML='<div style="width:76px;height:76px;background:#f0e8d0"></div>';}
+      }catch(err){document.getElementById('qr_${e.id}').innerHTML='<div style="width:150px;height:150px;background:#f0e8d0"></div>';}
     `).join('\n');
     win.document.write(`<!DOCTYPE html><html><head>
     <meta charset="UTF-8"/><title>Etiquetas TransPgso</title>
@@ -8018,7 +8020,7 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios}){
       .cliente-bar{background:#C8A84B;padding:6px 13px;display:flex;justify-content:space-between;align-items:center;}
       .section-dest{padding:11px 13px;border-bottom:1px dashed #e0d8c0;}
       .section-dir{padding:9px 13px;border-bottom:1px dashed #e0d8c0;}
-      .section-qr{padding:9px 13px;display:flex;align-items:center;gap:13px;flex:1;}
+      .section-qr{padding:9px 13px;display:flex;align-items:flex-start;gap:16px;flex:1;}
       .qr-box{background:#fff;border:1px solid #e0d8c0;border-radius:5px;padding:3px;flex-shrink:0;}
       .barcode{font-family:monospace;font-size:22px;letter-spacing:-1px;color:#2b2e20;line-height:1;margin-bottom:3px;}
       .footer{background:#f9f5eb;border-top:1px solid #e0d8c0;padding:5px 13px;display:flex;justify-content:space-between;font-size:8px;color:#7a7d6a;}
