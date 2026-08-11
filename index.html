@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786481967;
+window.__MODULES_VERSION=1786482227;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -5515,42 +5515,29 @@ async function procesarCodigo(codigo){
   }
 }
 
-// Express: busca el paquete y, si está en un estado adquirible (en_bodega o en_ruta —
-// mismos estados que "Asignación"), lo toma directamente para este mensajero, igual que
-// escanearlo ahí. Cualquier mensajero puede tomar un paquete en bodega o reasignarse uno
-// que esté en ruta con otro (ej: se lo pasan a mano). Solo se bloquea y pide admin cuando
-// el estado es uno que requiere gestión administrativa (cancelado, reprogramado, siniestro,
-// en_bodega_cancelado, entregado, retorno).
+// Express: SOLO busca y redirige a la pantalla de gestión de un paquete que YA está
+// en la ruta de este mensajero (agiliza encontrar 1 de 50 sin tener que revisar la lista).
+// No adquiere, no reasigna ni cambia estado de nada — eso es trabajo exclusivo de "Asignación".
 async function procesarEnvioEncontrado(data,cod){
   const esMio=data.estado==='en_ruta'&&normNombre(data.mensajero||'')===normNombre(usuario.nombre);
-  if(esMio){
-    playSound('success');
-    setModo('ok');
-    setResultado({codigo:cod,envio:data});
-    onScanSuccess(data);
-    return;
-  }
-  if(!ESTADOS_ADQUIRIBLES_ESCANEO.includes(data.estado)){
+  if(!esMio){
     playSound('error');
     setModo('bloqueado');
-    setResultado({codigo:cod,msg:motivoNoAdquirible(data.estado,data.mensajero),envio:data});
+    // 'mensajero' queda escrito en el envío también cuando alguien lo recibe por Colecta
+    // (aunque el estado siga en_bodega, sin asignar a nadie todavía), así que solo decimos
+    // "está en ruta con X" cuando el estado REALMENTE es en_ruta; para cualquier otro caso
+    // (en_bodega u otro) mostramos el estado real y sugerimos usar "Asignación" para tomarlo.
+    const enRutaConOtro=data.estado==='en_ruta'&&data.mensajero&&normNombre(data.mensajero)!==normNombre(usuario.nombre);
+    const msg=enRutaConOtro
+      ?'Este paquete está en ruta con '+data.mensajero+'. Si es un error, avisa al administrador.'
+      :'Este paquete no está en tu ruta ('+(data.estado||'—')+'). Para tomarlo usa "Asignación".';
+    setResultado({codigo:cod,msg:msg,envio:data});
     return;
   }
-  // Adquirible: lo tomo para mí (mismo comportamiento que confirmarAsignacion en Asignación).
-  try{
-    const eraDeOtro=data.mensajero&&normNombre(data.mensajero)!==normNombre(usuario.nombre)&&data.estado==='en_ruta';
-    await db.from('envios').update({estado:'en_ruta',mensajero:usuario.nombre}).eq('codigo',data.codigo);
-    sbRegistrarHistorial(data.codigo,'en_ruta',eraDeOtro?'Reasignado por escaneo Express (antes: '+data.mensajero+')':'Auto-asignado por escaneo Express',usuario.nombre,'app_mensajero');
-    const env={...data,estado:'en_ruta',mensajero:usuario.nombre};
-    playSound('success');
-    setModo('ok');
-    setResultado({codigo:cod,envio:env});
-    onScanSuccess(env);
-  }catch(e){
-    playSound('error');
-    setModo('error');
-    setResultado({codigo:cod,msg:'Error de conexión al asignar: '+e.message});
-  }
+  playSound('success');
+  setModo('ok');
+  setResultado({codigo:cod,envio:data});
+  onScanSuccess(data);
 }
 
 function reiniciar(){
