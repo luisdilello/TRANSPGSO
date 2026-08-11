@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786457551;
+window.__MODULES_VERSION=1786458254;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3917,6 +3917,52 @@ function RetiroMasivoRider(_ref_rm){
   var linternaRef=useRef(false);
   var clientesActivos=(clientes||[]).filter(function(c){return c.activo!==false;});
 
+  // ── Sesión recuperable ──────────────────────────────────────────────
+  // Si la app se cierra, se cae o se pierde la señal a mitad de un Retiro Masivo,
+  // lo ya escaneado NO debe desaparecer: se guarda en localStorage a cada escaneo y,
+  // al volver a abrir Retiro Masivo, se ofrece continuar exactamente donde quedó.
+  var claveSesionRM='transpgso_sesion_retiromasivo_'+(usuario.nombre||'').toLowerCase().replace(/[^a-z0-9]/g,'_');
+  var _srm2=useState(function(){
+    try{
+      var g=JSON.parse(localStorage.getItem(claveSesionRM)||'null');
+      if(g&&Array.isArray(g.paquetes)&&g.paquetes.length>0) return g;
+    }catch(e){}
+    return null;
+  }),sesionRecuperableRM=_srm2[0],setSesionRecuperableRM=_srm2[1];
+
+  useEffect(function(){
+    if(sesionRecuperableRM) return; // esperando que el mensajero decida continuar o descartar
+    try{
+      if(paquetes.length>0){
+        var payload={ts:new Date().toISOString(),clienteSel:clienteSel,paquetes:paquetes};
+        try{
+          localStorage.setItem(claveSesionRM,JSON.stringify(payload));
+        }catch(eQuota){
+          // Sin espacio para las fotos — igual guardamos códigos y datos sin las imágenes.
+          // Lo más caro en tiempo/plata es volver a escanear todo, no volver a fotografiar.
+          try{
+            var liviano=paquetes.map(function(p){return Object.assign({},p,{foto:null});});
+            localStorage.setItem(claveSesionRM,JSON.stringify({ts:payload.ts,clienteSel:clienteSel,paquetes:liviano,sinFotos:true}));
+          }catch(eQuota2){}
+        }
+      }else{
+        localStorage.removeItem(claveSesionRM);
+      }
+    }catch(e){}
+  },[paquetes,clienteSel,sesionRecuperableRM]);
+
+  function continuarSesionRM(){
+    setClienteSel(sesionRecuperableRM.clienteSel);
+    setPaquetes(sesionRecuperableRM.paquetes);
+    codigosRef.current=new Set(sesionRecuperableRM.paquetes.map(function(p){return p.codigo;}));
+    setFase('escaneando');
+    setSesionRecuperableRM(null);
+  }
+  function descartarSesionRM(){
+    try{localStorage.removeItem(claveSesionRM);}catch(e){}
+    setSesionRecuperableRM(null);
+  }
+
   useEffect(function(){
     if(fase==='escaneando') iniciarScanner();
     return function(){ if(fase==='escaneando') detenerScanner(); };
@@ -4131,10 +4177,23 @@ function RetiroMasivoRider(_ref_rm){
       }
     });
     detenerScanner();
+    try{localStorage.removeItem(claveSesionRM);}catch(e){}
     setGuardando(false);
     setFase('resumen');
     toast('✓ '+ok+' paquetes registrados'+(err>0?' · '+err+' errores':''));
   }
+
+  // SESIÓN RECUPERABLE — se muestra antes que cualquier otra fase si hay escaneos sin confirmar
+  if(sesionRecuperableRM) return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:24,color:'#fff',fontFamily:'DM Sans,sans-serif'}},
+    React.createElement('div',{style:{fontSize:48,marginBottom:12}},'🚛'),
+    React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:22,color:'var(--gold)',letterSpacing:2,marginBottom:10,textAlign:'center'}},'RETIRO MASIVO SIN TERMINAR'),
+    React.createElement('div',{style:{fontSize:13,color:'rgba(255,255,255,0.6)',textAlign:'center',marginBottom:6,lineHeight:1.5,maxWidth:320}},'Quedaron '+sesionRecuperableRM.paquetes.length+' paquete'+(sesionRecuperableRM.paquetes.length!==1?'s':'')+' escaneado'+(sesionRecuperableRM.paquetes.length!==1?'s':'')+' sin confirmar de '+(sesionRecuperableRM.clienteSel&&sesionRecuperableRM.clienteSel.nombre?sesionRecuperableRM.clienteSel.nombre:'una sesión anterior')+'.'),
+    React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.35)',textAlign:'center',marginBottom:6}},'Última actividad: '+new Date(sesionRecuperableRM.ts).toLocaleString('es-CL')),
+    sesionRecuperableRM.sinFotos&&React.createElement('div',{style:{fontSize:11,color:'#e0b040',textAlign:'center',marginBottom:6,maxWidth:300}},'⚠ Las fotos de las etiquetas no se guardaron localmente — vuelve a fotografiarlas si es necesario.'),
+    React.createElement('div',{style:{height:16}}),
+    React.createElement('button',{onClick:continuarSesionRM,style:{width:'100%',maxWidth:320,padding:'15px',borderRadius:10,border:'none',background:'linear-gradient(135deg,var(--gold),#a87d2a)',color:'var(--dark-deep)',fontFamily:'Bebas Neue',fontSize:17,letterSpacing:2,cursor:'pointer',marginBottom:10}},'▶ CONTINUAR DONDE QUEDÉ'),
+    React.createElement('button',{onClick:descartarSesionRM,style:{width:'100%',maxWidth:320,padding:'13px',borderRadius:10,border:'1px solid rgba(255,255,255,0.2)',background:'transparent',color:'rgba(255,255,255,0.5)',fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1,cursor:'pointer'}},'🗑 DESCARTAR Y EMPEZAR DE NUEVO')
+  );
 
   // FASE SELECCIÓN CLIENTE
 if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
@@ -4378,6 +4437,43 @@ function ColectaRider(_ref_cr){
   const videoRef=useRef();
   const linternaRef=useRef(false);
   const [linternaOn,setLinternaOn]=useState(false);
+
+  // ── Sesión recuperable ──────────────────────────────────────────────
+  // Si la app se cierra, se cae o se pierde la señal a mitad de una Colecta (cámara o
+  // manual), lo ya escaneado NO debe desaparecer: se guarda en localStorage a cada escaneo
+  // y, al volver a abrir Colecta, se ofrece continuar exactamente donde quedó.
+  const claveSesionCol='transpgso_sesion_colecta_'+(usuario.nombre||'').toLowerCase().replace(/[^a-z0-9]/g,'_');
+  const _src=useState(function(){
+    try{
+      var g=JSON.parse(localStorage.getItem(claveSesionCol)||'null');
+      if(g&&Array.isArray(g.paquetes)&&g.paquetes.length>0) return g;
+    }catch(e){}
+    return null;
+  }),sesionRecuperableCol=_src[0],setSesionRecuperableCol=_src[1];
+
+  useEffect(function(){
+    if(sesionRecuperableCol) return; // esperando que el mensajero decida continuar o descartar
+    try{
+      if(paquetes.length>0){
+        localStorage.setItem(claveSesionCol,JSON.stringify({ts:new Date().toISOString(),turno:turno,clienteSel:clienteSel,paquetes:paquetes}));
+      }else{
+        localStorage.removeItem(claveSesionCol);
+      }
+    }catch(e){}
+  },[paquetes,turno,clienteSel,sesionRecuperableCol]);
+
+  function continuarSesionCol(){
+    setClienteSel(sesionRecuperableCol.clienteSel);
+    if(sesionRecuperableCol.turno) setTurno(sesionRecuperableCol.turno);
+    setPaquetes(sesionRecuperableCol.paquetes);
+    codigosRef.current=new Set(sesionRecuperableCol.paquetes.map(function(p){return p.codigo;}));
+    setFase('escaneo');
+    setSesionRecuperableCol(null);
+  }
+  function descartarSesionCol(){
+    try{localStorage.removeItem(claveSesionCol);}catch(e){}
+    setSesionRecuperableCol(null);
+  }
 
   async function toggleLinterna(){
     try{
@@ -4795,6 +4891,7 @@ function ColectaRider(_ref_cr){
     }
     // Actualizar estados locales
     setPaquetes(prev=>prev.map(p=>({...p,estado:bloqueadosSet.has(p.codigo)?'error':(err>0?'error':'ok'),motivo:bloqueadosSet.has(p.codigo)?'Requiere admin (no está en bodega/en ruta)':null})));
+    try{localStorage.removeItem(claveSesionCol);}catch(e){}
     setGuardando(false);
     playSound(bloqueados>0?'error':'success');
     setFase('resumen');
@@ -4803,6 +4900,15 @@ function ColectaRider(_ref_cr){
 
   const clientesActivos=(clientes||[]).filter(c=>c.activo!==false);
   const pendientes=paquetes.filter(p=>p.estado==='pendiente').length;
+
+  if(sesionRecuperableCol) return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:24,color:'#fff',fontFamily:'DM Sans,sans-serif'}},
+    React.createElement('div',{style:{fontSize:48,marginBottom:12}},'📦'),
+    React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:22,color:'var(--gold)',letterSpacing:2,marginBottom:10,textAlign:'center'}},'COLECTA SIN TERMINAR'),
+    React.createElement('div',{style:{fontSize:13,color:'rgba(255,255,255,0.6)',textAlign:'center',marginBottom:6,lineHeight:1.5,maxWidth:320}},'Quedaron '+sesionRecuperableCol.paquetes.length+' paquete'+(sesionRecuperableCol.paquetes.length!==1?'s':'')+' escaneado'+(sesionRecuperableCol.paquetes.length!==1?'s':'')+' sin confirmar de '+(sesionRecuperableCol.clienteSel&&sesionRecuperableCol.clienteSel.nombre?sesionRecuperableCol.clienteSel.nombre:'una sesión anterior')+(sesionRecuperableCol.turno?(' · Turno '+sesionRecuperableCol.turno):'')+'.'),
+    React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.35)',textAlign:'center',marginBottom:22}},'Última actividad: '+new Date(sesionRecuperableCol.ts).toLocaleString('es-CL')),
+    React.createElement('button',{onClick:continuarSesionCol,style:{width:'100%',maxWidth:320,padding:'15px',borderRadius:10,border:'none',background:'linear-gradient(135deg,var(--gold),#a87d2a)',color:'var(--dark-deep)',fontFamily:'Bebas Neue',fontSize:17,letterSpacing:2,cursor:'pointer',marginBottom:10}},'▶ CONTINUAR DONDE QUEDÉ'),
+    React.createElement('button',{onClick:descartarSesionCol,style:{width:'100%',maxWidth:320,padding:'13px',borderRadius:10,border:'1px solid rgba(255,255,255,0.2)',background:'transparent',color:'rgba(255,255,255,0.5)',fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1,cursor:'pointer'}},'🗑 DESCARTAR Y EMPEZAR DE NUEVO')
+  );
 
   if(fase==='galeria') return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif',overflowY:'auto'}},
     React.createElement('div',{style:{background:'var(--dark)',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'2px solid var(--gold)',flexShrink:0}},
