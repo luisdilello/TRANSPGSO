@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786458254;
+window.__MODULES_VERSION=1786458908;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3979,6 +3979,10 @@ function RetiroMasivoRider(_ref_rm){
       try{videoRef.current.srcObject.getTracks().forEach(function(t){t.stop()});}catch(e){}
       videoRef.current.srcObject=null;
     }
+    // El stream se cerró: el próximo arranca con la linterna apagada por hardware.
+    // Sincronizamos el botón para que no quede mostrando "encendida" en falso.
+    linternaRef.current=false;
+    setLinternaOn(false);
   }
 
   async function toggleLinterna(){
@@ -4542,6 +4546,10 @@ function ColectaRider(_ref_cr){
       try{videoRef.current.srcObject.getTracks().forEach(t=>t.stop());}catch(e){}
       videoRef.current.srcObject=null;
     }
+    // El stream se cerró: el próximo arranca con la linterna apagada por hardware.
+    // Sincronizamos el botón para que no quede mostrando "encendida" en falso.
+    linternaRef.current=false;
+    setLinternaOn(false);
   }
 
   function escaneado(raw){
@@ -5188,6 +5196,10 @@ function AsignacionRider(_ref_ar){
       try{videoRef.current.srcObject.getTracks().forEach(t=>t.stop());}catch(e){}
       videoRef.current.srcObject=null;
     }
+    // El stream se cerró: el próximo arranca con la linterna apagada por hardware.
+    // Sincronizamos el botón para que no quede mostrando "encendida" en falso.
+    linternaAsigRef.current=false;
+    setLinternaAsigOn(false);
   }
 
   function escaneadoAsig(raw){
@@ -5463,6 +5475,10 @@ function detenerScanner(){
     try{videoRef.current.srcObject.getTracks().forEach(t=>t.stop());}catch(e){}
     videoRef.current.srcObject=null;
   }
+  // El stream se cerró: el próximo arranca con la linterna apagada por hardware.
+  // Sincronizamos el botón para que no quede mostrando "encendida" en falso.
+  lintScanRef.current=false;
+  setLintScanOn(false);
 }
 
 async function procesarCodigo(codigo){
@@ -5512,6 +5528,7 @@ async function procesarEnvioEncontrado(data,cod){
 }
 
 function reiniciar(){
+  detenerScanner();
   procesandoRef.current=false;
   setResultado(null);
   setManualCode('');
@@ -7203,6 +7220,7 @@ const _useShowCamEA=useState(false),showCamara=_useShowCamEA[0],setShowCamara=_u
 const videoRefCamEA=React.useRef(null);
 const streamRefCamEA=React.useRef(null);
 const _useCamCountEA=useState(0),fotosSesion=_useCamCountEA[0],setFotosSesion=_useCamCountEA[1];
+const fotosSesionRefEA=React.useRef(0);
 const _useCamErrEA=useState(''),errorCamara=_useCamErrEA[0],setErrorCamara=_useCamErrEA[1];
 const _useLintEA=useState(false),linternaOn=_useLintEA[0],setLinternaOn=_useLintEA[1];
 const _useVideoEA=useState(null),videoGrabado=_useVideoEA[0],setVideoGrabado=_useVideoEA[1];
@@ -7220,6 +7238,7 @@ async function abrirCamaraPropia(){
   try{
     const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
     streamRefCamEA.current=stream;
+    fotosSesionRefEA.current=0;
     setFotosSesion(0);
     setShowCamara(true);
     setTimeout(()=>{if(videoRefCamEA.current)videoRefCamEA.current.srcObject=stream;},50);
@@ -7258,9 +7277,14 @@ function dispararFoto(){
   canvas.height=Math.round(video.videoHeight*scale);
   canvas.getContext('2d').drawImage(video,0,0,canvas.width,canvas.height);
   const b64=canvas.toDataURL('image/jpeg',0.65);
+  // Índice sincrónico por ref: dos disparos seguidos (doble tap, dedo rápido) NUNCA
+  // deben recibir el mismo número — si lo tuvieran, Chrome intenta descargar dos veces
+  // el mismo nombre de archivo y muestra el diálogo "¿Deseas volver a descargar?",
+  // interrumpiendo al mensajero en medio de la entrega.
+  const idxFoto=++fotosSesionRefEA.current;
   setFotos(prev=>[...prev,{data:b64}]);
-  setFotosSesion(n=>n+1);
-  guardarFotoEnDispositivo(b64,fotosSesion+1);
+  setFotosSesion(idxFoto);
+  guardarFotoEnDispositivo(b64,idxFoto);
 }
 
 // ── Grabacion de video corto (respaldo de entrega, prueba) ──
