@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786486717;
+window.__MODULES_VERSION=1786487522;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7680,11 +7680,13 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
           var res=await db.from('envios').select('codigo,destinatario,direccion,comuna,estado,fecha,lat,lng').eq('cliente',nombreCliente).neq('estado','eliminado').range(offset,offset+bloque-1);
           if(res.error||!res.data||res.data.length===0)break;
           acumulado=acumulado.concat(res.data);
+          // Se pinta el mapa apenas llega el primer bloque en vez de esperar todos los bloques,
+          // igual que en cargarEnviosCliente, para clientes con miles de envíos.
+          if(!cancelado)setEnvios(acumulado.slice());
           if(res.data.length<bloque)break;
           offset+=bloque;
           if(offset>=50000)break;
         }
-        if(!cancelado)setEnvios(acumulado);
       }catch(e){}
     }
     cargar();
@@ -7817,27 +7819,35 @@ function PortalCliente({usuario,onLogout}){
     // ni forma de reintentar. Ahora 'loading' solo se apaga cuando la consulta real termina,
     // y si falla se muestra un aviso con botón para reintentar en vez de una lista vacía falsa.
     //
-    // Además: un solo select('*') sin paginar se trunca server-side en Supabase (tope PostgREST)
-    // apenas el cliente supera ~1000 envíos históricos, mostrando un total incompleto sin avisar
-    // (mismo problema ya resuelto en el Dashboard admin). Se pagina en bloques de 1000 para
-    // traer siempre el histórico completo del cliente.
+    // Un solo select('*') sin paginar se trunca server-side en Supabase (tope PostgREST) apenas
+    // el cliente supera ~1000 envíos históricos, mostrando un total incompleto sin avisar (mismo
+    // problema ya resuelto en el Dashboard admin). Se pagina en bloques de 1000 para traer siempre
+    // el histórico completo del cliente, PERO mostrando la pantalla apenas llega el primer bloque
+    // (setEnvios/setLoading por bloque) en vez de esperar a que terminen todos los bloques — para
+    // clientes con miles de envíos (ej. MR SHENG, +1000) esto evita que la entrada al portal se
+    // sienta lenta esperando 2-3 vueltas de red antes de mostrar nada.
+    // Tampoco se trae 'fotos_entrega' aquí: no se usa en ningún listado, solo en el detalle de un
+    // envío puntual (FotosEntregaConRecarga ya la trae fresca por su cuenta al abrir el modal),
+    // así que pedirla para el histórico completo era peso muerto en cada carga.
     try{
-      var acumulado=[];var offset=0;var bloque=1000;
+      var acumulado=[];var offset=0;var bloque=1000;var primero=true;
+      var cols='id,codigo,cliente,destinatario,telefono,direccion,comuna,fecha,estado,mensajero,monto,nota,foto_etiqueta,created_at';
       while(true){
-        var res=await db.from('envios').select('*').eq('cliente',nombreCliente).range(offset,offset+bloque-1);
+        var res=await db.from('envios').select(cols).eq('cliente',nombreCliente).range(offset,offset+bloque-1);
         if(res.error){
           console.warn('Error cargando envíos del cliente:',res.error.message);
-          setFetchError(true);
+          if(primero)setFetchError(true);
           break;
         }
         if(!res.data||res.data.length===0)break;
         acumulado=acumulado.concat(res.data);
+        var sb=acumulado.map(function(e){return{id:e.id,codigo:e.codigo,cliente:e.cliente,destinatario:e.destinatario,telefono:e.telefono,direccion:e.direccion,comuna:e.comuna,fecha:e.fecha,estado:e.estado,mensajero:e.mensajero,monto:e.monto,nota:e.nota,foto_etiqueta:e.foto_etiqueta,historial:[{fecha:e.created_at,estado:e.estado,nota:'Cargado'}]};});
+        setEnvios(sb);
+        if(primero){setLoading(false);primero=false;}
         if(res.data.length<bloque)break;
         offset+=bloque;
         if(offset>=50000)break;
       }
-      var sb=acumulado.map(function(e){return{id:e.id,codigo:e.codigo,cliente:e.cliente,destinatario:e.destinatario,telefono:e.telefono,direccion:e.direccion,comuna:e.comuna,fecha:e.fecha,estado:e.estado,mensajero:e.mensajero,monto:e.monto,nota:e.nota,foto_etiqueta:e.foto_etiqueta,fotos_entrega:e.fotos_entrega,historial:[{fecha:e.created_at,estado:e.estado,nota:'Cargado'}]};});
-      setEnvios(sb);
     }catch(err){
       console.warn('Error de conexión cargando envíos del cliente:',err&&err.message);
       setFetchError(true);
