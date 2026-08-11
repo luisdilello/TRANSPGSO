@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786485345;
+window.__MODULES_VERSION=1786486165;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7561,8 +7561,79 @@ avisoFotos&&React.createElement("div",{style:{marginTop:8,padding:'10px 14px',ba
 var UMBRAL_ATRASO_DIAS=2; // dias en 'en_ruta' antes de marcar el envio como atrasado
 function diasDesdeFecha(fechaStr){if(!fechaStr)return 0;try{var f=new Date(fechaStr+'T00:00:00');var hoy=new Date(fechaHoyCL()+'T00:00:00');return Math.round((hoy-f)/86400000);}catch(e){return 0;}}
 function esEnvioAtrasado(e){if(!e)return false;return e.estado==='en_ruta'&&diasDesdeFecha(e.fecha)>=UMBRAL_ATRASO_DIAS;}
-const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localStorage.getItem(LS_KEY+'_'+key);return raw?JSON.parse(raw):fallback;}catch(e){return fallback;}}function lsSave(key,val){try{localStorage.setItem(LS_KEY+'_'+key,JSON.stringify(val));}catch(e){}}function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY)).forEach(k=>localStorage.removeItem(k));}catch(e){}}function MapaCliente(props){
+const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localStorage.getItem(LS_KEY+'_'+key);return raw?JSON.parse(raw):fallback;}catch(e){return fallback;}}function lsSave(key,val){try{localStorage.setItem(LS_KEY+'_'+key,JSON.stringify(val));}catch(e){}}
+// ── Traductor SOLO para la vista del Portal Cliente (Dashboard/Mis Envios/Mapa/Carga de
+// Envios) - NUNCA afecta el panel admin ni la app de mensajeros, que siguen 100% en español.
+// El idioma es solo de sesion (no se guarda) - el portal SIEMPRE abre en español y el cliente
+// elige Ingles o Chino cada vez que entra, si quiere.
+var TRAD_CLIENTE={
+  'Portal Cliente':{en:'Client Portal',zh:'客户门户'},
+  'Salir':{en:'Log out',zh:'退出'},
+  'Dashboard':{en:'Dashboard',zh:'仪表盘'},
+  'Mis Envíos':{en:'My Shipments',zh:'我的包裹'},
+  'Mapa':{en:'Map',zh:'地图'},
+  'Carga de Envíos':{en:'Upload Shipments',zh:'上传包裹'},
+  'Mi ':{en:'My ',zh:'我的'},
+  'Mis ':{en:'My ',zh:'我的'},
+  'Mapa de ':{en:'Delivery ',zh:'配送'},
+  'Entregas':{en:'Map',zh:'地图'},
+  'Hoy':{en:'Today',zh:'今天'},
+  'Esta semana':{en:'This week',zh:'本周'},
+  'Este mes':{en:'This month',zh:'本月'},
+  'Rango':{en:'Range',zh:'范围'},
+  'al':{en:'to',zh:'至'},
+  'Cargando...':{en:'Loading...',zh:'加载中...'},
+  'Cargando envíos...':{en:'Loading shipments...',zh:'正在加载包裹...'},
+  'Cargando mapa...':{en:'Loading map...',zh:'正在加载地图...'},
+  'Total Envíos':{en:'Total Shipments',zh:'包裹总数'},
+  'Entregados':{en:'Delivered',zh:'已送达'},
+  'En Ruta':{en:'On the Way',zh:'配送中'},
+  'Reprogramados':{en:'Rescheduled',zh:'已改期'},
+  'Cancelados':{en:'Cancelled',zh:'已取消'},
+  'Efectividad':{en:'Success Rate',zh:'成功率'},
+  'Distribución de Estados':{en:'Status Breakdown',zh:'状态分布'},
+  '% del total':{en:'% of total',zh:'% 占总数'},
+  'Buscar por código, destinatario o dirección...':{en:'Search by code, recipient or address...',zh:'按编号、收件人或地址搜索...'},
+  '⚠ No pudimos cargar tus envíos. Verifica tu conexión e intenta de nuevo.':{en:'⚠ We could not load your shipments. Check your connection and try again.',zh:'⚠ 无法加载您的包裹。请检查网络连接后重试。'},
+  '🔄 Reintentar':{en:'🔄 Retry',zh:'🔄 重试'},
+  'Sin envíos encontrados.':{en:'No shipments found.',zh:'未找到包裹。'},
+  'Total':{en:'Total',zh:'总数'},
+  'Código':{en:'Code',zh:'编号'},
+  'Destinatario':{en:'Recipient',zh:'收件人'},
+  'Dirección':{en:'Address',zh:'地址'},
+  'Comuna':{en:'District',zh:'区'},
+  'Estado':{en:'Status',zh:'状态'},
+  'Fecha':{en:'Date',zh:'日期'},
+  'Teléfono':{en:'Phone',zh:'电话'},
+  'Ver':{en:'View',zh:'查看'},
+  'Cerrar':{en:'Close',zh:'关闭'},
+  'Envío ':{en:'Shipment ',zh:'包裹 '},
+  // Estados (comparten texto con estadoInfo()/ESTADOS_ENVIO y con los labels propios del Mapa)
+  'En Bodega':{en:'In Warehouse',zh:'在仓库'},
+  'En bodega':{en:'In warehouse',zh:'在仓库'},
+  'En ruta':{en:'On the way',zh:'配送中'},
+  'Entregado':{en:'Delivered',zh:'已送达'},
+  'Reprogramado':{en:'Rescheduled',zh:'已改期'},
+  'Cancelado':{en:'Cancelled',zh:'已取消'},
+  'Siniestro':{en:'Damaged/Lost',zh:'损坏/丢失'},
+  'Cancelado/Siniestro':{en:'Cancelled/Damaged',zh:'已取消/损坏'},
+  'Todos':{en:'All',zh:'全部'},
+  'TIEMPO REAL':{en:'LIVE',zh:'实时'},
+  'Etiquetas':{en:'Labels',zh:'标签'},
+  '➕ Nuevo Envío':{en:'➕ New Shipment',zh:'➕ 新建包裹'},
+  'Carga Masiva':{en:'Bulk Upload',zh:'批量上传'},
+  '📄 Carga PDF':{en:'📄 PDF Upload',zh:'📄 PDF上传'},
+  'Sel. todos':{en:'Select all',zh:'全选'}
+};
+function traducirCliente(idioma,es){
+  if(!es||idioma==='es')return es;
+  var t=TRAD_CLIENTE[es];
+  return(t&&t[idioma])||es;
+}
+function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY)).forEach(k=>localStorage.removeItem(k));}catch(e){}}function MapaCliente(props){
   var nombreCliente=props.nombreCliente;
+  var idioma=props.idioma||'es';
+  function t(es){return traducirCliente(idioma,es);}
   var mapRef=React.useRef(null);
   var mapObj=React.useRef(null);
   var geocoderRef=React.useRef(null);
@@ -7580,7 +7651,7 @@ const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localSto
   }
   function labelEstado(estado){
     var m={en_bodega:'En bodega',en_ruta:'En ruta',entregado:'Entregado',reprogramado:'Reprogramado',cancelado:'Cancelado',siniestro:'Siniestro'};
-    return m[estado]||estado;
+    return t(m[estado]||estado);
   }
   React.useEffect(function(){
     var cancelado=false;
@@ -7660,24 +7731,24 @@ const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localSto
   },[envios,mapaListo,filtroEstado]);
   return React.createElement('div',null,
     React.createElement('div',{className:'section-head'},
-      React.createElement('div',{className:'section-title'},'Mapa de ',React.createElement('span',null,'Entregas')),
+      React.createElement('div',{className:'section-title'},t('Mapa de '),React.createElement('span',null,t('Entregas'))),
       React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6,background:'rgba(46,125,79,0.1)',border:'1px solid rgba(46,125,79,0.2)',borderRadius:20,padding:'4px 10px'}},
         React.createElement('div',{style:{width:8,height:8,borderRadius:'50%',background:'#2e7d4f'}}),
-        React.createElement('span',{style:{fontSize:10,color:'#2e7d4f',fontWeight:700,letterSpacing:1}},'TIEMPO REAL')
+        React.createElement('span',{style:{fontSize:10,color:'#2e7d4f',fontWeight:700,letterSpacing:1}},t('TIEMPO REAL'))
       )
     ),
     React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12,fontSize:11}},
-      React.createElement('button',{onClick:function(){setFiltroEstado('todos');},style:{display:'flex',alignItems:'center',gap:5,padding:'4px 12px',borderRadius:20,border:'1px solid '+(filtroEstado==='todos'?'var(--gold)':'var(--border)'),background:filtroEstado==='todos'?'rgba(200,168,75,0.12)':'#fff',color:filtroEstado==='todos'?'var(--gold)':'var(--text-soft)',fontWeight:700,cursor:'pointer'}},'Todos'),
+      React.createElement('button',{onClick:function(){setFiltroEstado('todos');},style:{display:'flex',alignItems:'center',gap:5,padding:'4px 12px',borderRadius:20,border:'1px solid '+(filtroEstado==='todos'?'var(--gold)':'var(--border)'),background:filtroEstado==='todos'?'rgba(200,168,75,0.12)':'#fff',color:filtroEstado==='todos'?'var(--gold)':'var(--text-soft)',fontWeight:700,cursor:'pointer'}},t('Todos')),
       [['en_bodega','#1a6b8a','En bodega'],['en_ruta','#C8A84B','En ruta'],['entregado','#2e7d4f','Entregado'],['reprogramado','#9c27b0','Reprogramado'],['cancelado','#b03030','Cancelado/Siniestro']].map(function(x){
         var isAct=filtroEstado===x[0]||(x[0]==='cancelado'&&filtroEstado==='siniestro');
         return React.createElement('button',{key:x[1],onClick:function(){setFiltroEstado(x[0]==='cancelado'?'cancelado':x[0]);},style:{display:'flex',alignItems:'center',gap:5,padding:'4px 12px',borderRadius:20,border:'1px solid '+(isAct?x[1]:'var(--border)'),background:isAct?x[1]+'22':'#fff',color:isAct?x[1]:'var(--text-soft)',fontWeight:700,cursor:'pointer'}},
           React.createElement('div',{style:{width:10,height:10,borderRadius:'50%',background:x[1]}}),
-          x[2]
+          t(x[2])
         );
       })
     ),
     React.createElement('div',{ref:mapRef,style:{width:'100%',height:'70vh',borderRadius:12,border:'1px solid var(--border)'}}),
-    !mapaListo&&React.createElement('div',{style:{textAlign:'center',padding:20,color:'var(--text-soft)',fontSize:12}},'Cargando mapa...')
+    !mapaListo&&React.createElement('div',{style:{textAlign:'center',padding:20,color:'var(--text-soft)',fontSize:12}},t('Cargando mapa...'))
   );
 }
 function PortalCliente({usuario,onLogout}){
@@ -7691,6 +7762,11 @@ function PortalCliente({usuario,onLogout}){
   var _fh=useState(''),fechaHasta=_fh[0],setFechaHasta=_fh[1];
   var _s=useState(''),search=_s[0],setSearch=_s[1];
   var _fe=useState(false),fetchError=_fe[0],setFetchError=_fe[1];
+  var _fec=useState('todos'),filtroEstadoCliente=_fec[0],setFiltroEstadoCliente=_fec[1];
+  // Idioma SOLO de esta sesión (nunca se guarda) - el portal siempre abre en español;
+  // el cliente puede cambiar a inglés o chino y vuelve a español si recarga o vuelve a entrar.
+  var _idi=useState('es'),idiomaCliente=_idi[0],setIdiomaCliente=_idi[1];
+  function t(es){return traducirCliente(idiomaCliente,es);}
 
   function cargarEnviosCliente(){
     setLoading(true);
@@ -7746,6 +7822,7 @@ function PortalCliente({usuario,onLogout}){
   // no sobre 'envios' completo, para que el período elegido también aplique a la tabla
   // de "Mis Envíos" y no solo a las tarjetas de resumen.
   var enviosFiltrados=filtPeriodo.filter(function(e){
+    if(filtroEstadoCliente!=='todos'&&e.estado!==filtroEstadoCliente)return false;
     if(!search)return true;
     var q=search.toLowerCase();
     return (e.codigo||'').toLowerCase().includes(q)||(e.destinatario||'').toLowerCase().includes(q)||(e.direccion||'').toLowerCase().includes(q);
@@ -7785,18 +7862,24 @@ function PortalCliente({usuario,onLogout}){
         React.createElement('img',{className:'logo-img',src:LOGO_SRC,alt:'TransPgso'}),
         React.createElement('div',null,
           React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:22,letterSpacing:3,color:'var(--gold)',lineHeight:1}},'TRANSPGSO'),
-          React.createElement('div',{className:'logo-sub'},'Portal Cliente')
+          React.createElement('div',{className:'logo-sub'},t('Portal Cliente'))
         )
       ),
-      React.createElement('div',{className:'header-right'},
+      React.createElement('div',{className:'header-right',style:{display:'flex',alignItems:'center',gap:10}},
+        React.createElement('div',{style:{display:'flex',border:'1px solid rgba(200,168,75,0.25)',borderRadius:8,overflow:'hidden'}},
+          [['es','ES'],['en','EN'],['zh','中文']].map(function(l){
+            var act=idiomaCliente===l[0];
+            return React.createElement('button',{key:l[0],onClick:function(){setIdiomaCliente(l[0]);},style:{padding:'5px 9px',border:'none',background:act?'var(--gold)':'transparent',color:act?'var(--dark-deep)':'rgba(200,168,75,0.6)',fontSize:11,fontWeight:700,cursor:'pointer'}},l[1]);
+          })
+        ),
         React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:12,color:'var(--gold)',background:'rgba(200,168,75,0.12)',padding:'6px 14px',borderRadius:8,border:'1px solid var(--gold-border)'}},''+nombreCliente),
-        React.createElement('button',{onClick:onLogout,style:{background:'none',border:'1px solid rgba(200,168,75,0.2)',borderRadius:6,cursor:'pointer',color:'rgba(200,168,75,0.6)',fontSize:10,padding:'4px 10px'}},'Salir')
+        React.createElement('button',{onClick:onLogout,style:{background:'none',border:'1px solid rgba(200,168,75,0.2)',borderRadius:6,cursor:'pointer',color:'rgba(200,168,75,0.6)',fontSize:10,padding:'4px 10px'}},t('Salir'))
       )
     ),
     // Nav
     React.createElement('div',{className:'nav'},
-      [{id:'dashboard',label:'Dashboard'},{id:'envios',label:'Mis Envíos'},{id:'mapa',label:'Mapa'},{id:'etiquetas',label:'Carga de Envíos'}].map(function(t){
-        return React.createElement('button',{key:t.id,className:'nav-btn '+(tab===t.id?'active':''),onClick:function(){setTab(t.id);}},t.label);
+      [{id:'dashboard',label:'Dashboard'},{id:'envios',label:'Mis Envíos'},{id:'mapa',label:'Mapa'},{id:'etiquetas',label:'Carga de Envíos'}].map(function(nv){
+        return React.createElement('button',{key:nv.id,className:'nav-btn '+(tab===nv.id?'active':''),onClick:function(){setTab(nv.id);}},t(nv.label));
       })
     ),
     // Main
@@ -7804,42 +7887,42 @@ function PortalCliente({usuario,onLogout}){
       // Dashboard tab
       tab==='dashboard'&&React.createElement('div',null,
         React.createElement('div',{className:'section-head'},
-          React.createElement('div',{className:'section-title'},'Mi ',React.createElement('span',null,'Dashboard')),
+          React.createElement('div',{className:'section-title'},t('Mi '),React.createElement('span',null,t('Dashboard'))),
           React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
-            btnPeriodo('hoy','Hoy'),
-            btnPeriodo('semana','Esta semana'),
-            btnPeriodo('mes','Este mes'),
-            btnPeriodo('personalizado','Rango'),
+            btnPeriodo('hoy',t('Hoy')),
+            btnPeriodo('semana',t('Esta semana')),
+            btnPeriodo('mes',t('Este mes')),
+            btnPeriodo('personalizado',t('Rango')),
             periodo==='personalizado'&&React.createElement(React.Fragment,null,
               React.createElement('input',{type:'date',value:fechaDesde,onChange:function(e){setFechaDesde(e.target.value);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}}),
-              React.createElement('span',{style:{alignSelf:'center',fontSize:12,color:'var(--text-soft)'}},'al'),
+              React.createElement('span',{style:{alignSelf:'center',fontSize:12,color:'var(--text-soft)'}},t('al')),
               React.createElement('input',{type:'date',value:fechaHasta,onChange:function(e){setFechaHasta(e.target.value);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}})
             )
           )
         ),
-        loading?React.createElement('div',{className:'empty-state'},'Cargando...'):
+        loading?React.createElement('div',{className:'empty-state'},t('Cargando...')):
         React.createElement('div',null,
           React.createElement('div',{className:'stats-grid',style:{marginBottom:20}},
             [{label:'Total Envíos',val:total,cls:''},{label:'Entregados',val:entregados,cls:'green'},{label:'En Ruta',val:enRuta,cls:'gold'},{label:'Reprogramados',val:reprog,cls:'red'},{label:'Cancelados',val:cancelados,cls:'red'},{label:'Efectividad',val:efectividad+'%',cls:efectividad>=80?'green':efectividad>=60?'gold':'red'}].map(function(s){
               return React.createElement('div',{key:s.label,className:'stat-card'},
-                React.createElement('div',{className:'stat-label'},s.label),
+                React.createElement('div',{className:'stat-label'},t(s.label)),
                 React.createElement('div',{className:'stat-value '+s.cls},s.val)
               );
             })
           ),
           // Distribución estados
           React.createElement('div',{className:'panel'},
-            React.createElement('div',{className:'panel-title'},'Distribución de Estados'),
+            React.createElement('div',{className:'panel-title'},t('Distribución de Estados')),
             React.createElement('div',{style:{display:'flex',gap:12,flexWrap:'wrap',padding:'8px 0'}},
               [{label:'Entregados',val:entregados,color:'var(--success)'},{label:'En Ruta',val:enRuta,color:'var(--gold)'},{label:'Reprogramados',val:reprog,color:'var(--warning)'},{label:'Cancelados',val:cancelados,color:'var(--danger)'}].map(function(s){
                 var pct=total>0?Math.round(s.val/total*100):0;
                 return React.createElement('div',{key:s.label,style:{flex:'1 1 130px',background:'var(--cream)',borderRadius:10,padding:'12px 16px',border:'1px solid var(--border)'}},
-                  React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginBottom:4,textTransform:'uppercase',letterSpacing:1}},s.label),
+                  React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginBottom:4,textTransform:'uppercase',letterSpacing:1}},t(s.label)),
                   React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:24,fontWeight:700,color:s.color}},s.val),
                   React.createElement('div',{style:{marginTop:6,height:4,borderRadius:2,background:'var(--border)'}},
                     React.createElement('div',{style:{height:'100%',width:pct+'%',background:s.color,borderRadius:2,transition:'width 0.5s'}})
                   ),
-                  React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginTop:4}},pct+'% del total')
+                  React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginTop:4}},pct+t('% del total'))
                 );
               })
             )
@@ -7850,54 +7933,61 @@ function PortalCliente({usuario,onLogout}){
       // Envíos tab
       tab==='envios'&&React.createElement('div',null,
         React.createElement('div',{className:'section-head'},
-          React.createElement('div',{className:'section-title'},'Mis ',React.createElement('span',null,'Envíos')),
+          React.createElement('div',{className:'section-title'},t('Mis '),React.createElement('span',null,t('Envíos'))),
           React.createElement('div',{style:{display:'flex',gap:8}},
             React.createElement('button',{className:'btn-secondary',onClick:exportarPDF},'📄 PDF'),
             React.createElement('button',{className:'btn-secondary',onClick:exportarExcel},'Excel')
           )
         ),
         React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}},
-          btnPeriodo('hoy','Hoy'),
-          btnPeriodo('semana','Esta semana'),
-          btnPeriodo('mes','Este mes'),
-          btnPeriodo('personalizado','Rango'),
+          btnPeriodo('hoy',t('Hoy')),
+          btnPeriodo('semana',t('Esta semana')),
+          btnPeriodo('mes',t('Este mes')),
+          btnPeriodo('personalizado',t('Rango')),
           periodo==='personalizado'&&React.createElement(React.Fragment,null,
             React.createElement('input',{type:'date',value:fechaDesde,onChange:function(e){setFechaDesde(e.target.value);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}}),
-            React.createElement('span',{style:{alignSelf:'center',fontSize:12,color:'var(--text-soft)'}},'al'),
+            React.createElement('span',{style:{alignSelf:'center',fontSize:12,color:'var(--text-soft)'}},t('al')),
             React.createElement('input',{type:'date',value:fechaHasta,onChange:function(e){setFechaHasta(e.target.value);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}})
           )
         ),
-        // Totalizador por estado del período elegido arriba (Hoy/Semana/Mes/Rango)
+        // Totalizador por estado del período elegido arriba (Hoy/Semana/Mes/Rango) - clickeable,
+        // funciona como filtro adicional sobre la tabla (igual que en Gestión de Envíos admin).
         React.createElement('div',{className:'stats-grid',style:{marginBottom:16}},
           [{val:'todos',label:'Total',color:'var(--gold)',val_num:filtPeriodo.length}].concat(
             ESTADOS_CLIENTE_PORTAL.map(function(est){return{val:est.val,label:est.label,color:est.color,val_num:statsPeriodo[est.val]||0};})
           ).map(function(s){
-            return React.createElement('div',{key:s.val,className:'stat-card'},
-              React.createElement('div',{className:'stat-label'},s.label),
+            var activo=filtroEstadoCliente===s.val;
+            return React.createElement('div',{
+              key:s.val,
+              className:'stat-card',
+              onClick:function(){setFiltroEstadoCliente(activo?'todos':s.val);},
+              style:{cursor:'pointer',border:'2px solid '+(activo?s.color:'rgba(200,168,75,0.18)'),borderTop:'4px solid '+(activo?s.color:'rgba(200,168,75,0.18)'),boxShadow:activo?'0 0 0 3px '+s.color+'22':undefined}
+            },
+              React.createElement('div',{className:'stat-label'},t(s.label)),
               React.createElement('div',{className:'stat-value',style:{color:s.color,background:'none',WebkitTextFillColor:s.color}},s.val_num)
             );
           })
         ),
         React.createElement('div',{style:{marginBottom:16}},
-          React.createElement('input',{className:'search-box',placeholder:'Buscar por código, destinatario o dirección...',value:search,onChange:function(e){setSearch(e.target.value);}})
+          React.createElement('input',{className:'search-box',placeholder:t('Buscar por código, destinatario o dirección...'),value:search,onChange:function(e){setSearch(e.target.value);}})
         ),
-        loading?React.createElement('div',{className:'empty-state'},'Cargando envíos...'):
+        loading?React.createElement('div',{className:'empty-state'},t('Cargando envíos...')):
         fetchError?React.createElement('div',{className:'info-banner',style:{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}},
-          React.createElement('span',null,'⚠ No pudimos cargar tus envíos. Verifica tu conexión e intenta de nuevo.'),
-          React.createElement('button',{className:'btn-secondary',onClick:cargarEnviosCliente},'🔄 Reintentar')
+          React.createElement('span',null,t('⚠ No pudimos cargar tus envíos. Verifica tu conexión e intenta de nuevo.')),
+          React.createElement('button',{className:'btn-secondary',onClick:cargarEnviosCliente},t('🔄 Reintentar'))
         ):
-        enviosFiltrados.length===0?React.createElement('div',{className:'info-banner'},'Sin envíos encontrados.'):
+        enviosFiltrados.length===0?React.createElement('div',{className:'info-banner'},t('Sin envíos encontrados.')):
         React.createElement('div',{className:'table-wrap'},
           React.createElement('table',null,
             React.createElement('thead',null,
               React.createElement('tr',null,
                 React.createElement('th',null,'#'),
-                React.createElement('th',null,'Código'),
-                React.createElement('th',null,'Destinatario'),
-                React.createElement('th',null,'Dirección'),
-                React.createElement('th',null,'Comuna'),
-                React.createElement('th',null,'Estado'),
-                React.createElement('th',null,'Fecha'),
+                React.createElement('th',null,t('Código')),
+                React.createElement('th',null,t('Destinatario')),
+                React.createElement('th',null,t('Dirección')),
+                React.createElement('th',null,t('Comuna')),
+                React.createElement('th',null,t('Estado')),
+                React.createElement('th',null,t('Fecha')),
                 React.createElement('th',null,'')
               )
             ),
@@ -7910,9 +8000,9 @@ function PortalCliente({usuario,onLogout}){
                   React.createElement('td',{style:{fontSize:12}},e.destinatario||'—'),
                   React.createElement('td',{style:{fontSize:11,color:'var(--text-mid)',maxWidth:140,overflow:'hidden',textOverflow:'ellipsis'}},e.direccion||'—'),
                   React.createElement('td',null,React.createElement('span',{style:{background:'var(--dark-deep)',color:'var(--gold)',padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:700}},e.comuna||'—')),
-                  React.createElement('td',null,React.createElement('span',{style:{padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:700,background:ei.bg||'#eee',color:ei.color||'#333'}},ei.label||e.estado)),
+                  React.createElement('td',null,React.createElement('span',{style:{padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:700,background:ei.bg||'#eee',color:ei.color||'#333'}},t(ei.label||e.estado))),
                   React.createElement('td',{style:{fontFamily:'JetBrains Mono',fontSize:11,color:'var(--text-soft)'}},e.fecha||'—'),
-                  React.createElement('td',null,React.createElement('button',{className:'action-btn btn-edit',onClick:function(ev){ev.stopPropagation();setDetalle(e);}},'Ver'))
+                  React.createElement('td',null,React.createElement('button',{className:'action-btn btn-edit',onClick:function(ev){ev.stopPropagation();setDetalle(e);}},t('Ver')))
                 );
               })
             )
@@ -7921,16 +8011,16 @@ function PortalCliente({usuario,onLogout}){
       ),
 
       // Etiquetas tab
-      tab==='mapa'&&React.createElement(MapaCliente,{nombreCliente:nombreCliente}),
-      tab==='etiquetas'&&React.createElement(EtiquetasCliente,{nombreCliente:nombreCliente,envios:envios,setEnvios:setEnvios})
+      tab==='mapa'&&React.createElement(MapaCliente,{nombreCliente:nombreCliente,idioma:idiomaCliente}),
+      tab==='etiquetas'&&React.createElement(EtiquetasCliente,{nombreCliente:nombreCliente,envios:envios,setEnvios:setEnvios,idioma:idiomaCliente})
     ),
 
     // Modal detalle envío
-    detalle&&React.createElement(Modal,{title:'Envío '+detalle.codigo,onClose:function(){setDetalle(null);}},
+    detalle&&React.createElement(Modal,{title:t('Envío ')+detalle.codigo,onClose:function(){setDetalle(null);}},
       React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}},
-        [['Código',detalle.codigo],['Destinatario',detalle.destinatario],['Dirección',detalle.direccion],['Comuna',detalle.comuna],['Teléfono',detalle.telefono],['Fecha',detalle.fecha],['Estado',(estadoInfo?estadoInfo(detalle.estado):{label:detalle.estado}).label]].map(function(x){
+        [['Código',detalle.codigo],['Destinatario',detalle.destinatario],['Dirección',detalle.direccion],['Comuna',detalle.comuna],['Teléfono',detalle.telefono],['Fecha',detalle.fecha],['Estado',t((estadoInfo?estadoInfo(detalle.estado):{label:detalle.estado}).label)]].map(function(x){
           return React.createElement('div',{key:x[0],style:{padding:'8px 12px',background:'linear-gradient(145deg,#fff,#fdf6e8)',borderRadius:8,border:'1px solid rgba(200,168,75,0.1)',boxShadow:'2px 2px 4px rgba(43,46,32,0.06)'}},
-            React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)',letterSpacing:1.5,textTransform:'uppercase',marginBottom:3,fontFamily:'Bebas Neue',fontSize:10}},''+x[0]),
+            React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)',letterSpacing:1.5,textTransform:'uppercase',marginBottom:3,fontFamily:'Bebas Neue',fontSize:10}},t(x[0])),
             React.createElement('div',{style:{fontSize:13,fontWeight:600,color:'var(--dark)'}},x[1]||'—')
           );
         })
@@ -7938,13 +8028,14 @@ function PortalCliente({usuario,onLogout}){
       detalle.nota&&React.createElement('div',{className:'obs-box',style:{marginBottom:16}},'',detalle.nota),
       React.createElement(FotosEntregaConRecarga,{codigo:detalle.codigo,fotoEtiquetaInicial:detalle.foto_etiqueta}),
       React.createElement('div',{className:'modal-actions'},
-        React.createElement('button',{className:'btn-secondary',onClick:function(){setDetalle(null);}},'Cerrar')
+        React.createElement('button',{className:'btn-secondary',onClick:function(){setDetalle(null);}},t('Cerrar'))
       )
     )
   );
 }
 
-function EtiquetasCliente({nombreCliente,envios,setEnvios}){
+function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
+  function t(es){return traducirCliente(idioma||'es',es);}
   var _sel=useState([]),seleccionados=_sel[0],setSeleccionados=_sel[1];
   var _tab=useState('lista'),subTab=_tab[0],setSubTab=_tab[1];
   var _fm=useState(false),showForm=_fm[0],setShowForm=_fm[1];
@@ -8315,15 +8406,15 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios}){
   return React.createElement('div',null,
     // Header
     React.createElement('div',{className:'section-head'},
-      React.createElement('div',{className:'section-title'},'Mis ',React.createElement('span',null,'Etiquetas')),
+      React.createElement('div',{className:'section-title'},t('Mis '),React.createElement('span',null,t('Etiquetas'))),
       React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}},
-        btnSub('lista','Mis Envíos'),
-        btnSub('nuevo','➕ Nuevo Envío'),
-        btnSub('masiva','Carga Masiva'),
-        btnSub('pdf','📄 Carga PDF'),
+        btnSub('lista',t('Mis Envíos')),
+        btnSub('nuevo',t('➕ Nuevo Envío')),
+        btnSub('masiva',t('Carga Masiva')),
+        btnSub('pdf',t('📄 Carga PDF')),
         subTab==='lista'&&React.createElement(React.Fragment,null,
           React.createElement('div',{style:{width:1,height:20,background:'var(--border)',margin:'0 4px'}}),
-          React.createElement('button',{className:'btn-secondary',onClick:selTodo},'Sel. todos'),
+          React.createElement('button',{className:'btn-secondary',onClick:selTodo},t('Sel. todos')),
           React.createElement('button',{className:'btn-secondary',onClick:deselTodo},'Limpiar'),
           React.createElement('button',{className:'btn-primary',onClick:imprimirEtiquetas,disabled:seleccionados.length===0,style:{whiteSpace:'nowrap'}},'Imprimir '+(seleccionados.length>0?'('+seleccionados.length+')':''))
         )
