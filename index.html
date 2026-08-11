@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786471737;
+window.__MODULES_VERSION=1786473279;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -4871,9 +4871,10 @@ function ColectaRider(_ref_cr){
         });
       }
     }
-    // Bulk update existentes
+    // Bulk update existentes - en paralelo (8 a la vez) en vez de uno por uno, para no esperar
+    // un round-trip de red por cada paquete ya existente confirmado en la colecta.
     var codigosUpdateOk=[];
-    for(const cod of updates){
+    await procesarConcurrencia(updates,async function(cod){
       try{
         const pActual=paquetes.find(pp=>pp.codigo===cod);
         const dActual=pActual?.datos||{};
@@ -4887,7 +4888,7 @@ function ColectaRider(_ref_cr){
         ok++;
         codigosUpdateOk.push(cod);
       }catch(e){ err++; }
-    }
+    },8);
     if(codigosUpdateOk.length>0)sbRegistrarHistorialLote(codigosUpdateOk,'en_bodega','Colecta '+turno+' (ya estaba en el sistema)',usuario.nombre,'app_mensajero');
     // Bulk insert nuevos
     if(inserts.length>0){
@@ -5250,6 +5251,7 @@ function AsignacionRider(_ref_ar){
     // Si está en cualquier otro estado (en ruta con otro mensajero, entregado, cancelado, reprogramado,
     // siniestro, pendiente de retiro) se rechaza y se guarda el motivo para mostrárselo al mensajero.
     const motivos={};
+    const elegibles=[];
     for(const cod of codigos){
       if(!encontrados[cod]){ noExiste++; continue; }
       const data=encontrados[cod];
@@ -5258,6 +5260,12 @@ function AsignacionRider(_ref_ar){
         motivos[cod]=motivoNoAdquirible(data.estado,data.mensajero);
         continue;
       }
+      elegibles.push(cod);
+    }
+    // Actualizar en paralelo (8 a la vez) en vez de uno por uno - antes esto era una espera de red
+    // POR CADA paquete de la ruta completa del día (pueden ser 100+ paquetes escaneados seguidos).
+    await procesarConcurrencia(elegibles,async function(cod){
+      const data=encontrados[cod];
       try{
         // OJO: usar data.codigo (el código real de la fila encontrada), no el 'cod' escaneado —
         // cuando el match vino del fallback ilike, ambos pueden diferir y un .eq('codigo',cod)
@@ -5269,7 +5277,7 @@ function AsignacionRider(_ref_ar){
         if(onEnviosUpdate) onEnviosUpdate(env);
         ok++;
       }catch(e){ err++; motivos[cod]='Error de conexión al asignar'; }
-    }
+    },8);
     // Actualizar estados locales
     setPaquetes(prev=>prev.map(p=>({...p,estado:!encontrados[p.codigo]?'noexiste':motivos[p.codigo]?'rechazado':'asignado',motivo:motivos[p.codigo]||null})));
     setGuardando(false);
@@ -6871,9 +6879,10 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     setDividiendo(true);
     const codigos=Array.from(seleccionados);
     try{
-      for(const codigo of codigos){
-        await db.from('envios').update({mensajero:colegaElegido}).eq('codigo',codigo);
-      }
+      // En paralelo (8 a la vez) en vez de uno por uno.
+      await procesarConcurrencia(codigos,async function(codigo){
+        try{await db.from('envios').update({mensajero:colegaElegido}).eq('codigo',codigo);}catch(e){}
+      },8);
       setStopsOrdenados(prev=>prev.filter(p=>!seleccionados.has(p.envio.codigo)));
       onDividido(codigos);
       setSeleccionados(new Set());
@@ -7414,18 +7423,19 @@ if(showGrabadora){
 async function guardarConEstado(estadoFinal){
   setGuardando(true);
   try{
-    const fotosB64=[];
-    for(var fi=0;fi<fotos.length;fi++){
+    // Comprimir todas las fotos en paralelo (4 a la vez) en vez de una por una - esto era un cuello
+    // de botella real en la entrega: cada foto esperaba a que la anterior terminara de comprimirse.
+    const fotosB64Raw=await procesarConcurrencia(fotos,async function(f){
       try{
-        const b64=await new Promise(function(res){var img=new Image();img.onload=function(){var MAX=800;var scale=Math.min(1,MAX/Math.max(img.width,img.height));var canvas=document.createElement('canvas');canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);res(canvas.toDataURL('image/jpeg',0.7));};img.onerror=function(){res(null);};img.src=fotos[fi].data;});
-        if(b64)fotosB64.push(b64);
-      }catch(e){}
-    }
-    // Subir cada foto a Supabase Storage en vez de guardar el base64 completo en la tabla (ahorra espacio y ancho de banda)
-    const fotosUrls=[];
-    for(let fu=0;fu<fotosB64.length;fu++){
-      fotosUrls.push(await subirFotoStorage(fotosB64[fu],envio.codigo,'e'+fu));
-    }
+        return await new Promise(function(res){var img=new Image();img.onload=function(){var MAX=800;var scale=Math.min(1,MAX/Math.max(img.width,img.height));var canvas=document.createElement('canvas');canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);res(canvas.toDataURL('image/jpeg',0.7));};img.onerror=function(){res(null);};img.src=f.data;});
+      }catch(e){return null;}
+    },4);
+    const fotosB64=fotosB64Raw.filter(function(b){return!!b;});
+    // Subir cada foto a Supabase Storage en paralelo (4 a la vez) en vez de una por una - con conexión
+    // móvil/celular esto es lo que más se sentía: 4 fotos = 4 round-trips secuenciales antes de este fix.
+    const fotosUrls=await procesarConcurrencia(fotosB64,async function(b64,fu){
+      try{return await subirFotoStorage(b64,envio.codigo,'e'+fu);}catch(e){return null;}
+    },4);
     let videoUrlSubido=null;
     if(videoGrabado&&videoGrabado.blob){
       const _rv=await subirVideoStorage(videoGrabado.blob,envio.codigo,'e');
