@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786486165;
+window.__MODULES_VERSION=1786486717;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7634,6 +7634,21 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
   var nombreCliente=props.nombreCliente;
   var idioma=props.idioma||'es';
   function t(es){return traducirCliente(idioma,es);}
+  var periodo=props.periodo,setPeriodo=props.setPeriodo;
+  var fechaDesde=props.fechaDesde,setFechaDesde=props.setFechaDesde;
+  var fechaHasta=props.fechaHasta,setFechaHasta=props.setFechaHasta;
+  var hoyStrMapa=fechaHoyCL();
+  function fechaEnvioMapa(e){return(e.fecha||'').slice(0,10);}
+  function enRangoMapa(e){
+    var fi=fechaEnvioMapa(e);
+    if(!fi)return true;
+    if(periodo==='hoy')return fi===hoyStrMapa;
+    if(periodo==='semana'){var d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));var lunesStr=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');return fi>=lunesStr&&fi<=hoyStrMapa;}
+    if(periodo==='mes')return fi.startsWith(hoyStrMapa.slice(0,7));
+    if(periodo==='personalizado'&&fechaDesde&&fechaHasta)return fi>=fechaDesde&&fi<=fechaHasta;
+    return true;
+  }
+  var btnPeriodoMapa=function(v,l){return React.createElement('button',{onClick:function(){setPeriodo(v);},style:{padding:'6px 14px',borderRadius:8,border:'1px solid '+(periodo===v?'var(--gold)':'var(--border)'),background:periodo===v?'rgba(200,168,75,0.12)':'#fff',color:periodo===v?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer'}},l);};
   var mapRef=React.useRef(null);
   var mapObj=React.useRef(null);
   var geocoderRef=React.useRef(null);
@@ -7655,10 +7670,22 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
   }
   React.useEffect(function(){
     var cancelado=false;
-    function cargar(){
-      db.from('envios').select('codigo,destinatario,direccion,comuna,estado,fecha,lat,lng').eq('cliente',nombreCliente).neq('estado','eliminado').then(function(res){
-        if(!cancelado&&res.data)setEnvios(res.data);
-      }).catch(function(){});
+    // Paginado en bloques de 1000: igual que el fetch del cliente en "Mis Envíos", una sola
+    // consulta sin rango se trunca server-side (tope PostgREST) para clientes con más de ~1000
+    // envíos históricos, dejando pines faltantes en el mapa sin ningún aviso.
+    async function cargar(){
+      try{
+        var acumulado=[];var offset=0;var bloque=1000;
+        while(true){
+          var res=await db.from('envios').select('codigo,destinatario,direccion,comuna,estado,fecha,lat,lng').eq('cliente',nombreCliente).neq('estado','eliminado').range(offset,offset+bloque-1);
+          if(res.error||!res.data||res.data.length===0)break;
+          acumulado=acumulado.concat(res.data);
+          if(res.data.length<bloque)break;
+          offset+=bloque;
+          if(offset>=50000)break;
+        }
+        if(!cancelado)setEnvios(acumulado);
+      }catch(e){}
     }
     cargar();
     var canalId='envios-cliente-'+nombreCliente.replace(/[^a-zA-Z0-9]/g,'_');
@@ -7682,7 +7709,8 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
     var map=mapObj.current;
     var geocoder=geocoderRef.current;
     var codigosActuales={};
-    var enviosVisibles=filtroEstado==='todos'?envios:filtroEstado==='cancelado'?envios.filter(function(e){return e.estado==='cancelado'||e.estado==='siniestro';}):envios.filter(function(e){return e.estado===filtroEstado;});
+    var enviosPeriodo=envios.filter(enRangoMapa);
+    var enviosVisibles=filtroEstado==='todos'?enviosPeriodo:filtroEstado==='cancelado'?enviosPeriodo.filter(function(e){return e.estado==='cancelado'||e.estado==='siniestro';}):enviosPeriodo.filter(function(e){return e.estado===filtroEstado;});
     enviosVisibles.forEach(function(e){codigosActuales[e.codigo]=true;});
     Object.keys(markersRef.current).forEach(function(cod){
       if(!codigosActuales[cod]){markersRef.current[cod].setMap(null);delete markersRef.current[cod];}
@@ -7728,13 +7756,24 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
         });
       },delay);
     });
-  },[envios,mapaListo,filtroEstado]);
+  },[envios,mapaListo,filtroEstado,periodo,fechaDesde,fechaHasta]);
   return React.createElement('div',null,
     React.createElement('div',{className:'section-head'},
       React.createElement('div',{className:'section-title'},t('Mapa de '),React.createElement('span',null,t('Entregas'))),
       React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6,background:'rgba(46,125,79,0.1)',border:'1px solid rgba(46,125,79,0.2)',borderRadius:20,padding:'4px 10px'}},
         React.createElement('div',{style:{width:8,height:8,borderRadius:'50%',background:'#2e7d4f'}}),
         React.createElement('span',{style:{fontSize:10,color:'#2e7d4f',fontWeight:700,letterSpacing:1}},t('TIEMPO REAL'))
+      )
+    ),
+    React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12,alignItems:'center'}},
+      btnPeriodoMapa('hoy',t('Hoy')),
+      btnPeriodoMapa('semana',t('Esta semana')),
+      btnPeriodoMapa('mes',t('Este mes')),
+      btnPeriodoMapa('personalizado',t('Rango')),
+      periodo==='personalizado'&&React.createElement(React.Fragment,null,
+        React.createElement('input',{type:'date',value:fechaDesde,onChange:function(e){setFechaDesde(e.target.value);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}}),
+        React.createElement('span',{style:{alignSelf:'center',fontSize:12,color:'var(--text-soft)'}},t('al')),
+        React.createElement('input',{type:'date',value:fechaHasta,onChange:function(e){setFechaHasta(e.target.value);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}})
       )
     ),
     React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12,fontSize:11}},
@@ -7768,7 +7807,7 @@ function PortalCliente({usuario,onLogout}){
   var _idi=useState('es'),idiomaCliente=_idi[0],setIdiomaCliente=_idi[1];
   function t(es){return traducirCliente(idiomaCliente,es);}
 
-  function cargarEnviosCliente(){
+  async function cargarEnviosCliente(){
     setLoading(true);
     setFetchError(false);
     // OJO: antes 'loading' se apagaba apenas se filtraba el caché local (casi instantáneo),
@@ -7777,20 +7816,33 @@ function PortalCliente({usuario,onLogout}){
     // "Sin envíos encontrados" como si fuera un resultado confirmado, sin ningún error visible
     // ni forma de reintentar. Ahora 'loading' solo se apaga cuando la consulta real termina,
     // y si falla se muestra un aviso con botón para reintentar en vez de una lista vacía falsa.
-    db.from('envios').select('*').eq('cliente',nombreCliente).then(function(res){
-      if(res.error){
-        console.warn('Error cargando envíos del cliente:',res.error.message);
-        setFetchError(true);
-      }else if(res.data){
-        var sb=res.data.map(function(e){return{id:e.id,codigo:e.codigo,cliente:e.cliente,destinatario:e.destinatario,telefono:e.telefono,direccion:e.direccion,comuna:e.comuna,fecha:e.fecha,estado:e.estado,mensajero:e.mensajero,monto:e.monto,nota:e.nota,foto_etiqueta:e.foto_etiqueta,fotos_entrega:e.fotos_entrega,historial:[{fecha:e.created_at,estado:e.estado,nota:'Cargado'}]};});
-        setEnvios(sb);
+    //
+    // Además: un solo select('*') sin paginar se trunca server-side en Supabase (tope PostgREST)
+    // apenas el cliente supera ~1000 envíos históricos, mostrando un total incompleto sin avisar
+    // (mismo problema ya resuelto en el Dashboard admin). Se pagina en bloques de 1000 para
+    // traer siempre el histórico completo del cliente.
+    try{
+      var acumulado=[];var offset=0;var bloque=1000;
+      while(true){
+        var res=await db.from('envios').select('*').eq('cliente',nombreCliente).range(offset,offset+bloque-1);
+        if(res.error){
+          console.warn('Error cargando envíos del cliente:',res.error.message);
+          setFetchError(true);
+          break;
+        }
+        if(!res.data||res.data.length===0)break;
+        acumulado=acumulado.concat(res.data);
+        if(res.data.length<bloque)break;
+        offset+=bloque;
+        if(offset>=50000)break;
       }
-      setLoading(false);
-    },function(err){
+      var sb=acumulado.map(function(e){return{id:e.id,codigo:e.codigo,cliente:e.cliente,destinatario:e.destinatario,telefono:e.telefono,direccion:e.direccion,comuna:e.comuna,fecha:e.fecha,estado:e.estado,mensajero:e.mensajero,monto:e.monto,nota:e.nota,foto_etiqueta:e.foto_etiqueta,fotos_entrega:e.fotos_entrega,historial:[{fecha:e.created_at,estado:e.estado,nota:'Cargado'}]};});
+      setEnvios(sb);
+    }catch(err){
       console.warn('Error de conexión cargando envíos del cliente:',err&&err.message);
       setFetchError(true);
-      setLoading(false);
-    });
+    }
+    setLoading(false);
   }
 
   React.useEffect(function(){
@@ -7801,13 +7853,25 @@ function PortalCliente({usuario,onLogout}){
   },[nombreCliente]);
 
   // Analítica
-  var hoy=new Date();
+  // OJO: 'fecha' es la fecha de negocio del envío (día real de despacho/entrega); 'created_at'
+  // (guardado como historial[0].fecha) es solo cuándo se insertó la fila en la base, que puede
+  // ser muy distinto si el envío se cargó en lote/PDF. Antes esta función priorizaba
+  // historial[0].fecha sobre e.fecha, así que "Hoy" mostraba todo lo INGRESADO hoy en el sistema
+  // en vez de lo FECHADO hoy — mismo bug ya corregido en Gestión de Envíos (admin). Se corrige
+  // usando el mismo criterio que el admin (fechaIngreso): e.fecha primero, comparación por string.
+  var hoyStr=fechaHoyCL();
+  function fechaEnvioCliente(e){
+    if(e.fecha)return(e.fecha+'').slice(0,10);
+    if(e.historial&&e.historial.length>0)return(e.historial[0].fecha||'').slice(0,10);
+    return'';
+  }
   function enRango(e){
-    var f=new Date((e.historial&&e.historial[0]?e.historial[0].fecha:null)||e.fecha||hoy);
-    if(periodo==='hoy'){var s=new Date(hoy);s.setHours(0,0,0,0);return f>=s;}
-    if(periodo==='semana'){var lun=new Date(hoy);lun.setDate(hoy.getDate()-((hoy.getDay()+6)%7));lun.setHours(0,0,0,0);return f>=lun;}
-    if(periodo==='mes'){var ini=new Date(hoy.getFullYear(),hoy.getMonth(),1);return f>=ini;}
-    if(periodo==='personalizado'&&fechaDesde&&fechaHasta){var d=new Date(fechaDesde+'T00:00:00');var h=new Date(fechaHasta+'T23:59:59');return f>=d&&f<=h;}
+    var fi=fechaEnvioCliente(e);
+    if(!fi)return true;
+    if(periodo==='hoy')return fi===hoyStr;
+    if(periodo==='semana'){var d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));var lunesStr=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');return fi>=lunesStr&&fi<=hoyStr;}
+    if(periodo==='mes')return fi.startsWith(hoyStr.slice(0,7));
+    if(periodo==='personalizado'&&fechaDesde&&fechaHasta)return fi>=fechaDesde&&fi<=fechaHasta;
     return true;
   }
   var filtPeriodo=envios.filter(enRango);
@@ -8011,7 +8075,7 @@ function PortalCliente({usuario,onLogout}){
       ),
 
       // Etiquetas tab
-      tab==='mapa'&&React.createElement(MapaCliente,{nombreCliente:nombreCliente,idioma:idiomaCliente}),
+      tab==='mapa'&&React.createElement(MapaCliente,{nombreCliente:nombreCliente,idioma:idiomaCliente,periodo:periodo,setPeriodo:setPeriodo,fechaDesde:fechaDesde,setFechaDesde:setFechaDesde,fechaHasta:fechaHasta,setFechaHasta:setFechaHasta}),
       tab==='etiquetas'&&React.createElement(EtiquetasCliente,{nombreCliente:nombreCliente,envios:envios,setEnvios:setEnvios,idioma:idiomaCliente})
     ),
 
