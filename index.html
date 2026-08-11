@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786415535;
+window.__MODULES_VERSION=1786416338;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8795,43 +8795,55 @@ function MapaRutas(props){
 
   var _a=React.useState({});var asig=_a[0];var setAsig=_a[1];
 
-  // Firma liviana de los campos relevantes de 'envios' (código, estado, si tiene dirección/comuna).
-  // Se usa como dependencia del efecto de pines en vez del array completo: así el mapa SÍ se
-  // refresca cuando cambia qué envíos deberían tener pin (nuevos en_ruta, cambios de estado, etc.),
-  // pero no re-geocodifica todo en cada poll de 30s si el conjunto relevante no cambió realmente.
+  // Lista de envíos que deberían tener pin con el filtro actual (memoizada: solo se recalcula
+  // si cambian los envíos, el período o el filtro de estado — no en cada render del componente).
+  var enviosPinFiltrados=React.useMemo(function(){
+    var hoy=fechaHoyCL();
+    var conDir=envios.filter(function(e){return e.direccion&&e.comuna;});
+    var pin;
+    if(pinFiltro==='hoy'){
+      pin=conDir.filter(function(e){return e.fecha===hoy;});
+    }else if(pinFiltro==='pendientes'){
+      pin=conDir.filter(function(e){return e.estado!=='entregado'&&e.estado!=='cancelado'&&e.estado!=='siniestro';});
+    }else{
+      pin=conDir;
+    }
+    if(estadoFiltroPin!=='todos'){
+      pin=pin.filter(function(e){return e.estado===estadoFiltroPin;});
+    }
+    return pin.slice(0,2000);
+  },[envios,pinFiltro,estadoFiltroPin]);
+
+  // Firma = solo el CONJUNTO de códigos que deberían tener pin (ordenado, para que no cambie
+  // por simple reordenamiento). A propósito NO incluye estado/dirección: los cambios de estado
+  // de un pin que ya está en el mapa los actualiza el efecto de "Actualizar color" de más abajo
+  // (deps=[envios,mapaListo]), sin tocar este efecto. Así este efecto solo se dispara cuando
+  // realmente hay que AGREGAR o QUITAR un pin — no en cada sync donde cambió cualquier otra cosa
+  // del sistema (eso fue lo que causaba que los pines "desaparecieran": se estaba re-dibujando
+  // todo el mapa desde cero en cada actualización, en vez de solo la diferencia).
   var enviosPinSig=React.useMemo(function(){
-    return envios.map(function(e){return e.codigo+'~'+e.estado+'~'+(e.direccion?1:0)+'~'+(e.comuna?1:0);}).join(',');
-  },[envios]);
+    return enviosPinFiltrados.map(function(e){return e.codigo;}).sort().join(',');
+  },[enviosPinFiltrados]);
+
   // ── Pins de envíos en el mapa ─────────────────────────────
+  // IMPORTANTE: este efecto actualiza de forma INCREMENTAL (agrega los pines nuevos, quita los
+  // que ya no corresponden) — nunca borra y vuelve a dibujar todo el mapa de una vez. Así los
+  // pines que ya estaban bien puestos no parpadean ni desaparecen mientras se actualizan los demás.
   React.useEffect(function(){
     if(!mapaListo||!mapObj.current||!geocoderRef.current) return;
     var map=mapObj.current;
     var geocoder=geocoderRef.current;
 
-    // Cancelar geocodificaciones pendientes e invalidar callbacks en curso
+    // Cancelar geocodificaciones pendientes e invalidar callbacks en curso de la corrida anterior
     geocodTimeoutsRef.current.forEach(function(t){clearTimeout(t);});
     geocodTimeoutsRef.current=[];
     geocodSessionRef.current++;
     var thisSession=geocodSessionRef.current;
-    // No geocodificar si está oculto
+    var capturedSession=thisSession;
+    // No tocar nada si está oculto — lo maneja el efecto de visibilidad, aparte
     if(!pinsVisibleRef.current) return;
-    // Limpiar markers anteriores y re-geocodificar
-    Object.keys(markersEnviosRef.current).forEach(function(k){markersEnviosRef.current[k].setMap(null);});
-    markersEnviosRef.current={};
-    var hoy=fechaHoyCL();
-    var conDir=envios.filter(function(e){return e.direccion&&e.comuna;});
-    var enviosPin;
-    if(pinFiltro==='hoy'){
-      enviosPin=conDir.filter(function(e){return e.fecha===hoy;});
-    }else if(pinFiltro==='pendientes'){
-      enviosPin=conDir.filter(function(e){return e.estado!=='entregado'&&e.estado!=='cancelado'&&e.estado!=='siniestro';});
-    }else{
-      enviosPin=conDir;
-    }
-    if(estadoFiltroPin!=='todos'){
-      enviosPin=enviosPin.filter(function(e){return e.estado===estadoFiltroPin;});
-    }
-    enviosPin=enviosPin.slice(0,2000);
+
+    var enviosPin=enviosPinFiltrados;
     console.log('Pins:',enviosPin.length,'filtro:',pinFiltro);
 
     // colorEstado definida en scope externo
@@ -8872,14 +8884,26 @@ function MapaRutas(props){
       markersEnviosRef.current[e.codigo]=marker;
     }
 
+    // 1) Quitar del mapa los pines que ya NO deberían estar (código ya no matchea el filtro actual)
+    var targetCodigos={};
+    enviosPin.forEach(function(e){targetCodigos[e.codigo]=true;});
+    Object.keys(markersEnviosRef.current).forEach(function(cod){
+      if(!targetCodigos[cod]){
+        markersEnviosRef.current[cod].setMap(null);
+        delete markersEnviosRef.current[cod];
+      }
+    });
+
+    // 2) Solo hace falta colocar los que todavía no tienen marker en el mapa
+    var faltantes=enviosPin.filter(function(e){return !markersEnviosRef.current[e.codigo];});
+
     // Traer coordenadas ya cacheadas en la BD (columna envios.lat/lng) para este lote,
     // asi evitamos re-geocodificar direcciones que el Mapa de Cliente (u otra carga previa)
     // ya resolvio. Solo se geocodifica lo que realmente falta.
-    var capturedSession=thisSession;
     function procesarConCache(mapaDbCoords){
       if(geocodSessionRef.current!==capturedSession) return;
       var pendientes=[];
-      enviosPin.forEach(function(e){
+      faltantes.forEach(function(e){
         var cached=coordsCacheRef.current[e.codigo]||(mapaDbCoords&&mapaDbCoords[e.codigo]);
         if(cached){
           coordsCacheRef.current[e.codigo]=cached;
@@ -8915,8 +8939,8 @@ function MapaRutas(props){
       });
     }
 
-    var codigos=enviosPin.map(function(e){return e.codigo;});
-    if(codigos.length===0){ procesarConCache({}); return; }
+    var codigos=faltantes.map(function(e){return e.codigo;});
+    if(codigos.length===0){ return; }
     var chunks=[];
     for(var ci=0;ci<codigos.length;ci+=200) chunks.push(codigos.slice(ci,ci+200));
     Promise.all(chunks.map(function(chunk){
@@ -8931,7 +8955,7 @@ function MapaRutas(props){
       });
       procesarConCache(mapaDbCoords);
     }).catch(function(){procesarConCache({});});
-  },[mapaListo,pinFiltro,estadoFiltroPin,enviosPinSig]); // Re-geocodifica al cambiar filtro O cuando cambia el conjunto real de envíos relevantes
+  },[mapaListo,pinFiltro,estadoFiltroPin,enviosPinSig]); // Se dispara al cambiar filtro, o cuando cambia el CONJUNTO de códigos que deberían tener pin
 
   // Toggle visibilidad pins - useEffect separado para no re-geocodificar
   React.useEffect(function(){
