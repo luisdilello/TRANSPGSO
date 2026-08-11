@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786485087;
+window.__MODULES_VERSION=1786485345;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7751,6 +7751,12 @@ function PortalCliente({usuario,onLogout}){
     return (e.codigo||'').toLowerCase().includes(q)||(e.destinatario||'').toLowerCase().includes(q)||(e.direccion||'').toLowerCase().includes(q);
   });
 
+  // Totalizador por estado de "Mis Envíos" - solo estados visibles para el cliente
+  // (se excluyen 'retorno' y 'en_bodega_cancelado', que son de uso interno del admin).
+  var ESTADOS_CLIENTE_PORTAL=ESTADOS_ENVIO.filter(function(e){return!e.soloAdmin;});
+  var statsPeriodo={};
+  ESTADOS_CLIENTE_PORTAL.forEach(function(est){statsPeriodo[est.val]=filtPeriodo.filter(function(e){return e.estado===est.val;}).length;});
+
   function exportarPDF(){
     var win=window.open('','_blank');
     var rows=enviosFiltrados.map(function(e,i){
@@ -7860,6 +7866,17 @@ function PortalCliente({usuario,onLogout}){
             React.createElement('span',{style:{alignSelf:'center',fontSize:12,color:'var(--text-soft)'}},'al'),
             React.createElement('input',{type:'date',value:fechaHasta,onChange:function(e){setFechaHasta(e.target.value);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}})
           )
+        ),
+        // Totalizador por estado del período elegido arriba (Hoy/Semana/Mes/Rango)
+        React.createElement('div',{className:'stats-grid',style:{marginBottom:16}},
+          [{val:'todos',label:'Total',color:'var(--gold)',val_num:filtPeriodo.length}].concat(
+            ESTADOS_CLIENTE_PORTAL.map(function(est){return{val:est.val,label:est.label,color:est.color,val_num:statsPeriodo[est.val]||0};})
+          ).map(function(s){
+            return React.createElement('div',{key:s.val,className:'stat-card'},
+              React.createElement('div',{className:'stat-label'},s.label),
+              React.createElement('div',{className:'stat-value',style:{color:s.color,background:'none',WebkitTextFillColor:s.color}},s.val_num)
+            );
+          })
         ),
         React.createElement('div',{style:{marginBottom:16}},
           React.createElement('input',{className:'search-box',placeholder:'Buscar por código, destinatario o dirección...',value:search,onChange:function(e){setSearch(e.target.value);}})
