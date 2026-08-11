@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786413959;
+window.__MODULES_VERSION=1786415535;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8795,6 +8795,13 @@ function MapaRutas(props){
 
   var _a=React.useState({});var asig=_a[0];var setAsig=_a[1];
 
+  // Firma liviana de los campos relevantes de 'envios' (código, estado, si tiene dirección/comuna).
+  // Se usa como dependencia del efecto de pines en vez del array completo: así el mapa SÍ se
+  // refresca cuando cambia qué envíos deberían tener pin (nuevos en_ruta, cambios de estado, etc.),
+  // pero no re-geocodifica todo en cada poll de 30s si el conjunto relevante no cambió realmente.
+  var enviosPinSig=React.useMemo(function(){
+    return envios.map(function(e){return e.codigo+'~'+e.estado+'~'+(e.direccion?1:0)+'~'+(e.comuna?1:0);}).join(',');
+  },[envios]);
   // ── Pins de envíos en el mapa ─────────────────────────────
   React.useEffect(function(){
     if(!mapaListo||!mapObj.current||!geocoderRef.current) return;
@@ -8924,7 +8931,7 @@ function MapaRutas(props){
       });
       procesarConCache(mapaDbCoords);
     }).catch(function(){procesarConCache({});});
-  },[mapaListo,pinFiltro,estadoFiltroPin]); // Solo re-geocodifica al cambiar filtro
+  },[mapaListo,pinFiltro,estadoFiltroPin,enviosPinSig]); // Re-geocodifica al cambiar filtro O cuando cambia el conjunto real de envíos relevantes
 
   // Toggle visibilidad pins - useEffect separado para no re-geocodificar
   React.useEffect(function(){
