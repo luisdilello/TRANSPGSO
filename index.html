@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786482227;
+window.__MODULES_VERSION=1786484206;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7690,19 +7690,38 @@ function PortalCliente({usuario,onLogout}){
   var _fd=useState(''),fechaDesde=_fd[0],setFechaDesde=_fd[1];
   var _fh=useState(''),fechaHasta=_fh[0],setFechaHasta=_fh[1];
   var _s=useState(''),search=_s[0],setSearch=_s[1];
+  var _fe=useState(false),fetchError=_fe[0],setFetchError=_fe[1];
+
+  function cargarEnviosCliente(){
+    setLoading(true);
+    setFetchError(false);
+    // OJO: antes 'loading' se apagaba apenas se filtraba el caché local (casi instantáneo),
+    // ANTES de que terminara la consulta real a Supabase. Si la consulta era lenta o fallaba
+    // (ej: conexión del cliente, sesión vencida), la pantalla se quedaba mostrando
+    // "Sin envíos encontrados" como si fuera un resultado confirmado, sin ningún error visible
+    // ni forma de reintentar. Ahora 'loading' solo se apaga cuando la consulta real termina,
+    // y si falla se muestra un aviso con botón para reintentar en vez de una lista vacía falsa.
+    db.from('envios').select('*').eq('cliente',nombreCliente).then(function(res){
+      if(res.error){
+        console.warn('Error cargando envíos del cliente:',res.error.message);
+        setFetchError(true);
+      }else if(res.data){
+        var sb=res.data.map(function(e){return{id:e.id,codigo:e.codigo,cliente:e.cliente,destinatario:e.destinatario,telefono:e.telefono,direccion:e.direccion,comuna:e.comuna,fecha:e.fecha,estado:e.estado,mensajero:e.mensajero,monto:e.monto,nota:e.nota,foto_etiqueta:e.foto_etiqueta,fotos_entrega:e.fotos_entrega,historial:[{fecha:e.created_at,estado:e.estado,nota:'Cargado'}]};});
+        setEnvios(sb);
+      }
+      setLoading(false);
+    },function(err){
+      console.warn('Error de conexión cargando envíos del cliente:',err&&err.message);
+      setFetchError(true);
+      setLoading(false);
+    });
+  }
 
   React.useEffect(function(){
     var local=lsLoad('gestion_envios',[]);
     var mios=local.filter(function(e){return(e.cliente||'').toUpperCase().trim()===nombreCliente;});
-    setEnvios(mios);
-    setLoading(false);
-    // Sincronizar desde Supabase
-    db.from('envios').select('*').eq('cliente',nombreCliente).then(function(res){
-      if(res.data){
-        var sb=res.data.map(function(e){return{id:e.id,codigo:e.codigo,cliente:e.cliente,destinatario:e.destinatario,telefono:e.telefono,direccion:e.direccion,comuna:e.comuna,fecha:e.fecha,estado:e.estado,mensajero:e.mensajero,monto:e.monto,nota:e.nota,foto_etiqueta:e.foto_etiqueta,fotos_entrega:e.fotos_entrega,historial:[{fecha:e.created_at,estado:e.estado,nota:'Cargado'}]};});
-        setEnvios(sb);
-      }
-    }).catch(function(){});
+    if(mios.length>0)setEnvios(mios);
+    cargarEnviosCliente();
   },[nombreCliente]);
 
   // Analítica
@@ -7833,6 +7852,10 @@ function PortalCliente({usuario,onLogout}){
           React.createElement('input',{className:'search-box',placeholder:'Buscar por código, destinatario o dirección...',value:search,onChange:function(e){setSearch(e.target.value);}})
         ),
         loading?React.createElement('div',{className:'empty-state'},'Cargando envíos...'):
+        fetchError?React.createElement('div',{className:'info-banner',style:{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}},
+          React.createElement('span',null,'⚠ No pudimos cargar tus envíos. Verifica tu conexión e intenta de nuevo.'),
+          React.createElement('button',{className:'btn-secondary',onClick:cargarEnviosCliente},'🔄 Reintentar')
+        ):
         enviosFiltrados.length===0?React.createElement('div',{className:'info-banner'},'Sin envíos encontrados.'):
         React.createElement('div',{className:'table-wrap'},
           React.createElement('table',null,
