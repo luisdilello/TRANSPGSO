@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786396505;
+window.__MODULES_VERSION=1786413959;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7488,9 +7488,17 @@ const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localSto
       if(cached){ponerPin(cached);return;}
       delay+=60;
       setTimeout(function(){
-        geocoder.geocode({address:e.direccion+', '+(e.comuna||'')+', Santiago, Chile'},function(results,status){
+        // Misma limpieza que usa el Mapa de Rutas del admin: saca depto/piso/block (que
+        // confunden al geocoder) y agrega region:'CL' para sesgar resultados ambiguos hacia Chile.
+        var dirLimpia=(e.direccion||'').trim().replace(/,?\s*(depto?|apt|of|piso|block|bl|dpto)[.\s]*[0-9a-z-]*/gi,'').trim();
+        geocoder.geocode({address:dirLimpia+', '+(e.comuna||'')+', Santiago, Chile',region:'CL'},function(results,status){
           if(status==='OK'&&results&&results[0]){
             var loc={lat:results[0].geometry.location.lat(),lng:results[0].geometry.location.lng()};
+            // Sanity check: si el resultado cae muy lejos de la Región Metropolitana (ej. el
+            // geocoder confundió una dirección ambigua y devolvió algo en la cordillera u otra
+            // región), se descarta en vez de mostrar y guardar un pin en el lugar equivocado.
+            var dentroDeRM=loc.lat<=-32.5&&loc.lat>=-34.5&&loc.lng<=-70.0&&loc.lng>=-71.5;
+            if(!dentroDeRM){console.warn('Geocoder devolvió una ubicación fuera de la RM para',e.codigo,dirLimpia,loc);return;}
             coordsCacheRef.current[e.codigo]=loc;
             ponerPin(loc);
             // Se guarda en la base para que la próxima vez (recarga, u otro que abra este
