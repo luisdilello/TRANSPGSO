@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786416338;
+window.__MODULES_VERSION=1786457551;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7503,7 +7503,7 @@ const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localSto
             ponerPin(loc);
             // Se guarda en la base para que la próxima vez (recarga, u otro que abra este
             // mismo mapa) no tenga que volver a geocodificar esta dirección.
-            db.rpc('guardar_coords_envio',{p_codigo:e.codigo,p_lat:loc.lat,p_lng:loc.lng}).catch(function(){});
+            db.rpc('guardar_coords_envio',{p_codigo:e.codigo,p_lat:loc.lat,p_lng:loc.lng}).then(function(){},function(){});
           }
         });
       },delay);
@@ -8931,7 +8931,7 @@ function MapaRutas(props){
               var pos={lat:loc.lat(),lng:loc.lng()};
               coordsCacheRef.current[e.codigo]=pos;
               ponerPin(e,pos);
-              db.rpc('guardar_coords_envio',{p_codigo:e.codigo,p_lat:pos.lat,p_lng:pos.lng}).catch(function(){});
+              db.rpc('guardar_coords_envio',{p_codigo:e.codigo,p_lat:pos.lat,p_lng:pos.lng}).then(function(){},function(){});
             }
           });
         geocodTimeoutsRef.current.push(_tid);
