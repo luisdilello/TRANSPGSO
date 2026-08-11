@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786484206;
+window.__MODULES_VERSION=1786485087;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7742,8 +7742,10 @@ function PortalCliente({usuario,onLogout}){
   var cancelados=filtPeriodo.filter(function(e){return e.estado==='cancelado';}).length;
   var efectividad=total>0?Math.round(entregados/total*100):0;
 
-  // Filtro búsqueda en envíos
-  var enviosFiltrados=envios.filter(function(e){
+  // Filtro búsqueda en envíos - sobre filtPeriodo (ya filtrado por Hoy/Semana/Mes/Rango),
+  // no sobre 'envios' completo, para que el período elegido también aplique a la tabla
+  // de "Mis Envíos" y no solo a las tarjetas de resumen.
+  var enviosFiltrados=filtPeriodo.filter(function(e){
     if(!search)return true;
     var q=search.toLowerCase();
     return (e.codigo||'').toLowerCase().includes(q)||(e.destinatario||'').toLowerCase().includes(q)||(e.direccion||'').toLowerCase().includes(q);
@@ -7846,6 +7848,17 @@ function PortalCliente({usuario,onLogout}){
           React.createElement('div',{style:{display:'flex',gap:8}},
             React.createElement('button',{className:'btn-secondary',onClick:exportarPDF},'📄 PDF'),
             React.createElement('button',{className:'btn-secondary',onClick:exportarExcel},'Excel')
+          )
+        ),
+        React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}},
+          btnPeriodo('hoy','Hoy'),
+          btnPeriodo('semana','Esta semana'),
+          btnPeriodo('mes','Este mes'),
+          btnPeriodo('personalizado','Rango'),
+          periodo==='personalizado'&&React.createElement(React.Fragment,null,
+            React.createElement('input',{type:'date',value:fechaDesde,onChange:function(e){setFechaDesde(e.target.value);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}}),
+            React.createElement('span',{style:{alignSelf:'center',fontSize:12,color:'var(--text-soft)'}},'al'),
+            React.createElement('input',{type:'date',value:fechaHasta,onChange:function(e){setFechaHasta(e.target.value);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}})
           )
         ),
         React.createElement('div',{style:{marginBottom:16}},
