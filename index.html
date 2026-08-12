@@ -46,7 +46,15 @@ if('serviceWorker' in navigator){
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<!-- Google Fonts cargado sin bloquear el render: fonts.googleapis.com esta bloqueado por el
+     Gran Cortafuegos en China continental. Antes esto era un <link rel="stylesheet"> normal, que
+     el navegador espera a cargar (o a que falle) ANTES de pintar la pagina - para un cliente en
+     China eso podia significar una pantalla en blanco/colgada mientras el navegador reintenta la
+     conexion bloqueada. Con rel="preload" + swap a stylesheet en el evento onload, el navegador
+     no espera nada: si el recurso nunca carga, la pagina igual se pinta de inmediato usando las
+     tipografias del sistema como respaldo (ya definidas en el CSS de abajo). -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" onload="this.onload=null;this.rel='stylesheet'"/>
+<noscript><link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/></noscript>
 <style>
 :root {
   --dark:       #3a3d2e;
@@ -536,7 +544,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786500288;
+window.__MODULES_VERSION=1786500696;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
