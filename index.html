@@ -536,7 +536,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786487522;
+window.__MODULES_VERSION=1786500288;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -5965,16 +5965,21 @@ function GananciasRider(_ref_gr){
         let acumulado=[];
         let desde=0;
         const bloque=1000;
+        // Se pagina por 'id' (llave primaria estable) y no por 'updated_at': esa columna puede
+        // cambiar en medio de la paginación (ej. otra corrección al mismo envío) y correr filas
+        // de página, duplicando entregas en el cálculo de ganancias del mensajero.
         while(true){
           const{data,error}=await db.from('envios').select('codigo,fecha,estado,mensajero,monto,comuna,updated_at')
             .eq('estado','entregado').ilike('mensajero','%'+primerNombre+'%')
-            .order('updated_at',{ascending:false}).range(desde,desde+bloque-1);
+            .order('id',{ascending:true}).range(desde,desde+bloque-1);
           if(error||!data||data.length===0)break;
           acumulado=acumulado.concat(data);
           if(data.length<bloque)break;
           desde+=bloque;
           if(cancelado)return;
         }
+        // Defensa adicional: deduplicar por código por si igual llegara alguno repetido.
+        {const _vistos={};acumulado=acumulado.filter(function(r){if(_vistos[r.codigo])return false;_vistos[r.codigo]=true;return true;});}
         // La consulta usa ilike por PRIMER nombre (evita bugs del .or() de PostgREST) y por
         // eso puede traer entregas de otro mensajero con el mismo primer nombre (ej. "MARCOS
         // GIOVACCHINI" y "MARCOS FUENTEALBA"). Se filtra a coincidencia EXACTA de nombre
