@@ -544,7 +544,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786500696;
+window.__MODULES_VERSION=1786574955;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -920,7 +920,7 @@ async function enviarNotificacionPush(mensajero,title,message,url){
 // inicial ya insertó el envio con su estado - esto solo deja la marca de quién y por qué medio entró al sistema).
 async function sbRegistrarHistorial(codigo,estado,nota,usuario,canal){try{await db.from('historial_envios').insert({envio_id:null,codigo_envio:codigo,estado,nota:nota||'',usuario:usuario||'Sistema',canal:canal||'sistema',created_at:new Date().toISOString()});}catch(e){console.warn('Registrar historial error:',e.message);}}
 // Version en lote: para inserciones masivas (colecta, importaciones) evita 1 insert por paquete.
-async function sbRegistrarHistorialLote(codigos,estado,nota,usuario,canal){try{if(!codigos||!codigos.length)return;const ts=new Date().toISOString();const filas=codigos.map(function(cod){return{envio_id:null,codigo_envio:cod,estado,nota:nota||'',usuario:usuario||'Sistema',canal:canal||'sistema',created_at:ts};});await db.from('historial_envios').insert(filas);}catch(e){console.warn('Registrar historial lote error:',e.message);}}const _React=React,useState=_React.useState,useEffect=_React.useEffect,useMemo=_React.useMemo,useRef=_React.useRef;const INIT_CLIENTES=[{id:1,nombre:'MR SHENG',activo:true,tarifa:1600,pagaIVA:false,obs:'Valor ÚNICO S/IVA. Mínimo diario 200 pcs.',rut:'',direccion:'',contacto:'',tarifa10kg:3200,tarifa18kg:12800,tarifaColina:2600,tarifaPH:2600},{id:2,nombre:'YAFA LTDA',activo:true,tarifa:2300,pagaIVA:true,obs:''},{id:3,nombre:'ALMA BONSAI',activo:true,tarifa:2500,pagaIVA:false,obs:'No suele enviar paquetería grande ni PH y Colina'},{id:4,nombre:'ANDES (COLINA)',activo:true,tarifa:2101,pagaIVA:true,obs:'Tarifada por cantidad, precio fijo en Colina y PH'},{id:5,nombre:'DMT',activo:true,tarifa:2261,pagaIVA:false,obs:'No suele enviar paquetería grande'},{id:6,nombre:'HUANG SPA',activo:true,tarifa:1849,pagaIVA:true,obs:'No envía paquetería de Colina y PH'},{id:7,nombre:'IAITECH',activo:true,tarifa:1765,pagaIVA:true,obs:'Suele enviar paquetería pesada o grande'},{id:8,nombre:'QUE COMPRARAS',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:9,nombre:'MARDA',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:10,nombre:'ILAHUI',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:11,nombre:'MEDICALAB',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:12,nombre:'HOME ELECTRO',activo:true,tarifa:2521,pagaIVA:true,obs:''},{id:13,nombre:'SHOP HEY',activo:false,tarifa:2101,pagaIVA:true,obs:''},{id:14,nombre:'MALL SANHOO',activo:true,tarifa:2101,pagaIVA:false,obs:''},{id:15,nombre:'HUANG XIUDAN',activo:true,tarifa:2380,pagaIVA:false,obs:''},{id:16,nombre:'PUMA',activo:true,tarifa:1933,pagaIVA:true,obs:'No envía paquetería de Colina y PH'},{id:17,nombre:'DON TANG',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:18,nombre:'DENTAL ALAMEDA',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:19,nombre:'IMPORTADORA VINI',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:20,nombre:'MAX BELLEZA',activo:true,tarifa:2101,pagaIVA:false,obs:''},{id:21,nombre:'GALVORA',activo:true,tarifa:2300,pagaIVA:true,obs:''},{id:22,nombre:'MAKA',activo:false,tarifa:1891,pagaIVA:true,obs:'Cliente con retiro complicado'},{id:23,nombre:'WEIHOME',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:24,nombre:'NEXO',activo:true,tarifa:2101,pagaIVA:true,obs:'El cliente viene a dejar la paquetería'},{id:25,nombre:'POWERSUPPS',activo:true,tarifa:2500,pagaIVA:false,obs:''},{id:26,nombre:'SUPER XIYU',activo:true,tarifa:1950,pagaIVA:true,obs:''},{id:27,nombre:'PLAZA LILA',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:28,nombre:'ROMERO',activo:false,tarifa:1849,pagaIVA:true,obs:''},{id:29,nombre:'YEAH',activo:false,tarifa:2101,pagaIVA:true,obs:''},{id:30,nombre:'MODA Y MARKET',activo:false,tarifa:2101,pagaIVA:true,obs:''},{id:31,nombre:'NUEVA SHENGA',activo:false,tarifa:2101,pagaIVA:true,obs:''}];const INIT_MENSAJEROS=[{id:1,nombre:'ALEX ARAUJO',activo:true,tarifa:1200},{id:2,nombre:'ANGEL OSUNA',activo:true,tarifa:1200},{id:3,nombre:'ANGEL CARPIO',activo:true,tarifa:1200},{id:4,nombre:'EDBEL MORILLO',activo:true,tarifa:1000},{id:5,nombre:'ELIS CHANGAROTE',activo:true,tarifa:1200},{id:6,nombre:'EXPRESS',activo:true,tarifa:1200},{id:7,nombre:'EXPRESSCOLINA',activo:true,tarifa:1200},{id:8,nombre:'FERNANDOCHECK',activo:false,tarifa:1200},{id:9,nombre:'FIDEL REVERON',activo:true,tarifa:1800},{id:10,nombre:'GERARDO NAHUELPAN',activo:true,tarifa:1200},{id:11,nombre:'GUSTAVO ROMAN',activo:true,tarifa:1300},{id:12,nombre:'HILDEMARO CABRILES',activo:true,tarifa:1200},{id:13,nombre:'JYF',activo:true,tarifa:1200},{id:14,nombre:'JONATHAN RAMIREZ',activo:true,tarifa:1300},{id:15,nombre:'JORGE GATICA',activo:true,tarifa:1300},{id:16,nombre:'MARCOS GIOVACCHINI',activo:true,tarifa:1000},{id:17,nombre:'MARCOS FUENTEALBA',activo:true,tarifa:1200},{id:18,nombre:'MARTIN GATICA',activo:true,tarifa:1300},{id:19,nombre:'MATIAS PARRA',activo:true,tarifa:1200},{id:20,nombre:'RONALD GARCIA',activo:true,tarifa:1200},{id:21,nombre:'YULFER JIMENEZ',activo:true,tarifa:1200},{id:22,nombre:'JONJAIRO CANTILLO',activo:true,tarifa:1200},{id:23,nombre:'JUAN BARTOLI',activo:true,tarifa:1400},{id:24,nombre:'JAVIER CASTRO',activo:true,tarifa:1200},{id:25,nombre:'VICTOR PEREZ',activo:true,tarifa:1000},{id:26,nombre:'MATIAS MORA',activo:true,tarifa:1000},{id:27,nombre:'DAVID MOLINA',activo:true,tarifa:1300},{id:28,nombre:'HERNAN MELEAN',activo:true,tarifa:1200},{id:29,nombre:'ALEJANDRO PADRINO',activo:true,tarifa:1200},{id:30,nombre:'JF LOGISTIC',activo:true,tarifa:2300},{id:31,nombre:'PBCLIS EXPRESS',activo:true,tarifa:0},{id:32,nombre:'MARTIN, PALMA',activo:true,tarifa:1300},{id:33,nombre:'LEONARDO, ESTUPIAÑAN',activo:true,tarifa:1200},{id:34,nombre:'DANIELA, TOLEDO',activo:true,tarifa:1200}];const pct=v=>isNaN(v)||!isFinite(v)?'—':(v*100).toFixed(1)+'%';const barColor=v=>v>=0.95?'#2e7d4f':v>=0.85?'#C8A84B':'#b03030';const badgeKpi=v=>v>=0.95?'green':v>=0.85?'amber':'red';const fmt=n=>typeof n==='number'?n.toLocaleString('es-CL'):'—';const today=()=>new Date().toLocaleDateString('es-CL',{weekday:'long',year:'numeric',month:'long',day:'numeric'});function normalizarNombre(raw){if(!raw)return'';return raw.toString().trim().replace(/,\s*/g,' ').replace(/\s+/g,' ').toUpperCase();}function normNombre(n){return(n||'').toUpperCase().replace(/,/g,'').replace(/\s+/g,' ').trim();}function parsearFecha(raw){try{if(!raw)return'';if(raw instanceof Date){if(isNaN(raw.getTime()))return'';return raw.toISOString().slice(0,10);}if(typeof raw==='number'){const d=new Date(Math.round((raw-25569)*86400*1000));if(isNaN(d.getTime()))return'';return d.toISOString().slice(0,10);}const s=raw.toString().trim();if(!s)return'';const d=new Date(s);if(!isNaN(d.getTime()))return d.toISOString().slice(0,10);const m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);if(m){const d2=new Date(`${m[3].length===2?'20'+m[3]:m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`);if(!isNaN(d2.getTime()))return d2.toISOString().slice(0,10);}return'';}catch(e){return'';}}function parsearEstatus(est){const e=(est||'').toString().toLowerCase();if(e.includes('entregado'))return'entregado';if(e.includes('cancelado'))return'cancelado';if(e.includes('reprogramado')||e.includes('reprog'))return'reprogramado';if(e.includes('camino'))return'camino';return'pendiente';}function procesarImport(rows){const map={};let fechaGlobal='';rows.forEach(r=>{const desp=normalizarNombre(r['Despachador']);const cli=(r['Cliente']||'').toString().trim().toUpperCase();const est=parsearEstatus(r['Estatus de Envio']);const fecha=parsearFecha(r['Fecha Envio']);if(fecha&&!fechaGlobal)fechaGlobal=fecha;if(!desp)return;if(!map[desp])map[desp]={nombre:desp,total:0,entregados:0,enCamino:0,reprogram:0,cancelados:0,pendientes:0,fecha:fecha||fechaGlobal,clientes:{}};map[desp].total++;if(est==='entregado')map[desp].entregados++;else if(est==='cancelado')map[desp].cancelados++;else if(est==='reprogramado')map[desp].reprogram++;else if(est==='camino')map[desp].enCamino++;else map[desp].pendientes++;if(cli){if(!map[desp].clientes[cli])map[desp].clientes[cli]=0;map[desp].clientes[cli]++;}});return{data:Object.values(map),fecha:fechaGlobal};}function KpiBar(_ref2){let value=_ref2.value;const pv=Math.min(Math.max(isFinite(value)?value:0,0),1);return/*#__PURE__*/React.createElement("div",{className:"kpi-bar"},/*#__PURE__*/React.createElement("div",{className:"bar-track"},/*#__PURE__*/React.createElement("div",{className:"bar-fill",style:{width:pv*100+'%',background:barColor(pv)}})),/*#__PURE__*/React.createElement("span",{className:"bar-pct"},pct(value)));}function Badge(_ref3){let type=_ref3.type,children=_ref3.children;return/*#__PURE__*/React.createElement("span",{className:`badge ${type}`},children);}function Toast(_ref4){let msg=_ref4.msg,onClose=_ref4.onClose;useEffect(()=>{const t=setTimeout(onClose,2800);return()=>clearTimeout(t);},[]);return/*#__PURE__*/React.createElement("div",{className:"toast"},"\u2713 ",msg);}function Modal(_ref5){let title=_ref5.title,sub=_ref5.sub,onClose=_ref5.onClose,wide=_ref5.wide,children=_ref5.children;return/*#__PURE__*/React.createElement("div",{className:"modal-overlay",onClick:e=>{if(e.target===e.currentTarget)onClose();}},/*#__PURE__*/React.createElement("div",{className:`modal${wide?' modal-wide':''}`},/*#__PURE__*/React.createElement("div",{className:"modal-title"},title),sub&&/*#__PURE__*/React.createElement("div",{className:"modal-sub"},sub),children));}function ImportarExcel(_ref6){let mensajeros=_ref6.mensajeros,setMensajeros=_ref6.setMensajeros,setMensajerosDia=_ref6.setMensajerosDia,setKpi=_ref6.setKpi,toast=_ref6.toast;const _useState=useState(false),drag=_useState[0],setDrag=_useState[1];const _useState2=useState(null),preview=_useState2[0],setPreview=_useState2[1];const _useState3=useState(null),editPreview=_useState3[0],setEditPreview=_useState3[1];const _useState4=useState(false),importado=_useState4[0],setImportado=_useState4[1];const _useState5=useState(null),error=_useState5[0],setError=_useState5[1];const _useState6=useState([]),importedRows=_useState6[0],setImportedRows=_useState6[1];const fileRef=useRef();function leerArchivo(file){if(!file)return;const ext=file.name.split('.').pop().toLowerCase();if(ext==='htm'||ext==='html'){const r2=new FileReader();r2.onload=ev=>{try{const parser=new DOMParser();const doc=parser.parseFromString(ev.target.result,'text/html');const table=doc.querySelector('table');if(!table){setError('No se encontró tabla en el archivo HTM.');return;}const filas=Array.from(table.querySelectorAll('tr'));const headers=Array.from(filas[0].querySelectorAll('th,td')).map(c=>c.textContent.replace(/[ \t\n\r]+/g,' ').trim());const rows2=filas.slice(1).map(tr=>{const cells=Array.from(tr.querySelectorAll('td')).map(c=>c.textContent.replace(/[ \t\n\r]+/g,' ').trim());const obj={};headers.forEach((h,i)=>{obj[h]=cells[i]||'';});return obj;}).filter(r=>Object.values(r).some(v=>v));procesarFilasImport(rows2);}catch(err){setError('Error leyendo HTM: '+err.message);}};r2.readAsText(file,'windows-1252');return;}const reader=new FileReader();reader.onload=e=>{try{let wb;try{wb=XLSX.read(e.target.result,{type:'array',cellDates:true,raw:false});}catch(e1){try{wb=XLSX.read(e.target.result,{type:'array'});}catch(e2){// Check if it's a frameset XLS
+async function sbRegistrarHistorialLote(codigos,estado,nota,usuario,canal){try{if(!codigos||!codigos.length)return;const ts=new Date().toISOString();const filas=codigos.map(function(cod){return{envio_id:null,codigo_envio:cod,estado,nota:nota||'',usuario:usuario||'Sistema',canal:canal||'sistema',created_at:ts};});await db.from('historial_envios').insert(filas);}catch(e){console.warn('Registrar historial lote error:',e.message);}}async function obtenerFuentesExistentes(codigos){try{if(!codigos||!codigos.length)return new Map();var uniq=Array.from(new Set(codigos.filter(Boolean)));if(!uniq.length)return new Map();var res=await db.from('envios').select('codigo,fuente').in('codigo',uniq);var mapa=new Map();if(res&&res.data)res.data.forEach(function(r){mapa.set(r.codigo,r.fuente);});return mapa;}catch(e){console.warn('obtenerFuentesExistentes error:',e.message);return new Map();}}const _React=React,useState=_React.useState,useEffect=_React.useEffect,useMemo=_React.useMemo,useRef=_React.useRef;const INIT_CLIENTES=[{id:1,nombre:'MR SHENG',activo:true,tarifa:1600,pagaIVA:false,obs:'Valor ÚNICO S/IVA. Mínimo diario 200 pcs.',rut:'',direccion:'',contacto:'',tarifa10kg:3200,tarifa18kg:12800,tarifaColina:2600,tarifaPH:2600},{id:2,nombre:'YAFA LTDA',activo:true,tarifa:2300,pagaIVA:true,obs:''},{id:3,nombre:'ALMA BONSAI',activo:true,tarifa:2500,pagaIVA:false,obs:'No suele enviar paquetería grande ni PH y Colina'},{id:4,nombre:'ANDES (COLINA)',activo:true,tarifa:2101,pagaIVA:true,obs:'Tarifada por cantidad, precio fijo en Colina y PH'},{id:5,nombre:'DMT',activo:true,tarifa:2261,pagaIVA:false,obs:'No suele enviar paquetería grande'},{id:6,nombre:'HUANG SPA',activo:true,tarifa:1849,pagaIVA:true,obs:'No envía paquetería de Colina y PH'},{id:7,nombre:'IAITECH',activo:true,tarifa:1765,pagaIVA:true,obs:'Suele enviar paquetería pesada o grande'},{id:8,nombre:'QUE COMPRARAS',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:9,nombre:'MARDA',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:10,nombre:'ILAHUI',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:11,nombre:'MEDICALAB',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:12,nombre:'HOME ELECTRO',activo:true,tarifa:2521,pagaIVA:true,obs:''},{id:13,nombre:'SHOP HEY',activo:false,tarifa:2101,pagaIVA:true,obs:''},{id:14,nombre:'MALL SANHOO',activo:true,tarifa:2101,pagaIVA:false,obs:''},{id:15,nombre:'HUANG XIUDAN',activo:true,tarifa:2380,pagaIVA:false,obs:''},{id:16,nombre:'PUMA',activo:true,tarifa:1933,pagaIVA:true,obs:'No envía paquetería de Colina y PH'},{id:17,nombre:'DON TANG',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:18,nombre:'DENTAL ALAMEDA',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:19,nombre:'IMPORTADORA VINI',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:20,nombre:'MAX BELLEZA',activo:true,tarifa:2101,pagaIVA:false,obs:''},{id:21,nombre:'GALVORA',activo:true,tarifa:2300,pagaIVA:true,obs:''},{id:22,nombre:'MAKA',activo:false,tarifa:1891,pagaIVA:true,obs:'Cliente con retiro complicado'},{id:23,nombre:'WEIHOME',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:24,nombre:'NEXO',activo:true,tarifa:2101,pagaIVA:true,obs:'El cliente viene a dejar la paquetería'},{id:25,nombre:'POWERSUPPS',activo:true,tarifa:2500,pagaIVA:false,obs:''},{id:26,nombre:'SUPER XIYU',activo:true,tarifa:1950,pagaIVA:true,obs:''},{id:27,nombre:'PLAZA LILA',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:28,nombre:'ROMERO',activo:false,tarifa:1849,pagaIVA:true,obs:''},{id:29,nombre:'YEAH',activo:false,tarifa:2101,pagaIVA:true,obs:''},{id:30,nombre:'MODA Y MARKET',activo:false,tarifa:2101,pagaIVA:true,obs:''},{id:31,nombre:'NUEVA SHENGA',activo:false,tarifa:2101,pagaIVA:true,obs:''}];const INIT_MENSAJEROS=[{id:1,nombre:'ALEX ARAUJO',activo:true,tarifa:1200},{id:2,nombre:'ANGEL OSUNA',activo:true,tarifa:1200},{id:3,nombre:'ANGEL CARPIO',activo:true,tarifa:1200},{id:4,nombre:'EDBEL MORILLO',activo:true,tarifa:1000},{id:5,nombre:'ELIS CHANGAROTE',activo:true,tarifa:1200},{id:6,nombre:'EXPRESS',activo:true,tarifa:1200},{id:7,nombre:'EXPRESSCOLINA',activo:true,tarifa:1200},{id:8,nombre:'FERNANDOCHECK',activo:false,tarifa:1200},{id:9,nombre:'FIDEL REVERON',activo:true,tarifa:1800},{id:10,nombre:'GERARDO NAHUELPAN',activo:true,tarifa:1200},{id:11,nombre:'GUSTAVO ROMAN',activo:true,tarifa:1300},{id:12,nombre:'HILDEMARO CABRILES',activo:true,tarifa:1200},{id:13,nombre:'JYF',activo:true,tarifa:1200},{id:14,nombre:'JONATHAN RAMIREZ',activo:true,tarifa:1300},{id:15,nombre:'JORGE GATICA',activo:true,tarifa:1300},{id:16,nombre:'MARCOS GIOVACCHINI',activo:true,tarifa:1000},{id:17,nombre:'MARCOS FUENTEALBA',activo:true,tarifa:1200},{id:18,nombre:'MARTIN GATICA',activo:true,tarifa:1300},{id:19,nombre:'MATIAS PARRA',activo:true,tarifa:1200},{id:20,nombre:'RONALD GARCIA',activo:true,tarifa:1200},{id:21,nombre:'YULFER JIMENEZ',activo:true,tarifa:1200},{id:22,nombre:'JONJAIRO CANTILLO',activo:true,tarifa:1200},{id:23,nombre:'JUAN BARTOLI',activo:true,tarifa:1400},{id:24,nombre:'JAVIER CASTRO',activo:true,tarifa:1200},{id:25,nombre:'VICTOR PEREZ',activo:true,tarifa:1000},{id:26,nombre:'MATIAS MORA',activo:true,tarifa:1000},{id:27,nombre:'DAVID MOLINA',activo:true,tarifa:1300},{id:28,nombre:'HERNAN MELEAN',activo:true,tarifa:1200},{id:29,nombre:'ALEJANDRO PADRINO',activo:true,tarifa:1200},{id:30,nombre:'JF LOGISTIC',activo:true,tarifa:2300},{id:31,nombre:'PBCLIS EXPRESS',activo:true,tarifa:0},{id:32,nombre:'MARTIN, PALMA',activo:true,tarifa:1300},{id:33,nombre:'LEONARDO, ESTUPIAÑAN',activo:true,tarifa:1200},{id:34,nombre:'DANIELA, TOLEDO',activo:true,tarifa:1200}];const pct=v=>isNaN(v)||!isFinite(v)?'—':(v*100).toFixed(1)+'%';const barColor=v=>v>=0.95?'#2e7d4f':v>=0.85?'#C8A84B':'#b03030';const badgeKpi=v=>v>=0.95?'green':v>=0.85?'amber':'red';const fmt=n=>typeof n==='number'?n.toLocaleString('es-CL'):'—';const today=()=>new Date().toLocaleDateString('es-CL',{weekday:'long',year:'numeric',month:'long',day:'numeric'});function normalizarNombre(raw){if(!raw)return'';return raw.toString().trim().replace(/,\s*/g,' ').replace(/\s+/g,' ').toUpperCase();}function normNombre(n){return(n||'').toUpperCase().replace(/,/g,'').replace(/\s+/g,' ').trim();}function parsearFecha(raw){try{if(!raw)return'';if(raw instanceof Date){if(isNaN(raw.getTime()))return'';return raw.toISOString().slice(0,10);}if(typeof raw==='number'){const d=new Date(Math.round((raw-25569)*86400*1000));if(isNaN(d.getTime()))return'';return d.toISOString().slice(0,10);}const s=raw.toString().trim();if(!s)return'';const d=new Date(s);if(!isNaN(d.getTime()))return d.toISOString().slice(0,10);const m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);if(m){const d2=new Date(`${m[3].length===2?'20'+m[3]:m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`);if(!isNaN(d2.getTime()))return d2.toISOString().slice(0,10);}return'';}catch(e){return'';}}function parsearEstatus(est){const e=(est||'').toString().toLowerCase();if(e.includes('entregado'))return'entregado';if(e.includes('cancelado'))return'cancelado';if(e.includes('reprogramado')||e.includes('reprog'))return'reprogramado';if(e.includes('camino'))return'camino';return'pendiente';}function procesarImport(rows){const map={};let fechaGlobal='';rows.forEach(r=>{const desp=normalizarNombre(r['Despachador']);const cli=(r['Cliente']||'').toString().trim().toUpperCase();const est=parsearEstatus(r['Estatus de Envio']);const fecha=parsearFecha(r['Fecha Envio']);if(fecha&&!fechaGlobal)fechaGlobal=fecha;if(!desp)return;if(!map[desp])map[desp]={nombre:desp,total:0,entregados:0,enCamino:0,reprogram:0,cancelados:0,pendientes:0,fecha:fecha||fechaGlobal,clientes:{}};map[desp].total++;if(est==='entregado')map[desp].entregados++;else if(est==='cancelado')map[desp].cancelados++;else if(est==='reprogramado')map[desp].reprogram++;else if(est==='camino')map[desp].enCamino++;else map[desp].pendientes++;if(cli){if(!map[desp].clientes[cli])map[desp].clientes[cli]=0;map[desp].clientes[cli]++;}});return{data:Object.values(map),fecha:fechaGlobal};}function KpiBar(_ref2){let value=_ref2.value;const pv=Math.min(Math.max(isFinite(value)?value:0,0),1);return/*#__PURE__*/React.createElement("div",{className:"kpi-bar"},/*#__PURE__*/React.createElement("div",{className:"bar-track"},/*#__PURE__*/React.createElement("div",{className:"bar-fill",style:{width:pv*100+'%',background:barColor(pv)}})),/*#__PURE__*/React.createElement("span",{className:"bar-pct"},pct(value)));}function Badge(_ref3){let type=_ref3.type,children=_ref3.children;return/*#__PURE__*/React.createElement("span",{className:`badge ${type}`},children);}function Toast(_ref4){let msg=_ref4.msg,onClose=_ref4.onClose;useEffect(()=>{const t=setTimeout(onClose,2800);return()=>clearTimeout(t);},[]);return/*#__PURE__*/React.createElement("div",{className:"toast"},"\u2713 ",msg);}function Modal(_ref5){let title=_ref5.title,sub=_ref5.sub,onClose=_ref5.onClose,wide=_ref5.wide,children=_ref5.children;return/*#__PURE__*/React.createElement("div",{className:"modal-overlay",onClick:e=>{if(e.target===e.currentTarget)onClose();}},/*#__PURE__*/React.createElement("div",{className:`modal${wide?' modal-wide':''}`},/*#__PURE__*/React.createElement("div",{className:"modal-title"},title),sub&&/*#__PURE__*/React.createElement("div",{className:"modal-sub"},sub),children));}function ImportarExcel(_ref6){let mensajeros=_ref6.mensajeros,setMensajeros=_ref6.setMensajeros,setMensajerosDia=_ref6.setMensajerosDia,setKpi=_ref6.setKpi,toast=_ref6.toast;const _useState=useState(false),drag=_useState[0],setDrag=_useState[1];const _useState2=useState(null),preview=_useState2[0],setPreview=_useState2[1];const _useState3=useState(null),editPreview=_useState3[0],setEditPreview=_useState3[1];const _useState4=useState(false),importado=_useState4[0],setImportado=_useState4[1];const _useState5=useState(null),error=_useState5[0],setError=_useState5[1];const _useState6=useState([]),importedRows=_useState6[0],setImportedRows=_useState6[1];const fileRef=useRef();function leerArchivo(file){if(!file)return;const ext=file.name.split('.').pop().toLowerCase();if(ext==='htm'||ext==='html'){const r2=new FileReader();r2.onload=ev=>{try{const parser=new DOMParser();const doc=parser.parseFromString(ev.target.result,'text/html');const table=doc.querySelector('table');if(!table){setError('No se encontró tabla en el archivo HTM.');return;}const filas=Array.from(table.querySelectorAll('tr'));const headers=Array.from(filas[0].querySelectorAll('th,td')).map(c=>c.textContent.replace(/[ \t\n\r]+/g,' ').trim());const rows2=filas.slice(1).map(tr=>{const cells=Array.from(tr.querySelectorAll('td')).map(c=>c.textContent.replace(/[ \t\n\r]+/g,' ').trim());const obj={};headers.forEach((h,i)=>{obj[h]=cells[i]||'';});return obj;}).filter(r=>Object.values(r).some(v=>v));procesarFilasImport(rows2);}catch(err){setError('Error leyendo HTM: '+err.message);}};r2.readAsText(file,'windows-1252');return;}const reader=new FileReader();reader.onload=e=>{try{let wb;try{wb=XLSX.read(e.target.result,{type:'array',cellDates:true,raw:false});}catch(e1){try{wb=XLSX.read(e.target.result,{type:'array'});}catch(e2){// Check if it's a frameset XLS
 const txt=new TextDecoder().decode(e.target.result.slice(0,500));if(txt.includes('frameset')||txt.includes('shLink')){throw new Error('Este archivo Excel usa formato de carpeta. Ábrelo en Excel y guárdalo como .xlsx (Archivo → Guardar como → Excel Workbook .xlsx), luego súbelo aquí.');}throw new Error('Formato no soportado. Guarda el archivo como .xlsx desde Excel e inténtalo de nuevo.');}}const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});if(!rows.length){setError('El archivo está vacío o no tiene datos.');return;}// Normalizar nombres de columnas — aceptar variaciones
 const normalizeRows=rows.map(r=>{const n={};Object.keys(r).forEach(k=>{const kn=k.trim().toLowerCase();// Mapear variantes de columnas
 if(kn==='envio'||kn==='envío'||kn==='codigo'||kn==='código'||kn==='tracking')n['Envio']=String(r[k]||'').replace(/^'+/,'').trim();else if(kn==='despachador'||kn==='mensajero'||kn==='repartidor')n['Despachador']=r[k];else if(kn==='cliente'||kn==='remitente'||kn==='origen')n['Cliente']=r[k];else if(kn==='destinatario'||kn==='receptor'||kn==='destino')n['Destinatario']=r[k];else if(kn==='telefono'||kn==='teléfono'||kn==='tel'||kn==='fono')n['Telefono']=r[k];else if(kn==='direccion'||kn==='dirección'||kn==='dir')n['Direccion']=r[k];else if(kn==='comuna'||kn==='sector'||kn==='localidad')n['Comuna']=r[k];else if(kn==='fecha envio'||kn==='fecha envío'||kn==='fecha'||kn==='date')n['Fecha Envio']=r[k];else if(kn==='estatus de envio'||kn==='estatus'||kn==='estado'||kn==='status')n['Estatus de Envio']=r[k];else if(kn==='monto'||kn==='valor'||kn==='cod'||kn==='cobro')n['Monto']=r[k];else n[k]=r[k];});// Si no tiene Envio normalizedo, intentar el campo original
@@ -3917,6 +3917,7 @@ function RetiroMasivoRider(_ref_rm){
   var _s7=useState(''),manualCode=_s7[0],setManualCode=_s7[1];
   var _s8=useState(false),showManual=_s8[0],setShowManual=_s8[1];
   var _s9=useState('idle'),scanEstado=_s9[0],setScanEstado=_s9[1]; // idle | alineando | capturando
+  var _s10rm=useState(null),resultadoErrorRM=_s10rm[0],setResultadoErrorRM=_s10rm[1];
   var videoRef=useRef();
   var canvasRef=useRef();
   var scannerRef=useRef(null);
@@ -4139,15 +4140,21 @@ function RetiroMasivoRider(_ref_rm){
     setGuardando(true);
     var clienteNombre=clienteSel&&clienteSel.nombre?clienteSel.nombre:'Sin cliente';
     var fecha=fechaHoyCL();
-    var inserts=paquetes.filter(function(p){return p.estado!=='error';}).map(function(p){
+    var paquetesValidos=paquetes.filter(function(p){return p.estado!=='error';});
+    // El PDF siempre manda: si un código ya fue cargado por PDF (fuente:'flex'), el escaneo
+    // del mensajero en Retiro Masivo NO debe pisar destinatario/dirección/comuna/teléfono/
+    // referencia (a veces mal leídos por fotos movidas) — solo confirma el retiro físico.
+    var fuentesExistentesRM=await obtenerFuentesExistentes(paquetesValidos.map(function(p){return p.codigo;}));
+    var inserts=[];
+    var protegidosRM=[];
+    paquetesValidos.forEach(function(p){
+      if(fuentesExistentesRM.get(p.codigo)==='flex'){ protegidosRM.push(p); return; }
       var d=p.datosIA||{};
       // Usar datos editados si existen, sino los de IA
       var destinatario=p.editDest!=null?p.editDest:(d.destinatario||'');
       var direccion=p.editDir!=null?p.editDir:(d.direccion||'');
       var comuna=p.editComuna!=null?p.editComuna:(d.comuna||'');
-      // Usar foto directamente (ya está comprimida al capturar)
-      var fotoB64=p.foto||null;
-      return{
+      inserts.push({
         codigo:p.codigo,
         cliente:clienteNombre,
         destinatario:destinatario,
@@ -4164,35 +4171,59 @@ function RetiroMasivoRider(_ref_rm){
         nota:'Retiro masivo - '+usuario.nombre,
         fuente:'retiro_masivo',
         foto_etiqueta:p.foto||null
-      };
+      });
     });
     var ok=0,err=0;
+    var codigosFallidosRM=[];
     // Insertar en lotes de 50
     var LOTE=50;
     for(var i=0;i<inserts.length;i+=LOTE){
       var lote=inserts.slice(i,i+LOTE);
       try{
         var res=await db.from('envios').upsert(lote,{onConflict:'codigo',ignoreDuplicates:false});
-        if(res.error){err+=lote.length;}else{
+        if(res.error){err+=lote.length;codigosFallidosRM=codigosFallidosRM.concat(lote.map(function(e){return e.codigo;}));}else{
           ok+=lote.length;
           // Registrar en el historial quien y a que hora ingreso cada paquete via colecta, y por que medio (celular del mensajero)
           sbRegistrarHistorialLote(lote.map(function(e){return e.codigo;}),'en_bodega','Colecta / Retiro masivo',usuario.nombre,'app_mensajero');
         }
-      }catch(e){err+=lote.length;}
+      }catch(e){err+=lote.length;codigosFallidosRM=codigosFallidosRM.concat(lote.map(function(x){return x.codigo;}));}
     }
-    // Subir fotos en background sin bloquear
-    paquetes.forEach(function(p){
-      if(p.foto&&ok>0){
+    // Paquetes ya cargados por PDF: solo confirmar el retiro físico, sin tocar los datos del PDF
+    if(protegidosRM.length>0){
+      await procesarConcurrencia(protegidosRM,async function(p){
         try{
-          db.from('envios').update({foto_etiqueta:p.foto}).eq('codigo',p.codigo).then(function(){}).catch(function(){});
-        }catch(e){}
-      }
-    });
+          var r=await db.from('envios').update({estado:'en_bodega',mensajero:normNombre(usuario.nombre),foto_etiqueta:p.foto||null}).eq('codigo',p.codigo);
+          if(r.error){ err++; codigosFallidosRM.push(p.codigo); }
+          else{ ok++; }
+        }catch(e){ err++; codigosFallidosRM.push(p.codigo); }
+      },8);
+      var protegidosOkRM=protegidosRM.filter(function(p){return codigosFallidosRM.indexOf(p.codigo)===-1;});
+      if(protegidosOkRM.length>0) sbRegistrarHistorialLote(protegidosOkRM.map(function(p){return p.codigo;}),'en_bodega','Colecta / Retiro masivo (dato PDF preservado)',usuario.nombre,'app_mensajero');
+    }
     detenerScanner();
-    try{localStorage.removeItem(claveSesionRM);}catch(e){}
     setGuardando(false);
-    setFase('resumen');
-    toast('✓ '+ok+' paquetes registrados'+(err>0?' · '+err+' errores':''));
+    if(codigosFallidosRM.length===0){
+      // Éxito total: recién ahora borramos la sesión recuperable y subimos fotos en background.
+      paquetes.forEach(function(p){
+        if(p.foto){
+          try{
+            db.from('envios').update({foto_etiqueta:p.foto}).eq('codigo',p.codigo).then(function(){}).catch(function(){});
+          }catch(e){}
+        }
+      });
+      try{localStorage.removeItem(claveSesionRM);}catch(e){}
+      setFase('resumen');
+      toast('✓ '+ok+' paquetes registrados'+(protegidosRM.length>0?' · '+protegidosRM.length+' con dato PDF preservado':''));
+    }else{
+      // Falló total o parcialmente guardar en la base (ej. se cortó la conexión a mitad del
+      // retiro): NO borramos la sesión recuperable y dejamos en pantalla solo lo que faltó
+      // guardar, para reintentar ahí mismo sin perder nada — nunca mostrar "completado" en falso.
+      var setFallidosRM=new Set(codigosFallidosRM);
+      setPaquetes(function(prev){return prev.filter(function(p){return setFallidosRM.has(p.codigo);});});
+      setResultadoErrorRM({ok:ok,err:err,total:paquetesValidos.length});
+      setFase('errorGuardadoRM');
+      toast('⚠ '+ok+' guardados · '+err+' NO se guardaron — reintenta antes de salir');
+    }
   }
 
   // SESIÓN RECUPERABLE — se muestra antes que cualquier otra fase si hay escaneos sin confirmar
@@ -4400,6 +4431,16 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
     );
   }
 
+  // FASE ERROR AL GUARDAR — nunca fingir éxito: mostrar de verdad qué falló y dejar reintentar
+  if(fase==='errorGuardadoRM') return React.createElement('div',{style:{position:'fixed',inset:0,background:'#1a0a0a',zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff',fontFamily:'DM Sans,sans-serif',padding:24}},
+    React.createElement('div',{style:{fontSize:56,marginBottom:16}},'⚠️'),
+    React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:26,color:'#ff6b6b',letterSpacing:2,marginBottom:8,textAlign:'center'}},'NO SE GUARDÓ TODO'),
+    React.createElement('div',{style:{fontSize:15,color:'rgba(255,255,255,0.7)',marginBottom:6,textAlign:'center'}},(resultadoErrorRM?resultadoErrorRM.ok:0)+' de '+(resultadoErrorRM?resultadoErrorRM.total:0)+' paquetes se guardaron correctamente'),
+    React.createElement('div',{style:{fontSize:14,color:'#ff6b6b',marginBottom:24,textAlign:'center',maxWidth:320}},'Quedan '+paquetes.length+' paquete'+(paquetes.length!==1?'s':'')+' SIN guardar. No cierres la app — reintenta ahora mismo antes de irte del lugar.'),
+    React.createElement('button',{onClick:confirmarRetiro,disabled:guardando,style:{width:'100%',maxWidth:320,padding:'16px',borderRadius:12,border:'none',background:guardando?'rgba(200,168,75,0.3)':'linear-gradient(135deg,var(--gold),#a87d2a)',color:'var(--dark-deep)',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,cursor:guardando?'not-allowed':'pointer',marginBottom:12}},guardando?'REINTENTANDO...':'🔄 REINTENTAR '+paquetes.length+' PAQUETES'),
+    React.createElement('button',{onClick:function(){setFase('revision');},style:{width:'100%',maxWidth:320,padding:'13px',borderRadius:10,border:'1px solid rgba(255,255,255,0.2)',background:'transparent',color:'rgba(255,255,255,0.6)',fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1,cursor:'pointer'}},'VER DETALLE ANTES DE REINTENTAR')
+  );
+
   // FASE RESUMEN
   return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff',fontFamily:'DM Sans,sans-serif',padding:24}},
     React.createElement('div',{style:{fontSize:60,marginBottom:16}},'✅'),
@@ -4444,6 +4485,7 @@ function ColectaRider(_ref_cr){
   const _s8b=useState(null),fotoAnalisis=_s8b[0],setFotoAnalisis=_s8b[1]; // {codigo,base64,mediaType,analizando,datos}
   const _s8c=useState([]),fotosGaleria=_s8c[0],setFotosGaleria=_s8c[1]; // [{file,preview,analizando,datos,error}]
   const _s8d=useState(false),procesandoGaleria=_s8d[0],setProcesandoGaleria=_s8d[1];
+  const _s8e=useState(null),resultadoErrorCol=_s8e[0],setResultadoErrorCol=_s8e[1];
   const galeriaInputRef=useRef();
   const fotoRef=useRef();
   const videoRef=useRef();
@@ -4743,7 +4785,12 @@ function ColectaRider(_ref_cr){
     const manuales=fotosGaleria.filter(f=>f.datos&&(f.datos?.tipo==='manual'||(!f.datos?.codigo&&(f.datos?.destinatario||f.datos?.direccion))));
     if(conCodigo.length===0&&manuales.length===0){ toast('⚠ No hay paquetes para cargar'); return; }
     setProcesandoGaleria(true);
-    const inserts=conCodigo.map(f=>{
+    // El PDF siempre manda: si el código ya fue cargado por PDF (fuente:'flex'), no pisar
+    // destinatario/dirección/comuna/teléfono/referencia con lo leído de la foto de galería.
+    const fuentesExistentesGal=await obtenerFuentesExistentes(conCodigo.map(f=>f.datos.codigo));
+    const conCodigoProtegidos=conCodigo.filter(f=>fuentesExistentesGal.get(f.datos.codigo)==='flex');
+    const conCodigoNormales=conCodigo.filter(f=>fuentesExistentesGal.get(f.datos.codigo)!=='flex');
+    const inserts=conCodigoNormales.map(f=>{
       const d=f.datos||{};
       return{
         codigo:d.codigo,
@@ -4763,9 +4810,27 @@ function ColectaRider(_ref_cr){
       };
     });
     try{
-      const {error}=await db.from('envios').upsert(inserts,{onConflict:'codigo',ignoreDuplicates:false});
-      if(error) console.warn('Upsert warning:',error.message);
-      else sbRegistrarHistorialLote(inserts.map(function(e){return e.codigo;}),'en_bodega','Colecta Galería '+turno,usuario.nombre,'app_mensajero');
+      // Nunca fingir éxito: si el guardado principal falla, no borrar la galería ni avanzar
+      // de fase — así el mensajero puede reintentar sin perder las fotos ya analizadas
+      // (esto es justo lo que le pasó al retiro de 166 paquetes de DMT en Retiro Masivo).
+      let insertsFallaron=false;
+      if(inserts.length>0){
+        const {error}=await db.from('envios').upsert(inserts,{onConflict:'codigo',ignoreDuplicates:false});
+        if(error){ console.warn('Upsert warning:',error.message); insertsFallaron=true; }
+        else sbRegistrarHistorialLote(inserts.map(function(e){return e.codigo;}),'en_bodega','Colecta Galería '+turno,usuario.nombre,'app_mensajero');
+      }
+      if(insertsFallaron){
+        toast('⚠ No se pudo guardar '+inserts.length+' paquete'+(inserts.length!==1?'s':'')+' — reintenta ahora, no se borró la galería');
+        setProcesandoGaleria(false);
+        return;
+      }
+      // Ya cargados por PDF: solo confirmar el retiro físico, sin pisar los datos del PDF
+      if(conCodigoProtegidos.length>0){
+        await procesarConcurrencia(conCodigoProtegidos,async function(f){
+          try{ await db.from('envios').update({estado:'en_ruta',mensajero:normNombre(usuario.nombre)}).eq('codigo',f.datos.codigo); }catch(e){}
+        },8);
+        sbRegistrarHistorialLote(conCodigoProtegidos.map(function(f){return f.datos.codigo;}),'en_ruta','Colecta Galería '+turno+' (dato PDF preservado)',usuario.nombre,'app_mensajero');
+      }
       // Guardar foto como base64 directamente en la tabla envios (sin Storage)
       let fotasSubidas=0;
       let errFotos=[];
@@ -4838,10 +4903,11 @@ function ColectaRider(_ref_cr){
     const clienteNombre=clienteSel?.nombre||clienteSel||'Sin cliente';
     let ok=0,err=0,bloqueados=0;
     const codigos=paquetes.map(p=>p.codigo);
-    // Buscar cuáles ya existen (con su estado actual, para no pisar piezas que requieren admin)
+    // Buscar cuáles ya existen (con su estado actual, para no pisar piezas que requieren admin,
+    // y con su fuente para no pisar datos cargados por PDF con lo leído por la cámara)
     let existentes=new Map();
     try{
-      const {data}=await db.from('envios').select('codigo,estado,mensajero').in('codigo',codigos);
+      const {data}=await db.from('envios').select('codigo,estado,mensajero,fuente').in('codigo',codigos);
       if(data) data.forEach(r=>existentes.set(r.codigo,r));
     }catch(e){}
     const bloqueadosSet=new Set();
@@ -4882,37 +4948,59 @@ function ColectaRider(_ref_cr){
     // Bulk update existentes - en paralelo (8 a la vez) en vez de uno por uno, para no esperar
     // un round-trip de red por cada paquete ya existente confirmado en la colecta.
     var codigosUpdateOk=[];
+    var codigosFallidosCol=[];
     await procesarConcurrencia(updates,async function(cod){
       try{
         const pActual=paquetes.find(pp=>pp.codigo===cod);
         const dActual=pActual?.datos||{};
-        const updateFields={estado:'en_bodega',mensajero:normNombre(usuario.nombre),fuente:'colecta_'+turno,actualizado_en:ts};
-        if(dActual.destinatario) updateFields.destinatario=dActual.destinatario;
-        if(dActual.direccion) updateFields.direccion=dActual.direccion;
-        if(dActual.telefono) updateFields.telefono=dActual.telefono;
-        if(dActual.comuna) updateFields.comuna=dActual.comuna;
+        // El PDF siempre manda: si ya estaba cargado por PDF (fuente:'flex'), no tocar sus
+        // datos de dirección/destinatario/teléfono/comuna ni su fuente, solo confirmar retiro.
+        const esPDF=existentes.get(cod)?.fuente==='flex';
+        const updateFields={estado:'en_bodega',mensajero:normNombre(usuario.nombre),actualizado_en:ts};
+        if(!esPDF){
+          updateFields.fuente='colecta_'+turno;
+          if(dActual.destinatario) updateFields.destinatario=dActual.destinatario;
+          if(dActual.direccion) updateFields.direccion=dActual.direccion;
+          if(dActual.telefono) updateFields.telefono=dActual.telefono;
+          if(dActual.comuna) updateFields.comuna=dActual.comuna;
+        }
         if(pActual?.foto) updateFields.foto_etiqueta=pActual.foto;
-        await db.from('envios').update(updateFields).eq('codigo',cod);
-        ok++;
-        codigosUpdateOk.push(cod);
-      }catch(e){ err++; }
+        const r=await db.from('envios').update(updateFields).eq('codigo',cod);
+        if(r.error){ err++; codigosFallidosCol.push(cod); }
+        else{ ok++; codigosUpdateOk.push(cod); }
+      }catch(e){ err++; codigosFallidosCol.push(cod); }
     },8);
     if(codigosUpdateOk.length>0)sbRegistrarHistorialLote(codigosUpdateOk,'en_bodega','Colecta '+turno+' (ya estaba en el sistema)',usuario.nombre,'app_mensajero');
     // Bulk insert nuevos
     if(inserts.length>0){
       try{
         const {error}=await db.from('envios').insert(inserts);
-        if(error){ console.error('Insert error:',error.message,error.details); err+=inserts.length; }
+        if(error){ console.error('Insert error:',error.message,error.details); err+=inserts.length; codigosFallidosCol=codigosFallidosCol.concat(inserts.map(function(e){return e.codigo;})); }
         else{ok+=inserts.length;sbRegistrarHistorialLote(inserts.map(function(e){return e.codigo;}),'en_bodega','Colecta '+turno,usuario.nombre,'app_mensajero');}
-      }catch(e){ err+=inserts.length; }
+      }catch(e){ err+=inserts.length; codigosFallidosCol=codigosFallidosCol.concat(inserts.map(function(e){return e.codigo;})); }
     }
-    // Actualizar estados locales
-    setPaquetes(prev=>prev.map(p=>({...p,estado:bloqueadosSet.has(p.codigo)?'error':(err>0?'error':'ok'),motivo:bloqueadosSet.has(p.codigo)?'Requiere admin (no está en bodega/en ruta)':null})));
-    try{localStorage.removeItem(claveSesionCol);}catch(e){}
     setGuardando(false);
-    playSound(bloqueados>0?'error':'success');
-    setFase('resumen');
-    toast(bloqueados>0?'⚠ '+ok+' cargados · '+bloqueados+' requieren revisión de un admin (no estaban en bodega/en ruta)':'✓ Colecta confirmada: '+ok+' paquetes en bodega');
+    if(codigosFallidosCol.length===0){
+      // Todo lo que se intentó guardar se guardó (los bloqueados quedan marcados para
+      // revisión de un admin, no es una falla). Recién ahora borramos la sesión recuperable
+      // y mostramos el resumen real.
+      setPaquetes(prev=>prev.map(p=>({...p,estado:bloqueadosSet.has(p.codigo)?'error':'ok',motivo:bloqueadosSet.has(p.codigo)?'Requiere admin (no está en bodega/en ruta)':null})));
+      try{localStorage.removeItem(claveSesionCol);}catch(e){}
+      playSound(bloqueados>0?'error':'success');
+      setFase('resumen');
+      toast(bloqueados>0?'⚠ '+ok+' cargados · '+bloqueados+' requieren revisión de un admin (no estaban en bodega/en ruta)':'✓ Colecta confirmada: '+ok+' paquetes en bodega');
+    }else{
+      // Falló total o parcialmente guardar en la base (ej. se cortó la conexión): NO
+      // borramos la sesión recuperable y dejamos en pantalla solo lo que faltó guardar,
+      // para reintentar ahí mismo sin perder nada — esto es lo que le pasó al retiro
+      // de 166 paquetes de DMT: la pantalla decía "completado" pero nunca llegó a la base.
+      var setFallidosCol=new Set(codigosFallidosCol);
+      setPaquetes(prev=>prev.filter(function(p){return setFallidosCol.has(p.codigo);}));
+      setResultadoErrorCol({ok:ok,err:err,bloqueados:bloqueados,total:paquetes.length});
+      playSound('error');
+      setFase('errorGuardadoColecta');
+      toast('⚠ '+ok+' guardados · '+err+' NO se guardaron — reintenta antes de salir');
+    }
   }
 
   const clientesActivos=(clientes||[]).filter(c=>c.activo!==false);
@@ -5110,6 +5198,16 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
     paquetes.length>0&&React.createElement('div',{style:{padding:'12px 16px',background:'rgba(0,0,0,0.6)',borderTop:'2px solid var(--gold)',flexShrink:0}},
       React.createElement('button',{onClick:()=>{if(paquetes.length===0){toast('⚠ No hay paquetes escaneados');return;}setFase('revision');},disabled:guardando||paquetes.length===0,style:{width:'100%',padding:'14px',borderRadius:10,border:'none',background:paquetes.length>0?'linear-gradient(135deg,var(--gold),#a87d2a)':'rgba(255,255,255,0.1)',color:paquetes.length>0?'var(--dark-deep)':'rgba(255,255,255,0.3)',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,cursor:paquetes.length>0?'pointer':'default',fontWeight:700}},'👁 REVISAR '+paquetes.length+' PAQUETE'+(paquetes.length!==1?'S':''))
     )
+  );
+
+  // FASE ERROR AL GUARDAR — nunca fingir éxito: mostrar de verdad qué falló y dejar reintentar
+  if(fase==='errorGuardadoColecta') return React.createElement('div',{style:{position:'fixed',inset:0,background:'#1a0a0a',zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff',fontFamily:'DM Sans,sans-serif',padding:24}},
+    React.createElement('div',{style:{fontSize:56,marginBottom:16}},'⚠️'),
+    React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:26,color:'#ff6b6b',letterSpacing:2,marginBottom:8,textAlign:'center'}},'NO SE GUARDÓ TODO'),
+    React.createElement('div',{style:{fontSize:15,color:'rgba(255,255,255,0.7)',marginBottom:6,textAlign:'center'}},(resultadoErrorCol?resultadoErrorCol.ok:0)+' de '+(resultadoErrorCol?resultadoErrorCol.total:0)+' paquetes se guardaron correctamente'),
+    React.createElement('div',{style:{fontSize:14,color:'#ff6b6b',marginBottom:24,textAlign:'center',maxWidth:320}},'Quedan '+paquetes.length+' paquete'+(paquetes.length!==1?'s':'')+' SIN guardar. No cierres la app — reintenta ahora mismo antes de irte del lugar.'),
+    React.createElement('button',{onClick:confirmarColecta,disabled:guardando,style:{width:'100%',maxWidth:320,padding:'16px',borderRadius:12,border:'none',background:guardando?'rgba(200,168,75,0.3)':'linear-gradient(135deg,var(--gold),#a87d2a)',color:'var(--dark-deep)',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,cursor:guardando?'not-allowed':'pointer',marginBottom:12}},guardando?'REINTENTANDO...':'🔄 REINTENTAR '+paquetes.length+' PAQUETES'),
+    React.createElement('button',{onClick:function(){setFase('revision');},style:{width:'100%',maxWidth:320,padding:'13px',borderRadius:10,border:'1px solid rgba(255,255,255,0.2)',background:'transparent',color:'rgba(255,255,255,0.6)',fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1,cursor:'pointer'}},'VER DETALLE ANTES DE REINTENTAR')
   );
 
   return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif',alignItems:'center',justifyContent:'center',padding:24}},
