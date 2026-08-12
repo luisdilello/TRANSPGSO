@@ -544,7 +544,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786574955;
+window.__MODULES_VERSION=1786576810;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -4188,11 +4188,12 @@ function RetiroMasivoRider(_ref_rm){
         }
       }catch(e){err+=lote.length;codigosFallidosRM=codigosFallidosRM.concat(lote.map(function(x){return x.codigo;}));}
     }
-    // Paquetes ya cargados por PDF: solo confirmar el retiro físico, sin tocar los datos del PDF
+    // Paquetes ya cargados por PDF: solo confirmar el retiro físico (estado), sin tocar los
+    // datos del PDF ni subir la foto del mensajero — el PDF ya es el mejor registro que hay.
     if(protegidosRM.length>0){
       await procesarConcurrencia(protegidosRM,async function(p){
         try{
-          var r=await db.from('envios').update({estado:'en_bodega',mensajero:normNombre(usuario.nombre),foto_etiqueta:p.foto||null}).eq('codigo',p.codigo);
+          var r=await db.from('envios').update({estado:'en_bodega',mensajero:normNombre(usuario.nombre)}).eq('codigo',p.codigo);
           if(r.error){ err++; codigosFallidosRM.push(p.codigo); }
           else{ ok++; }
         }catch(e){ err++; codigosFallidosRM.push(p.codigo); }
@@ -4203,9 +4204,11 @@ function RetiroMasivoRider(_ref_rm){
     detenerScanner();
     setGuardando(false);
     if(codigosFallidosRM.length===0){
-      // Éxito total: recién ahora borramos la sesión recuperable y subimos fotos en background.
+      // Éxito total: recién ahora borramos la sesión recuperable y subimos fotos en background
+      // (solo de los paquetes NO protegidos por PDF — esos no necesitan foto del mensajero).
+      var codigosProtegidosSetRM=new Set(protegidosRM.map(function(p){return p.codigo;}));
       paquetes.forEach(function(p){
-        if(p.foto){
+        if(p.foto&&!codigosProtegidosSetRM.has(p.codigo)){
           try{
             db.from('envios').update({foto_etiqueta:p.foto}).eq('codigo',p.codigo).then(function(){}).catch(function(){});
           }catch(e){}
@@ -4831,10 +4834,11 @@ function ColectaRider(_ref_cr){
         },8);
         sbRegistrarHistorialLote(conCodigoProtegidos.map(function(f){return f.datos.codigo;}),'en_ruta','Colecta Galería '+turno+' (dato PDF preservado)',usuario.nombre,'app_mensajero');
       }
-      // Guardar foto como base64 directamente en la tabla envios (sin Storage)
+      // Guardar foto como base64 directamente en la tabla envios (sin Storage) — solo para
+      // los que NO están protegidos por PDF, esos no necesitan foto del mensajero.
       let fotasSubidas=0;
       let errFotos=[];
-      await Promise.all(conCodigo.map(async f=>{
+      await Promise.all(conCodigoNormales.map(async f=>{
         try{
           // Comprimir a tamaño pequeño para guardar en DB
           const fotoBase64=await new Promise(res=>{
@@ -4954,7 +4958,8 @@ function ColectaRider(_ref_cr){
         const pActual=paquetes.find(pp=>pp.codigo===cod);
         const dActual=pActual?.datos||{};
         // El PDF siempre manda: si ya estaba cargado por PDF (fuente:'flex'), no tocar sus
-        // datos de dirección/destinatario/teléfono/comuna ni su fuente, solo confirmar retiro.
+        // datos de dirección/destinatario/teléfono/comuna/fuente, ni subir la foto del
+        // mensajero — el PDF ya es el mejor registro que hay, solo confirmar el retiro.
         const esPDF=existentes.get(cod)?.fuente==='flex';
         const updateFields={estado:'en_bodega',mensajero:normNombre(usuario.nombre),actualizado_en:ts};
         if(!esPDF){
@@ -4963,8 +4968,8 @@ function ColectaRider(_ref_cr){
           if(dActual.direccion) updateFields.direccion=dActual.direccion;
           if(dActual.telefono) updateFields.telefono=dActual.telefono;
           if(dActual.comuna) updateFields.comuna=dActual.comuna;
+          if(pActual?.foto) updateFields.foto_etiqueta=pActual.foto;
         }
-        if(pActual?.foto) updateFields.foto_etiqueta=pActual.foto;
         const r=await db.from('envios').update(updateFields).eq('codigo',cod);
         if(r.error){ err++; codigosFallidosCol.push(cod); }
         else{ ok++; codigosUpdateOk.push(cod); }
