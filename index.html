@@ -544,7 +544,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786578093;
+window.__MODULES_VERSION=1786578739;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1567,6 +1567,21 @@ function Dashboard(_ref7){
   const colectaSort=Object.entries(porColecta).sort((a,b)=>b[1].total-a[1].total);
   function buildManifiestoColecta(cli){
     function getTipo(e){const kg=parseFloat(e.peso)||0;const com=(e.comuna||'').toUpperCase();if(com.includes('COLINA'))return'colina';if(com.includes('PADRE HURTADO')||com.includes('HURTADO'))return'ph';if(kg>18)return'18kg';if(kg>10)return'10kg';return'normal';}
+    // "Flex" solo si de verdad vino de un import PDF/Excel de Flex (fuente:'flex'). Cualquier
+    // otro origen (etiqueta propia, colecta, retiro masivo, etc.) es carga manual del sistema.
+    function tipoLabelPara(e,t){
+      const esFlex=(e.fuente||'').toLowerCase()==='flex';
+      const sufijo={normal:'',d10kg:' sobre 10kg',d18kg:' sobre 18kg',colina:' Colina',ph:' Padre Hurtado'}[t]||'';
+      return(esFlex?'Flex':'Manual')+sufijo;
+    }
+    // Formatea fecha 'YYYY-MM-DD' a 'DD-MM-YYYY' con texto plano (sin objeto Date) para que
+    // no se corra un día por huso horario, y para que coincida con el formato de RECIBIDO.
+    function fmtFechaCL(iso){
+      if(!iso)return'—';
+      const p=(iso+'').slice(0,10).split('-');
+      if(p.length!==3)return iso;
+      return p[2]+'-'+p[1]+'-'+p[0];
+    }
     function modalidadInfo(e){
       const f=(e.fuente||'').toLowerCase();
       if(f.indexOf('colecta')===0)return f.slice(-3)==='_pm'?{label:'Colecta PM',bg:'#E3F2FD',fg:'#1565C0'}:{label:'Colecta AM',bg:'#FFF3E0',fg:'#E65100'};
@@ -1596,10 +1611,10 @@ function Dashboard(_ref7){
       return '<tr data-est="'+(e.estado||'')+'" data-secc="'+secc+'" data-via="'+mi.label.toUpperCase()+'" style="border-bottom:1px solid #EDE3C8">'
         +'<td style="padding:8px 10px;color:#aaa;font-size:11px;text-align:center">'+(i+1)+'</td>'
         +'<td style="padding:8px 10px;font-family:monospace;color:#A0842A;font-weight:700;font-size:11px">'+e.codigo+'</td>'
-        +'<td style="padding:8px 10px;font-size:12px;color:#444">'+(e.fecha||'—')+'</td>'
+        +'<td style="padding:8px 10px;font-size:12px;color:#444">'+fmtFechaCL(e.fecha)+'</td>'
         +'<td style="padding:8px 10px;font-size:12px;color:#444">'+(e.created_at?new Date(e.created_at).toLocaleDateString('es-CL'):'—')+'</td>'
         +'<td style="padding:8px 10px">'+comunaHtml+'</td>'
-        +'<td style="padding:8px 10px;font-size:12px;color:#666">'+(tipoLabel[t]||'Flex')+'</td>'
+        +'<td style="padding:8px 10px;font-size:12px;color:#666">'+tipoLabelPara(e,t)+'</td>'
         +'<td style="padding:8px 10px"><span style="background:'+estBg+';color:'+estColor+';padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">'+estLabel+'</span></td>'
         +'</tr>';
     }).join('');
@@ -1609,7 +1624,7 @@ function Dashboard(_ref7){
     const estadosPresentes={};
     enviosCli.forEach(e=>{const lbl={'entregado':'Entregado','cancelado':'Cancelado','siniestro':'Siniestro','reprogramado':'Reprogramado','en_ruta':'En Ruta','en_bodega':'En Bodega'}[e.estado]||e.estado;estadosPresentes[lbl]=(estadosPresentes[lbl]||0)+1;});
     const tiposPresentes={};
-    enviosCli.forEach(e=>{const t=getTipo(e);const lbl=tipoLabel[t]||'Flex';tiposPresentes[lbl]=(tiposPresentes[lbl]||0)+1;});
+    enviosCli.forEach(e=>{const t=getTipo(e);const lbl=tipoLabelPara(e,t);tiposPresentes[lbl]=(tiposPresentes[lbl]||0)+1;});
     const modalidadesPresentes={};
     enviosCli.forEach(e=>{const lbl=modalidadInfo(e).label;modalidadesPresentes[lbl]=(modalidadesPresentes[lbl]||0)+1;});
     const htmlContent='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5"/><meta name="theme-color" content="#C8A84B"/><title>'+cli+' - '+periodoLabel+'</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></scr'+'ipt><style>*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}body{font-family:"DM Sans",system-ui,sans-serif;background:#F9F6EE;color:#444}#up{position:fixed;bottom:20px;right:16px;width:42px;height:42px;border-radius:50%;background:#C8A84B;color:#fff;border:none;font-size:20px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(168,132,48,.35);display:none;align-items:center;justify-content:center;z-index:200}#up.show{display:flex}</style></head><body>'
