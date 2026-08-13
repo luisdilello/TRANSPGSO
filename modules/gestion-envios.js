@@ -506,10 +506,13 @@ showListaNegra&&(()=>{const lista=lsLoad('envios_eliminados',[]);return/*#__PURE
     /*#__PURE__*/React.createElement('input',{type:'date',value:hasta,onChange:function(e){setHasta(e.target.value);setPage(1);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12,outline:'none'}})
   ),
   /*#__PURE__*/React.createElement('span',{style:{marginLeft:'auto',display:'flex',alignItems:'center',gap:8,fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1,color:'var(--dark)',background:'linear-gradient(145deg,#fff,#f5eedc)',border:'1.5px solid var(--gold)',borderRadius:12,padding:'6px 16px',boxShadow:'3px 3px 8px rgba(43,46,32,0.1)'}},
-    /*#__PURE__*/React.createElement('span',{style:{color:'var(--gold)',fontSize:22}},enviosPeriodo.length.toLocaleString('es-CL')),
-    /*#__PURE__*/React.createElement('span',{style:{fontSize:11,fontFamily:'DM Sans',color:'var(--text-soft)',letterSpacing:0,textTransform:'none'}},'envíos en período')
+    sincronizando?/*#__PURE__*/React.createElement('span',{style:{fontSize:13,fontFamily:'DM Sans',color:'var(--text-soft)'}},'Sincronizando...'):/*#__PURE__*/React.createElement(React.Fragment,null,
+      /*#__PURE__*/React.createElement('span',{style:{color:'var(--gold)',fontSize:22}},enviosPeriodo.length.toLocaleString('es-CL')),
+      /*#__PURE__*/React.createElement('span',{style:{fontSize:11,fontFamily:'DM Sans',color:'var(--text-soft)',letterSpacing:0,textTransform:'none'}},'envíos en período')
+    )
   )
 ),
+sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'20px',color:'var(--text-soft)',fontSize:13,marginBottom:20}},'⏳ Sincronizando historial completo desde la nube...'):
 /*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:20,paddingTop:14,overflowX:'auto'}},[{val:'todos',label:'Todos',color:'var(--gold)'},...ESTADOS_ENVIO].map(est=>{const count=est.val==='todos'?enviosPeriodo.length:stats[est.val]||0;const active=filtroEst===est.val;const accentColor=est.color||'var(--gold)';return/*#__PURE__*/React.createElement("div",{key:est.val,onClick:()=>{setFiltroEst(est.val);setPage(1);},style:{
   padding:'16px 18px',borderRadius:14,cursor:'pointer',minWidth:100,textAlign:'center',
   background:active?'linear-gradient(145deg,#ffffff,#f0e8d0)':'linear-gradient(145deg,#fff,#faf3e0)',

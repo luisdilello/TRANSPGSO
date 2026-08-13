@@ -544,7 +544,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786639054;
+window.__MODULES_VERSION=1786648247;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1684,7 +1684,9 @@ function Dashboard(_ref7){
       ),
       React.createElement('span',{style:{marginLeft:'auto',display:'flex',alignItems:'center',gap:8,fontFamily:'Bebas Neue',fontSize:20,letterSpacing:1,color:'var(--dark)',background:'linear-gradient(145deg,#fff,#f5eedc)',border:'1.5px solid var(--gold)',borderRadius:12,padding:'8px 18px',boxShadow:'3px 3px 8px rgba(43,46,32,0.1)'}},cargandoExtra||cargandoRango||cargandoTodos?React.createElement('span',{style:{fontSize:13,fontFamily:'DM Sans',color:'var(--text-soft)'}},'Cargando historial...'):React.createElement(React.Fragment,null,React.createElement('span',{style:{color:'var(--gold)',fontSize:26}},total.toLocaleString('es-CL')),React.createElement('span',{style:{fontSize:12,fontFamily:'DM Sans',color:'var(--text-soft)',letterSpacing:0,textTransform:'none'}},'envíos en período')))
     ),
-    // ── KPI CARDS ESTADO ──
+    // ── KPI CARDS ESTADO ── (oculto mientras carga el historial completo del período: evita mostrar
+    // un desglose parcial que luego cambia de golpe al terminar de traer todas las páginas de Supabase)
+    (cargandoExtra||cargandoRango||cargandoTodos)?React.createElement('div',{style:{textAlign:'center',padding:'20px',color:'var(--text-soft)',fontSize:13,marginBottom:20}},'⏳ Cargando historial completo del período...'):
     React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12,marginBottom:20}},
       Object.entries(porEstado).map(([est,cnt])=>{
         var valClass=est==='en_bodega'?'teal':est==='en_ruta'?'gold':est==='entregado'?'green':est==='reprogramado'?'purple':est==='cancelado'?'red':'orange';
@@ -1696,7 +1698,7 @@ function Dashboard(_ref7){
       );})
     ),
     // ── EFECTIVIDAD ──
-    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:20}},
+    (cargandoExtra||cargandoRango||cargandoTodos)?React.createElement('div',{style:{padding:'20px 0',textAlign:'center',color:'var(--text-soft)',fontSize:13,marginBottom:20}},'⏳ Cargando historial completo del período...'):React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:20}},
       React.createElement('div',{className:'panel'},
         React.createElement('div',{className:'panel-title'},'Efectividad del período'),
         [
