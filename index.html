@@ -544,7 +544,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786578739;
+window.__MODULES_VERSION=1786581125;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7924,6 +7924,7 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
   var _envios=React.useState([]);var envios=_envios[0];var setEnvios=_envios[1];
   var _mapaListo=React.useState(false);var mapaListo=_mapaListo[0];var setMapaListo=_mapaListo[1];
   var _fe=React.useState('todos');var filtroEstado=_fe[0];var setFiltroEstado=_fe[1];
+  var _cm=React.useState(true);var cargandoMapaCliente=_cm[0];var setCargandoMapaCliente=_cm[1];
   function colorEstado(estado){
     if(estado==='entregado')return'#2e7d4f';
     if(estado==='cancelado'||estado==='siniestro')return'#b03030';
@@ -7941,6 +7942,7 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
     // consulta sin rango se trunca server-side (tope PostgREST) para clientes con más de ~1000
     // envíos históricos, dejando pines faltantes en el mapa sin ningún aviso.
     async function cargar(){
+      if(!cancelado)setCargandoMapaCliente(true);
       try{
         var acumulado=[];var offset=0;var bloque=1000;
         while(true){
@@ -7948,13 +7950,16 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
           if(res.error||!res.data||res.data.length===0)break;
           acumulado=acumulado.concat(res.data);
           // Se pinta el mapa apenas llega el primer bloque en vez de esperar todos los bloques,
-          // igual que en cargarEnviosCliente, para clientes con miles de envíos.
+          // igual que en cargarEnviosCliente, para clientes con miles de envíos. Mientras siguen
+          // llegando más bloques se avisa con 'cargandoMapaCliente' para que no parezca que el
+          // número final ya está listo cuando en realidad todavía puede crecer.
           if(!cancelado)setEnvios(acumulado.slice());
           if(res.data.length<bloque)break;
           offset+=bloque;
           if(offset>=50000)break;
         }
       }catch(e){}
+      if(!cancelado)setCargandoMapaCliente(false);
     }
     cargar();
     var canalId='envios-cliente-'+nombreCliente.replace(/[^a-zA-Z0-9]/g,'_');
@@ -8039,6 +8044,7 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
       btnPeriodoMapa('semana',t('Esta semana')),
       btnPeriodoMapa('mes',t('Este mes')),
       btnPeriodoMapa('personalizado',t('Rango')),
+      cargandoMapaCliente&&React.createElement('span',{style:{fontSize:11,color:'var(--gold)',fontWeight:700,display:'flex',alignItems:'center',gap:5}},React.createElement('span',{style:{width:7,height:7,borderRadius:'50%',background:'var(--gold)',animation:'pulse 1s infinite'}}),t('Cargando todos los envíos…')),
       periodo==='personalizado'&&React.createElement(React.Fragment,null,
         React.createElement('input',{type:'date',value:fechaDesde,onChange:function(e){setFechaDesde(e.target.value);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}}),
         React.createElement('span',{style:{alignSelf:'center',fontSize:12,color:'var(--text-soft)'}},t('al')),
@@ -8123,9 +8129,12 @@ function PortalCliente({usuario,onLogout}){
   }
 
   React.useEffect(function(){
-    var local=lsLoad('gestion_envios',[]);
-    var mios=local.filter(function(e){return(e.cliente||'').toUpperCase().trim()===nombreCliente;});
-    if(mios.length>0)setEnvios(mios);
+    // Antes esto sembraba 'envios' con el cache local (lsLoad('gestion_envios')) filtrado por
+    // cliente ANTES de ir a buscar los datos reales — el cliente veía un número (a veces viejo,
+    // a veces de otra sesión/dispositivo) que unos segundos después cambiaba al real cuando
+    // terminaba cargarEnviosCliente(). Se saca el sembrado: mientras carga se muestra el
+    // loading real (ya manejado por cargarEnviosCliente), y lo que aparece en pantalla es
+    // siempre el dato real de Supabase, nunca una cifra vieja que después se corrige sola.
     cargarEnviosCliente();
   },[nombreCliente]);
 
@@ -9192,7 +9201,22 @@ useEffect(()=>{async function syncInicial(){
       data=retry.data;error=retry.error;
     }
     if(error||!data||!data.length)return;
-    const local=lsLoad('gestion_envios',[]);const mapaLocal={};local.forEach(e=>{mapaLocal[e.codigo]=e;});const merged=data.map(sb=>{var _mapaLocal$sb$codigo3,_mapaLocal$sb$codigo4;return{id:((_mapaLocal$sb$codigo3=mapaLocal[sb.codigo])==null?void 0:_mapaLocal$sb$codigo3.id)||sb.id,codigo:sb.codigo,cliente:sb.cliente||'',destinatario:sb.destinatario||'',telefono:sb.telefono||'',direccion:sb.direccion||'',comuna:sb.comuna||'',referencia:sb.referencia||'',fecha:sb.fecha||fechaHoyCL(),estado:sb.estado||'en_bodega',mensajero:sb.mensajero||'',monto:sb.monto||0,enUnCambio:sb.en_un_cambio||false,nota:sb.nota||'',fuente:sb.fuente||'propio',historial:((_mapaLocal$sb$codigo4=mapaLocal[sb.codigo])==null?void 0:_mapaLocal$sb$codigo4.historial)||[{fecha:sb.created_at||new Date().toISOString(),estado:sb.estado,nota:'Sincronizado desde Supabase'}],_synced:true};});const codigosSB=new Set(data.map(e=>e.codigo));const eliminadosInit=new Set(lsLoad('envios_eliminados',[]));const soloLocal=local.filter(e=>!codigosSB.has(e.codigo)&&!eliminadosInit.has(e.codigo)&&e._synced!==true);const final=[...merged,...soloLocal];lsSave('gestion_envios',final);setEnviosGestion(final);console.log('✓ Sync inicial:',data.length,'envíos desde Supabase');
+    // OJO: este sync solo trae los últimos 8 días (para ser rápido al abrir la app). Antes,
+    // cualquier envío en el cache local MÁS VIEJO que esa ventana y ya marcado _synced (por
+    // el sync completo de Gestión de Envíos) se descartaba acá porque no venía en este fetch
+    // parcial — eso hacía que el total de Dashboard/Mapa se achicara cada vez que este sync
+    // corría, y volviera a crecer cuando Gestión de Envíos sincronizaba de nuevo: el número
+    // "aparecía y cambiaba" cada 60s sin que nadie tocara nada. Ahora este sync solo
+    // ACTUALIZA/AGREGA los códigos que trae (los últimos 8 días), y nunca elimina del cache
+    // local ningún código fuera de esa ventana — el historial completo queda intacto.
+    const local=lsLoad('gestion_envios',[]);const mapaLocal={};local.forEach(e=>{mapaLocal[e.codigo]=e;});
+    data.forEach(function(sb){
+      const existente=mapaLocal[sb.codigo];
+      mapaLocal[sb.codigo]={id:(existente&&existente.id)||sb.id,codigo:sb.codigo,cliente:sb.cliente||'',destinatario:sb.destinatario||'',telefono:sb.telefono||'',direccion:sb.direccion||'',comuna:sb.comuna||'',referencia:sb.referencia||'',fecha:sb.fecha||fechaHoyCL(),estado:sb.estado||'en_bodega',mensajero:sb.mensajero||'',monto:sb.monto||0,enUnCambio:sb.en_un_cambio||false,nota:sb.nota||'',fuente:sb.fuente||'propio',historial:(existente&&existente.historial)||[{fecha:sb.created_at||new Date().toISOString(),estado:sb.estado,nota:'Sincronizado desde Supabase'}],_synced:true};
+    });
+    const eliminadosInit=new Set(lsLoad('envios_eliminados',[]));
+    const final=Object.values(mapaLocal).filter(function(e){return!eliminadosInit.has(e.codigo);});
+    lsSave('gestion_envios',final);setEnviosGestion(final);console.log('✓ Sync inicial:',data.length,'envíos actualizados de los últimos 8 días · '+final.length+' en total');
   }catch(e){console.warn('Sync inicial error:',e.message);}
 }syncInicial();const _autoSyncInterval2=setInterval(syncInicial,60000);return()=>clearInterval(_autoSyncInterval2);},[]);const mensajerosActivos=useMemo(()=>mensajeros.filter(m=>m.activo!==false),[mensajeros]);const mensajerosVista=useMemo(()=>{if(!perfil||perfil.verTodo)return mensajerosActivos;return mensajerosActivos.filter(m=>perfil.mensajerosIds.includes(m.id));},[perfil,mensajerosActivos]);const mensajerosDiaVista=useMemo(()=>{if(!perfil||perfil.verTodo)return mensajerosDia;const nombresPermitidos=new Set(mensajerosVista.map(m=>m.nombre));return mensajerosDia.filter(m=>nombresPermitidos.has(m.nombre));},[perfil,mensajerosDia,mensajerosVista]);const kpiVista=useMemo(()=>{if(!perfil||perfil.verTodo)return kpi;const totEnt=mensajerosDiaVista.reduce((a,m)=>a+m.entregados,0);const totCam=mensajerosDiaVista.reduce((a,m)=>a+(m.enCamino||0),0);const totRep=mensajerosDiaVista.reduce((a,m)=>a+m.reprogram,0);const totCan=mensajerosDiaVista.reduce((a,m)=>a+m.cancelados,0);const totTotal=mensajerosDiaVista.reduce((a,m)=>a+m.total,0);return{...kpi,totalPaquetes:totTotal,entregados:totEnt,enCamino:totCam,reprogramados:totRep,cancelados:totCan};},[perfil,kpi,mensajerosDiaVista]);if(!usuarioActivo){return/*#__PURE__*/React.createElement(LoginScreen,{onLogin:u=>{setUsuarioActivo(u);lsSave('session_usuario',u);let pf=null;if(u.rol==='superadmin'){pf={nombre:u.nombre,rol:'superadmin',esAdmin:true,esSuperAdmin:true,verTodo:true,mensajerosIds:[]};}else if(u.rol==='admin'){pf={nombre:u.nombre,rol:'admin',esAdmin:true,esSuperAdmin:false,verTodo:true,mensajerosIds:[]};}else if(u.rol==='rider'){pf={nombre:u.nombre,rol:'rider',esAdmin:false,esSuperAdmin:false,verTodo:false,mensajerosIds:[]};}if(pf){setPerfil(pf);lsSave('session_perfil',pf);}}});}if((usuarioActivo==null?void 0:usuarioActivo.rol)==='cliente'){return/*#__PURE__*/React.createElement(PortalCliente,{usuario:usuarioActivo,onLogout:()=>{setUsuarioActivo(null);lsSave('session_usuario',null);}});}if((usuarioActivo==null?void 0:usuarioActivo.rol)==='rider'){return/*#__PURE__*/React.createElement(RiderApp,{usuario:usuarioActivo,mensajeros:mensajeros,onLogout:()=>{setUsuarioActivo(null);setPerfil(null);lsSave('session_usuario',null);lsSave('session_perfil',null);}});}if(!perfil){return/*#__PURE__*/React.createElement(PerfilSelector,{mensajeros:mensajeros,usuario:usuarioActivo,onConfirm:p=>{const pf2={...p,rol:p.rol||usuarioActivo.rol,esAdmin:p.esAdmin,esSuperAdmin:p.esSuperAdmin||false};setPerfil(pf2);lsSave('session_perfil',pf2);}});}const tabs=[];return/*#__PURE__*/React.createElement(React.Fragment,null,
 avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,left:0,right:0,zIndex:99999,display:'flex',flexDirection:'column',gap:4,padding:'8px 8px 0'}},
@@ -9445,8 +9469,13 @@ function MapaRutas(props){
     if(estadoFiltroPin!=='todos'){
       pin=pin.filter(function(e){return e.estado===estadoFiltroPin;});
     }
-    return pin.slice(0,2000);
+    return pin;
   },[envios,pinFiltro,estadoFiltroPin]);
+  // Límite de pines dibujados en el mapa por rendimiento — a diferencia de antes, ahora se
+  // avisa en pantalla cuando aplica (antes se recortaba en silencio a 2000 y no había forma
+  // de saber que faltaban pines sin contarlos a mano).
+  var LIMITE_PINES_MAPA=3000;
+  var pinesOcultosPorLimite=Math.max(0,enviosPinFiltrados.length-LIMITE_PINES_MAPA);
 
   // Firma = solo el CONJUNTO de códigos que deberían tener pin (ordenado, para que no cambie
   // por simple reordenamiento). A propósito NO incluye estado/dirección: los cambios de estado
@@ -9477,8 +9506,8 @@ function MapaRutas(props){
     // No tocar nada si está oculto — lo maneja el efecto de visibilidad, aparte
     if(!pinsVisibleRef.current) return;
 
-    var enviosPin=enviosPinFiltrados;
-    console.log('Pins:',enviosPin.length,'filtro:',pinFiltro);
+    var enviosPin=enviosPinFiltrados.slice(0,LIMITE_PINES_MAPA);
+    console.log('Pins:',enviosPin.length,'de',enviosPinFiltrados.length,'filtro:',pinFiltro);
 
     // colorEstado definida en scope externo
     function colorEstadoLocal(estado){
@@ -10290,6 +10319,7 @@ function MapaRutas(props){
           transition:'all 0.2s'}},
           f==='hoy'?'HOY':f==='pendientes'?'PENDIENTES':'TODOS');
       }),
+      pinesOcultosPorLimite>0&&React.createElement('span',{title:'Por rendimiento el mapa dibuja como máximo '+LIMITE_PINES_MAPA+' pines a la vez. Filtra por período o estado para ver el resto.',style:{fontSize:10,color:'#ff6b6b',fontWeight:700,background:'rgba(200,0,0,0.15)',border:'1px solid rgba(255,107,107,0.4)',borderRadius:6,padding:'4px 8px'}},'⚠ '+pinesOcultosPorLimite+' sin mostrar — filtra para verlos'),
       React.createElement('div',{style:{width:1,height:16,background:'rgba(255,255,255,0.08)',margin:'0 2px'}}),
       React.createElement('button',{onClick:function(){setPinsVisible(function(v){return !v;});},
         style:{padding:'5px 14px',borderRadius:8,
