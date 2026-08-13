@@ -544,7 +544,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786636581;
+window.__MODULES_VERSION=1786639054;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -864,14 +864,15 @@ function procesarConcurrencia(items,worker,concurrencia){
   });
 }
 // Estados desde los cuales CUALQUIER mensajero puede adquirir un paquete escaneandolo.
-// reprogramado/cancelado/siniestro/pendiente_retiro/sin_asignar deben pasar primero por un admin (-> en_bodega).
-var ESTADOS_ADQUIRIBLES_ESCANEO=['en_bodega','en_ruta'];
+// El servicio es de multiples intentos de entrega: un paquete reprogramado puede volver a
+// ser tomado por cualquier mensajero sin pasar por un admin (no necesariamente el mismo que lo tenia antes).
+// cancelado/siniestro/pendiente_retiro/sin_asignar si deben pasar primero por un admin (-> en_bodega).
+var ESTADOS_ADQUIRIBLES_ESCANEO=['en_bodega','en_ruta','reprogramado'];
 function motivoNoAdquirible(estado,mensajeroActual){
   var MOTIVOS={
     entregado:'Ya fue entregado',
     cancelado:'Cancelado, un admin debe pasarlo a bodega/retorno antes de re-despachar',
     siniestro:'Marcado como siniestro, un admin debe pasarlo a bodega/retorno antes de re-despachar',
-    reprogramado:'Reprogramado, un admin debe pasarlo a bodega antes de re-despachar'+(mensajeroActual?' (estaba con '+mensajeroActual+')':''),
     retorno:'En retorno a bodega, un admin debe procesarlo'
   };
   return MOTIVOS[estado]||('Estado actual: '+estado+', requiere gestion de un admin');
