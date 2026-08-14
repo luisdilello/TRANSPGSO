@@ -544,7 +544,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786722158;
+window.__MODULES_VERSION=1786722329;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -931,17 +931,28 @@ async function sbRegistrarHistorialLote(codigos,estado,nota,usuario,canal){try{i
 // build(offset,limite,conConteo) debe devolver la promesa de Supabase ya armada y lista para awaitear,
 // ej: (offset,limite,conConteo)=>db.from('envios').select(COLS,conConteo?{count:'exact'}:undefined).eq(...).range(offset,offset+limite-1)
 async function fetchPaginadoParalelo(build){
-  const BLOQUE=1000;
-  const primera=await build(0,BLOQUE,true);
-  if(primera.error)throw primera.error;
-  let acumulado=primera.data||[];
-  const total=typeof primera.count==='number'?primera.count:acumulado.length;
-  if(total>acumulado.length){
-    const paginasFaltantes=Math.ceil((total-acumulado.length)/BLOQUE);
+  // Sin pedir conteo exacto primero: en tablas grandes esa sola consulta (count:'exact')
+  // puede tardar varios segundos por si sola (mas que traer los datos), asi que en vez de
+  // "cuenta, despues trae el resto en paralelo" hacemos "pide de entrada un lote de paginas
+  // en paralelo" (8 paginas = 8.000 filas) y solo si TODAS vienen llenas (senal de que puede
+  // haber mas) se pide un lote adicional. Para el uso normal (un dia, una semana, un mes)
+  // esto es UN SOLO viaje de ida y vuelta, limitado por la pagina mas lenta, no por la suma.
+  const BLOQUE=1000,LOTE=8;
+  let acumulado=[];let paginaBase=0;
+  while(true){
     const promesas=[];
-    for(let p=1;p<=paginasFaltantes;p++)promesas.push(build(p*BLOQUE,BLOQUE,false));
+    for(let p=0;p<LOTE;p++)promesas.push(build((paginaBase+p)*BLOQUE,BLOQUE,false));
     const resultados=await Promise.all(promesas);
-    resultados.forEach(function(r){if(r&&!r.error)acumulado=acumulado.concat(r.data||[]);});
+    let siguioLlena=true;
+    for(let i=0;i<resultados.length;i++){
+      const r=resultados[i];
+      if(r.error)throw r.error;
+      const data=r.data||[];
+      acumulado=acumulado.concat(data);
+      if(data.length<BLOQUE){siguioLlena=false;break;}
+    }
+    if(!siguioLlena)break;
+    paginaBase+=LOTE;
   }
   return acumulado;
 }
@@ -1462,7 +1473,7 @@ function Dashboard(_ref7){
         let desdeFE,hastaFE=hoyFE;
         if(periodo==='semana'){const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));desdeFE=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
         else{const mes=mesFiltro||hoyFE.slice(0,7);const[y,m]=mes.split('-').map(Number);desdeFE=mes+'-01';hastaFE=mes+'-'+String(new Date(y,m,0).getDate()).padStart(2,'0');}
-        const acumulado=await fetchPaginadoParalelo((offset,limite,conConteo)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at',conConteo?{count:'exact'}:undefined).neq('estado','eliminado').gte('fecha',desdeFE).lte('fecha',hastaFE).order('fecha',{ascending:false}).range(offset,offset+limite-1));
+        const acumulado=await fetchPaginadoParalelo((offset,limite,conConteo)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at').neq('estado','eliminado').gte('fecha',desdeFE).lte('fecha',hastaFE).order('fecha',{ascending:false}).range(offset,offset+limite-1));
         if(!cancelado)setExtraEnvios(acumulado);
       }catch(e){console.warn('Dashboard fetch extra error:',e.message);}
       if(!cancelado)setCargandoExtra(false);
@@ -1481,7 +1492,7 @@ function Dashboard(_ref7){
       try{
         // Igual que fetchExtra: paginado en paralelo con fetchPaginadoParalelo en vez de
         // pagina por pagina, para que un rango grande no tarde varios segundos en cargar.
-        const acumulado=await fetchPaginadoParalelo((offset,limite,conConteo)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at',conConteo?{count:'exact'}:undefined).neq('estado','eliminado').gte('fecha',desde).lte('fecha',hasta).order('fecha',{ascending:false}).range(offset,offset+limite-1));
+        const acumulado=await fetchPaginadoParalelo((offset,limite,conConteo)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at').neq('estado','eliminado').gte('fecha',desde).lte('fecha',hasta).order('fecha',{ascending:false}).range(offset,offset+limite-1));
         if(!cancelado)setRangoEnvios(acumulado);
       }catch(e){console.warn('Dashboard fetch rango error:',e.message);}
       if(!cancelado)setCargandoRango(false);
@@ -1498,7 +1509,7 @@ function Dashboard(_ref7){
     async function fetchTodoHistorico(){
       setCargandoTodos(true);
       try{
-        const acumulado=await fetchPaginadoParalelo((offset,limite,conConteo)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at',conConteo?{count:'exact'}:undefined).neq('estado','eliminado').order('fecha',{ascending:false}).range(offset,offset+limite-1));
+        const acumulado=await fetchPaginadoParalelo((offset,limite,conConteo)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at').neq('estado','eliminado').order('fecha',{ascending:false}).range(offset,offset+limite-1));
         if(!cancelado)setTodosHistorico(acumulado);
       }catch(e){console.warn('Dashboard fetch todo histórico error:',e.message);}
       if(!cancelado)setCargandoTodos(false);

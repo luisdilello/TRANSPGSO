@@ -43,7 +43,7 @@ async function sincronizarDesdeSupabase(){setSincronizando(true);try{
   // filas entre paginas. Se pagina en PARALELO (fetchPaginadoParalelo) en vez de una pagina a la
   // vez para que un periodo grande (Semana/Mes/Rango) no tarde varios segundos en cargar.
   const rows=await fetchPaginadoParalelo(function(offset,limite,conConteo){
-    let _q=db.from('envios').select(COLS,conConteo?{count:'exact'}:undefined).neq('estado','eliminado');
+    let _q=db.from('envios').select(COLS).neq('estado','eliminado');
     if(desdeQ)_q=_q.gte('fecha',desdeQ);
     if(hastaQ)_q=_q.lte('fecha',hastaQ);
     return _q.order('id',{ascending:true}).range(offset,offset+limite-1);
