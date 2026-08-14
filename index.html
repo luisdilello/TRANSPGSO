@@ -544,7 +544,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786727902;
+window.__MODULES_VERSION=1786730459;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7070,6 +7070,19 @@ function formatDuracionMin(min){
   const h=Math.floor(min/60),m=min%60;
   return h+'h'+(m>0?' '+m+'min':'');
 }
+// Clave de cache de ruta: una por mensajero y por día (se reinicia solo al otro día).
+function claveRutaCache(usuario){
+  return 'ruta_optimizada_'+normalizarNombre(usuario.nombre).replace(/\s+/g,'_')+'_'+fechaHoyCL();
+}
+function guardarCacheRuta(clave,ordenFinal,geometria,distM,durS,origen){
+  try{
+    lsSave(clave,{
+      puntos:ordenFinal.map(p=>({codigo:p.envio.codigo,lat:p.lat,lng:p.lng})),
+      geometria:(geometria||[]).map(pt=>({lat:typeof pt.lat==='function'?pt.lat():pt.lat,lng:typeof pt.lng==='function'?pt.lng():pt.lng})),
+      distM:distM||0,durS:durS||0,origen
+    });
+  }catch(e){}
+}
 const RUTA_ESTADO_COLORS={en_bodega:'#1a6b8a',en_ruta:'#C8A84B',entregado:'#2e7d4f',reprogramado:'#9c27b0',cancelado:'#b03030',siniestro:'#e65100'};
 function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.mensajeros||[],envios=_ref_or.envios,enviosTodos=_ref_or.enviosTodos||[],onClose=_ref_or.onClose,onDividido=_ref_or.onDividido||function(){};
   const mapRef=React.useRef(null);
@@ -7109,9 +7122,7 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       return cambio?nuevo:prev;
     });
   },[enviosTodos,estado]);
-  async function calcularRuta(){
-    if(!envios.length){setErrorMsg('No tienes envíos pendientes para optimizar.');setEstado('error');return;}
-    if(!window.google||!window.google.maps){setErrorMsg('El mapa no está disponible en este momento.');setEstado('error');return;}
+  async function calcularRutaDesdeCero(){
     setEstado('geocodificando');setProgreso(0);
     const geocoder=new google.maps.Geocoder();
     let origen=null;
@@ -7182,7 +7193,77 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     setStopsOrdenados(ordenFinal);
     setDistTotal(distanciaAcumM>0?(distanciaAcumM/1000).toFixed(1):null);
     setDurTotal(duracionAcumS>0?Math.round(duracionAcumS/60):null);
+    guardarCacheRuta(claveRutaCache(usuario),ordenFinal,geometriaCompleta,distanciaAcumM,duracionAcumS,origen);
     setEstado('listo');
+  }
+  async function calcularRuta(forzar){
+    if(!envios.length){setErrorMsg('No tienes envíos pendientes para optimizar.');setEstado('error');return;}
+    if(!window.google||!window.google.maps){setErrorMsg('El mapa no está disponible en este momento.');setEstado('error');return;}
+    const clave=claveRutaCache(usuario);
+    const cache=forzar?null:lsLoad(clave,null);
+    // ── Ya existe una ruta calculada hoy para este mensajero: la restauramos tal cual en
+    // vez de recalcular desde su posición GPS actual (eso era lo que hacía que el orden
+    // cambiara cada vez que se volvía a abrir "Optimizar Ruta" a mitad de la ruta). Los
+    // paquetes nuevos que no estaban en la ruta guardada (ej. tomados por escaneo mientras
+    // ya iba en camino) se agregan al final, sin tocar el orden ya armado.
+    if(cache&&cache.puntos&&cache.puntos.length){
+      setEstado('geocodificando');setProgreso(0);
+      const envioPorCodigo={};
+      envios.forEach(e=>{envioPorCodigo[e.codigo]=e;});
+      const codigosEnCache=new Set(cache.puntos.map(pt=>pt.codigo));
+      const puntosVigentes=cache.puntos.filter(pt=>envioPorCodigo[pt.codigo]);
+      const nuevos=envios.filter(e=>!codigosEnCache.has(e.codigo));
+      if(puntosVigentes.length>0){
+        let ordenFinal=puntosVigentes.map(pt=>({lat:pt.lat,lng:pt.lng,envio:envioPorCodigo[pt.codigo]}));
+        let geometriaCompleta=(cache.geometria||[]).slice();
+        let distanciaAcumM=cache.distM||0;
+        let duracionAcumS=cache.durS||0;
+        origenRef.current=cache.origen||{lat:ordenFinal[0].lat,lng:ordenFinal[0].lng};
+        if(nuevos.length>0){
+          setEstado('geocodificando');
+          const geocoder=new google.maps.Geocoder();
+          const puntosNuevos=[];
+          for(let i=0;i<nuevos.length;i++){
+            const e=nuevos[i];
+            const p=await aiGeocode(geocoder,e.direccion||'',e.comuna||'');
+            if(p)puntosNuevos.push({...p,envio:e});
+            setProgreso(Math.round(((i+1)/nuevos.length)*50));
+          }
+          setEstado('optimizando');
+          if(puntosNuevos.length>0){
+            const directionsService=new google.maps.DirectionsService();
+            const puntoAnterior=ordenFinal.length?{lat:ordenFinal[ordenFinal.length-1].lat,lng:ordenFinal[ordenFinal.length-1].lng}:origenRef.current;
+            if(puntosNuevos.length===1){
+              const tramo=await aiRouteLeg(directionsService,puntoAnterior,puntosNuevos[0]);
+              ordenFinal.push(puntosNuevos[0]);
+              if(tramo){distanciaAcumM+=tramo.distanciaM;duracionAcumS+=tramo.duracionS||0;geometriaCompleta=geometriaCompleta.concat(tramo.path);}
+            }else{
+              const destino=puntosNuevos[puntosNuevos.length-1];
+              const intermedios=puntosNuevos.slice(0,-1);
+              const resultado=await aiOptimizeBatch(directionsService,puntoAnterior,destino,intermedios);
+              if(resultado){
+                const orden=resultado.routes[0].waypoint_order;
+                orden.forEach(idx=>ordenFinal.push(intermedios[idx]));
+                ordenFinal.push(destino);
+                resultado.routes[0].legs.forEach(leg=>{distanciaAcumM+=leg.distance?leg.distance.value:0;duracionAcumS+=leg.duration?leg.duration.value:0;});
+                if(resultado.routes[0].overview_path)geometriaCompleta=geometriaCompleta.concat(resultado.routes[0].overview_path);
+              }else{
+                puntosNuevos.forEach(p=>ordenFinal.push(p));
+              }
+            }
+          }
+        }
+        geometriaRef.current=geometriaCompleta;
+        setStopsOrdenados(ordenFinal);
+        setDistTotal(distanciaAcumM>0?(distanciaAcumM/1000).toFixed(1):null);
+        setDurTotal(duracionAcumS>0?Math.round(duracionAcumS/60):null);
+        guardarCacheRuta(clave,ordenFinal,geometriaCompleta,distanciaAcumM,duracionAcumS,origenRef.current);
+        setProgreso(100);
+        setEstado('listo');
+        return;
+      }
+    }
+    await calcularRutaDesdeCero();
   }
   useEffect(()=>{calcularRuta();},[]);
   // Redibuja el mapa cada vez que cambia el orden de las paradas (manual, o al dividir) o el filtro de pins
@@ -7248,6 +7329,8 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       const j=idx+dir;
       if(j<0||j>=nuevo.length)return prev;
       [nuevo[idx],nuevo[j]]=[nuevo[j],nuevo[idx]];
+      // Guardamos el nuevo orden manual en la cache para que se respete si se reabre la ruta.
+      guardarCacheRuta(claveRutaCache(usuario),nuevo,geometriaRef.current,(distTotal?parseFloat(distTotal)*1000:0),(durTotal?durTotal*60:0),origenRef.current);
       return nuevo;
     });
   }
@@ -7344,6 +7427,7 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       /*#__PURE__*/React.createElement("div",{style:{padding:'10px 16px',background:'var(--dark)',borderBottom:'1px solid rgba(200,168,75,0.2)',display:'flex',flexWrap:'wrap',gap:8,alignItems:'center',justifyContent:'space-between'}},
         /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'rgba(255,255,255,0.6)'}},stopsOrdenados.length," paradas",distTotal?` · ~${distTotal} km`:'',durTotal?` · ~${formatDuracionMin(durTotal)}`:''),
         /*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:6}},
+          /*#__PURE__*/React.createElement("button",{onClick:()=>calcularRuta(true),title:"Recalcular desde tu ubicación actual (por defecto la ruta se mantiene igual al reabrir)",style:{padding:'8px 12px',borderRadius:8,border:'1px solid rgba(255,255,255,0.15)',background:'none',color:'rgba(255,255,255,0.5)',fontWeight:700,fontSize:12,cursor:'pointer'}},"🔄"),
           /*#__PURE__*/React.createElement("button",{onClick:compartirRuta,style:{padding:'8px 14px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',background:'none',color:'var(--gold)',fontWeight:700,fontSize:12,cursor:'pointer'}},"Compartir"),
           /*#__PURE__*/React.createElement("button",{onClick:abrirEnGoogleMaps,style:{padding:'8px 14px',borderRadius:8,border:'none',background:'var(--gold)',color:'var(--dark-deep)',fontWeight:700,fontSize:12,cursor:'pointer'}},"Abrir en Maps")
         )
