@@ -1,6 +1,6 @@
 (function(){
 var useEffect=React.useEffect, useMemo=React.useMemo, useRef=React.useRef, useState=React.useState;
-var AdminEditarEnvio=window.__app.AdminEditarEnvio, abrirVentanaEtiquetas=window.__app.abrirVentanaEtiquetas, COMUNAS_CHILE=window.__app.COMUNAS_CHILE, ESTADOS_ENVIO=window.__app.ESTADOS_ENVIO, EtiquetaPreview=window.__app.EtiquetaPreview, ExportBtn=window.__app.ExportBtn, FotosEntregaConRecarga=window.__app.FotosEntregaConRecarga, Modal=window.__app.Modal, matchComuna=window.__app.matchComuna, confirmarCodigo=window.__app.confirmarCodigo, crearEntradaHistorial=window.__app.crearEntradaHistorial, db=window.__app.db, diasDesdeFecha=window.__app.diasDesdeFecha, esEnvioAtrasado=window.__app.esEnvioAtrasado, estadoBadge=window.__app.estadoBadge, estadoInfo=window.__app.estadoInfo, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, imprimirFotoEtiqueta=window.__app.imprimirFotoEtiqueta, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, normalizarNombre=window.__app.normalizarNombre, perfil=window.__app.perfil, playSound=window.__app.playSound, subirFotoStorage=window.__app.subirFotoStorage, sbRegistrarHistorial=window.__app.sbRegistrarHistorial, sbRegistrarHistorialLote=window.__app.sbRegistrarHistorialLote, fetchPaginadoParalelo=window.__app.fetchPaginadoParalelo;
+var AdminEditarEnvio=window.__app.AdminEditarEnvio, abrirVentanaEtiquetas=window.__app.abrirVentanaEtiquetas, COMUNAS_CHILE=window.__app.COMUNAS_CHILE, ESTADOS_ENVIO=window.__app.ESTADOS_ENVIO, EtiquetaPreview=window.__app.EtiquetaPreview, ExportBtn=window.__app.ExportBtn, FotosEntregaConRecarga=window.__app.FotosEntregaConRecarga, Modal=window.__app.Modal, matchComuna=window.__app.matchComuna, confirmarCodigo=window.__app.confirmarCodigo, crearEntradaHistorial=window.__app.crearEntradaHistorial, db=window.__app.db, diasDesdeFecha=window.__app.diasDesdeFecha, esEnvioAtrasado=window.__app.esEnvioAtrasado, estadoBadge=window.__app.estadoBadge, estadoInfo=window.__app.estadoInfo, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, imprimirFotoEtiqueta=window.__app.imprimirFotoEtiqueta, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, normalizarNombre=window.__app.normalizarNombre, perfil=window.__app.perfil, playSound=window.__app.playSound, subirFotoStorage=window.__app.subirFotoStorage, sbRegistrarHistorial=window.__app.sbRegistrarHistorial, sbRegistrarHistorialLote=window.__app.sbRegistrarHistorialLote, fetchPaginadoParalelo=window.__app.fetchPaginadoParalelo, fetchPorDiasParalelo=window.__app.fetchPorDiasParalelo;
 function GestionEnvios(_ref26){var _detalleEnvio$mensaje;let mensajeros=_ref26.mensajeros,clientes=_ref26.clientes,toast=_ref26.toast,esSuperAdmin=_ref26.esSuperAdmin,esAdmin=_ref26.esAdmin,usuario=_ref26.usuario;const _useState60=useState(()=>lsLoad('gestion_envios',[])),envios=_useState60[0],setEnvios=_useState60[1];const _useState61=useState('lista'),subTab=_useState61[0],setSubTab=_useState61[1];const _useState62=useState(''),search=_useState62[0],setSearch=_useState62[1];const _useState63=useState('todos'),filtroEst=_useState63[0],setFiltroEst=_useState63[1];const _useState64=useState('todos'),filtroCli=_useState64[0],setFiltroCli=_useState64[1];const _useState65=useState('todos'),filtroMen=_useState65[0],setFiltroMen=_useState65[1];const _useState65b=useState('todos'),filtroFuente=_useState65b[0],setFiltroFuente=_useState65b[1];const _useState66=useState(new Set()),selected=_useState66[0],setSelected=_useState66[1];const _useState67=useState(false),asignarModal=_useState67[0],setAsignarModal=_useState67[1];const _useState68=useState(''),mensajeroAsignar=_useState68[0],setMensajeroAsignar=_useState68[1];const _useState69=useState(null),detalleEnvio=_useState69[0],setDetalleEnvio=_useState69[1];const _useHistReal=useState([]),historialReal=_useHistReal[0],setHistorialReal=_useHistReal[1];const _useHistCarg=useState(false),cargandoHistorial=_useHistCarg[0],setCargandoHistorial=_useHistCarg[1];const _useEntregasReal=useState({}),entregasReal=_useEntregasReal[0],setEntregasReal=_useEntregasReal[1];const _useState70=useState(1),page=_useState70[0],setPage=_useState70[1];const _useState71=useState(false),sincronizando=_useState71[0],setSincronizando=_useState71[1];const _useState71b=useState(false),showListaNegra=_useState71b[0],setShowListaNegra=_useState71b[1];const _useState71cc=useState(false),cambiarClienteModal=_useState71cc[0],setCambiarClienteModal=_useState71cc[1];const _useState71dd=useState(''),clienteCambio=_useState71dd[0],setClienteCambio=_useState71dd[1];
 const _useState71c=useState(false),showPDFModal=_useState71c[0],setShowPDFModal=_useState71c[1];
 const _useState71d=useState(''),clientePDF=_useState71d[0],setClientePDF=_useState71d[1];
@@ -42,12 +42,19 @@ async function sincronizarDesdeSupabase(){setSincronizando(true);try{
   // por 'updated_at', una columna que cambia constantemente en vivo, y eso podia duplicar/saltear
   // filas entre paginas. Se pagina en PARALELO (fetchPaginadoParalelo) en vez de una pagina a la
   // vez para que un periodo grande (Semana/Mes/Rango) no tarde varios segundos en cargar.
-  const rows=await fetchPaginadoParalelo(function(cursor,limite){
-    let _q=db.from('envios').select(COLS).neq('estado','eliminado');
-    if(desdeQ)_q=_q.gte('fecha',desdeQ);
-    if(hastaQ)_q=_q.lte('fecha',hastaQ);
-    return _q.gt('id',cursor).order('id',{ascending:true}).limit(limite);
-  });
+  // Con ambos bordes de fecha definidos (Hoy/Semana/Mes, y Rango una vez elegidas las fechas)
+  // se reparte por dia en paralelo (mucho mas rapido); si falta algun borde (Rango sin fechas
+  // aun elegidas) se usa el fallback secuencial por cursor.
+  const rows=(desdeQ&&hastaQ)
+    ?await fetchPorDiasParalelo(desdeQ,hastaQ,function(fecha,cursor,limite){
+      return db.from('envios').select(COLS).neq('estado','eliminado').eq('fecha',fecha).gt('id',cursor).order('id',{ascending:true}).limit(limite);
+    })
+    :await fetchPaginadoParalelo(function(cursor,limite){
+      let _q=db.from('envios').select(COLS).neq('estado','eliminado');
+      if(desdeQ)_q=_q.gte('fecha',desdeQ);
+      if(hastaQ)_q=_q.lte('fecha',hastaQ);
+      return _q.gt('id',cursor).order('id',{ascending:true}).limit(limite);
+    });
   // Fechas de entrega REALES: se leen de historial_envios (fuente de verdad sincronizada),
   // no del historial local en cache del navegador, que puede quedar obsoleto o mezclado
   // entre dispositivos y hacer parecer que un envío se entregó antes de recibirse.
