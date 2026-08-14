@@ -544,7 +544,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786722493;
+window.__MODULES_VERSION=1786722587;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -943,7 +943,9 @@ async function sbRegistrarHistorialLote(codigos,estado,nota,usuario,canal){try{i
 // .order('id',{ascending:true}).limit(limite), lista para awaitear.
 async function fetchPaginadoParalelo(build){
   const BLOQUE=1000;
-  let acumulado=[];let cursor=0;
+  // 'id' en la tabla envios es UUID (no numerico), asi que el cursor inicial (mas chico posible)
+  // es el UUID todo-ceros, no el numero 0 — comparar '0' contra una columna uuid falla en Postgres.
+  let acumulado=[];let cursor='00000000-0000-0000-0000-000000000000';
   while(true){
     const r=await build(cursor,BLOQUE);
     if(r.error)throw r.error;
