@@ -544,7 +544,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786727216;
+window.__MODULES_VERSION=1786727902;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7057,12 +7057,18 @@ function aiRouteLeg(directionsService,origin,destination){
   return new Promise(resolve=>{
     directionsService.route({origin,destination,travelMode:google.maps.TravelMode.DRIVING},(result,status)=>{
       if(status==='OK'&&result.routes&&result.routes[0]){
-        let distanciaM=0;
-        result.routes[0].legs.forEach(leg=>{distanciaM+=leg.distance?leg.distance.value:0;});
-        resolve({distanciaM,path:result.routes[0].overview_path||[]});
+        let distanciaM=0,duracionS=0;
+        result.routes[0].legs.forEach(leg=>{distanciaM+=leg.distance?leg.distance.value:0;duracionS+=leg.duration?leg.duration.value:0;});
+        resolve({distanciaM,duracionS,path:result.routes[0].overview_path||[]});
       }else resolve(null);
     });
   });
+}
+function formatDuracionMin(min){
+  if(min==null)return null;
+  if(min<60)return min+' min';
+  const h=Math.floor(min/60),m=min%60;
+  return h+'h'+(m>0?' '+m+'min':'');
 }
 const RUTA_ESTADO_COLORS={en_bodega:'#1a6b8a',en_ruta:'#C8A84B',entregado:'#2e7d4f',reprogramado:'#9c27b0',cancelado:'#b03030',siniestro:'#e65100'};
 function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.mensajeros||[],envios=_ref_or.envios,enviosTodos=_ref_or.enviosTodos||[],onClose=_ref_or.onClose,onDividido=_ref_or.onDividido||function(){};
@@ -7077,6 +7083,7 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
   const _uStops=useState([]),stopsOrdenados=_uStops[0],setStopsOrdenados=_uStops[1];
   const _uErr=useState(''),errorMsg=_uErr[0],setErrorMsg=_uErr[1];
   const _uDist=useState(null),distTotal=_uDist[0],setDistTotal=_uDist[1];
+  const _uDur=useState(null),durTotal=_uDur[0],setDurTotal=_uDur[1];
   const _uSel=useState(new Set()),seleccionados=_uSel[0],setSeleccionados=_uSel[1];
   const _uPick=useState(false),mostrarPicker=_uPick[0],setMostrarPicker=_uPick[1];
   const _uColega=useState(''),colegaElegido=_uColega[0],setColegaElegido=_uColega[1];
@@ -7144,13 +7151,14 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     let puntoAnterior=origen;
     let ordenFinal=[];
     let distanciaAcumM=0;
+    let duracionAcumS=0;
     let geometriaCompleta=[];
     for(let b=0;b<bloques.length;b++){
       const bloque=bloques[b];
       if(bloque.length===1){
         const tramo=await aiRouteLeg(directionsService,puntoAnterior,bloque[0]);
         ordenFinal.push(bloque[0]);
-        if(tramo){distanciaAcumM+=tramo.distanciaM;geometriaCompleta=geometriaCompleta.concat(tramo.path);}
+        if(tramo){distanciaAcumM+=tramo.distanciaM;duracionAcumS+=tramo.duracionS||0;geometriaCompleta=geometriaCompleta.concat(tramo.path);}
         puntoAnterior=bloque[0];
       }else{
         const destino=bloque[bloque.length-1];
@@ -7160,7 +7168,7 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
           const orden=resultado.routes[0].waypoint_order;
           orden.forEach(idx=>ordenFinal.push(intermedios[idx]));
           ordenFinal.push(destino);
-          resultado.routes[0].legs.forEach(leg=>{distanciaAcumM+=leg.distance?leg.distance.value:0;});
+          resultado.routes[0].legs.forEach(leg=>{distanciaAcumM+=leg.distance?leg.distance.value:0;duracionAcumS+=leg.duration?leg.duration.value:0;});
           if(resultado.routes[0].overview_path)geometriaCompleta=geometriaCompleta.concat(resultado.routes[0].overview_path);
           puntoAnterior=destino;
         }else{
@@ -7173,6 +7181,7 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     geometriaRef.current=geometriaCompleta;
     setStopsOrdenados(ordenFinal);
     setDistTotal(distanciaAcumM>0?(distanciaAcumM/1000).toFixed(1):null);
+    setDurTotal(duracionAcumS>0?Math.round(duracionAcumS/60):null);
     setEstado('listo');
   }
   useEffect(()=>{calcularRuta();},[]);
@@ -7290,6 +7299,26 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       /*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1.5,color:'var(--gold)'}},"🧭 Optimizar Ruta"),
       /*#__PURE__*/React.createElement("button",{onClick:onClose,style:{background:'none',border:'none',color:'#fff',fontSize:22,cursor:'pointer'}},"✕")
     ),
+    estado==='listo'&&(function(){
+      const conteo={en_bodega:0,en_ruta:0,entregado:0,reprogramado:0,cancelado:0,siniestro:0};
+      stopsOrdenados.forEach(p=>{const es=p.envio.estado;if(conteo[es]!==undefined)conteo[es]++;});
+      const total=stopsOrdenados.length;
+      const efectividad=total>0?Math.round(conteo.entregado/total*100):0;
+      const LABELS={en_bodega:'En Bodega',en_ruta:'En Ruta',entregado:'Entregado',reprogramado:'Reprogram.',cancelado:'Cancelado',siniestro:'Siniestro'};
+      return/*#__PURE__*/React.createElement("div",{style:{background:'linear-gradient(135deg,#2b2e20,#222518)',borderBottom:'1px solid rgba(200,168,75,0.2)',padding:'10px 16px',display:'flex',flexWrap:'wrap',gap:14,alignItems:'center'}},
+        /*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'baseline',gap:6,flexShrink:0}},
+          /*#__PURE__*/React.createElement("span",{style:{fontFamily:'Bebas Neue',fontSize:20,color:'var(--gold)'}},efectividad+'%'),
+          /*#__PURE__*/React.createElement("span",{style:{fontSize:10,color:'rgba(255,255,255,0.4)'}},'efectividad · '+conteo.entregado+'/'+total)
+        ),
+        /*#__PURE__*/React.createElement("div",{style:{width:1,height:20,background:'rgba(255,255,255,0.1)'}}),
+        /*#__PURE__*/React.createElement("div",{style:{display:'flex',flexWrap:'wrap',gap:10}},
+          Object.keys(LABELS).filter(k=>conteo[k]>0).map(k=>/*#__PURE__*/React.createElement("div",{key:k,style:{display:'flex',alignItems:'center',gap:5}},
+            /*#__PURE__*/React.createElement("span",{style:{width:9,height:9,borderRadius:'50%',background:RUTA_ESTADO_COLORS[k],boxShadow:'0 0 5px '+RUTA_ESTADO_COLORS[k]}}),
+            /*#__PURE__*/React.createElement("span",{style:{fontSize:11,color:'rgba(255,255,255,0.7)'}},LABELS[k]+': '+conteo[k])
+          ))
+        )
+      );
+    })(),
     (estado==='geocodificando'||estado==='optimizando')&&/*#__PURE__*/React.createElement("div",{style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff',padding:20}},
       /*#__PURE__*/React.createElement("div",{style:{fontSize:14,color:'var(--gold)',marginBottom:14,fontWeight:700}},estado==='geocodificando'?'Ubicando direcciones...':'Calculando el mejor orden...'),
       /*#__PURE__*/React.createElement("div",{style:{width:'80%',maxWidth:300,height:8,background:'rgba(255,255,255,0.1)',borderRadius:4,overflow:'hidden'}},/*#__PURE__*/React.createElement("div",{style:{width:progreso+'%',height:'100%',background:'var(--gold)',transition:'width 0.3s'}})),
@@ -7313,7 +7342,7 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
         /*#__PURE__*/React.createElement("button",{onClick:()=>setMapExpandido(v=>!v),style:{marginLeft:'auto',padding:'5px 14px',borderRadius:8,border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.03)',color:'rgba(255,255,255,0.6)',cursor:'pointer',fontSize:11,fontFamily:'Bebas Neue',letterSpacing:1.5}},mapExpandido?'⤡ REDUCIR MAPA':'⤢ AMPLIAR MAPA')
       ),
       /*#__PURE__*/React.createElement("div",{style:{padding:'10px 16px',background:'var(--dark)',borderBottom:'1px solid rgba(200,168,75,0.2)',display:'flex',flexWrap:'wrap',gap:8,alignItems:'center',justifyContent:'space-between'}},
-        /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'rgba(255,255,255,0.6)'}},stopsOrdenados.length," paradas",distTotal?` · ~${distTotal} km`:''),
+        /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'rgba(255,255,255,0.6)'}},stopsOrdenados.length," paradas",distTotal?` · ~${distTotal} km`:'',durTotal?` · ~${formatDuracionMin(durTotal)}`:''),
         /*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:6}},
           /*#__PURE__*/React.createElement("button",{onClick:compartirRuta,style:{padding:'8px 14px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',background:'none',color:'var(--gold)',fontWeight:700,fontSize:12,cursor:'pointer'}},"Compartir"),
           /*#__PURE__*/React.createElement("button",{onClick:abrirEnGoogleMaps,style:{padding:'8px 14px',borderRadius:8,border:'none',background:'var(--gold)',color:'var(--dark-deep)',fontWeight:700,fontSize:12,cursor:'pointer'}},"Abrir en Maps")
