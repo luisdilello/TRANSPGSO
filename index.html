@@ -544,7 +544,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786730459;
+window.__MODULES_VERSION=1786733995;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7383,15 +7383,20 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       /*#__PURE__*/React.createElement("button",{onClick:onClose,style:{background:'none',border:'none',color:'#fff',fontSize:22,cursor:'pointer'}},"✕")
     ),
     estado==='listo'&&(function(){
+      // Ojo: contamos sobre enviosTodos (TODOS los envíos de hoy de este mensajero, cualquiera
+      // sea su estado), no sobre stopsOrdenados — stopsOrdenados es solo el subconjunto que
+      // estaba pendiente cuando se calculó la ruta, y quedaba "congelado" apenas se cacheó el
+      // orden. Usando enviosTodos el resumen siempre coincide con los totales reales que se ven
+      // en la pantalla principal de Mis Envíos.
       const conteo={en_bodega:0,en_ruta:0,entregado:0,reprogramado:0,cancelado:0,siniestro:0};
-      stopsOrdenados.forEach(p=>{const es=p.envio.estado;if(conteo[es]!==undefined)conteo[es]++;});
-      const total=stopsOrdenados.length;
+      enviosTodos.forEach(e=>{if(conteo[e.estado]!==undefined)conteo[e.estado]++;});
+      const total=enviosTodos.length;
       const efectividad=total>0?Math.round(conteo.entregado/total*100):0;
       const LABELS={en_bodega:'En Bodega',en_ruta:'En Ruta',entregado:'Entregado',reprogramado:'Reprogram.',cancelado:'Cancelado',siniestro:'Siniestro'};
       return/*#__PURE__*/React.createElement("div",{style:{background:'linear-gradient(135deg,#2b2e20,#222518)',borderBottom:'1px solid rgba(200,168,75,0.2)',padding:'10px 16px',display:'flex',flexWrap:'wrap',gap:14,alignItems:'center'}},
         /*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'baseline',gap:6,flexShrink:0}},
           /*#__PURE__*/React.createElement("span",{style:{fontFamily:'Bebas Neue',fontSize:20,color:'var(--gold)'}},efectividad+'%'),
-          /*#__PURE__*/React.createElement("span",{style:{fontSize:10,color:'rgba(255,255,255,0.4)'}},'efectividad · '+conteo.entregado+'/'+total)
+          /*#__PURE__*/React.createElement("span",{style:{fontSize:10,color:'rgba(255,255,255,0.4)'}},'efectividad hoy · '+conteo.entregado+'/'+total)
         ),
         /*#__PURE__*/React.createElement("div",{style:{width:1,height:20,background:'rgba(255,255,255,0.1)'}}),
         /*#__PURE__*/React.createElement("div",{style:{display:'flex',flexWrap:'wrap',gap:10}},
