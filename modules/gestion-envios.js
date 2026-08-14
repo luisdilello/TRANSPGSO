@@ -7,7 +7,7 @@ const _useState71d=useState(''),clientePDF=_useState71d[0],setClientePDF=_useSta
 const _useState71e=useState(null),pdfPreview=_useState71e[0],setPdfPreview=_useState71e[1];
 const _useState71f=useState(false),procesandoPDF=_useState71f[0],setProcesandoPDF=_useState71f[1];
 const _useState71g=useState(''),progresoPDF=_useState71g[0],setProgresoPDF=_useState71g[1];
-const _uPerGE=useState('semana'),periodo=_uPerGE[0],setPeriodo=_uPerGE[1];
+const _uPerGE=useState('hoy'),periodo=_uPerGE[0],setPeriodo=_uPerGE[1];
 const _uMesGE=useState(new Date().toISOString().slice(0,7)),mesFiltro=_uMesGE[0],setMesFiltro=_uMesGE[1];
 const _uD1GE=useState(''),desde=_uD1GE[0],setDesde=_uD1GE[1];
 const _uD2GE=useState(''),hasta=_uD2GE[0],setHasta=_uD2GE[1];
@@ -17,11 +17,26 @@ const pdfRef=useRef();const _usePS=useState(50),PAGE_SIZE=_usePS[0],setPageSize=
 // Los operadores ven y filtran envios en 'Retorno' igual que cualquier otro estado, pero no
 // pueden asignarselo — se les oculta de todos los botones/selectores que ESCRIBEN el estado.
 const estadosEditables=useMemo(()=>(esAdmin||esSuperAdmin)?ESTADOS_ENVIO:ESTADOS_ENVIO.filter(est=>!est.soloAdmin),[esAdmin,esSuperAdmin]);
-useEffect(()=>{sincronizarDesdeSupabase();const _autoSyncInterval=setInterval(sincronizarDesdeSupabase,60000);return()=>clearInterval(_autoSyncInterval);},[]);async function sincronizarDesdeSupabase(){setSincronizando(true);try{
-  // Trae TODO el historial (no solo hoy/en_bodega/en_ruta), paginado en bloques de 1000
-  // para no chocar con el tope de fila de Supabase. A pedido de Luis: Gestion de Envios
-  // debe mostrar siempre el historial completo, igual que Consulta Express y el Dashboard.
+useEffect(()=>{sincronizarDesdeSupabase();const _autoSyncInterval=setInterval(sincronizarDesdeSupabase,60000);return()=>clearInterval(_autoSyncInterval);},[periodo,mesFiltro,desde,hasta]);// Igual que el sistema anterior de Luis: por defecto solo trae el DIA EN CURSO (rapido), y solo trae
+// mas cuando el usuario cambia de periodo (Semana/Mes/Rango). Antes se traia SIEMPRE la tabla
+// completa cada 60s sin importar el filtro visible, lo que iba a pesar cada vez mas a medida
+// que crece el historico. Este helper calcula el rango de fechas exacto para el periodo activo
+// (mismo criterio que enPeriodoGE, mas abajo) y se lo pasamos a Supabase para que filtre alla,
+// no acá en el navegador.
+function limitesPeriodoGE(){
+  const hoy=fechaHoyCL();
+  if(periodo==='hoy')return{desde:hoy,hasta:hoy};
+  if(periodo==='semana'){const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));const lunes=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');return{desde:lunes,hasta:hoy};}
+  if(periodo==='mes'){const mes=mesFiltro||hoy.slice(0,7);const[y,m]=mes.split('-').map(Number);const ultimoDia=new Date(y,m,0).getDate();return{desde:mes+'-01',hasta:mes+'-'+String(ultimoDia).padStart(2,'0')};}
+  if(periodo==='rango')return{desde:desde||null,hasta:hasta||null};
+  return{desde:null,hasta:null};
+}
+async function sincronizarDesdeSupabase(){setSincronizando(true);try{
+  // Solo trae el periodo activo (Hoy por defecto), no la tabla completa. Se pagina en bloques
+  // de 1000 igual que antes por si un periodo amplio (Mes/Rango grande) supera esa cantidad,
+  // pero para 'Hoy' — el caso de uso normal del dia a dia — es tipicamente una sola pagina.
   const COLS='id,codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,nota_admin,fuente,peso,valor_siniestro,updated_at,created_at';
+  const{desde:desdeQ,hasta:hastaQ}=limitesPeriodoGE();
   let rows=[];let offset=0;const BLOQUE=1000;
   while(true){
     // OJO: antes se paginaba ordenando por 'updated_at', una columna que cambia constantemente
@@ -31,8 +46,11 @@ useEffect(()=>{sincronizarDesdeSupabase();const _autoSyncInterval=setInterval(si
   // hacía que los totales de Gestión de Envíos crecieran solos entre una sincronización y la
   // siguiente sin que nadie cargara nada nuevo. Se ordena por 'id' (llave primaria, nunca
   // cambia) para que la paginación sea siempre estable sin importar cuántas filas se editen
-  // mientras se está trayendo el historial completo.
-  const _r=await db.from('envios').select(COLS).neq('estado','eliminado').order('id',{ascending:true}).range(offset,offset+BLOQUE-1);
+  // mientras se está trayendo el periodo.
+  let _q=db.from('envios').select(COLS).neq('estado','eliminado');
+  if(desdeQ)_q=_q.gte('fecha',desdeQ);
+  if(hastaQ)_q=_q.lte('fecha',hastaQ);
+  const _r=await _q.order('id',{ascending:true}).range(offset,offset+BLOQUE-1);
     if(_r.error)throw _r.error;
     const data=_r.data||[];
     rows=rows.concat(data);
@@ -42,19 +60,18 @@ useEffect(()=>{sincronizarDesdeSupabase();const _autoSyncInterval=setInterval(si
   // Fechas de entrega REALES: se leen de historial_envios (fuente de verdad sincronizada),
   // no del historial local en cache del navegador, que puede quedar obsoleto o mezclado
   // entre dispositivos y hacer parecer que un envío se entregó antes de recibirse.
+  // Acotado a los codigos del periodo que acabamos de traer (antes traia TODO historial_envios
+  // con estado 'entregado' de siempre, otra consulta pesada e innecesaria para ver solo hoy).
   try{
-    let histRows=[];let hOffset=0;const hBloque=1000;
-    while(true){
-      const _h=await db.from('historial_envios').select('codigo_envio,created_at').eq('estado','entregado').order('created_at',{ascending:false}).range(hOffset,hOffset+hBloque-1);
+    const codigosPeriodo=[...new Set(rows.map(r=>r.codigo))];
+    let histRows=[];const hBloque=500;
+    for(let hi=0;hi<codigosPeriodo.length;hi+=hBloque){
+      const lote=codigosPeriodo.slice(hi,hi+hBloque);
+      const _h=await db.from('historial_envios').select('codigo_envio,created_at').eq('estado','entregado').in('codigo_envio',lote);
       if(_h.error)break;
-      const hdata=_h.data||[];
-      histRows=histRows.concat(hdata);
-      if(hdata.length<hBloque||hOffset>20000)break;
-      hOffset+=hBloque;
+      histRows=histRows.concat(_h.data||[]);
     }
-    const mapaEntregas={};
-    histRows.forEach(function(h){if(!mapaEntregas[h.codigo_envio])mapaEntregas[h.codigo_envio]=h.created_at;});
-    setEntregasReal(mapaEntregas);
+    setEntregasReal(prev=>{const merged={...prev};histRows.forEach(function(h){if(!merged[h.codigo_envio])merged[h.codigo_envio]=h.created_at;});return merged;});
   }catch(eHist){console.warn('Error cargando fechas de entrega reales:',eHist.message);}
   // Defensa adicional: aunque la paginación ya es estable por 'id', se deduplica por
   // 'codigo' al construir 'merged' (si por cualquier motivo llegara un código repetido,
