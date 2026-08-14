@@ -42,11 +42,11 @@ async function sincronizarDesdeSupabase(){setSincronizando(true);try{
   // por 'updated_at', una columna que cambia constantemente en vivo, y eso podia duplicar/saltear
   // filas entre paginas. Se pagina en PARALELO (fetchPaginadoParalelo) en vez de una pagina a la
   // vez para que un periodo grande (Semana/Mes/Rango) no tarde varios segundos en cargar.
-  const rows=await fetchPaginadoParalelo(function(offset,limite,conConteo){
+  const rows=await fetchPaginadoParalelo(function(cursor,limite){
     let _q=db.from('envios').select(COLS).neq('estado','eliminado');
     if(desdeQ)_q=_q.gte('fecha',desdeQ);
     if(hastaQ)_q=_q.lte('fecha',hastaQ);
-    return _q.order('id',{ascending:true}).range(offset,offset+limite-1);
+    return _q.gt('id',cursor).order('id',{ascending:true}).limit(limite);
   });
   // Fechas de entrega REALES: se leen de historial_envios (fuente de verdad sincronizada),
   // no del historial local en cache del navegador, que puede quedar obsoleto o mezclado

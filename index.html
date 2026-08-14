@@ -544,7 +544,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786722329;
+window.__MODULES_VERSION=1786722493;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -930,29 +930,28 @@ async function sbRegistrarHistorialLote(codigos,estado,nota,usuario,canal){try{i
 // secuencia y por eso tardaba varios segundos apenas el periodo elegido superaba 1000 filas.
 // build(offset,limite,conConteo) debe devolver la promesa de Supabase ya armada y lista para awaitear,
 // ej: (offset,limite,conConteo)=>db.from('envios').select(COLS,conConteo?{count:'exact'}:undefined).eq(...).range(offset,offset+limite-1)
+// Trae TODAS las filas de una consulta paginando por 'id' (cursor/keyset), NO por OFFSET.
+// Se probaron dos formas antes de esta: (1) pagina por pagina en secuencia — lenta, cada pagina
+// suma su propio viaje de red; (2) varias paginas OFFSET en paralelo — en Postgres un OFFSET
+// grande obliga a escanear y descartar todas las filas anteriores, asi que las paginas de mas
+// atras se ponen cada vez mas pesadas, y pedir varias asi a la vez satura la base (llegó a
+// cancelar consultas por timeout). Paginando por 'id' (llave primaria indexada) con
+// .gt('id',cursor) en vez de .range(offset,...), cada pagina es igualmente rápida sin importar
+// cuantas la precedan — no hace falta descartar nada. Sigue siendo secuencial (cada pagina
+// necesita el ultimo id de la anterior) pero cada vuelta es rapida por el motivo anterior.
+// build(cursorId,limite) debe devolver la query ya armada con .gt('id',cursorId)
+// .order('id',{ascending:true}).limit(limite), lista para awaitear.
 async function fetchPaginadoParalelo(build){
-  // Sin pedir conteo exacto primero: en tablas grandes esa sola consulta (count:'exact')
-  // puede tardar varios segundos por si sola (mas que traer los datos), asi que en vez de
-  // "cuenta, despues trae el resto en paralelo" hacemos "pide de entrada un lote de paginas
-  // en paralelo" (8 paginas = 8.000 filas) y solo si TODAS vienen llenas (senal de que puede
-  // haber mas) se pide un lote adicional. Para el uso normal (un dia, una semana, un mes)
-  // esto es UN SOLO viaje de ida y vuelta, limitado por la pagina mas lenta, no por la suma.
-  const BLOQUE=1000,LOTE=8;
-  let acumulado=[];let paginaBase=0;
+  const BLOQUE=1000;
+  let acumulado=[];let cursor=0;
   while(true){
-    const promesas=[];
-    for(let p=0;p<LOTE;p++)promesas.push(build((paginaBase+p)*BLOQUE,BLOQUE,false));
-    const resultados=await Promise.all(promesas);
-    let siguioLlena=true;
-    for(let i=0;i<resultados.length;i++){
-      const r=resultados[i];
-      if(r.error)throw r.error;
-      const data=r.data||[];
-      acumulado=acumulado.concat(data);
-      if(data.length<BLOQUE){siguioLlena=false;break;}
-    }
-    if(!siguioLlena)break;
-    paginaBase+=LOTE;
+    const r=await build(cursor,BLOQUE);
+    if(r.error)throw r.error;
+    const data=r.data||[];
+    if(!data.length)break;
+    acumulado=acumulado.concat(data);
+    if(data.length<BLOQUE)break;
+    cursor=data[data.length-1].id;
   }
   return acumulado;
 }
@@ -1473,7 +1472,7 @@ function Dashboard(_ref7){
         let desdeFE,hastaFE=hoyFE;
         if(periodo==='semana'){const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));desdeFE=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
         else{const mes=mesFiltro||hoyFE.slice(0,7);const[y,m]=mes.split('-').map(Number);desdeFE=mes+'-01';hastaFE=mes+'-'+String(new Date(y,m,0).getDate()).padStart(2,'0');}
-        const acumulado=await fetchPaginadoParalelo((offset,limite,conConteo)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at').neq('estado','eliminado').gte('fecha',desdeFE).lte('fecha',hastaFE).order('fecha',{ascending:false}).range(offset,offset+limite-1));
+        const acumulado=await fetchPaginadoParalelo((cursor,limite)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at').neq('estado','eliminado').gte('fecha',desdeFE).lte('fecha',hastaFE).gt('id',cursor).order('id',{ascending:true}).limit(limite));
         if(!cancelado)setExtraEnvios(acumulado);
       }catch(e){console.warn('Dashboard fetch extra error:',e.message);}
       if(!cancelado)setCargandoExtra(false);
@@ -1492,7 +1491,7 @@ function Dashboard(_ref7){
       try{
         // Igual que fetchExtra: paginado en paralelo con fetchPaginadoParalelo en vez de
         // pagina por pagina, para que un rango grande no tarde varios segundos en cargar.
-        const acumulado=await fetchPaginadoParalelo((offset,limite,conConteo)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at').neq('estado','eliminado').gte('fecha',desde).lte('fecha',hasta).order('fecha',{ascending:false}).range(offset,offset+limite-1));
+        const acumulado=await fetchPaginadoParalelo((cursor,limite)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at').neq('estado','eliminado').gte('fecha',desde).lte('fecha',hasta).gt('id',cursor).order('id',{ascending:true}).limit(limite));
         if(!cancelado)setRangoEnvios(acumulado);
       }catch(e){console.warn('Dashboard fetch rango error:',e.message);}
       if(!cancelado)setCargandoRango(false);
@@ -1509,7 +1508,7 @@ function Dashboard(_ref7){
     async function fetchTodoHistorico(){
       setCargandoTodos(true);
       try{
-        const acumulado=await fetchPaginadoParalelo((offset,limite,conConteo)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at').neq('estado','eliminado').order('fecha',{ascending:false}).range(offset,offset+limite-1));
+        const acumulado=await fetchPaginadoParalelo((cursor,limite)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at').neq('estado','eliminado').gt('id',cursor).order('id',{ascending:true}).limit(limite));
         if(!cancelado)setTodosHistorico(acumulado);
       }catch(e){console.warn('Dashboard fetch todo histórico error:',e.message);}
       if(!cancelado)setCargandoTodos(false);
