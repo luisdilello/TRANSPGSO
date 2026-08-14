@@ -1,6 +1,6 @@
 (function(){
 var useEffect=React.useEffect, useMemo=React.useMemo, useRef=React.useRef, useState=React.useState;
-var AdminEditarEnvio=window.__app.AdminEditarEnvio, abrirVentanaEtiquetas=window.__app.abrirVentanaEtiquetas, COMUNAS_CHILE=window.__app.COMUNAS_CHILE, ESTADOS_ENVIO=window.__app.ESTADOS_ENVIO, EtiquetaPreview=window.__app.EtiquetaPreview, ExportBtn=window.__app.ExportBtn, FotosEntregaConRecarga=window.__app.FotosEntregaConRecarga, Modal=window.__app.Modal, matchComuna=window.__app.matchComuna, confirmarCodigo=window.__app.confirmarCodigo, crearEntradaHistorial=window.__app.crearEntradaHistorial, db=window.__app.db, diasDesdeFecha=window.__app.diasDesdeFecha, esEnvioAtrasado=window.__app.esEnvioAtrasado, estadoBadge=window.__app.estadoBadge, estadoInfo=window.__app.estadoInfo, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, imprimirFotoEtiqueta=window.__app.imprimirFotoEtiqueta, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, normalizarNombre=window.__app.normalizarNombre, perfil=window.__app.perfil, playSound=window.__app.playSound, subirFotoStorage=window.__app.subirFotoStorage, sbRegistrarHistorial=window.__app.sbRegistrarHistorial, sbRegistrarHistorialLote=window.__app.sbRegistrarHistorialLote;
+var AdminEditarEnvio=window.__app.AdminEditarEnvio, abrirVentanaEtiquetas=window.__app.abrirVentanaEtiquetas, COMUNAS_CHILE=window.__app.COMUNAS_CHILE, ESTADOS_ENVIO=window.__app.ESTADOS_ENVIO, EtiquetaPreview=window.__app.EtiquetaPreview, ExportBtn=window.__app.ExportBtn, FotosEntregaConRecarga=window.__app.FotosEntregaConRecarga, Modal=window.__app.Modal, matchComuna=window.__app.matchComuna, confirmarCodigo=window.__app.confirmarCodigo, crearEntradaHistorial=window.__app.crearEntradaHistorial, db=window.__app.db, diasDesdeFecha=window.__app.diasDesdeFecha, esEnvioAtrasado=window.__app.esEnvioAtrasado, estadoBadge=window.__app.estadoBadge, estadoInfo=window.__app.estadoInfo, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, imprimirFotoEtiqueta=window.__app.imprimirFotoEtiqueta, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, normalizarNombre=window.__app.normalizarNombre, perfil=window.__app.perfil, playSound=window.__app.playSound, subirFotoStorage=window.__app.subirFotoStorage, sbRegistrarHistorial=window.__app.sbRegistrarHistorial, sbRegistrarHistorialLote=window.__app.sbRegistrarHistorialLote, fetchPaginadoParalelo=window.__app.fetchPaginadoParalelo;
 function GestionEnvios(_ref26){var _detalleEnvio$mensaje;let mensajeros=_ref26.mensajeros,clientes=_ref26.clientes,toast=_ref26.toast,esSuperAdmin=_ref26.esSuperAdmin,esAdmin=_ref26.esAdmin,usuario=_ref26.usuario;const _useState60=useState(()=>lsLoad('gestion_envios',[])),envios=_useState60[0],setEnvios=_useState60[1];const _useState61=useState('lista'),subTab=_useState61[0],setSubTab=_useState61[1];const _useState62=useState(''),search=_useState62[0],setSearch=_useState62[1];const _useState63=useState('todos'),filtroEst=_useState63[0],setFiltroEst=_useState63[1];const _useState64=useState('todos'),filtroCli=_useState64[0],setFiltroCli=_useState64[1];const _useState65=useState('todos'),filtroMen=_useState65[0],setFiltroMen=_useState65[1];const _useState65b=useState('todos'),filtroFuente=_useState65b[0],setFiltroFuente=_useState65b[1];const _useState66=useState(new Set()),selected=_useState66[0],setSelected=_useState66[1];const _useState67=useState(false),asignarModal=_useState67[0],setAsignarModal=_useState67[1];const _useState68=useState(''),mensajeroAsignar=_useState68[0],setMensajeroAsignar=_useState68[1];const _useState69=useState(null),detalleEnvio=_useState69[0],setDetalleEnvio=_useState69[1];const _useHistReal=useState([]),historialReal=_useHistReal[0],setHistorialReal=_useHistReal[1];const _useHistCarg=useState(false),cargandoHistorial=_useHistCarg[0],setCargandoHistorial=_useHistCarg[1];const _useEntregasReal=useState({}),entregasReal=_useEntregasReal[0],setEntregasReal=_useEntregasReal[1];const _useState70=useState(1),page=_useState70[0],setPage=_useState70[1];const _useState71=useState(false),sincronizando=_useState71[0],setSincronizando=_useState71[1];const _useState71b=useState(false),showListaNegra=_useState71b[0],setShowListaNegra=_useState71b[1];const _useState71cc=useState(false),cambiarClienteModal=_useState71cc[0],setCambiarClienteModal=_useState71cc[1];const _useState71dd=useState(''),clienteCambio=_useState71dd[0],setClienteCambio=_useState71dd[1];
 const _useState71c=useState(false),showPDFModal=_useState71c[0],setShowPDFModal=_useState71c[1];
 const _useState71d=useState(''),clientePDF=_useState71d[0],setClientePDF=_useState71d[1];
@@ -37,26 +37,17 @@ async function sincronizarDesdeSupabase(){setSincronizando(true);try{
   // pero para 'Hoy' — el caso de uso normal del dia a dia — es tipicamente una sola pagina.
   const COLS='id,codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,nota_admin,fuente,peso,valor_siniestro,updated_at,created_at';
   const{desde:desdeQ,hasta:hastaQ}=limitesPeriodoGE();
-  let rows=[];let offset=0;const BLOQUE=1000;
-  while(true){
-    // OJO: antes se paginaba ordenando por 'updated_at', una columna que cambia constantemente
-  // en vivo (cada vez que un rider actualiza un estado). Con paginacion por offset/limit, si
-  // una fila cambia de 'updated_at' EN MEDIO de la vuelta de páginas, se corre de posición y
-  // puede aparecer en dos páginas distintas a la vez (o saltarse) — eso duplicaba envíos y
-  // hacía que los totales de Gestión de Envíos crecieran solos entre una sincronización y la
-  // siguiente sin que nadie cargara nada nuevo. Se ordena por 'id' (llave primaria, nunca
-  // cambia) para que la paginación sea siempre estable sin importar cuántas filas se editen
-  // mientras se está trayendo el periodo.
-  let _q=db.from('envios').select(COLS).neq('estado','eliminado');
-  if(desdeQ)_q=_q.gte('fecha',desdeQ);
-  if(hastaQ)_q=_q.lte('fecha',hastaQ);
-  const _r=await _q.order('id',{ascending:true}).range(offset,offset+BLOQUE-1);
-    if(_r.error)throw _r.error;
-    const data=_r.data||[];
-    rows=rows.concat(data);
-    if(data.length<BLOQUE)break;
-    offset+=BLOQUE;
-  }
+  // Se ordena por 'id' (llave primaria, nunca cambia) para que la paginación sea siempre estable
+  // sin importar cuántas filas se editen mientras se está trayendo el periodo — antes se ordenaba
+  // por 'updated_at', una columna que cambia constantemente en vivo, y eso podia duplicar/saltear
+  // filas entre paginas. Se pagina en PARALELO (fetchPaginadoParalelo) en vez de una pagina a la
+  // vez para que un periodo grande (Semana/Mes/Rango) no tarde varios segundos en cargar.
+  const rows=await fetchPaginadoParalelo(function(offset,limite,conConteo){
+    let _q=db.from('envios').select(COLS,conConteo?{count:'exact'}:undefined).neq('estado','eliminado');
+    if(desdeQ)_q=_q.gte('fecha',desdeQ);
+    if(hastaQ)_q=_q.lte('fecha',hastaQ);
+    return _q.order('id',{ascending:true}).range(offset,offset+limite-1);
+  });
   // Fechas de entrega REALES: se leen de historial_envios (fuente de verdad sincronizada),
   // no del historial local en cache del navegador, que puede quedar obsoleto o mezclado
   // entre dispositivos y hacer parecer que un envío se entregó antes de recibirse.
@@ -64,13 +55,12 @@ async function sincronizarDesdeSupabase(){setSincronizando(true);try{
   // con estado 'entregado' de siempre, otra consulta pesada e innecesaria para ver solo hoy).
   try{
     const codigosPeriodo=[...new Set(rows.map(r=>r.codigo))];
-    let histRows=[];const hBloque=500;
-    for(let hi=0;hi<codigosPeriodo.length;hi+=hBloque){
-      const lote=codigosPeriodo.slice(hi,hi+hBloque);
-      const _h=await db.from('historial_envios').select('codigo_envio,created_at').eq('estado','entregado').in('codigo_envio',lote);
-      if(_h.error)break;
-      histRows=histRows.concat(_h.data||[]);
-    }
+    const hBloque=500;const lotes=[];
+    for(let hi=0;hi<codigosPeriodo.length;hi+=hBloque)lotes.push(codigosPeriodo.slice(hi,hi+hBloque));
+    // En paralelo (antes uno detras de otro) — con periodos grandes esto podia ser varias
+    // vueltas de red innecesariamente lentas.
+    const resultados=await Promise.all(lotes.map(function(lote){return db.from('historial_envios').select('codigo_envio,created_at').eq('estado','entregado').in('codigo_envio',lote);}));
+    let histRows=[];resultados.forEach(function(_h){if(!_h.error)histRows=histRows.concat(_h.data||[]);});
     setEntregasReal(prev=>{const merged={...prev};histRows.forEach(function(h){if(!merged[h.codigo_envio])merged[h.codigo_envio]=h.created_at;});return merged;});
   }catch(eHist){console.warn('Error cargando fechas de entrega reales:',eHist.message);}
   // Defensa adicional: aunque la paginación ya es estable por 'id', se deduplica por
