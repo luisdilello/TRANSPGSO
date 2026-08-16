@@ -544,7 +544,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1786733995;
+window.__MODULES_VERSION=1786906992;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -916,7 +916,45 @@ async function enviarNotificacionPush(mensajero,title,message,url){
     if(perfilError||!perfilData){await db.auth.signOut();return null;}
     return{...perfilData,mustChangePassword:!!(authData.user.user_metadata&&authData.user.user_metadata.must_change_password)};
   }catch(e){return null;}
-}async function sbInsertEnvio(envio){try{const _await$db$from$insert=await db.from('envios').insert({codigo:envio.codigo,cliente:envio.cliente,destinatario:envio.destinatario,telefono:envio.telefono,direccion:envio.direccion,comuna:envio.comuna,referencia:envio.referencia||'',fecha:envio.fecha,estado:envio.estado||'en_bodega',mensajero:envio.mensajero||'',monto:envio.monto||0,en_un_cambio:envio.enUnCambio||false,nota:envio.nota||'',fuente:envio.fuente||'propio'}).select().single(),data=_await$db$from$insert.data,error=_await$db$from$insert.error;if(error)console.warn('Insert envio error:',error.message);return data;}catch(e){return null;}}async function sbUpdateEstado(codigo,estado,nota,usuario,canal){try{const ts=new Date().toISOString();await db.from('envios').update({estado,mensajero:usuario&&estado!=='sin_asignar'?usuario:undefined,updated_at:ts}).eq('codigo',codigo);await db.from('historial_envios').insert({envio_id:null,codigo_envio:codigo,estado,nota:nota||'',usuario:usuario||'Sistema',canal:canal||'sistema',created_at:ts});}catch(e){console.warn('Update estado error:',e.message);}}
+}async function sbInsertEnvio(envio){try{const _await$db$from$insert=await db.from('envios').insert({codigo:envio.codigo,cliente:envio.cliente,destinatario:envio.destinatario,telefono:envio.telefono,direccion:envio.direccion,comuna:envio.comuna,referencia:envio.referencia||'',fecha:envio.fecha,estado:envio.estado||'en_bodega',mensajero:envio.mensajero||'',monto:envio.monto||0,en_un_cambio:envio.enUnCambio||false,nota:envio.nota||'',fuente:envio.fuente||'propio'}).select().single(),data=_await$db$from$insert.data,error=_await$db$from$insert.error;if(error)console.warn('Insert envio error:',error.message);return data;}catch(e){return null;}}
+// ── Handler offline-safe para "marcar entrega / reprogramar / cancelar" (EnvioAccion) ──
+// Hace exactamente el mismo trabajo que antes hacian guardarConEstado + sbUpdateEstado por
+// separado (subir fotos/video, guardar el historial de intentos, cambiar el estado, dejar
+// marca en historial_envios) pero unificado en una sola funcion que se puede llamar tanto al
+// toque (hay señal) como mas tarde desde la cola offline (cuando se recupera la señal).
+async function sincronizarEntregaOffline(payload){
+  const fotosUrls=[];
+  for(let i=0;i<(payload.fotosB64||[]).length;i++){
+    const url=await subirFotoStorage(payload.fotosB64[i],payload.codigo,'o'+i);
+    if(url)fotosUrls.push(url);
+  }
+  let videoUrlSubido=null;
+  if(payload.videoBlob){
+    const _rv=await subirVideoStorage(payload.videoBlob,payload.codigo,'o');
+    if(_rv&&_rv.url)videoUrlSubido=_rv.url;
+  }
+  const ts=new Date().toISOString();
+  if(fotosUrls.length>0||videoUrlSubido){
+    let intentosAnt=[];
+    const{data:filaActual}=await db.from('envios').select('fotos_entrega').eq('codigo',payload.codigo).single();
+    if(filaActual&&filaActual.fotos_entrega){
+      const parsed=JSON.parse(filaActual.fotos_entrega);
+      if(Array.isArray(parsed)&&parsed.length>0){
+        if(typeof parsed[0]==='string'){intentosAnt=[{intento:1,estado:payload.estadoPrevio||'desconocido',fecha:ts,mensajero:payload.mensajero,fotos:parsed}];}
+        else{intentosAnt=parsed;}
+      }
+    }
+    const nuevoIntento={intento:intentosAnt.length+1,estado:payload.estadoFinal,fecha:ts,mensajero:payload.mensajero,nota:payload.nota||'',fotos:fotosUrls,video:videoUrlSubido||undefined};
+    const{error:errFotos}=await db.from('envios').update({fotos_entrega:JSON.stringify([...intentosAnt,nuevoIntento]),estado:payload.estadoFinal,updated_at:ts}).eq('codigo',payload.codigo);
+    if(errFotos)throw errFotos;
+  }else{
+    const{error:errEst}=await db.from('envios').update({estado:payload.estadoFinal,updated_at:ts}).eq('codigo',payload.codigo);
+    if(errEst)throw errEst;
+  }
+  const{error:errHist}=await db.from('historial_envios').insert({envio_id:null,codigo_envio:payload.codigo,estado:payload.estadoFinal,nota:payload.nota||'',usuario:payload.mensajero||'Sistema',canal:'app_mensajero',created_at:ts});
+  if(errHist)throw errHist;
+}
+async function sbUpdateEstado(codigo,estado,nota,usuario,canal){try{const ts=new Date().toISOString();await db.from('envios').update({estado,mensajero:usuario&&estado!=='sin_asignar'?usuario:undefined,updated_at:ts}).eq('codigo',codigo);await db.from('historial_envios').insert({envio_id:null,codigo_envio:codigo,estado,nota:nota||'',usuario:usuario||'Sistema',canal:canal||'sistema',created_at:ts});}catch(e){console.warn('Update estado error:',e.message);}}
 // Registra en el historial un evento que NO cambia el estado en la tabla envios (ej: la creacion/colecta
 // inicial ya insertó el envio con su estado - esto solo deja la marca de quién y por qué medio entró al sistema).
 async function sbRegistrarHistorial(codigo,estado,nota,usuario,canal){try{await db.from('historial_envios').insert({envio_id:null,codigo_envio:codigo,estado,nota:nota||'',usuario:usuario||'Sistema',canal:canal||'sistema',created_at:new Date().toISOString()});}catch(e){console.warn('Registrar historial error:',e.message);}}
@@ -4251,6 +4289,19 @@ function RetiroMasivoRider(_ref_rm){
     var clienteNombre=clienteSel&&clienteSel.nombre?clienteSel.nombre:'Sin cliente';
     var fecha=fechaHoyCL();
     var paquetesValidos=paquetes.filter(function(p){return p.estado!=='error';});
+    // Sin señal desde el vamos: directo a guardar el lote completo en el celular para
+    // sincronizar solo apenas vuelva la conexión, en vez de intentar llamadas que van a fallar.
+    if(typeof navigator!=='undefined'&&navigator.onLine===false){
+      const totalOffline=paquetesValidos.length;
+      await encolarAccionOffline('retiro',{paquetes:paquetesValidos,clienteNombre:clienteNombre,fecha:fecha,mensajero:usuario.nombre},usuario.nombre);
+      try{localStorage.removeItem(claveSesionRM);}catch(e){}
+      setPaquetes([]);
+      setGuardando(false);
+      playSound('success');
+      setFase('resumen');
+      toast('📴 Sin conexión — retiro guardado en el celular ('+totalOffline+' paquetes), se sincroniza solo');
+      return;
+    }
     // El PDF siempre manda: si un código ya fue cargado por PDF (fuente:'flex'), el escaneo
     // del mensajero en Retiro Masivo NO debe pisar destinatario/dirección/comuna/teléfono/
     // referencia (a veces mal leídos por fotos movidas) — solo confirma el retiro físico.
@@ -5106,6 +5157,20 @@ function ColectaRider(_ref_cr){
     setGuardando(true);
     const ts=new Date().toISOString();
     const clienteNombre=clienteSel?.nombre||clienteSel||'Sin cliente';
+    // Sin señal desde el vamos: ni intentamos las llamadas de red -- directo a guardar todo el
+    // lote en el celular (IndexedDB) para que se sincronice solo apenas vuelva la conexión. La
+    // sesión recuperable local ya no hace falta porque el lote quedó a salvo en la cola offline.
+    if(typeof navigator!=='undefined'&&navigator.onLine===false){
+      const totalOffline=paquetes.length;
+      await encolarAccionOffline('colecta',{paquetes:paquetes,clienteNombre:clienteNombre,turno:turno,mensajero:usuario.nombre},usuario.nombre);
+      try{localStorage.removeItem(claveSesionCol);}catch(e){}
+      setPaquetes([]);
+      setGuardando(false);
+      playSound('success');
+      setFase('resumen');
+      toast('📴 Sin conexión — colecta guardada en el celular ('+totalOffline+' paquetes), se sincroniza sola');
+      return;
+    }
     let ok=0,err=0,bloqueados=0;
     const codigos=paquetes.map(p=>p.codigo);
     // Buscar cuáles ya existen (con su estado actual, para no pisar piezas que requieren admin,
@@ -5545,6 +5610,20 @@ function AsignacionRider(_ref_ar){
     const ts=new Date().toISOString();
     const codigos=paquetes.map(p=>p.codigo);
     let ok=0,noExiste=0,err=0;
+    // Sin señal desde el vamos: guardamos los códigos escaneados para asignarlos solos apenas
+    // vuelva la conexión, en vez de intentar una búsqueda que va a fallar. OJO: como esto es
+    // "tomar" un paquete (puede haber otro mensajero compitiendo por el mismo código), al
+    // sincronizar se vuelve a chequear que siga disponible -- si otro ya lo tomó mientras
+    // tanto, se respeta a quien lo tomó primero y no se pisa.
+    if(typeof navigator!=='undefined'&&navigator.onLine===false){
+      await encolarAccionOffline('asignacion',{codigos:codigos,mensajero:usuario.nombre},usuario.nombre);
+      setPaquetes(prev=>prev.map(p=>({...p,estado:'asignado',motivo:null})));
+      setGuardando(false);
+      playSound('success');
+      setFinalizado(true);
+      toast('📴 Sin conexión — quedó guardado en el celular, se confirma solo apenas vuelva la señal');
+      return;
+    }
     // Buscar todos en Supabase de una vez
     let encontrados={};
     try{
@@ -7472,7 +7551,7 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     )
   );
 }
-function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout,mensajeros=_ref32.mensajeros||[];const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87bp=useState(null),clienteRetiroPresel=_useState87bp[0],setClienteRetiroPresel=_useState87bp[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const _useRIA=useState(false),rutaIAActiva=_useRIA[0],setRutaIAActiva=_useRIA[1];const _useSRIA=useState(false),showRutaIA=_useSRIA[0],setShowRutaIA=_useSRIA[1];const _useVG=useState(true),verGanancias=_useVG[0],setVerGanancias=_useVG[1];const _useMas=useState(false),showMas=_useMas[0],setShowMas=_useMas[1];const _useNotif=useState(false),notifActivas=_useNotif[0],setNotifActivas=_useNotif[1];const _useShowAv=useState(false),showAvisos=_useShowAv[0],setShowAvisos=_useShowAv[1];const _useBusq=useState(''),busquedaEnvio=_useBusq[0],setBusquedaEnvio=_useBusq[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);};const _useClientesRider=useState(()=>lsLoad('clientes',[])),clientesRider=_useClientesRider[0],setClientesRider=_useClientesRider[1];useEffect(function(){db.from('clientes').select('id,nombre,activo').order('nombre').then(function(res){if(res.data&&res.data.length>0){setClientesRider(res.data);lsSave('clientes',res.data);}}).catch(function(){});},[]);useEffect(()=>{
+function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout,mensajeros=_ref32.mensajeros||[];const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87bp=useState(null),clienteRetiroPresel=_useState87bp[0],setClienteRetiroPresel=_useState87bp[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const _useRIA=useState(false),rutaIAActiva=_useRIA[0],setRutaIAActiva=_useRIA[1];const _useSRIA=useState(false),showRutaIA=_useSRIA[0],setShowRutaIA=_useSRIA[1];const _useVG=useState(true),verGanancias=_useVG[0],setVerGanancias=_useVG[1];const _useMas=useState(false),showMas=_useMas[0],setShowMas=_useMas[1];const _useNotif=useState(false),notifActivas=_useNotif[0],setNotifActivas=_useNotif[1];const _useShowAv=useState(false),showAvisos=_useShowAv[0],setShowAvisos=_useShowAv[1];const _useBusq=useState(''),busquedaEnvio=_useBusq[0],setBusquedaEnvio=_useBusq[1];const _usePend=useState(0),pendientesSync=_usePend[0],setPendientesSync=_usePend[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);};const _useClientesRider=useState(()=>lsLoad('clientes',[])),clientesRider=_useClientesRider[0],setClientesRider=_useClientesRider[1];useEffect(function(){db.from('clientes').select('id,nombre,activo').order('nombre').then(function(res){if(res.data&&res.data.length>0){setClientesRider(res.data);lsSave('clientes',res.data);}}).catch(function(){});},[]);useEffect(()=>{
   if('serviceWorker' in navigator){
     navigator.serviceWorker.ready.then(reg=>reg.pushManager.getSubscription()).then(sub=>{if(sub)setNotifActivas(true);}).catch(()=>{});
   }
@@ -7539,7 +7618,25 @@ useEffect(function(){
     // Marcar como inactivo al salir
     try{db.from('ubicaciones_mensajeros').update({activo:false}).eq('mensajero',usuario.nombre).then(function(){}).catch(function(){});}catch(e){}
   };
-},[]);const ESTADOS_RIDER=[{val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#C8A84B',bg:'rgba(200,168,75,0.15)'},{val:'entregado',label:'Entregado',icon:'✅',color:'#2e7d4f',bg:'rgba(46,125,79,0.15)'},{val:'reprogramado',label:'Reprogramado',icon:'📅',color:'#b07d10',bg:'rgba(176,125,16,0.15)'},{val:'cancelado',label:'Cancelado',icon:'❌',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'siniestro',label:'Siniestro',icon:'⚠️',color:'#b03030',bg:'rgba(176,48,48,0.12)'}];async function cargarEnvios(){setLoading(true);try{const nombreRider=normNombre(usuario.nombre);
+},[]);
+// ── Sincronizacion en segundo plano: reintenta lo que haya quedado pendiente por falta de
+// señal (entregas, colectas, retiros, asignaciones) y mantiene el contador de "pendientes"
+// actualizado para que el mensajero sepa si le queda algo por sincronizar.
+async function actualizarContadorSync(){
+  try{const items=await idbOfflineGetAll();setPendientesSync(items.length);}catch(e){}
+}
+useEffect(function(){
+  actualizarContadorSync();
+  procesarColaOffline(actualizarContadorSync);
+  var onOnline=function(){procesarColaOffline(actualizarContadorSync);};
+  window.addEventListener('online',onOnline);
+  var iv=setInterval(function(){
+    if(navigator.onLine!==false)procesarColaOffline(actualizarContadorSync);
+    else actualizarContadorSync();
+  },20000);
+  return function(){window.removeEventListener('online',onOnline);clearInterval(iv);};
+},[]);
+const ESTADOS_RIDER=[{val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#C8A84B',bg:'rgba(200,168,75,0.15)'},{val:'entregado',label:'Entregado',icon:'✅',color:'#2e7d4f',bg:'rgba(46,125,79,0.15)'},{val:'reprogramado',label:'Reprogramado',icon:'📅',color:'#b07d10',bg:'rgba(176,125,16,0.15)'},{val:'cancelado',label:'Cancelado',icon:'❌',color:'#b03030',bg:'rgba(176,48,48,0.12)'},{val:'siniestro',label:'Siniestro',icon:'⚠️',color:'#b03030',bg:'rgba(176,48,48,0.12)'}];async function cargarEnvios(){setLoading(true);try{const nombreRider=normNombre(usuario.nombre);
     const partes=nombreRider.split(' ');
     const primerNombre=partes[0];
     const apellido=partes[1]||partes[0];
@@ -7571,7 +7668,24 @@ useEffect(function(){
     const data=Object.values(mapaEnvios).filter(function(e){return normNombre(e.mensajero||'')===nombreRider;});
     if(error)throw error;
     setEnvios(data||[]);
-}catch(e){console.warn('Error cargando envios:',e.message);setEnvios([]);}finally{setLoading(false);}}
+    // Guardamos una copia de la ruta del dia en el celular -- si mas tarde se pierde la señal
+    // y la app se recarga (o se abre de nuevo), el mensajero sigue viendo su ruta en vez de una
+    // pantalla vacia, aunque no se pueda traer nada nuevo de Supabase en ese momento.
+    try{lsSave('rider_envios_cache_'+primerNombre.toLowerCase(),data||[]);}catch(e2){}
+}catch(e){
+  console.warn('Error cargando envios:',e.message);
+  // Sin señal (o error de red): en vez de vaciar la ruta, mostramos la ultima copia guardada
+  // en el celular -- el mensajero puede seguir viendo y gestionando lo que ya tenia cargado.
+  const nombreRiderFallback=normNombre(usuario.nombre);
+  const primerNombreFallback=nombreRiderFallback.split(' ')[0];
+  const cache=lsLoad('rider_envios_cache_'+primerNombreFallback.toLowerCase(),null);
+  if(cache&&cache.length>0){
+    setEnvios(cache);
+    toast('⚠ Sin conexión — mostrando tu ruta guardada en el celular');
+  }else{
+    setEnvios([]);
+  }
+}finally{setLoading(false);}}
   // ── Cargar mi ruta: toma de una sola vez todos los envios "libres" (en_bodega o
   // sin_asignar) de las comunas que este mensajero tiene asignadas en el Mapa, y los
   // pasa a el mismo. Es ADEMAS de las otras formas de cargar carga (escaneo, asignacion
@@ -7616,7 +7730,7 @@ useEffect(function(){
   // Recargar cada 2 minutos para mantener datos frescos
   const interval=setInterval(cargarEnvios, 120000);
   return ()=>clearInterval(interval);
-},[]);useEffect(()=>{const channel=db.channel('rider-envios').on('postgres_changes',{event:'UPDATE',schema:'public',table:'envios'},payload=>{setEnvios(prev=>prev.map(e=>e.codigo===payload.new.codigo?{...e,...payload.new}:e));}).subscribe();return()=>{db.removeChannel(channel);};},[]);const enviosFiltrados=useMemo(()=>{let base;if(filtro==='pendientes')base=envios.filter(e=>e.estado==='en_ruta'||e.estado==='reprogramado');else if(filtro==='reprogramados')base=envios.filter(e=>e.estado==='reprogramado');else if(filtro==='cancelados')base=envios.filter(e=>e.estado==='cancelado');else if(filtro==='siniestros')base=envios.filter(e=>e.estado==='siniestro');else if(filtro==='entregados')base=envios.filter(e=>e.estado==='entregado');else base=envios;if(busquedaEnvio.trim()){const q=busquedaEnvio.trim().toLowerCase();base=base.filter(e=>(e.codigo||'').toLowerCase().includes(q)||(e.destinatario||'').toLowerCase().includes(q)||(e.direccion||'').toLowerCase().includes(q)||(e.comuna||'').toLowerCase().includes(q)||(e.telefono||'').toLowerCase().includes(q)||(e.cliente||'').toLowerCase().includes(q));}return base;},[envios,filtro,busquedaEnvio]);const stats={total:envios.length,entregados:envios.filter(e=>e.estado==='entregado').length,enRuta:envios.filter(e=>e.estado==='en_ruta').length,reprogramados:envios.filter(e=>e.estado==='reprogramado').length,cancelados:envios.filter(e=>e.estado==='cancelado').length,siniestros:envios.filter(e=>e.estado==='siniestro').length,pendientes:envios.filter(e=>e.estado==='en_ruta'||e.estado==='reprogramado').length};const efectividad=stats.total>0?Math.round(stats.entregados/stats.total*100):0;return/*#__PURE__*/React.createElement("div",{style:{minHeight:'100vh',background:'var(--dark-deep)',color:'#fff',fontFamily:'DM Sans,sans-serif',paddingBottom:90}},/*#__PURE__*/React.createElement("div",{style:{background:'var(--dark)',borderBottom:'3px solid var(--gold)',padding:'10px 16px',paddingTop:'max(10px,env(safe-area-inset-top))',display:'flex',alignItems:'center',justifyContent:'space-between'},className:'rider-sticky'},/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:10}},/*#__PURE__*/React.createElement("div",{style:{width:42,height:42,borderRadius:8,overflow:'hidden',flexShrink:0,border:'2px solid var(--gold)',background:'var(--dark-deep)'}},/*#__PURE__*/React.createElement("img",{src:LOGO_SRC,style:{width:'100%',height:'100%',objectFit:'cover'},onError:e=>{e.target.style.display='none';}})),/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:15,letterSpacing:2,color:'var(--gold)',lineHeight:1}},"TRANSPGSO"),/*#__PURE__*/React.createElement("div",{style:{fontSize:10,color:'rgba(200,168,75,0.5)',letterSpacing:1}},"RIDER \xB7 ",usuario.nombre.replace(/,\s*/g,' ').split(' ')[0]))),/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:8}},/*#__PURE__*/React.createElement("button",{onClick:cargarEnvios,title:"Actualizar",style:{background:'none',border:'1px solid rgba(200,168,75,0.25)',borderRadius:10,padding:'9px 10px',color:'var(--gold)',cursor:'pointer',fontSize:16,minWidth:40,minHeight:40,display:'flex',alignItems:'center',justifyContent:'center'}},"\u21BA"),/*#__PURE__*/React.createElement("button",{onClick:onLogout,title:"Salir",style:{background:'none',border:'1px solid rgba(255,255,255,0.12)',borderRadius:10,padding:'9px 10px',color:'rgba(255,255,255,0.4)',cursor:'pointer',fontSize:14,minWidth:40,minHeight:40,display:'flex',alignItems:'center',justifyContent:'center'}},"\uD83D\uDEAA"))),riderTab==='envios'&&/*#__PURE__*/React.createElement(React.Fragment,null,/*#__PURE__*/React.createElement("div",{style:{padding:'10px 14px 0',background:'linear-gradient(180deg,#2b2e20,#1e2118)'}},/*#__PURE__*/React.createElement("input",{type:"text",placeholder:"🔍 Buscar por código, destinatario, dirección...",value:busquedaEnvio,onChange:e=>setBusquedaEnvio(e.target.value),style:{width:'100%',padding:'10px 12px',borderRadius:10,border:'1px solid rgba(200,168,75,0.25)',background:'rgba(255,255,255,0.05)',color:'#fff',fontSize:13,boxSizing:'border-box'}})),/*#__PURE__*/React.createElement("div",{style:{background:'linear-gradient(180deg,#2b2e20,#1e2118)',padding:'12px 14px',borderBottom:'1px solid rgba(200,168,75,0.2)'}},[  /*#__PURE__*/React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,marginBottom:6}},
+},[]);useEffect(()=>{const channel=db.channel('rider-envios').on('postgres_changes',{event:'UPDATE',schema:'public',table:'envios'},payload=>{setEnvios(prev=>prev.map(e=>e.codigo===payload.new.codigo?{...e,...payload.new}:e));}).subscribe();return()=>{db.removeChannel(channel);};},[]);const enviosFiltrados=useMemo(()=>{let base;if(filtro==='pendientes')base=envios.filter(e=>e.estado==='en_ruta'||e.estado==='reprogramado');else if(filtro==='reprogramados')base=envios.filter(e=>e.estado==='reprogramado');else if(filtro==='cancelados')base=envios.filter(e=>e.estado==='cancelado');else if(filtro==='siniestros')base=envios.filter(e=>e.estado==='siniestro');else if(filtro==='entregados')base=envios.filter(e=>e.estado==='entregado');else base=envios;if(busquedaEnvio.trim()){const q=busquedaEnvio.trim().toLowerCase();base=base.filter(e=>(e.codigo||'').toLowerCase().includes(q)||(e.destinatario||'').toLowerCase().includes(q)||(e.direccion||'').toLowerCase().includes(q)||(e.comuna||'').toLowerCase().includes(q)||(e.telefono||'').toLowerCase().includes(q)||(e.cliente||'').toLowerCase().includes(q));}return base;},[envios,filtro,busquedaEnvio]);const stats={total:envios.length,entregados:envios.filter(e=>e.estado==='entregado').length,enRuta:envios.filter(e=>e.estado==='en_ruta').length,reprogramados:envios.filter(e=>e.estado==='reprogramado').length,cancelados:envios.filter(e=>e.estado==='cancelado').length,siniestros:envios.filter(e=>e.estado==='siniestro').length,pendientes:envios.filter(e=>e.estado==='en_ruta'||e.estado==='reprogramado').length};const efectividad=stats.total>0?Math.round(stats.entregados/stats.total*100):0;return/*#__PURE__*/React.createElement("div",{style:{minHeight:'100vh',background:'var(--dark-deep)',color:'#fff',fontFamily:'DM Sans,sans-serif',paddingBottom:90}},/*#__PURE__*/React.createElement("div",{style:{background:'var(--dark)',borderBottom:'3px solid var(--gold)',padding:'10px 16px',paddingTop:'max(10px,env(safe-area-inset-top))',display:'flex',alignItems:'center',justifyContent:'space-between'},className:'rider-sticky'},/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:10}},/*#__PURE__*/React.createElement("div",{style:{width:42,height:42,borderRadius:8,overflow:'hidden',flexShrink:0,border:'2px solid var(--gold)',background:'var(--dark-deep)'}},/*#__PURE__*/React.createElement("img",{src:LOGO_SRC,style:{width:'100%',height:'100%',objectFit:'cover'},onError:e=>{e.target.style.display='none';}})),/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:15,letterSpacing:2,color:'var(--gold)',lineHeight:1}},"TRANSPGSO"),/*#__PURE__*/React.createElement("div",{style:{fontSize:10,color:'rgba(200,168,75,0.5)',letterSpacing:1}},"RIDER \xB7 ",usuario.nombre.replace(/,\s*/g,' ').split(' ')[0]),pendientesSync>0&&/*#__PURE__*/React.createElement("div",{title:"Guardado en el celular, esperando señal para sincronizar",style:{marginTop:3,fontSize:10,color:'#e6a23c',background:'rgba(230,162,60,0.12)',border:'1px solid rgba(230,162,60,0.35)',borderRadius:6,padding:'2px 6px',display:'inline-flex',alignItems:'center',gap:4,fontWeight:700}},"📴 ",pendientesSync," sin sincronizar"))),/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:8}},/*#__PURE__*/React.createElement("button",{onClick:cargarEnvios,title:"Actualizar",style:{background:'none',border:'1px solid rgba(200,168,75,0.25)',borderRadius:10,padding:'9px 10px',color:'var(--gold)',cursor:'pointer',fontSize:16,minWidth:40,minHeight:40,display:'flex',alignItems:'center',justifyContent:'center'}},"\u21BA"),/*#__PURE__*/React.createElement("button",{onClick:onLogout,title:"Salir",style:{background:'none',border:'1px solid rgba(255,255,255,0.12)',borderRadius:10,padding:'9px 10px',color:'rgba(255,255,255,0.4)',cursor:'pointer',fontSize:14,minWidth:40,minHeight:40,display:'flex',alignItems:'center',justifyContent:'center'}},"\uD83D\uDEAA"))),riderTab==='envios'&&/*#__PURE__*/React.createElement(React.Fragment,null,/*#__PURE__*/React.createElement("div",{style:{padding:'10px 14px 0',background:'linear-gradient(180deg,#2b2e20,#1e2118)'}},/*#__PURE__*/React.createElement("input",{type:"text",placeholder:"🔍 Buscar por código, destinatario, dirección...",value:busquedaEnvio,onChange:e=>setBusquedaEnvio(e.target.value),style:{width:'100%',padding:'10px 12px',borderRadius:10,border:'1px solid rgba(200,168,75,0.25)',background:'rgba(255,255,255,0.05)',color:'#fff',fontSize:13,boxSizing:'border-box'}})),/*#__PURE__*/React.createElement("div",{style:{background:'linear-gradient(180deg,#2b2e20,#1e2118)',padding:'12px 14px',borderBottom:'1px solid rgba(200,168,75,0.2)'}},[  /*#__PURE__*/React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,marginBottom:6}},
     [{label:'TOTAL',val:stats.total,color:'#fff',bg:'rgba(255,255,255,0.06)'},{label:'ENTREGADOS',val:stats.entregados,color:'#44b876',bg:'rgba(46,125,79,0.15)'},{label:'EN RUTA',val:stats.enRuta,color:'#C8A84B',bg:'rgba(200,168,75,0.12)'},{label:'EFECT.',val:efectividad+'%',color:efectividad>=90?'#44b876':efectividad>=80?'#C8A84B':'#e05555',bg:efectividad>=90?'rgba(46,125,79,0.12)':efectividad>=80?'rgba(200,168,75,0.1)':'rgba(176,48,48,0.12)'}]
     .map((s,i)=>/*#__PURE__*/React.createElement('div',{key:i,style:{textAlign:'center',background:s.bg,borderRadius:10,padding:'10px 4px',border:'1px solid '+s.color+'33',boxShadow:'0 2px 8px rgba(0,0,0,0.2),inset 0 1px 0 rgba(255,255,255,0.05)'}},
       /*#__PURE__*/React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:24,color:s.color,lineHeight:1,textShadow:'0 0 10px '+s.color+'66'}},s.val),
@@ -7719,7 +7833,7 @@ showMas&&/*#__PURE__*/React.createElement('div',{onClick:()=>setShowMas(false),s
       )
     )
   )
-),riderToast&&React.createElement('div',{style:{position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',background:'#3A3D2E',color:'var(--gold)',padding:'12px 24px',borderRadius:10,fontWeight:700,fontSize:14,zIndex:99999,boxShadow:'0 4px 20px rgba(0,0,0,0.4)',whiteSpace:'nowrap'}},riderToast),envioActivo&&/*#__PURE__*/React.createElement(EnvioAccion,{envio:envioActivo,usuario:usuario,estados:ESTADOS_RIDER,onClose:()=>{setEnvioActivo(null);setBusquedaEnvio('');setFiltro('pendientes');},onUpdate:(codigo,nuevoEstado,nota,foto,operador)=>{if(estadoEsTerminal(envioActivo?.estado||'')){toast('⚠ Estado terminal. Contacta al admin.');return;}setEnvios(prev=>{const updated=prev.map(e=>e.codigo===codigo?{...e,estado:nuevoEstado,nota:nota||e.nota,historial:[...(e.historial||[]),crearEntradaHistorial(nuevoEstado,nota,operador||usuario.nombre)]}:e);const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,updated);return updated;});setEnvioActivo(prev=>({...prev,estado:nuevoEstado}));sbUpdateEstado(codigo,nuevoEstado,nota,operador||usuario.nombre,'app_mensajero');},onComunaUpdate:(codigo,comuna)=>{setEnvios(prev=>{const updated=prev.map(e=>e.codigo===codigo?{...e,comuna}:e);const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,updated);return updated;});setEnvioActivo(prev=>prev?{...prev,comuna}:prev);}}));}function EnvioAccion(_ref33){var _estados$find;let envio=_ref33.envio,usuario=_ref33.usuario,estados=_ref33.estados,onClose=_ref33.onClose,onUpdate=_ref33.onUpdate,onComunaUpdate=_ref33.onComunaUpdate;const _useState88=useState(''),nota=_useState88[0],setNota=_useState88[1];const _useState89=useState([]),fotos=_useState89[0],setFotos=_useState89[1];const _useState90=useState(false),guardando=_useState90[0],setGuardando=_useState90[1];const _useState91=useState(null),estadoSel=_useState91[0],setEstadoSel=_useState91[1];
+),riderToast&&React.createElement('div',{style:{position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',background:'#3A3D2E',color:'var(--gold)',padding:'12px 24px',borderRadius:10,fontWeight:700,fontSize:14,zIndex:99999,boxShadow:'0 4px 20px rgba(0,0,0,0.4)',whiteSpace:'nowrap'}},riderToast),envioActivo&&/*#__PURE__*/React.createElement(EnvioAccion,{envio:envioActivo,usuario:usuario,estados:ESTADOS_RIDER,onClose:()=>{setEnvioActivo(null);setBusquedaEnvio('');setFiltro('pendientes');},onUpdate:(codigo,nuevoEstado,nota,foto,operador,offline)=>{if(estadoEsTerminal(envioActivo?.estado||'')){toast('⚠ Estado terminal. Contacta al admin.');return;}setEnvios(prev=>{const updated=prev.map(e=>e.codigo===codigo?{...e,estado:nuevoEstado,nota:nota||e.nota,_pendienteSync:!!offline,historial:[...(e.historial||[]),crearEntradaHistorial(nuevoEstado,nota,operador||usuario.nombre)]}:e);const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,updated);return updated;});setEnvioActivo(prev=>({...prev,estado:nuevoEstado}));if(offline){toast('📴 Sin conexión — se guardó en el celular, se sincroniza solo cuando vuelva la señal');}else{toast('✓ Entrega registrada');}},onComunaUpdate:(codigo,comuna)=>{setEnvios(prev=>{const updated=prev.map(e=>e.codigo===codigo?{...e,comuna}:e);const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,updated);return updated;});setEnvioActivo(prev=>prev?{...prev,comuna}:prev);}}));}function EnvioAccion(_ref33){var _estados$find;let envio=_ref33.envio,usuario=_ref33.usuario,estados=_ref33.estados,onClose=_ref33.onClose,onUpdate=_ref33.onUpdate,onComunaUpdate=_ref33.onComunaUpdate;const _useState88=useState(''),nota=_useState88[0],setNota=_useState88[1];const _useState89=useState([]),fotos=_useState89[0],setFotos=_useState89[1];const _useState90=useState(false),guardando=_useState90[0],setGuardando=_useState90[1];const _useState91=useState(null),estadoSel=_useState91[0],setEstadoSel=_useState91[1];
 const _useAvisoFotosEA=useState(''),avisoFotos=_useAvisoFotosEA[0],setAvisoFotos=_useAvisoFotosEA[1];
 const MIN_FOTOS_ENTREGA=2;
 const _useShowCamEA=useState(false),showCamara=_useShowCamEA[0],setShowCamara=_useShowCamEA[1];
@@ -7926,24 +8040,30 @@ async function guardarConEstado(estadoFinal){
       }catch(e){return null;}
     },4);
     const fotosB64=fotosB64Raw.filter(function(b){return!!b;});
-    // Subir cada foto a Supabase Storage en paralelo (4 a la vez) en vez de una por una - con conexión
-    // móvil/celular esto es lo que más se sentía: 4 fotos = 4 round-trips secuenciales antes de este fix.
-    const fotosUrls=await procesarConcurrencia(fotosB64,async function(b64,fu){
-      try{return await subirFotoStorage(b64,envio.codigo,'e'+fu);}catch(e){return null;}
-    },4);
-    let videoUrlSubido=null;
-    if(videoGrabado&&videoGrabado.blob){
-      const _rv=await subirVideoStorage(videoGrabado.blob,envio.codigo,'e');
-      videoUrlSubido=_rv.url;
-      if(_rv.error){setVideoSubidaError('⚠ El video no se pudo guardar: '+_rv.error);}
+    // OJO: a partir de aca ya NO se sube nada directo -- se arma el "payload" (fotos comprimidas,
+    // video, estado, nota) y se intenta guardar via intentarConColaOffline. Si hay señal, se sube
+    // y queda listo al toque. Si no hay señal (o se corta a mitad de la subida), el payload queda
+    // guardado completo en el celular (IndexedDB) y se reintenta solo cuando vuelva la conexion --
+    // nunca se pierde la entrega por un corte de señal.
+    const payload={
+      codigo:envio.codigo,
+      estadoFinal:estadoFinal,
+      estadoPrevio:envio.estado,
+      nota:nota||'',
+      mensajero:usuario.nombre,
+      fotosB64:fotosB64,
+      videoBlob:(videoGrabado&&videoGrabado.blob)||null
+    };
+    let resultado;
+    try{
+      resultado=await intentarConColaOffline('entrega',payload,usuario.nombre);
+    }catch(errReal){
+      // Error real del servidor (no de red): se lo mostramos al mensajero en vez de reintentar solo.
+      setVideoSubidaError('⚠ No se pudo guardar: '+(errReal&&errReal.message?errReal.message:'error desconocido'));
+      if(mountedRef.current)setGuardando(false);
+      return;
     }
-    if(fotosUrls.length>0||videoUrlSubido){
-      var intentosAnt=[];
-      try{const _r=await db.from('envios').select('fotos_entrega').eq('codigo',envio.codigo).single();if(_r.data&&_r.data.fotos_entrega){const parsed=JSON.parse(_r.data.fotos_entrega);if(Array.isArray(parsed)&&parsed.length>0){if(typeof parsed[0]==='string'){intentosAnt=[{intento:1,estado:envio.estado,fecha:new Date().toISOString(),mensajero:usuario.nombre,fotos:parsed}];}else{intentosAnt=parsed;}}}}catch(e){}
-      const nuevoIntento={intento:intentosAnt.length+1,estado:estadoFinal,fecha:new Date().toISOString(),mensajero:usuario.nombre,nota:nota||'',fotos:fotosUrls,video:videoUrlSubido||undefined};
-      await db.from('envios').update({fotos_entrega:JSON.stringify([...intentosAnt,nuevoIntento])}).eq('codigo',envio.codigo);
-    }
-    onUpdate(envio.codigo,estadoFinal,nota,fotosUrls,usuario.nombre);
+    onUpdate(envio.codigo,estadoFinal,nota,[],usuario.nombre,resultado.offline);
     limpiarBorradorFotos();
     onClose();
   }catch(e){console.warn(e);}
@@ -7957,39 +8077,27 @@ async function guardarCambio(){if(!estadoSel){return;}setGuardando(true);try{
           if(b64) fotosB64.push(b64);
         }catch(e){console.warn('Foto compress error:',e.message);}
       }
-      // Subir cada foto a Supabase Storage en vez de guardar el base64 completo en la tabla
-      const fotosUrls=[];
-      for(let fu=0;fu<fotosB64.length;fu++){
-        fotosUrls.push(await subirFotoStorage(fotosB64[fu],envio.codigo,'c'+fu));
+      // Igual que en guardarConEstado: se arma el payload y se intenta via la cola offline-safe,
+      // asi si no hay señal (o se corta a mitad de la subida) queda guardado en el celular y se
+      // reintenta solo -- nunca se pierde la entrega.
+      const payload={
+        codigo:envio.codigo,
+        estadoFinal:estadoSel,
+        estadoPrevio:envio.estado||'desconocido',
+        nota:nota||'',
+        mensajero:usuario.nombre,
+        fotosB64:fotosB64,
+        videoBlob:(videoGrabado&&videoGrabado.blob)||null
+      };
+      let resultado;
+      try{
+        resultado=await intentarConColaOffline('entrega',payload,usuario.nombre);
+      }catch(errReal){
+        setVideoSubidaError('⚠ No se pudo guardar: '+(errReal&&errReal.message?errReal.message:'error desconocido'));
+        if(mountedRef.current)setGuardando(false);
+        return;
       }
-      let videoUrlSubido2=null;
-      if(videoGrabado&&videoGrabado.blob){
-        const _rv2=await subirVideoStorage(videoGrabado.blob,envio.codigo,'c');
-        videoUrlSubido2=_rv2.url;
-        if(_rv2.error){setVideoSubidaError('⚠ El video no se pudo guardar: '+_rv2.error);}
-      }
-      if(fotosUrls.length>0||videoUrlSubido2){
-        // Leer intentos anteriores y ACUMULAR
-        let intentosAnteriores=[];
-        try{
-          const _r=await db.from('envios').select('fotos_entrega').eq('codigo',envio.codigo).single();
-          if(_r.data?.fotos_entrega){
-            const parsed=JSON.parse(_r.data.fotos_entrega);
-            // Compatibilidad: si era array plano (formato viejo), convertir a intento
-            if(Array.isArray(parsed)&&parsed.length>0){
-              if(typeof parsed[0]==='string'){
-                intentosAnteriores=[{intento:1,estado:envio.estado||'desconocido',fecha:new Date().toISOString(),mensajero:usuario.nombre,fotos:parsed}];
-              }else{
-                intentosAnteriores=parsed;
-              }
-            }
-          }
-        }catch(e){}
-        const nuevoIntento={intento:intentosAnteriores.length+1,estado:estadoSel,fecha:new Date().toISOString(),mensajero:usuario.nombre,nota:nota||'',fotos:fotosUrls,video:videoUrlSubido2||undefined};
-        const todosIntentos=[...intentosAnteriores,nuevoIntento];
-        await db.from('envios').update({fotos_entrega:JSON.stringify(todosIntentos)}).eq('codigo',envio.codigo);
-      }
-      onUpdate(envio.codigo,estadoSel,nota,fotosUrls,usuario.nombre);
+      onUpdate(envio.codigo,estadoSel,nota,[],usuario.nombre,resultado.offline);
       limpiarBorradorFotos();
       onClose();
     }catch(e){console.warn(e);}if(mountedRef.current)setGuardando(false);}const est=estados.find(s=>s.val===envio.estado)||{label:envio.estado,color:'#7a7d6a',icon:'📦'};
@@ -8051,6 +8159,227 @@ avisoFotos&&React.createElement("div",{style:{marginTop:8,padding:'10px 14px',ba
 var UMBRAL_ATRASO_DIAS=2; // dias en 'en_ruta' antes de marcar el envio como atrasado
 function diasDesdeFecha(fechaStr){if(!fechaStr)return 0;try{var f=new Date(fechaStr+'T00:00:00');var hoy=new Date(fechaHoyCL()+'T00:00:00');return Math.round((hoy-f)/86400000);}catch(e){return 0;}}
 function esEnvioAtrasado(e){if(!e)return false;return e.estado==='en_ruta'&&diasDesdeFecha(e.fecha)>=UMBRAL_ATRASO_DIAS;}
+
+// ══════════════════════ MODO OFFLINE (mensajeros) ══════════════════════
+// Objetivo: el mensajero SIEMPRE puede seguir trabajando -- entregar, hacer colecta, tomar
+// paquetes por escaneo -- tenga señal o no. Si una accion no se puede guardar en el momento
+// (sin conexion, o un corte puntual), se guarda intacta en el celular via IndexedDB (que
+// sobrevive a que se cierre o reinicie la app, a diferencia de una variable en memoria) y se
+// reintenta sola en cuanto vuelva la señal. Nunca se pierde una entrega ya hecha.
+const IDB_OFFLINE_NAME='transpgso_offline';
+const IDB_OFFLINE_VERSION=1;
+function idbOfflineOpen(){
+  return new Promise(function(resolve,reject){
+    if(!('indexedDB' in window)){reject(new Error('IndexedDB no disponible'));return;}
+    const req=indexedDB.open(IDB_OFFLINE_NAME,IDB_OFFLINE_VERSION);
+    req.onupgradeneeded=function(e){
+      const idb=e.target.result;
+      if(!idb.objectStoreNames.contains('cola'))idb.createObjectStore('cola',{keyPath:'id'});
+    };
+    req.onsuccess=function(e){resolve(e.target.result);};
+    req.onerror=function(e){reject(e.target.error);};
+  });
+}
+async function idbOfflinePut(item){
+  try{
+    const idb=await idbOfflineOpen();
+    await new Promise(function(resolve,reject){
+      const tx=idb.transaction('cola','readwrite');
+      tx.objectStore('cola').put(item);
+      tx.oncomplete=function(){resolve();};
+      tx.onerror=function(){reject(tx.error);};
+    });
+  }catch(e){}
+}
+async function idbOfflineDelete(id){
+  try{
+    const idb=await idbOfflineOpen();
+    await new Promise(function(resolve,reject){
+      const tx=idb.transaction('cola','readwrite');
+      tx.objectStore('cola').delete(id);
+      tx.oncomplete=function(){resolve();};
+      tx.onerror=function(){reject(tx.error);};
+    });
+  }catch(e){}
+}
+async function idbOfflineGetAll(){
+  try{
+    const idb=await idbOfflineOpen();
+    return await new Promise(function(resolve,reject){
+      const tx=idb.transaction('cola','readonly');
+      const req=tx.objectStore('cola').getAll();
+      req.onsuccess=function(){resolve(req.result||[]);};
+      req.onerror=function(){reject(req.error);};
+    });
+  }catch(e){return [];}
+}
+// Guarda una accion que no se pudo hacer en el momento (falla de red). "tipo" identifica que
+// handler la debe reprocesar cuando vuelva la señal (ver procesarColaOffline).
+async function encolarAccionOffline(tipo,payload,mensajero){
+  const item={id:'off_'+Date.now()+'_'+Math.random().toString(36).slice(2,9),tipo:tipo,payload:payload,mensajero:mensajero||'',ts:new Date().toISOString(),intentos:0};
+  await idbOfflinePut(item);
+  return item;
+}
+// Un error de red (fetch falla, timeout, sin señal) vs. un error real del servidor (RLS,
+// validacion, etc.) -- solo el primero justifica encolar y reintentar despues; un error real
+// se debe mostrar tal cual porque reintentarlo no lo va a arreglar solo.
+function esErrorDeRed(e){
+  if(!e)return false;
+  if(typeof navigator!=='undefined'&&navigator.onLine===false)return true;
+  const msg=((e&&e.message)||String(e)||'').toLowerCase();
+  return msg.includes('fetch')||msg.includes('network')||msg.includes('failed to fetch')||msg.includes('load failed')||msg.includes('timeout')||msg.includes('conexion')||msg.includes('connection');
+}
+// Registro de handlers por tipo -- cada flujo offline-safe (entrega, colecta, retiro,
+// asignacion) registra aca la funcion real que hace el trabajo de red, para que
+// procesarColaOffline sepa como reprocesar cada item guardado.
+const HANDLERS_OFFLINE={};
+function registrarHandlerOffline(tipo,fn){HANDLERS_OFFLINE[tipo]=fn;}
+registrarHandlerOffline('entrega',sincronizarEntregaOffline);
+// ── Handler offline-safe para Colecta (retiro de paquetes por el mensajero) ── Replica la
+// misma logica de confirmarColecta (buscar existentes, respetar datos de PDF, insertar los
+// nuevos) para poder reprocesar el lote completo mas tarde si se guardo en la cola por falta
+// de señal.
+async function sincronizarColectaOffline(payload){
+  const ts=new Date().toISOString();
+  const codigos=payload.paquetes.map(function(p){return p.codigo;});
+  const{data}=await db.from('envios').select('codigo,estado,mensajero,fuente').in('codigo',codigos);
+  const existentes=new Map();
+  if(data)data.forEach(function(r){existentes.set(r.codigo,r);});
+  const updates=[];
+  const inserts=[];
+  payload.paquetes.forEach(function(p){
+    if(existentes.has(p.codigo)){
+      const ex=existentes.get(p.codigo);
+      if(!ESTADOS_ADQUIRIBLES_ESCANEO.includes(ex.estado))return;
+      updates.push(p.codigo);
+    }else{
+      const d=p.datos||{};
+      inserts.push({codigo:p.codigo,cliente:payload.clienteNombre,estado:'en_bodega',fuente:'colecta_'+payload.turno,mensajero:normNombre(payload.mensajero),destinatario:d.destinatario||'',direccion:d.direccion||'',telefono:d.telefono||'',comuna:d.comuna||'',referencia:'',fecha:fechaHoyCL(),monto:0,en_un_cambio:false,nota:'Colecta '+payload.turno+' - '+payload.mensajero+(d.destinatario?' · '+d.destinatario:''),foto_etiqueta:p.foto||null});
+    }
+  });
+  const codigosUpdateOk=[];
+  for(const cod of updates){
+    const pActual=payload.paquetes.find(function(pp){return pp.codigo===cod;});
+    const dActual=(pActual&&pActual.datos)||{};
+    const esPDF=existentes.get(cod)&&existentes.get(cod).fuente==='flex';
+    const updateFields={estado:'en_bodega',mensajero:normNombre(payload.mensajero),actualizado_en:ts};
+    if(!esPDF){
+      updateFields.fuente='colecta_'+payload.turno;
+      if(dActual.destinatario)updateFields.destinatario=dActual.destinatario;
+      if(dActual.direccion)updateFields.direccion=dActual.direccion;
+      if(dActual.telefono)updateFields.telefono=dActual.telefono;
+      if(dActual.comuna)updateFields.comuna=dActual.comuna;
+      if(pActual&&pActual.foto)updateFields.foto_etiqueta=pActual.foto;
+    }
+    const r=await db.from('envios').update(updateFields).eq('codigo',cod);
+    if(r.error)throw r.error;
+    codigosUpdateOk.push(cod);
+  }
+  if(codigosUpdateOk.length>0)sbRegistrarHistorialLote(codigosUpdateOk,'en_bodega','Colecta '+payload.turno+' (sincronizado, se hizo sin señal)',payload.mensajero,'app_mensajero');
+  if(inserts.length>0){
+    const{error}=await db.from('envios').insert(inserts);
+    if(error)throw error;
+    sbRegistrarHistorialLote(inserts.map(function(e){return e.codigo;}),'en_bodega','Colecta '+payload.turno+' (sincronizado, se hizo sin señal)',payload.mensajero,'app_mensajero');
+  }
+}
+registrarHandlerOffline('colecta',sincronizarColectaOffline);
+// ── Handler offline-safe para Retiro Masivo ── Misma logica que confirmarRetiro (insertar
+// respetando el dato del PDF cuando corresponde, upsert en lotes).
+async function sincronizarRetiroOffline(payload){
+  const fecha=payload.fecha||fechaHoyCL();
+  const{data:fuentesData}=await db.from('envios').select('codigo,fuente').in('codigo',payload.paquetes.map(function(p){return p.codigo;}));
+  const fuentesExistentes=new Map();
+  if(fuentesData)fuentesData.forEach(function(r){fuentesExistentes.set(r.codigo,r.fuente);});
+  const inserts=[];
+  const protegidos=[];
+  payload.paquetes.forEach(function(p){
+    if(fuentesExistentes.get(p.codigo)==='flex'){protegidos.push(p);return;}
+    const d=p.datosIA||{};
+    inserts.push({codigo:p.codigo,cliente:payload.clienteNombre,destinatario:p.editDest!=null?p.editDest:(d.destinatario||''),direccion:p.editDir!=null?p.editDir:(d.direccion||''),telefono:d.telefono||'',comuna:p.editComuna!=null?p.editComuna:(d.comuna||''),referencia:d.referencia||'',fecha:fecha,estado:'en_bodega',mensajero:normNombre(payload.mensajero),monto:0,en_un_cambio:false,peso:parseFloat(p.peso)||0,nota:'Retiro masivo - '+payload.mensajero+' (sincronizado, se hizo sin señal)',fuente:'retiro_masivo',foto_etiqueta:p.foto||null});
+  });
+  const LOTE=50;
+  for(let i=0;i<inserts.length;i+=LOTE){
+    const lote=inserts.slice(i,i+LOTE);
+    const res=await db.from('envios').upsert(lote,{onConflict:'codigo',ignoreDuplicates:false});
+    if(res.error)throw res.error;
+    sbRegistrarHistorialLote(lote.map(function(e){return e.codigo;}),'en_bodega','Colecta / Retiro masivo (sincronizado, se hizo sin señal)',payload.mensajero,'app_mensajero');
+  }
+  for(const p of protegidos){
+    const r=await db.from('envios').update({estado:'en_bodega',mensajero:normNombre(payload.mensajero)}).eq('codigo',p.codigo);
+    if(r.error)throw r.error;
+  }
+}
+registrarHandlerOffline('retiro',sincronizarRetiroOffline);
+// ── Handler offline-safe para Autoasignación por escaneo (AsignacionRider) ── Misma logica
+// que confirmarAsignacion: solo puede tomar paquetes que sigan en un estado adquirible.
+async function sincronizarAsignacionOffline(payload){
+  const codigos=payload.codigos;
+  const{data}=await db.from('envios').select('id,codigo,cliente,destinatario,telefono,direccion,comuna,fecha,estado,mensajero,monto,nota').in('codigo',codigos);
+  const encontrados={};
+  if(data)data.forEach(function(r){encontrados[r.codigo]=r;});
+  for(const cod of codigos){
+    const fila=encontrados[cod];
+    if(!fila)continue; // ya no existe: nada que hacer
+    if(!ESTADOS_ADQUIRIBLES_ESCANEO.includes(fila.estado))continue; // lo tomo otro mientras tanto: no pisar
+    const r=await db.from('envios').update({estado:'en_ruta',mensajero:payload.mensajero}).eq('codigo',fila.codigo);
+    if(r.error)throw r.error;
+    await sbRegistrarHistorial(fila.codigo,'en_ruta','Auto-asignado por escaneo (sincronizado, se hizo sin señal)',payload.mensajero,'app_mensajero');
+  }
+}
+registrarHandlerOffline('asignacion',sincronizarAsignacionOffline);
+// Intenta hacer la accion de una (con señal), y si falla por falta de red la deja guardada
+// para reintentar sola despues -- en vez de mostrarle un error al mensajero y que la entrega
+// se pierda. Devuelve {offline:true} si quedo pendiente de sincronizar, {offline:false} si se
+// guardo al toque. Si el error NO es de red (ej. el servidor la rechazo por una razon real),
+// se relanza tal cual para mostrarlo -- reintentarlo despues no lo va a arreglar solo.
+async function intentarConColaOffline(tipo,payload,mensajero){
+  try{
+    await HANDLERS_OFFLINE[tipo](payload);
+    return{offline:false};
+  }catch(e){
+    if(esErrorDeRed(e)){
+      await encolarAccionOffline(tipo,payload,mensajero);
+      return{offline:true};
+    }
+    throw e;
+  }
+}
+let sincronizandoOffline=false;
+// Reintenta todo lo que quedo pendiente, en el orden en que se guardo. Si un item vuelve a
+// fallar por red, se deja en la cola para el proximo intento (no se pierde). Si un handler no
+// esta registrado (build viejo en caché) tambien se deja para mas adelante.
+async function procesarColaOffline(onCambio){
+  if(sincronizandoOffline)return;
+  sincronizandoOffline=true;
+  try{
+    const items=await idbOfflineGetAll();
+    items.sort(function(a,b){return(a.ts||'').localeCompare(b.ts||'');});
+    for(const item of items){
+      const handler=HANDLERS_OFFLINE[item.tipo];
+      if(!handler)continue;
+      try{
+        await handler(item.payload);
+        await idbOfflineDelete(item.id);
+        if(onCambio)onCambio();
+      }catch(e){
+        if(!esErrorDeRed(e)){
+          // Error real (no de red): igual lo dejamos en la cola en vez de tirarlo -- es preferible
+          // que un admin lo revise a perder la informacion de la entrega -- pero avisamos por consola.
+          console.warn('Error sincronizando item offline (no es de red):',item.tipo,e&&e.message);
+        }
+        // Si es error de red, cortamos aca: no tiene sentido seguir intentando el resto ahora.
+        if(esErrorDeRed(e))break;
+      }
+    }
+  }finally{
+    sincronizandoOffline=false;
+  }
+}
+// Dispara la sincronizacion cuando el navegador detecta que volvio la señal.
+if(typeof window!=='undefined'){
+  window.addEventListener('online',function(){procesarColaOffline();});
+}
+
 const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localStorage.getItem(LS_KEY+'_'+key);return raw?JSON.parse(raw):fallback;}catch(e){return fallback;}}function lsSave(key,val){try{localStorage.setItem(LS_KEY+'_'+key,JSON.stringify(val));}catch(e){}}
 // ── Traductor SOLO para la vista del Portal Cliente (Dashboard/Mis Envios/Mapa/Carga de
 // Envios) - NUNCA afecta el panel admin ni la app de mensajeros, que siguen 100% en español.
