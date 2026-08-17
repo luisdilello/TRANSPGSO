@@ -85,20 +85,18 @@ async function confirmarLimpiezaDuplicados(){
   }catch(e){toast('⚠ '+e.message);}
   setProcesandoDup(false);
 }
-const filtrados=mensajeros.filter(m=>m.nombre.toLowerCase().includes(search.toLowerCase())&&(filtro==='todos'||filtro==='activos'&&m.activo||filtro==='pausados'&&!m.activo));const normNombre=n=>(n||'').toUpperCase().replace(/,/g,'').replace(/\s+/g,' ').trim();const statsMap={};mensajerosDia.forEach(m=>{if(m.total>0)statsMap[normNombre(m.nombre)]={ef:m.entregados/m.total,total:m.total,entregados:m.entregados};});async function toggleEstado(id){const m=mensajeros.find(x=>x.id===id);const nuevoActivo=!m.activo;setMensajeros(prev=>prev.map(x=>x.id===id?{...x,activo:nuevoActivo}:x));toast(`${m.nombre} ${nuevoActivo?'activado':'pausado'}`);try{const{error:errUpd}=await db.from('mensajeros').update({activo:nuevoActivo}).eq('id',id);if(errUpd)toast('⚠ Error guardando estado: '+errUpd.message);}catch(e){toast('⚠ '+e.message);}}async function save(){
+const filtrados=mensajeros.filter(m=>m.nombre.toLowerCase().includes(search.toLowerCase())&&(filtro==='todos'||filtro==='activos'&&m.activo||filtro==='pausados'&&!m.activo)).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));const normNombre=n=>(n||'').toUpperCase().replace(/,/g,'').replace(/\s+/g,' ').trim();const statsMap={};mensajerosDia.forEach(m=>{if(m.total>0)statsMap[normNombre(m.nombre)]={ef:m.entregados/m.total,total:m.total,entregados:m.entregados};});async function toggleEstado(id){const m=mensajeros.find(x=>x.id===id);const nuevoActivo=!m.activo;setMensajeros(prev=>prev.map(x=>x.id===id?{...x,activo:nuevoActivo}:x));toast(`${m.nombre} ${nuevoActivo?'activado':'pausado'}`);try{const{error:errUpd}=await db.from('mensajeros').update({activo:nuevoActivo}).eq('id',id);if(errUpd)toast('⚠ Error guardando estado: '+errUpd.message);}catch(e){toast('⚠ '+e.message);}}async function save(){
   if(!form.nombre.trim())return;
   const nombreFinal=normNombre(form.nombre);
-  const partes=nombreFinal.split(' ').filter(Boolean);
-  // Validar: exactamente 2 palabras, solo letras y espacios
-  if(partes.length<2){toast('⚠ Ingresa NOMBRE y APELLIDO — dos palabras en mayúsculas');return;}
-  if(partes.length>2){toast('⚠ Solo 1 nombre y 1 apellido — sin segundos nombres');return;}
-  if(!/^[A-ZÁÉÍÓÚÜÑ ]+$/.test(nombreFinal)){toast('⚠ Solo letras mayúsculas, sin comas ni símbolos');return;}
+  // Sin restricción de cantidad de palabras ni de caracteres: se permite cualquier nombre o código
+  // (ej. "TODO ENVIO", "BODEGA COLINA", apodos, un solo nombre, etc.). Solo se exige que no quede vacío.
+  if(!nombreFinal){toast('⚠ Ingresa un nombre');return;}
   if(modal==='add'){
     try{
       const{data:inserted,error:errIns}=await db.from('mensajeros').insert({nombre:nombreFinal,activo:true,tarifa:+form.tarifa,tarifa_retiro:+form.tarifaRetiro||500,ver_ganancias:false}).select().single();
       if(errIns){toast('⚠ Error: '+errIns.message);}
       else{
-        setMensajeros(prev=>[...prev,{id:inserted.id,nombre:nombreFinal,activo:true,tarifa:+form.tarifa,tarifaRetiro:+form.tarifaRetiro||500}]);
+        setMensajeros(prev=>[...prev,{id:inserted.id,nombre:nombreFinal,activo:true,tarifa:+form.tarifa,tarifaRetiro:+form.tarifaRetiro||500}].sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es')));
         toast('✓ Mensajero '+nombreFinal+' agregado');
       }
     }catch(e){toast('⚠ '+e.message);}
