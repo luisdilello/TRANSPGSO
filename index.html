@@ -3444,34 +3444,69 @@ return/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createEleme
   win.document.close();
 }
 function FotosEntregaConRecarga(_ref23b){
-  let codigo=_ref23b.codigo,fotoEtiquetaInicial=_ref23b.fotoEtiquetaInicial;
+  let codigo=_ref23b.codigo,fotoEtiquetaInicial=_ref23b.fotoEtiquetaInicial,esAdmin=_ref23b.esAdmin;
   const [fotoEtiqueta,setFotoEtiqueta]=useState(fotoEtiquetaInicial||null);
-  const [fotosEntregaDB,setFotosEntregaDB]=useState([]);
-  useEffect(()=>{
+  // 'fotosEntregaRaw' guarda el array TAL COMO viene de Supabase (sin el remapeo de {url,name}
+  // que se usa solo para mostrar) — se necesita en este formato original para poder sacar UN
+  // intento puntual y volver a guardar el resto tal cual, sin corromper el campo para otras
+  // pantallas que también lo leen (portal cliente, app rider).
+  const [fotosEntregaRaw,setFotosEntregaRaw]=useState([]);
+  const [esFormatoViejo,setEsFormatoViejo]=useState(false);
+  function cargar(){
     if(!codigo)return;
     db.from('envios').select('foto_etiqueta,fotos_entrega').eq('codigo',codigo).single()
       .then(({data})=>{
-        if(data?.foto_etiqueta)setFotoEtiqueta(data.foto_etiqueta);
+        setFotoEtiqueta(data?.foto_etiqueta||null);
         if(data?.fotos_entrega){
           try{
             const parsed=JSON.parse(data.fotos_entrega);
             if(Array.isArray(parsed)&&parsed.length>0){
               if(typeof parsed[0]==='string'){
-                // Formato viejo: array plano de urls
-                setFotosEntregaDB([{intento:1,estado:'desconocido',fecha:'',mensajero:'',fotos:parsed.map((url,i)=>({url,name:'entrega_'+i}))}]);
+                setEsFormatoViejo(true);
+                setFotosEntregaRaw(parsed);
               }else{
-                // Formato nuevo: array de intentos
-                setFotosEntregaDB(parsed.map(it=>({...it,fotos:(it.fotos||[]).map((url,i)=>({url,name:'intento_'+it.intento+'_'+i}))})));
+                setEsFormatoViejo(false);
+                setFotosEntregaRaw(parsed);
               }
-            }
-          }catch(e){}
-        }
+            }else{setFotosEntregaRaw([]);}
+          }catch(e){setFotosEntregaRaw([]);}
+        }else{setFotosEntregaRaw([]);}
       })
       .catch(()=>{});
-  },[codigo]);
-  return React.createElement(FotosEntrega,{codigo,fotoEtiqueta,fotosEntregaExternas:fotosEntregaDB});
+  }
+  useEffect(cargar,[codigo]);
+  // Versión para MOSTRAR (con {url,name} por foto) derivada de fotosEntregaRaw — se recalcula
+  // sola cada vez que se borra algo, sin tener que volver a pedirle los datos a Supabase.
+  const fotosEntregaDB=React.useMemo(function(){
+    if(!fotosEntregaRaw||fotosEntregaRaw.length===0)return[];
+    if(esFormatoViejo){
+      return[{intento:1,estado:'desconocido',fecha:'',mensajero:'',fotos:fotosEntregaRaw.map((url,i)=>({url,name:'entrega_'+i}))}];
+    }
+    return fotosEntregaRaw.map(it=>({...it,fotos:(it.fotos||[]).map((url,i)=>({url,name:'intento_'+it.intento+'_'+i}))}));
+  },[fotosEntregaRaw,esFormatoViejo]);
+  async function borrarFotoEtiqueta(){
+    if(!window.confirm('¿Borrar la foto de etiqueta de este envío? No se puede deshacer.'))return;
+    try{
+      await db.from('envios').update({foto_etiqueta:null}).eq('codigo',codigo);
+      setFotoEtiqueta(null);
+    }catch(e){alert('Error al borrar la foto: '+e.message);}
+  }
+  async function borrarIntento(idx){
+    if(!window.confirm('¿Borrar las fotos de este intento de entrega? Es útil cuando se subieron fotos equivocadas por error. No se puede deshacer.'))return;
+    try{
+      if(esFormatoViejo){
+        await db.from('envios').update({fotos_entrega:null}).eq('codigo',codigo);
+        setFotosEntregaRaw([]);setEsFormatoViejo(false);
+        return;
+      }
+      const filtrado=fotosEntregaRaw.filter(function(_,i){return i!==idx;});
+      await db.from('envios').update({fotos_entrega:filtrado.length>0?JSON.stringify(filtrado):null}).eq('codigo',codigo);
+      setFotosEntregaRaw(filtrado);
+    }catch(e){alert('Error al borrar las fotos: '+e.message);}
+  }
+  return React.createElement(FotosEntrega,{codigo,fotoEtiqueta,fotosEntregaExternas:fotosEntregaDB,esAdmin,onBorrarFotoEtiqueta:borrarFotoEtiqueta,onBorrarIntento:borrarIntento});
 }
-function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoEtiqueta,fotosEntregaExternas=_ref23.fotosEntregaExternas;const [zoomFoto,setZoomFoto]=useState(null);const _useState54=useState([]),fotos=_useState54[0],setFotos=_useState54[1];const _useState55=useState(true),loading=_useState55[0],setLoading=_useState55[1];useEffect(()=>{if(!codigo)return;db.storage.from('evidencias').list('',{limit:500,offset:0,sortBy:{column:'created_at',order:'desc'}}).then(_ref24=>{let data=_ref24.data,error=_ref24.error;if(error){console.warn('Storage list error:',error);setLoading(false);return;}if(data&&data.length>0){const archivos=data.filter(f=>f.name&&f.name.includes(codigo));if(archivos.length>0){const urls=archivos.map(f=>{const _db$storage$from$getP=db.storage.from('evidencias').getPublicUrl(f.name),u=_db$storage$from$getP.data;return{name:f.name,url:(u==null?void 0:u.publicUrl)||''};}).filter(f=>f.url);setFotos(urls);}}setLoading(false);}).catch(e=>{console.warn('Storage error:',e);setLoading(false);});},[codigo]);// Mostrar foto de etiqueta directamente desde el campo del envio
+function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoEtiqueta,fotosEntregaExternas=_ref23.fotosEntregaExternas,esAdmin=_ref23.esAdmin,onBorrarFotoEtiqueta=_ref23.onBorrarFotoEtiqueta,onBorrarIntento=_ref23.onBorrarIntento;const [zoomFoto,setZoomFoto]=useState(null);const _useState54=useState([]),fotos=_useState54[0],setFotos=_useState54[1];const _useState55=useState(true),loading=_useState55[0],setLoading=_useState55[1];useEffect(()=>{if(!codigo)return;db.storage.from('evidencias').list('',{limit:500,offset:0,sortBy:{column:'created_at',order:'desc'}}).then(_ref24=>{let data=_ref24.data,error=_ref24.error;if(error){console.warn('Storage list error:',error);setLoading(false);return;}if(data&&data.length>0){const archivos=data.filter(f=>f.name&&f.name.includes(codigo));if(archivos.length>0){const urls=archivos.map(f=>{const _db$storage$from$getP=db.storage.from('evidencias').getPublicUrl(f.name),u=_db$storage$from$getP.data;return{name:f.name,url:(u==null?void 0:u.publicUrl)||''};}).filter(f=>f.url);setFotos(urls);}}setLoading(false);}).catch(e=>{console.warn('Storage error:',e);setLoading(false);});},[codigo]);// Mostrar foto de etiqueta directamente desde el campo del envio
   const fotosEtiquetaDirecta=fotoEtiqueta?[{url:fotoEtiqueta,name:'etiqueta_colecta'}]:[];
   const fotosEntregaArrCheck=fotosEntregaExternas||[];if(loading&&fotosEntregaArrCheck.length===0&&!fotoEtiqueta)return/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginBottom:16,padding:'8px 12px',background:'var(--cream)',borderRadius:7}},"\u23F3 Buscando fotos...");const allFotos=[...fotosEtiquetaDirecta,...fotos,...fotosEntregaArrCheck];const sinFotos=allFotos.length===0&&!fotoEtiqueta;if(sinFotos)return/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginBottom:16,padding:'8px 12px',background:'var(--cream)',borderRadius:7}},"\uD83D\uDCF7 Sin fotos de evidencia registradas");const fotosEtiqueta=[...fotosEtiquetaDirecta,...fotos.filter(f=>f.name.includes('__etiqueta__'))];
   const intentosEntrega=fotosEntregaExternas||[];
@@ -3481,7 +3516,10 @@ function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoE
     fotosEtiqueta.length>0&&React.createElement("div",{style:{marginBottom:14}},
       React.createElement("div",{style:{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8,marginBottom:8}},
         React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:1.5,color:'var(--dark)'}},"FOTO DE ETIQUETA (colecta)"),
-        React.createElement("button",{onClick:()=>imprimirFotoEtiqueta(fotosEtiqueta.map(f=>f.url)),style:{padding:'5px 12px',borderRadius:6,border:'1px solid var(--gold)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',fontWeight:700,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}},"🖨 Imprimir")
+        React.createElement("div",{style:{display:'flex',gap:8}},
+          React.createElement("button",{onClick:()=>imprimirFotoEtiqueta(fotosEtiqueta.map(f=>f.url)),style:{padding:'5px 12px',borderRadius:6,border:'1px solid var(--gold)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',fontWeight:700,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}},"🖨 Imprimir"),
+          esAdmin&&onBorrarFotoEtiqueta&&React.createElement("button",{onClick:onBorrarFotoEtiqueta,style:{padding:'5px 12px',borderRadius:6,border:'1px solid #b03030',background:'rgba(176,48,48,0.08)',color:'#b03030',fontWeight:700,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}},"🗑 Borrar")
+        )
       ),
       React.createElement("div",{style:{display:'flex',gap:8,flexWrap:'wrap'}},
         fotosEtiqueta.map((f,i)=>React.createElement("div",{key:i,onClick:()=>setZoomFoto(f.url),style:{display:'block',borderRadius:10,overflow:'hidden',border:'2px solid var(--gold)',flexShrink:0,transition:'transform 0.15s',cursor:'zoom-in'},onMouseEnter:e=>e.currentTarget.style.transform='scale(1.02)',onMouseLeave:e=>e.currentTarget.style.transform='scale(1)'},
@@ -3497,7 +3535,8 @@ function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoE
           React.createElement("span",{style:{fontFamily:'Bebas Neue',fontSize:12,letterSpacing:1,color:estadoColor(it.estado)}},"INTENTO ",it.intento),
           React.createElement("span",{style:{fontSize:11,fontWeight:700,color:estadoColor(it.estado),background:`${estadoColor(it.estado)}22`,padding:'2px 8px',borderRadius:10}},estadoInfo(it.estado)?.label||it.estado),
           it.mensajero&&React.createElement("span",{style:{fontSize:10,color:'var(--text-soft)'}},"· ",it.mensajero),
-          it.fecha&&React.createElement("span",{style:{fontSize:10,color:'var(--text-soft)',marginLeft:'auto',fontFamily:'JetBrains Mono'}},new Date(it.fecha).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})),
+          it.fecha&&React.createElement("span",{style:{fontSize:10,color:'var(--text-soft)',marginLeft:(esAdmin&&onBorrarIntento)?0:'auto',fontFamily:'JetBrains Mono'}},new Date(it.fecha).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})),
+          esAdmin&&onBorrarIntento&&React.createElement("button",{onClick:()=>onBorrarIntento(ii),style:{marginLeft:'auto',padding:'3px 10px',borderRadius:6,border:'1px solid #b03030',background:'rgba(176,48,48,0.08)',color:'#b03030',fontWeight:700,fontSize:10,cursor:'pointer',whiteSpace:'nowrap'}},"🗑 Borrar fotos"),
           it.nota&&React.createElement("div",{style:{width:'100%',fontSize:10,color:'var(--text-soft)',fontStyle:'italic',marginTop:2}},"",it.nota)
         ),
         React.createElement("div",{style:{display:'flex',gap:6,flexWrap:'wrap',padding:8}},
