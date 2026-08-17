@@ -1,4 +1,3 @@
-```javascript
 (function(){
 var useEffect=React.useEffect, useMemo=React.useMemo, useState=React.useState;
 var Badge=window.__app.Badge, COMUNAS_CHILE=window.__app.COMUNAS_CHILE, Modal=window.__app.Modal, db=window.__app.db, fmt=window.__app.fmt, normNombre=window.__app.normNombre;
@@ -69,5 +68,3 @@ const _useState20=useState(''),search=_useState20[0],setSearch=_useState20[1];co
   /*#__PURE__*/React.createElement("div",{className:"modal-actions"},React.createElement("button",{className:"btn-secondary",onClick:()=>setModal(null)},"Cancelar"),React.createElement("button",{className:"btn-primary",onClick:save},modal==='add'?'Agregar':'Guardar'))),confirmDel&&/*#__PURE__*/React.createElement(Modal,{title:"\xBFEliminar cliente?",onClose:()=>setConfirmDel(null)},/*#__PURE__*/React.createElement("p",{style:{fontSize:13,color:'var(--text-mid)',marginBottom:24}},"Esta acci\xF3n no se puede deshacer. \xBFConfirmas eliminar este cliente del sistema?"),/*#__PURE__*/React.createElement("div",{className:"modal-actions"},/*#__PURE__*/React.createElement("button",{className:"btn-secondary",onClick:()=>setConfirmDel(null)},"Cancelar"),/*#__PURE__*/React.createElement("button",{className:"btn-primary",style:{background:'var(--danger)',borderColor:'var(--danger)',color:'#fff'},onClick:()=>del(confirmDel)},"Eliminar"))));}
 window.GestionClientes = GestionClientes;
 })();
-
-```
