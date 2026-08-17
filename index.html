@@ -165,6 +165,8 @@ html,body{overflow-x:hidden;max-width:100vw;}
 .stat-value.teal{background:linear-gradient(135deg,#1a6b8a,#2899c4,#0d4a6b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
 .stat-value.purple{background:linear-gradient(135deg,#9c27b0,#ce93d8,#6a1a7a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
 .stat-value.orange{background:linear-gradient(135deg,#e65100,#ff8c42,#b03a00);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.stat-value.brown{background:linear-gradient(135deg,#7a5c1a,#a8853a,#4a380f);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.stat-value.rust{background:linear-gradient(135deg,#a15c1a,#c98a4a,#6b3d0f);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
 .stat-sub{font-size:11px;color:var(--text-soft);margin-top:8px;font-family:'JetBrains Mono';letter-spacing:0.5px;}
 .panel{background:linear-gradient(145deg,#ffffff,#fdf6e8);border:1px solid rgba(200,168,75,0.15);border-top:3px solid var(--gold);border-radius:14px;padding:22px;box-shadow:6px 6px 14px rgba(43,46,32,0.1),-2px -2px 8px rgba(255,255,255,0.9);}
 .panel-title{font-family:'Bebas Neue';font-size:18px;color:var(--dark-deep);letter-spacing:2px;margin-bottom:18px;background:linear-gradient(135deg,#2b2e20,#4a4d3a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
@@ -1662,6 +1664,9 @@ function Dashboard(_ref7){
     entregado:filtrados.filter(e=>e.estado==='entregado').length,
     reprogramado:filtrados.filter(e=>e.estado==='reprogramado').length,
     cancelado:filtrados.filter(e=>e.estado==='cancelado').length,
+    siniestro:filtrados.filter(e=>e.estado==='siniestro').length,
+    retorno:filtrados.filter(e=>e.estado==='retorno').length,
+    en_bodega_cancelado:filtrados.filter(e=>e.estado==='en_bodega_cancelado').length,
   };
   const ef=total>0?porEstado.entregado/total:0;
   const den=porEstado.entregado+porEstado.reprogramado+porEstado.cancelado;
@@ -1785,8 +1790,8 @@ function Dashboard(_ref7){
   filtrados.filter(e=>e.mensajero&&e.estado!=='en_bodega').forEach(e=>{const m=e.mensajero.replace(/,\s*/g,' ');if(!porMen[m])porMen[m]={nombre:m,total:0,entregado:0};porMen[m].total++;if(e.estado==='entregado')porMen[m].entregado++;});
   const mensajerosLista=Object.values(porMen).sort((a,b)=>b.total-a.total);
   // ── COLORES ───────────────────────────────────────────────────
-  const ESTADO_COLORS={en_bodega:'#1a6b8a',en_ruta:'#C8A84B',entregado:'#2e7d4f',reprogramado:'#9c27b0',cancelado:'#b03030',siniestro:'#e65100'};
-  const ESTADO_LABELS={en_bodega:'En Bodega',en_ruta:'En Ruta',entregado:'Entregado',reprogramado:'Reprogramado',cancelado:'Cancelado',siniestro:'Siniestro'};
+  const ESTADO_COLORS={en_bodega:'#1a6b8a',en_ruta:'#C8A84B',entregado:'#2e7d4f',reprogramado:'#9c27b0',cancelado:'#b03030',siniestro:'#e65100',retorno:'#7a5c1a',en_bodega_cancelado:'#a15c1a'};
+  const ESTADO_LABELS={en_bodega:'En Bodega',en_ruta:'En Ruta',entregado:'Entregado',reprogramado:'Reprogramado',cancelado:'Cancelado',siniestro:'Siniestro',retorno:'Retorno',en_bodega_cancelado:'En Bodega Cancelado'};
   const periodos=[{val:'hoy',label:'Hoy'},{val:'semana',label:'Esta semana'},{val:'mes',label:'Mes'},{val:'rango',label:'Rango'}];
   return React.createElement('div',null,
     // ── SELECTOR PERÍODO ──
@@ -1806,7 +1811,7 @@ function Dashboard(_ref7){
     (cargandoExtra||cargandoRango||cargandoTodos)?React.createElement('div',{style:{textAlign:'center',padding:'20px',color:'var(--text-soft)',fontSize:13,marginBottom:20}},'⏳ Cargando historial completo del período...'):
     React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12,marginBottom:20}},
       Object.entries(porEstado).map(([est,cnt])=>{
-        var valClass=est==='en_bodega'?'teal':est==='en_ruta'?'gold':est==='entregado'?'green':est==='reprogramado'?'purple':est==='cancelado'?'red':'orange';
+        var valClass=est==='en_bodega'?'teal':est==='en_ruta'?'gold':est==='entregado'?'green':est==='reprogramado'?'purple':est==='cancelado'?'red':est==='siniestro'?'orange':est==='retorno'?'brown':est==='en_bodega_cancelado'?'rust':'orange';
         var accentColor=ESTADO_COLORS[est];
         return React.createElement('div',{key:est,className:'stat-card',style:{'--card-accent':accentColor,borderTop:`4px solid ${accentColor}`}},
         React.createElement('div',{className:'stat-label'},ESTADO_LABELS[est]),
