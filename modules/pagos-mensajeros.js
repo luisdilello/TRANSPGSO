@@ -1,6 +1,6 @@
 (function(){
 var useEffect=React.useEffect, useRef=React.useRef, useState=React.useState;
-var ConteoAyudas=window.__app.ConteoAyudas, ExportBtn=window.__app.ExportBtn, HistorialCierres=window.__app.HistorialCierres, PlanillaRetiros=window.__app.PlanillaRetiros, db=window.__app.db, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave;
+var ConteoAyudas=window.__app.ConteoAyudas, ExportBtn=window.__app.ExportBtn, HistorialCierres=window.__app.HistorialCierres, PlanillaRetiros=window.__app.PlanillaRetiros, db=window.__app.db, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, fetchPorDiasParalelo=window.__app.fetchPorDiasParalelo;
 function PagosMensajeros(_ref18){let mensajeros=_ref18.mensajeros,mensajerosDia=_ref18.mensajerosDia,esAdmin=_ref18.esAdmin,toast=_ref18.toast,clientes=_ref18.clientes||[];const semanaActual=()=>{const hoy=new Date();const lunes=new Date(hoy);lunes.setDate(hoy.getDate()-((hoy.getDay()+6)%7));const sabado=new Date(lunes);sabado.setDate(lunes.getDate()+5);const fmt=d=>d.toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric'});return`${fmt(lunes)} al ${fmt(sabado)}`;};const _useState34=useState(semanaActual()),semana=_useState34[0],setSemana=_useState34[1];
 // Fechas de rango para calcular envíos
 var _fi=React.useState(()=>{var h=new Date();var lu=new Date(h);lu.setDate(h.getDate()-((h.getDay()+6)%7));return fechaHoyCL(lu);});
@@ -261,20 +261,19 @@ useEffect(()=>{
   setCalculando(true);
   toast('⏳ Calculando envíos...');
   try{
-    // Consulta directa a envios con columnas correctas: mensajero, estado, fecha, comuna
-    var r=await db.from('envios')
+    // Consulta directa a envios con columnas correctas: mensajero, estado, fecha, comuna.
+    // Se pagina por cursor (id) y por dia en paralelo con fetchPorDiasParalelo -- una sola
+    // consulta .select() sin paginar queda cortada por Supabase en 1000 filas, lo que hacia
+    // que semanas con mas de 1000 entregas calcularan pagos de menos (bug detectado: semana
+    // con 1.034 entregados solo calculaba 1000).
+    var data=await fetchPorDiasParalelo(fechaInicio,fechaFin,(fecha,cursor,limite)=>db.from('envios')
       .select('mensajero,estado,fecha,comuna')
       .eq('estado','entregado')
-      .gte('fecha',fechaInicio)
-      .lte('fecha',fechaFin);
+      .eq('fecha',fecha)
+      .gt('id',cursor)
+      .order('id',{ascending:true})
+      .limit(limite));
 
-    if(r.error){
-      toast('⚠ Error: '+r.error.message);
-      setCalculando(false);
-      return;
-    }
-
-    var data=r.data||[];
     toast(''+data.length+' registros encontrados...');
 
     var conteo={};
