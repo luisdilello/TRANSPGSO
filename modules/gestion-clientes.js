@@ -1,3 +1,4 @@
+```javascript
 (function(){
 var useEffect=React.useEffect, useMemo=React.useMemo, useState=React.useState;
 var Badge=window.__app.Badge, COMUNAS_CHILE=window.__app.COMUNAS_CHILE, Modal=window.__app.Modal, db=window.__app.db, fmt=window.__app.fmt, normNombre=window.__app.normNombre;
@@ -9,11 +10,11 @@ useEffect(()=>{
     else setUsuariosCliente([]);
   }).catch(()=>setUsuariosCliente([]));
 },[]);
-const clientes=useMemo(()=>{
-  if(usuariosCliente===null)return clientesProp;
-  const nombresConUsuario=new Set(usuariosCliente.map(u=>(u.nombre||'').trim().toUpperCase()));
-  return clientesProp.filter(c=>nombresConUsuario.has((c.nombre||'').trim().toUpperCase()));
-},[clientesProp,usuariosCliente]);
+// IMPORTANTE: esta lista NUNCA debe filtrar clientes reales -- antes ocultaba de esta pantalla
+// (sin aviso, sin poder editarlos) a cualquier cliente cuyo nombre no calzara letra por letra
+// con su cuenta en Usuarios (ej. "MEDICALAB" en Clientes vs "MEDICALAB SPA" en Usuarios). El
+// cruce con usuariosCliente solo sirve para el cartel informativo de sinUsuarioCliente, abajo.
+const clientes=clientesProp;
 const sinUsuarioCliente=useMemo(()=>{
   if(usuariosCliente===null)return[];
   const nombresConUsuario=new Set(usuariosCliente.map(u=>(u.nombre||'').trim().toUpperCase()));
@@ -68,3 +69,5 @@ const _useState20=useState(''),search=_useState20[0],setSearch=_useState20[1];co
   /*#__PURE__*/React.createElement("div",{className:"modal-actions"},React.createElement("button",{className:"btn-secondary",onClick:()=>setModal(null)},"Cancelar"),React.createElement("button",{className:"btn-primary",onClick:save},modal==='add'?'Agregar':'Guardar'))),confirmDel&&/*#__PURE__*/React.createElement(Modal,{title:"\xBFEliminar cliente?",onClose:()=>setConfirmDel(null)},/*#__PURE__*/React.createElement("p",{style:{fontSize:13,color:'var(--text-mid)',marginBottom:24}},"Esta acci\xF3n no se puede deshacer. \xBFConfirmas eliminar este cliente del sistema?"),/*#__PURE__*/React.createElement("div",{className:"modal-actions"},/*#__PURE__*/React.createElement("button",{className:"btn-secondary",onClick:()=>setConfirmDel(null)},"Cancelar"),/*#__PURE__*/React.createElement("button",{className:"btn-primary",style:{background:'var(--danger)',borderColor:'var(--danger)',color:'#fff'},onClick:()=>del(confirmDel)},"Eliminar"))));}
 window.GestionClientes = GestionClientes;
 })();
+
+```
