@@ -8750,10 +8750,12 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
     if(estado==='cancelado'||estado==='siniestro')return'#b03030';
     if(estado==='reprogramado')return'#9c27b0';
     if(estado==='en_bodega')return'#1a6b8a';
+    if(estado==='retorno')return'#7a5c1a';
+    if(estado==='en_bodega_cancelado')return'#a15c1a';
     return'#C8A84B';
   }
   function labelEstado(estado){
-    var m={en_bodega:'En bodega',en_ruta:'En ruta',entregado:'Entregado',reprogramado:'Reprogramado',cancelado:'Cancelado',siniestro:'Siniestro'};
+    var m={en_bodega:'En bodega',en_ruta:'En ruta',entregado:'Entregado',reprogramado:'Reprogramado',cancelado:'Cancelado',siniestro:'Siniestro',retorno:'Retorno',en_bodega_cancelado:'En bodega cancelado'};
     return t(m[estado]||estado);
   }
   React.useEffect(function(){
@@ -8873,7 +8875,7 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
     ),
     React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12,fontSize:11}},
       React.createElement('button',{onClick:function(){setFiltroEstado('todos');},style:{display:'flex',alignItems:'center',gap:5,padding:'4px 12px',borderRadius:20,border:'1px solid '+(filtroEstado==='todos'?'var(--gold)':'var(--border)'),background:filtroEstado==='todos'?'rgba(200,168,75,0.12)':'#fff',color:filtroEstado==='todos'?'var(--gold)':'var(--text-soft)',fontWeight:700,cursor:'pointer'}},t('Todos')),
-      [['en_bodega','#1a6b8a','En bodega'],['en_ruta','#C8A84B','En ruta'],['entregado','#2e7d4f','Entregado'],['reprogramado','#9c27b0','Reprogramado'],['cancelado','#b03030','Cancelado/Siniestro']].map(function(x){
+      [['en_bodega','#1a6b8a','En bodega'],['en_ruta','#C8A84B','En ruta'],['entregado','#2e7d4f','Entregado'],['reprogramado','#9c27b0','Reprogramado'],['cancelado','#b03030','Cancelado/Siniestro'],['retorno','#7a5c1a','Retorno'],['en_bodega_cancelado','#a15c1a','En bodega cancelado']].map(function(x){
         var isAct=filtroEstado===x[0]||(x[0]==='cancelado'&&filtroEstado==='siniestro');
         return React.createElement('button',{key:x[1],onClick:function(){setFiltroEstado(x[0]==='cancelado'?'cancelado':x[0]);},style:{display:'flex',alignItems:'center',gap:5,padding:'4px 12px',borderRadius:20,border:'1px solid '+(isAct?x[1]:'var(--border)'),background:isAct?x[1]+'22':'#fff',color:isAct?x[1]:'var(--text-soft)',fontWeight:700,cursor:'pointer'}},
           React.createElement('div',{style:{width:10,height:10,borderRadius:'50%',background:x[1]}}),
@@ -9006,9 +9008,13 @@ function PortalCliente({usuario,onLogout}){
     return (e.codigo||'').toLowerCase().includes(q)||(e.destinatario||'').toLowerCase().includes(q)||(e.direccion||'').toLowerCase().includes(q);
   });
 
-  // Totalizador por estado de "Mis Envíos" - solo estados visibles para el cliente
-  // (se excluyen 'retorno' y 'en_bodega_cancelado', que son de uso interno del admin).
-  var ESTADOS_CLIENTE_PORTAL=ESTADOS_ENVIO.filter(function(e){return!e.soloAdmin;});
+  // Totalizador por estado de "Mis Envíos". OJO: 'soloAdmin' en ESTADOS_ENVIO indica quién
+  // puede ASIGNAR ese estado (solo un admin puede marcar 'retorno' o 'en_bodega_cancelado'
+  // desde Gestión de Envíos — ver gestion-envios.js), no si el cliente puede VERLO. El cliente
+  // necesita ver 'Retorno' y 'En Bodega Cancelado' en su portal para llevar control de sus
+  // propios envíos, así que aquí se muestran TODOS los estados (a diferencia del filtro por
+  // 'soloAdmin' que sí aplica para decidir quién puede editarlos).
+  var ESTADOS_CLIENTE_PORTAL=ESTADOS_ENVIO;
   var statsPeriodo={};
   ESTADOS_CLIENTE_PORTAL.forEach(function(est){statsPeriodo[est.val]=filtPeriodo.filter(function(e){return e.estado===est.val;}).length;});
 
@@ -9081,7 +9087,20 @@ function PortalCliente({usuario,onLogout}){
         loading?React.createElement('div',{className:'empty-state'},t('Cargando...')):
         React.createElement('div',null,
           React.createElement('div',{className:'stats-grid',style:{marginBottom:20}},
-            [{label:'Total Envíos',val:total,cls:''},{label:'Entregados',val:entregados,cls:'green'},{label:'En Ruta',val:enRuta,cls:'gold'},{label:'Reprogramados',val:reprog,cls:'red'},{label:'Cancelados',val:cancelados,cls:'red'},{label:'Efectividad',val:efectividad+'%',cls:efectividad>=80?'green':efectividad>=60?'gold':'red'}].map(function(s){
+            // OJO: antes esta lista venía fija (Entregados/En Ruta/Reprogramados/Cancelados),
+            // así que cualquier estado nuevo que no estuviera en esos 4 (ej. 'En Bodega' o
+            // 'Siniestro') simplemente no se mostraba nunca — el total sí los contaba pero
+            // no aparecían en ningún desglose, y los números no cuadraban a simple vista.
+            // Ahora se arma dinámicamente desde ESTADOS_CLIENTE_PORTAL (mismo criterio que
+            // ya se usaba en la pestaña "Mis Envíos"), así que cualquier estado visible para
+            // el cliente aparece automáticamente, para todos los clientes, sin tener que
+            // tocar este código cada vez que se agregue un estado nuevo al sistema.
+            [{label:'Total Envíos',val:total,cls:''}].concat(
+              ESTADOS_CLIENTE_PORTAL.map(function(est){
+                var cls=est.val==='en_bodega'?'teal':est.val==='en_ruta'?'gold':est.val==='entregado'?'green':est.val==='reprogramado'?'purple':est.val==='cancelado'?'red':est.val==='siniestro'?'orange':est.val==='retorno'?'brown':est.val==='en_bodega_cancelado'?'rust':'gold';
+                return{label:est.label,val:statsPeriodo[est.val]||0,cls:cls};
+              })
+            ).concat([{label:'Efectividad',val:efectividad+'%',cls:efectividad>=80?'green':efectividad>=60?'gold':'red'}]).map(function(s){
               return React.createElement('div',{key:s.label,className:'stat-card'},
                 React.createElement('div',{className:'stat-label'},t(s.label)),
                 React.createElement('div',{className:'stat-value '+s.cls},s.val)
@@ -9092,7 +9111,7 @@ function PortalCliente({usuario,onLogout}){
           React.createElement('div',{className:'panel'},
             React.createElement('div',{className:'panel-title'},t('Distribución de Estados')),
             React.createElement('div',{style:{display:'flex',gap:12,flexWrap:'wrap',padding:'8px 0'}},
-              [{label:'Entregados',val:entregados,color:'var(--success)'},{label:'En Ruta',val:enRuta,color:'var(--gold)'},{label:'Reprogramados',val:reprog,color:'var(--warning)'},{label:'Cancelados',val:cancelados,color:'var(--danger)'}].map(function(s){
+              ESTADOS_CLIENTE_PORTAL.map(function(est){return{label:est.label,val:statsPeriodo[est.val]||0,color:est.color};}).map(function(s){
                 var pct=total>0?Math.round(s.val/total*100):0;
                 return React.createElement('div',{key:s.label,style:{flex:'1 1 130px',background:'var(--cream)',borderRadius:10,padding:'12px 16px',border:'1px solid var(--border)'}},
                   React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginBottom:4,textTransform:'uppercase',letterSpacing:1}},t(s.label)),
