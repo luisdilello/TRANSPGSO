@@ -8924,7 +8924,15 @@ function PortalCliente({usuario,onLogout}){
     // así que pedirla para el histórico completo era peso muerto en cada carga.
     try{
       var acumulado=[];var offset=0;var bloque=1000;var primero=true;
-      var cols='id,codigo,cliente,destinatario,telefono,direccion,comuna,fecha,estado,mensajero,monto,nota,foto_etiqueta,created_at';
+      // OJO: 'foto_etiqueta' NO se pide aquí (a proposito). Es una foto en base64 guardada
+      // directo en la fila (puede pesar >100KB cada una) y NO se usa en ningún listado del
+      // portal, solo en el detalle de un envío puntual — y ahí FotosEntregaConRecarga ya la
+      // trae fresca por su cuenta con un select puntual por código (ver más abajo). Pedirla
+      // para TODO el historial de un cliente (cientos o miles de envíos) multiplica el peso
+      // de esta consulta a decenas o cientos de MB y hace que el servidor la cancele por
+      // demorar más de lo permitido (statement timeout) — el cliente terminaba viendo el
+      // portal vacío sin ningún aviso. Mismo criterio que ya se usaba para 'fotos_entrega'.
+      var cols='id,codigo,cliente,destinatario,telefono,direccion,comuna,fecha,estado,mensajero,monto,nota,created_at';
       while(true){
         var res=await db.from('envios').select(cols).eq('cliente',nombreCliente).range(offset,offset+bloque-1);
         if(res.error){
@@ -8934,7 +8942,7 @@ function PortalCliente({usuario,onLogout}){
         }
         if(!res.data||res.data.length===0)break;
         acumulado=acumulado.concat(res.data);
-        var sb=acumulado.map(function(e){return{id:e.id,codigo:e.codigo,cliente:e.cliente,destinatario:e.destinatario,telefono:e.telefono,direccion:e.direccion,comuna:e.comuna,fecha:e.fecha,estado:e.estado,mensajero:e.mensajero,monto:e.monto,nota:e.nota,foto_etiqueta:e.foto_etiqueta,historial:[{fecha:e.created_at,estado:e.estado,nota:'Cargado'}]};});
+        var sb=acumulado.map(function(e){return{id:e.id,codigo:e.codigo,cliente:e.cliente,destinatario:e.destinatario,telefono:e.telefono,direccion:e.direccion,comuna:e.comuna,fecha:e.fecha,estado:e.estado,mensajero:e.mensajero,monto:e.monto,nota:e.nota,foto_etiqueta:null,historial:[{fecha:e.created_at,estado:e.estado,nota:'Cargado'}]};});
         setEnvios(sb);
         if(primero){setLoading(false);primero=false;}
         if(res.data.length<bloque)break;
