@@ -345,10 +345,32 @@ function Analitica(){
       try{
         var BLOQUE=500;var lotes=[];
         for(var i=0;i<codigos.length;i+=BLOQUE)lotes.push(codigos.slice(i,i+BLOQUE));
-        var resultados=await Promise.all(lotes.map(function(lote){
-          return db.from('historial_envios').select('codigo_envio,estado,usuario,canal,nota,created_at').in('codigo_envio',lote);
-        }));
-        var rows=[];resultados.forEach(function(r){if(!r.error)rows=rows.concat(r.data||[]);});
+        // Supabase/PostgREST corta cada consulta en un maximo fijo de filas (1000), incluso si se
+        // pide mas de una vez con .range() -- y un solo lote de 500 codigos ya puede tener mas de
+        // 1000 eventos de historial (asignado/en_ruta/entregado/correcciones, etc.). Antes se hacia
+        // UNA sola consulta por lote: se quedaba corta SIN avisar (no da error, solo trae menos
+        // filas), asi que cualquier calculo basado en historial (horas activas, ritmo, duracion de
+        // reparto, piezas c/atraso, rutas del periodo) contaba de menos en periodos con muchos
+        // envios (semana/mes/rango) -- confirmado: para 500 codigos de "esta semana" habia 1842
+        // filas reales y la consulta unica solo traia 1000. Ahora se pagina cada lote con .range()
+        // hasta que una pagina vuelve con menos filas que el tamano pedido (ya no queda mas).
+        var PAGINA=1000;
+        function fetchLoteCompleto(lote){
+          return(async function(){
+            var out=[];var offset=0;
+            while(true){
+              var r=await db.from('historial_envios').select('codigo_envio,estado,usuario,canal,nota,created_at').in('codigo_envio',lote).range(offset,offset+PAGINA-1);
+              if(r.error)throw r.error;
+              var data=r.data||[];
+              out=out.concat(data);
+              if(data.length<PAGINA)break;
+              offset+=PAGINA;
+            }
+            return out;
+          })();
+        }
+        var resultados=await Promise.all(lotes.map(function(lote){return fetchLoteCompleto(lote).catch(function(){return[];});}));
+        var rows=[];resultados.forEach(function(r){rows=rows.concat(r);});
         setHistorialKpi(rows);
       }catch(e){console.warn('KPI Mensajeros: error cargando historial:',e.message);setHistorialKpi([]);}
       setCargandoHistKpi(false);
