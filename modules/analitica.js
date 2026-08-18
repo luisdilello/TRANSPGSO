@@ -133,6 +133,19 @@ function calcularKpiPorMensajero(enviosPeriodo, historial, mensajerosRoster, his
     var montoPendiente=propios.filter(function(e){return e.estado==='en_ruta'||e.estado==='reprogramado';}).reduce(function(a,e){return a+(e.monto||0);},0);
     var comunas=new Set(propios.map(function(e){return (e.comuna||'').trim();}).filter(Boolean));
     var atrasados=propios.filter(function(e){return esEnvioAtrasado(e);}).length;
+    // Pendientes atrasados: a diferencia de "atrasados" (arriba, que solo mira 'en_ruta' -- el
+    // criterio historico usado en Gestion de Envios), esta lista es mas amplia: CUALQUIER paquete
+    // de este mensajero que todavia no llega al cliente (en bodega, en ruta o reprogramado, es
+    // decir, no entregado/cancelado/retorno/siniestro) y ya lleva UMBRAL_ATRASO_DIAS o mas dias
+    // desde su fecha de RECEPCION sin entregarse -- para que se note el desfase (ej. recibido el
+    // sabado y todavia sin entregar el martes), sin importar si ya salio a reparto o ni siquiera
+    // ha salido de bodega. No depende del historial detallado, asi que esta disponible siempre.
+    var ESTADOS_PENDIENTES_ENTREGA={en_bodega:true,en_ruta:true,reprogramado:true};
+    var pendientesAtrasados=propios.filter(function(e){
+      return ESTADOS_PENDIENTES_ENTREGA[e.estado]&&diasDesdeFecha(e.fecha)>=UMBRAL_ATRASO_DIAS;
+    }).map(function(e){
+      return{codigo:e.codigo,cliente:e.cliente,comuna:e.comuna,estado:e.estado,fecha:e.fecha,dias:diasDesdeFecha(e.fecha)};
+    }).sort(function(a,b){return b.dias-a.dias;});
     var entregadosArr=propios.filter(function(e){return e.estado==='entregado';});
     var conFoto=entregadosArr.filter(function(e){return tieneFotoEntrega(e.fotos_entrega);}).length;
     var conNota=propios.filter(function(e){return (e.nota||'').trim().length>0;}).length;
@@ -237,7 +250,7 @@ function calcularKpiPorMensajero(enviosPeriodo, historial, mensajerosRoster, his
       nombre:nombre, norm:norm, enRosterActivo:enRosterActivo,
       total:total, entregados:entregados, porEstado:porEstado, efectividad:efectividad, tasaFalla:tasaFalla,
       montoCobrado:montoCobrado, montoPendiente:montoPendiente, comunas:comunas.size,
-      atrasados:atrasados, pctFoto:pctFoto, pctNota:pctNota,
+      atrasados:atrasados, pendientesAtrasados:pendientesAtrasados, pctFoto:pctFoto, pctNota:pctNota,
       reintentos:reintentos, correccionesAdmin:correccionesAdmin,
       rutas:rutas, horasActivas:horasActivas, ritmo:ritmo,
       duracionRepartoProm:duracionRepartoProm, entregasConAtraso:entregasConAtraso
@@ -649,7 +662,8 @@ function Analitica(){
                      {label:'Ritmo (entregas/h)',val:m.ritmo==null?'—':m.ritmo.toFixed(1)},
                      {label:'Duración prom. reparto',val:fmtMin(m.duracionRepartoProm)},
                      {label:'$ Pendiente en ruta',val:fmt(m.montoPendiente)},
-                     {label:'Piezas c/atraso en entrega',val:m.entregasConAtraso==null?'—':m.entregasConAtraso.length,warn:m.entregasConAtraso&&m.entregasConAtraso.length>0}
+                     {label:'Piezas c/atraso en entrega',val:m.entregasConAtraso==null?'—':m.entregasConAtraso.length,warn:m.entregasConAtraso&&m.entregasConAtraso.length>0},
+                     {label:'Pendientes atrasados',val:m.pendientesAtrasados.length,warn:m.pendientesAtrasados.length>0}
                     ].map(function(x){return React.createElement('div',{key:x.label,style:{background:'#fff',borderRadius:8,padding:'10px 12px',border:'1px solid '+(x.warn?'rgba(176,48,48,0.3)':'var(--border)')}},
                       React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)',textTransform:'uppercase',letterSpacing:1,marginBottom:4}},x.label),
                       React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:16,fontWeight:700,color:x.warn?'var(--danger)':'var(--dark)'}},x.val)
@@ -691,6 +705,40 @@ function Analitica(){
                         }))
                       )
                     )
+                  ),
+                  // Pendientes atrasados: a diferencia de "Piezas entregadas con atraso" (abajo, que es
+                  // historico -- paquetes que YA se entregaron pero tarde), esta caja es la urgente: paquetes
+                  // de este mensajero que TODAVIA no llegan al cliente y ya llevan dias de mas desde que se
+                  // recibieron (en bodega, en ruta o reprogramados). El aviso equivalente en Gestion de Envios
+                  // es muy discreto y pasa desapercibido -- aca se muestra con un banner solido bien notorio,
+                  // no un simple borde de color.
+                  m.pendientesAtrasados.length>0&&React.createElement('div',{style:{marginTop:16,marginBottom:16,border:'2px solid var(--danger)',borderRadius:10,overflow:'hidden',boxShadow:'0 2px 10px rgba(176,48,48,0.25)'}},
+                    React.createElement('div',{style:{background:'var(--danger)',color:'#fff',padding:'10px 16px',fontSize:12,fontWeight:700,letterSpacing:0.3,display:'flex',alignItems:'center',gap:8}},
+                      '🚨 PENDIENTES ATRASADOS ('+m.pendientesAtrasados.length+') — sin entregar hace '+UMBRAL_ATRASO_DIAS+'+ días desde su recepción'
+                    ),
+                    React.createElement('div',{style:{maxHeight:220,overflowY:'auto',background:'#fff'}},
+                      React.createElement('table',{style:{width:'100%',fontSize:11}},
+                        React.createElement('thead',null,React.createElement('tr',{style:{background:'rgba(176,48,48,0.08)'}},
+                          React.createElement('th',{style:{textAlign:'left',padding:'6px 10px'}},'Código'),
+                          React.createElement('th',{style:{padding:'6px 10px'}},'Cliente'),
+                          React.createElement('th',{style:{padding:'6px 10px'}},'Comuna'),
+                          React.createElement('th',{style:{padding:'6px 10px'}},'Estado'),
+                          React.createElement('th',{style:{padding:'6px 10px'}},'Recepción'),
+                          React.createElement('th',{style:{padding:'6px 10px'}},'Días esperando')
+                        )),
+                        React.createElement('tbody',null,m.pendientesAtrasados.slice(0,30).map(function(x){
+                          return React.createElement('tr',{key:x.codigo,style:{background:'rgba(176,48,48,0.04)'}},
+                            React.createElement('td',{style:{padding:'5px 10px',fontFamily:'JetBrains Mono'}},x.codigo),
+                            React.createElement('td',{style:{padding:'5px 10px'}},x.cliente),
+                            React.createElement('td',{style:{padding:'5px 10px'}},x.comuna),
+                            React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},estadoInfo(x.estado).label),
+                            React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},x.fecha),
+                            React.createElement('td',{style:{padding:'5px 10px',textAlign:'center',fontWeight:700,color:'var(--danger)'}},x.dias+' día'+(x.dias!==1?'s':''))
+                          );
+                        }))
+                      )
+                    ),
+                    m.pendientesAtrasados.length>30&&React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',padding:'6px 10px',background:'#fff'}},'Mostrando 30 de '+m.pendientesAtrasados.length+'.')
                   ),
                   m.entregasConAtraso&&m.entregasConAtraso.length>0&&React.createElement('div',{style:{marginTop:16}},
                     React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:8}},
