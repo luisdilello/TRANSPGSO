@@ -47,9 +47,8 @@ function fmtHora(iso){try{return new Date(iso).toLocaleTimeString('es-CL',{hour:
 // para agrupar "por dia" o comparar contra la fecha de recepcion, cualquier entrega de tarde/noche
 // (la mayoria) caeria en el dia equivocado. Esta funcion convierte a la fecha LOCAL real.
 function diaLocalDe(iso){try{var d=new Date(iso);if(isNaN(d.getTime()))return '';return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}catch(e){return '';}}
-// primeraAccion/ultimaAccion ahora son un promedio de minutos-desde-medianoche (no un timestamp),
-// ver calcularKpiPorMensajero -- se formatean con esta funcion en vez de fmtHora.
-function fmtMinDelDia(min){if(min==null||!isFinite(min))return '—';var h=Math.floor(min/60)%24,m=Math.round(min%60);var d=new Date();d.setHours(h,m,0,0);return d.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});}
+// Formatea la fecha 'YYYY-MM-DD' de una ruta/turno a texto corto legible (dd/mm).
+function fmtDiaCorto(dia){try{var p=(dia||'').split('-');if(p.length!==3)return dia||'—';return p[2]+'/'+p[1];}catch(e){return dia||'—';}}
 function fmtHoras(h){if(h==null||!isFinite(h))return '—';if(h<1)return Math.round(h*60)+' min';return h.toFixed(1)+' h';}
 function fmtMin(m){if(m==null||!isFinite(m))return '—';if(m<60)return Math.round(m)+' min';return (m/60).toFixed(1)+' h';}
 // Regla unica de color para "efectividad" en toda Analitica: bajo 95% siempre rojo (antes habia
@@ -140,7 +139,7 @@ function calcularKpiPorMensajero(enviosPeriodo, historial, mensajerosRoster, his
     var pctFoto=entregadosArr.length>0?Math.round(conFoto/entregadosArr.length*100):null;
     var pctNota=total>0?Math.round(conNota/total*100):null;
 
-    var reintentos=null, correccionesAdmin=null, primeraAccion=null, ultimaAccion=null, horasActivas=null, ritmo=null, duracionRepartoProm=null, entregasConAtraso=null;
+    var reintentos=null, correccionesAdmin=null, rutas=null, horasActivas=null, ritmo=null, duracionRepartoProm=null, entregasConAtraso=null;
     if(historialDisponible){
       reintentos=0; correccionesAdmin=0;
       propios.forEach(function(e){
@@ -179,23 +178,22 @@ function calcularKpiPorMensajero(enviosPeriodo, historial, mensajerosRoster, his
         });
         horasActivas=turnosRider.reduce(function(a,t){return a+(t.fin-t.inicio)/3600000;},0);
         if(horasActivas>0.15&&entregados>0)ritmo=entregados/horasActivas;
-        // "Inicio de reparto" / "Termino de reparto": promedio (en minutos desde medianoche) de la
-        // hora de inicio y de termino de cada dia con actividad en el periodo. Antes se tomaba el
-        // minimo/maximo timestamp de TODO el periodo y solo se mostraba la hora del reloj -- en
-        // periodos de varios dias (semana/mes/rango) eso podia mostrar una "ultima accion" con hora
-        // de reloj anterior a la "primera accion" simplemente porque venian de dias distintos.
-        var diasConActividad=Object.keys(porDiaRider);
-        var sumIniMin=0,sumFinMin=0;
-        diasConActividad.forEach(function(dia){
-          var turnosDia=turnosRider.filter(function(t){return t.dia===dia;});
-          var iniDia=Math.min.apply(null,turnosDia.map(function(t){return t.inicio;}));
-          var finDia=Math.max.apply(null,turnosDia.map(function(t){return t.fin;}));
-          var dIni=new Date(iniDia),dFin=new Date(finDia);
-          sumIniMin+=dIni.getHours()*60+dIni.getMinutes();
-          sumFinMin+=dFin.getHours()*60+dFin.getMinutes();
-        });
-        primeraAccion=Math.round(sumIniMin/diasConActividad.length);
-        ultimaAccion=Math.round(sumFinMin/diasConActividad.length);
+        // Rutas concretas: antes se promediaba (en minutos desde medianoche) la hora de inicio y de
+        // termino entre todos los dias del periodo -- eso dejaba que una sola accion aislada (ej. 1
+        // entrega suelta en la manana un dia distinto) distorsionara el numero mostrado, dando a
+        // entender una "ruta" que no era representativa. Ahora se expone cada turno detectado como
+        // una fila propia: dia, hora de inicio, hora de termino, duracion y piezas entregadas en ese
+        // turno puntual -- datos concretos por ruta, no un promedio.
+        rutas=turnosRider.map(function(t){
+          var entregasTurno=entregadosArr.filter(function(e){
+            var hs=histPorCodigo[e.codigo]||[];
+            var entregadoEv=hs.find(function(h){return h.estado==='entregado';});
+            if(!entregadoEv)return false;
+            var tEnt=new Date(entregadoEv.created_at).getTime();
+            return tEnt>=t.inicio&&tEnt<=t.fin;
+          }).length;
+          return{dia:t.dia,inicio:t.inicio,fin:t.fin,duracionH:(t.fin-t.inicio)/3600000,entregas:entregasTurno};
+        }).sort(function(a,b){return a.inicio-b.inicio;});
       }
       var turnoDe=function(ts){
         for(var j=0;j<turnosRider.length;j++){if(ts>=turnosRider[j].inicio&&ts<=turnosRider[j].fin)return turnosRider[j];}
@@ -241,7 +239,7 @@ function calcularKpiPorMensajero(enviosPeriodo, historial, mensajerosRoster, his
       montoCobrado:montoCobrado, montoPendiente:montoPendiente, comunas:comunas.size,
       atrasados:atrasados, pctFoto:pctFoto, pctNota:pctNota,
       reintentos:reintentos, correccionesAdmin:correccionesAdmin,
-      primeraAccion:primeraAccion, ultimaAccion:ultimaAccion, horasActivas:horasActivas, ritmo:ritmo,
+      rutas:rutas, horasActivas:horasActivas, ritmo:ritmo,
       duracionRepartoProm:duracionRepartoProm, entregasConAtraso:entregasConAtraso
     };
   }).sort(function(a,b){
@@ -625,8 +623,6 @@ function Analitica(){
                      {label:'Correcciones de admin',val:m.correccionesAdmin==null?'—':m.correccionesAdmin,warn:m.correccionesAdmin>0},
                      {label:'% Con foto evidencia',val:m.pctFoto==null?'—':m.pctFoto+'%',warn:m.pctFoto!=null&&m.pctFoto<80},
                      {label:'% Con nota',val:m.pctNota==null?'—':m.pctNota+'%'},
-                     {label:'Inicio de reparto',val:m.primeraAccion!=null?fmtMinDelDia(m.primeraAccion):'—'},
-                     {label:'Término de reparto',val:m.ultimaAccion!=null?fmtMinDelDia(m.ultimaAccion):'—'},
                      {label:'Horas activas',val:fmtHoras(m.horasActivas)},
                      {label:'Ritmo (entregas/h)',val:m.ritmo==null?'—':m.ritmo.toFixed(1)},
                      {label:'Duración prom. reparto',val:fmtMin(m.duracionRepartoProm)},
@@ -649,6 +645,29 @@ function Analitica(){
                         if(v===0)return null;
                         return React.createElement('div',{key:es.val,style:{padding:'6px 12px',borderRadius:20,background:es.bg||'rgba(0,0,0,0.05)',border:'1px solid '+es.color,color:es.color,fontSize:11,fontWeight:700}},es.label+': '+v);
                       })
+                    )
+                  ),
+                  m.rutas&&m.rutas.length>0&&React.createElement('div',{style:{marginTop:16}},
+                    React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginBottom:8,textTransform:'uppercase',letterSpacing:1,fontWeight:700}},'Rutas del período ('+m.rutas.length+') — turnos concretos detectados, no un promedio'),
+                    React.createElement('div',{style:{maxHeight:220,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8,background:'#fff'}},
+                      React.createElement('table',{style:{width:'100%',fontSize:11}},
+                        React.createElement('thead',null,React.createElement('tr',null,
+                          React.createElement('th',{style:{textAlign:'left',padding:'6px 10px'}},'Día'),
+                          React.createElement('th',{style:{padding:'6px 10px'}},'Inicio'),
+                          React.createElement('th',{style:{padding:'6px 10px'}},'Término'),
+                          React.createElement('th',{style:{padding:'6px 10px'}},'Duración'),
+                          React.createElement('th',{style:{padding:'6px 10px'}},'Entregas')
+                        )),
+                        React.createElement('tbody',null,m.rutas.map(function(r,ri){
+                          return React.createElement('tr',{key:r.dia+'_'+ri},
+                            React.createElement('td',{style:{padding:'5px 10px',fontFamily:'JetBrains Mono'}},fmtDiaCorto(r.dia)),
+                            React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},fmtHora(r.inicio)),
+                            React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},fmtHora(r.fin)),
+                            React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},fmtHoras(r.duracionH)),
+                            React.createElement('td',{style:{padding:'5px 10px',textAlign:'center',fontWeight:700}},r.entregas)
+                          );
+                        }))
+                      )
                     )
                   ),
                   m.entregasConAtraso&&m.entregasConAtraso.length>0&&React.createElement('div',{style:{marginTop:16}},
