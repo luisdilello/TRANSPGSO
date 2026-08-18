@@ -16,13 +16,19 @@ function finDia(d){var x=new Date(d);x.setHours(23,59,59,999);return x;}
 function lunesDe(d){var x=new Date(d);x.setDate(x.getDate()-((x.getDay()+6)%7));x.setHours(0,0,0,0);return x;}
 function filtrarPorRango(envios, filtro, fechaDesde, fechaHasta){
   var hoy=new Date();
+  var ayer=new Date(hoy); ayer.setDate(ayer.getDate()-1);
   return envios.filter(function(e){
     var f=new Date((e.fecha||'')+'T12:00:00');
     if(isNaN(f.getTime()))f=new Date(e.fecha||hoy);
     if(filtro==='hoy'){return f>=inicioDia(hoy)&&f<=finDia(hoy);}
+    if(filtro==='ayer'){return f>=inicioDia(ayer)&&f<=finDia(ayer);}
     if(filtro==='semana'){return f>=lunesDe(hoy);}
     if(filtro==='mes'){return f>=new Date(hoy.getFullYear(),hoy.getMonth(),1);}
-    if(filtro==='personalizado'&&fechaDesde&&fechaHasta){return f>=new Date(fechaDesde+'T00:00:00')&&f<=new Date(fechaHasta+'T23:59:59');}
+    // 'personalizado' (Rango): antes, si faltaba alguna de las dos fechas, caia en el
+    // 'return true' de mas abajo y mostraba TODO el historico sin avisar -- parecia que el
+    // filtro traia fechas que el usuario no habia indicado. Ahora exige AMBAS fechas: mientras
+    // no esten las dos elegidas, no muestra nada (en vez de mostrar de mas).
+    if(filtro==='personalizado'){return !!fechaDesde&&!!fechaHasta&&f>=new Date(fechaDesde+'T00:00:00')&&f<=new Date(fechaHasta+'T23:59:59');}
     return true; // 'todo'
   });
 }
@@ -124,7 +130,7 @@ function calcularKpiPorMensajero(enviosPeriodo, historial, mensajerosRoster, his
     var pctFoto=entregadosArr.length>0?Math.round(conFoto/entregadosArr.length*100):null;
     var pctNota=total>0?Math.round(conNota/total*100):null;
 
-    var reintentos=null, correccionesAdmin=null, primeraAccion=null, ultimaAccion=null, horasActivas=null, ritmo=null, duracionRepartoProm=null;
+    var reintentos=null, correccionesAdmin=null, primeraAccion=null, ultimaAccion=null, horasActivas=null, ritmo=null, duracionRepartoProm=null, entregasConAtraso=null;
     if(historialDisponible){
       reintentos=0; correccionesAdmin=0;
       propios.forEach(function(e){
@@ -153,6 +159,23 @@ function calcularKpiPorMensajero(enviosPeriodo, historial, mensajerosRoster, his
         }
       });
       if(deltas.length>0)duracionRepartoProm=deltas.reduce(function(a,b){return a+b;},0)/deltas.length;
+
+      // Piezas entregadas cuya fecha de ENTREGA (real, segun historial) cae en un dia posterior
+      // a su fecha de RECEPCION (e.fecha) -- es decir, el mensajero se quedo con el paquete uno
+      // o mas dias antes de entregarlo, en vez de despacharlo el mismo dia que lo recibio.
+      entregasConAtraso=[];
+      entregadosArr.forEach(function(e){
+        var hs=histPorCodigo[e.codigo]||[];
+        var entregadoEv=hs.find(function(h){return h.estado==='entregado';});
+        if(!entregadoEv)return;
+        var fechaEntrega=(entregadoEv.created_at||'').slice(0,10);
+        var fechaRecepcion=(e.fecha||'').slice(0,10);
+        if(fechaEntrega&&fechaRecepcion&&fechaEntrega>fechaRecepcion){
+          var dias=Math.round((new Date(fechaEntrega+'T12:00:00')-new Date(fechaRecepcion+'T12:00:00'))/86400000);
+          entregasConAtraso.push({codigo:e.codigo,cliente:e.cliente,comuna:e.comuna,fechaRecepcion:fechaRecepcion,fechaEntrega:fechaEntrega,diasAtraso:dias});
+        }
+      });
+      entregasConAtraso.sort(function(a,b){return b.diasAtraso-a.diasAtraso;});
     }
 
     return{
@@ -162,7 +185,7 @@ function calcularKpiPorMensajero(enviosPeriodo, historial, mensajerosRoster, his
       atrasados:atrasados, pctFoto:pctFoto, pctNota:pctNota,
       reintentos:reintentos, correccionesAdmin:correccionesAdmin,
       primeraAccion:primeraAccion, ultimaAccion:ultimaAccion, horasActivas:horasActivas, ritmo:ritmo,
-      duracionRepartoProm:duracionRepartoProm
+      duracionRepartoProm:duracionRepartoProm, entregasConAtraso:entregasConAtraso
     };
   }).sort(function(a,b){
     if((a.total>0)!==(b.total>0))return a.total>0?-1:1;
@@ -189,16 +212,25 @@ function Analitica(){
     (async function(){
       try{
         var COLS='id,codigo,cliente,comuna,fecha,estado,mensajero,monto,nota,fotos_entrega,created_at,updated_at';
-        var rows=[];var offset=0;var BLOQUE=1000;
+        var rows=[];
+        // Paginado por cursor de 'id' (igual que el resto del sistema, ver fetchPaginadoParalelo
+        // en index.html) en vez de .range(offset,...): con range/OFFSET cada pagina siguiente se
+        // pone mas pesada a medida que crece el historico (Postgres tiene que escanear y
+        // descartar todo lo anterior), y con miles de envios eso hacia que Analitica se sintiera
+        // "colgada" varios segundos. Por 'id' cada pagina es igual de rapida sin importar cuantas
+        // la precedan. Ademas se actualiza el estado EN CADA PAGINA (no solo al final) para que
+        // se vea la info aparecer progresivamente en vez de una pantalla vacia varios segundos.
+        var cursor='00000000-0000-0000-0000-000000000000';var BLOQUE=1000;
         while(true){
-          var r=await db.from('envios').select(COLS).neq('estado','eliminado').range(offset,offset+BLOQUE-1);
+          var r=await db.from('envios').select(COLS).neq('estado','eliminado').gt('id',cursor).order('id',{ascending:true}).limit(BLOQUE);
           if(r.error)throw r.error;
           var data=r.data||[];
+          if(!data.length)break;
           rows=rows.concat(data);
+          setEnvios(rows.slice());
           if(data.length<BLOQUE)break;
-          offset+=BLOQUE;
+          cursor=data[data.length-1].id;
         }
-        setEnvios(rows);
         setUltimaActualizacion(new Date());
       }catch(e){
         console.warn('Analitica: error cargando envios desde Supabase:',e.message);
@@ -298,6 +330,7 @@ function Analitica(){
   var fleetEfectividad=fleetTotal>0?Math.round(fleetEntregados/fleetTotal*100):0;
   var fleetMonto=enviosPeriodoKpi.filter(function(e){return e.estado==='entregado';}).reduce(function(a,e){return a+(e.monto||0);},0);
   var fleetAtrasados=enviosPeriodoKpi.filter(function(e){return esEnvioAtrasado(e);}).length;
+  var fleetPiezasAtraso=kpiPorMensajero.reduce(function(a,m){return a+(m.entregasConAtraso?m.entregasConAtraso.length:0);},0);
   var conActividad=kpiPorMensajero.filter(function(m){return m.total>0;});
   var sinActividad=kpiPorMensajero.filter(function(m){return m.total===0;});
   var rankeables=conActividad.filter(function(m){return m.total>=3;});
@@ -311,14 +344,66 @@ function Analitica(){
     return React.createElement('div',{key:label,className:'stat-card'},React.createElement('div',{className:'stat-label'},label),React.createElement('div',{className:'stat-value '+(cls||'')},val));
   }
 
+  // Reporte individual (por mensajero) de piezas entregadas con fecha de recepcion de dias
+  // anteriores a su entrega -- formato "profesional" TransPgso SpA (mismo estilo de membrete/pie
+  // de pagina usado en Manifiesto de Colecta y Recibo de Cobro: logo, marca, RUT y contacto).
+  function periodoKpiLabelActual(){
+    if(kpiFiltro==='hoy')return 'Hoy';
+    if(kpiFiltro==='ayer')return 'Ayer';
+    if(kpiFiltro==='semana')return 'Esta semana';
+    if(kpiFiltro==='mes')return 'Este mes';
+    if(kpiFiltro==='personalizado')return (kpiFechaDesde||'...')+' al '+(kpiFechaHasta||'...');
+    return 'Período actual';
+  }
+  function exportarAtrasoPDF(m){
+    var lista=(m.entregasConAtraso||[]).slice();
+    if(lista.length===0)return;
+    var logoEl=document.querySelector('.logo-img');
+    var logoSrc=logoEl?logoEl.src:'';
+    var win=window.open('','_blank','width=1000,height=700');
+    if(!win)return;
+    var filas=lista.map(function(x,i){
+      return '<tr style="background:'+(i%2===0?'#fff':'#fdf9f2')+'">'
+        +'<td style="padding:7px 10px;text-align:center;color:#7a7d6a;border-bottom:1px solid #f0e8d0">'+(i+1)+'</td>'
+        +'<td style="padding:7px 10px;font-family:monospace;font-weight:700;border-bottom:1px solid #f0e8d0">'+x.codigo+'</td>'
+        +'<td style="padding:7px 10px;border-bottom:1px solid #f0e8d0">'+(x.cliente||'—')+'</td>'
+        +'<td style="padding:7px 10px;border-bottom:1px solid #f0e8d0">'+(x.comuna||'—')+'</td>'
+        +'<td style="padding:7px 10px;text-align:center;border-bottom:1px solid #f0e8d0">'+x.fechaRecepcion+'</td>'
+        +'<td style="padding:7px 10px;text-align:center;border-bottom:1px solid #f0e8d0">'+x.fechaEntrega+'</td>'
+        +'<td style="padding:7px 10px;text-align:center;font-weight:700;border-bottom:1px solid #f0e8d0;color:'+(x.diasAtraso>=3?'#b03030':'#b07d10')+'">'+x.diasAtraso+' día'+(x.diasAtraso!==1?'s':'')+'</td>'
+      +'</tr>';
+    }).join('');
+    var periodoLabel=periodoKpiLabelActual();
+    var html='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/><title>Reporte de Atrasos - '+m.nombre+'</title>'
+      +'<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;background:#FEF8EA;padding:24px;font-size:11px;color:#2b2e20;}'
+      +'.hdr{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #C8A84B;padding-bottom:12px;margin-bottom:18px;flex-wrap:wrap;gap:10px;}'
+      +'.logo{display:flex;align-items:center;gap:10px;}.logo img{width:50px;height:50px;object-fit:contain;border-radius:7px;}'
+      +'.brand{font-size:18px;font-family:\'Bebas Neue\',sans-serif;font-weight:900;letter-spacing:2px;color:#A0842A;}'
+      +'table{width:100%;border-collapse:collapse;margin-top:10px;}thead tr{background:#2b2e20;}thead th{color:#C8A84B;padding:8px 10px;font-size:9px;letter-spacing:1.2px;text-transform:uppercase;text-align:left;}'
+      +'.footer{text-align:center;padding:16px;font-size:10px;color:#888;border-top:2px solid #EDE3C8;margin-top:22px;}'
+      +'@media print{body{padding:14px;background:#fff;}}</style></head><body>'
+      +'<div class="hdr"><div class="logo">'+(logoSrc?'<img src="'+logoSrc+'" onerror="this.style.display=\'none\'"/>':'')+'<div><div class="brand">TRANSPGSO</div><div style="font-size:9px;color:#7a7d6a;letter-spacing:2px">REPORTE DE PIEZAS CON ATRASO EN ENTREGA</div></div></div>'
+      +'<span style="background:#FDF8EC;border:1.5px solid #C8A84B;color:#A0842A;font-size:10px;font-weight:700;padding:4px 10px;border-radius:999px;white-space:nowrap">'+periodoLabel.toUpperCase()+'</span></div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:8px">'
+      +'<div style="font-size:14px;font-weight:700;color:#2b2e20">Mensajero: '+m.nombre+'</div>'
+      +'<div style="font-size:11px;color:#7a7d6a">Generado: '+new Date().toLocaleString('es-CL')+'</div></div>'
+      +'<div style="font-size:12px;margin-bottom:6px;color:#4a4d3a">Se detectaron <strong>'+lista.length+'</strong> pieza'+(lista.length!==1?'s':'')+' entregada'+(lista.length!==1?'s':'')+' por este mensajero cuya fecha de entrega es posterior a su fecha de recepción (piezas retenidas de días anteriores antes de ser despachadas).</div>'
+      +'<table><thead><tr><th>#</th><th>Código</th><th>Cliente</th><th>Comuna</th><th>Fecha Recepción</th><th>Fecha Entrega</th><th>Días de Atraso</th></tr></thead><tbody>'+filas+'</tbody></table>'
+      +'<div class="footer">TransPgso SpA &nbsp;·&nbsp; RUT 78.143.701-8 &nbsp;·&nbsp; contacto@transpgso.cl &nbsp;·&nbsp; +56 9 4211 2940</div>'
+      +'<script>window.onload=function(){window.print();}<\/script></body></html>';
+    win.document.write(html);
+    win.document.close();
+  }
+
   function exportarKpiExcel(){
-    var headers=['Mensajero','Total','Entregados','En Ruta','Reprogramados','Cancelados','Retorno','En Bodega Cancelado','Efectividad %','Tasa Falla %','$ Cobrado','$ Pendiente','Comunas','Atrasados','% Con Foto','% Con Nota','Reintentos','Correcciones Admin','Ritmo (entregas/h)','Duración Prom. Reparto (min)'];
+    var headers=['Mensajero','Total','Entregados','En Ruta','Reprogramados','Cancelados','Retorno','En Bodega Cancelado','Efectividad %','Tasa Falla %','$ Cobrado','$ Pendiente','Comunas','Atrasados','% Con Foto','% Con Nota','Reintentos','Correcciones Admin','Ritmo (entregas/h)','Duración Prom. Reparto (min)','Piezas c/Atraso en Entrega'];
     var rows=kpiPorMensajero.map(function(m){
       return[m.nombre,m.total,m.entregados,m.porEstado.en_ruta||0,m.porEstado.reprogramado||0,m.porEstado.cancelado||0,m.porEstado.retorno||0,m.porEstado.en_bodega_cancelado||0,
         m.efectividad,m.tasaFalla,m.montoCobrado,m.montoPendiente,m.comunas,m.atrasados,
         m.pctFoto==null?'—':m.pctFoto,m.pctNota==null?'—':m.pctNota,
         m.reintentos==null?'—':m.reintentos,m.correccionesAdmin==null?'—':m.correccionesAdmin,
-        m.ritmo==null?'—':m.ritmo.toFixed(2),m.duracionRepartoProm==null?'—':Math.round(m.duracionRepartoProm)];
+        m.ritmo==null?'—':m.ritmo.toFixed(2),m.duracionRepartoProm==null?'—':Math.round(m.duracionRepartoProm),
+        m.entregasConAtraso==null?'—':m.entregasConAtraso.length];
     });
     exportToExcel('KPI_Mensajeros_'+kpiFiltro+'_'+new Date().toISOString().slice(0,10),[{name:'KPI Mensajeros',headers:headers,rows:rows}]);
   }
@@ -337,6 +422,7 @@ function Analitica(){
         React.createElement('div',null),
         React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}},
           React.createElement('button',{style:btnStyle(filtro==='hoy'),onClick:function(){setFiltro('hoy');}},'Hoy'),
+          React.createElement('button',{style:btnStyle(filtro==='ayer'),onClick:function(){setFiltro('ayer');}},'Ayer'),
           React.createElement('button',{style:btnStyle(filtro==='semana'),onClick:function(){setFiltro('semana');}},'Esta semana'),
           React.createElement('button',{style:btnStyle(filtro==='mes'),onClick:function(){setFiltro('mes');}},'Este mes'),
           React.createElement('button',{style:btnStyle(filtro==='todo'),onClick:function(){setFiltro('todo');}},'Todo'),
@@ -347,6 +433,7 @@ function Analitica(){
             React.createElement('input',{type:'date',value:fechaHasta,onChange:function(e){setFechaHasta(e.target.value);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}})
           ),
           React.createElement('button',{style:btnStyle(false),disabled:cargando,onClick:cargarEnvios},cargando?'Actualizando...':'↺ Actualizar'),
+          cargando&&React.createElement('span',{style:{fontSize:11,color:'var(--gold)',fontWeight:600}},'⏳ Cargando envíos...'),
           ultimaActualizacion&&React.createElement('span',{style:{fontSize:10,color:'var(--text-soft)'}},'Datos al '+ultimaActualizacion.toLocaleTimeString('es-CL'))
         )
       ),
@@ -358,7 +445,7 @@ function Analitica(){
       React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,marginBottom:20}},
         React.createElement('div',{className:'panel'},
           React.createElement('div',{className:'panel-title'},'Top Clientes'),
-          clientesArr.length===0?React.createElement('div',{className:'empty-state'},'Sin datos'):
+          clientesArr.length===0?React.createElement('div',{className:'empty-state'},cargando?'⏳ Cargando...':'Sin datos'):
           React.createElement('div',{className:'table-wrap'},React.createElement('table',null,
             React.createElement('thead',null,React.createElement('tr',null,React.createElement('th',null,'Cliente'),React.createElement('th',{style:{textAlign:'center'}},'Envíos'),React.createElement('th',{style:{textAlign:'center'}},'Entregados'),React.createElement('th',{style:{textAlign:'center'}},'%'))),
             React.createElement('tbody',null,clientesArr.map(function(x,i){
@@ -369,7 +456,7 @@ function Analitica(){
         ),
         React.createElement('div',{className:'panel'},
           React.createElement('div',{className:'panel-title'},'Top Mensajeros'),
-          mensArr.length===0?React.createElement('div',{className:'empty-state'},'Sin datos'):
+          mensArr.length===0?React.createElement('div',{className:'empty-state'},cargando?'⏳ Cargando...':'Sin datos'):
           React.createElement('div',{className:'table-wrap'},React.createElement('table',null,
             React.createElement('thead',null,React.createElement('tr',null,React.createElement('th',null,'Mensajero'),React.createElement('th',{style:{textAlign:'center'}},'Envíos'),React.createElement('th',{style:{textAlign:'center'}},'Entregados'),React.createElement('th',{style:{textAlign:'center'}},'%'))),
             React.createElement('tbody',null,mensArr.map(function(x,i){
@@ -398,6 +485,7 @@ function Analitica(){
     subTab==='kpi'&&React.createElement(React.Fragment,null,
       React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:16}},
         React.createElement('button',{style:btnStyle(kpiFiltro==='hoy'),onClick:function(){setKpiFiltro('hoy');}},'Hoy'),
+        React.createElement('button',{style:btnStyle(kpiFiltro==='ayer'),onClick:function(){setKpiFiltro('ayer');}},'Ayer'),
         React.createElement('button',{style:btnStyle(kpiFiltro==='semana'),onClick:function(){setKpiFiltro('semana');}},'Esta semana'),
         React.createElement('button',{style:btnStyle(kpiFiltro==='mes'),onClick:function(){setKpiFiltro('mes');}},'Este mes'),
         React.createElement('button',{style:btnStyle(kpiFiltro==='personalizado'),onClick:function(){setKpiFiltro('personalizado');}},'Rango'),
@@ -428,7 +516,7 @@ function Analitica(){
           necesitanAtencion.length>0?React.createElement(React.Fragment,null,'Necesitan atención: ',React.createElement('strong',{style:{color:'var(--danger)'}},necesitanAtencion.map(function(m){return m.nombre;}).join(', ')),' (efectividad bajo 70%).'):''
         ),
         React.createElement('div',{className:'stats-grid'},
-          [{label:'Gestionados',val:fleetTotal,cls:''},{label:'Entregados',val:fleetEntregados,cls:'green'},{label:'Efectividad Flota',val:fleetEfectividad+'%',cls:fleetEfectividad>=80?'green':fleetEfectividad>=60?'gold':'red'},{label:'$ Cobrado',val:fmt(fleetMonto),cls:'green'},{label:'Atrasados',val:fleetAtrasados,cls:fleetAtrasados>0?'red':''},{label:'Mensajeros Activos',val:conActividad.length+'/'+kpiPorMensajero.length,cls:''}].map(function(s){return statTile(s.label,s.val,s.cls);})
+          [{label:'Gestionados',val:fleetTotal,cls:''},{label:'Entregados',val:fleetEntregados,cls:'green'},{label:'Efectividad Flota',val:fleetEfectividad+'%',cls:fleetEfectividad>=80?'green':fleetEfectividad>=60?'gold':'red'},{label:'$ Cobrado',val:fmt(fleetMonto),cls:'green'},{label:'Atrasados',val:fleetAtrasados,cls:fleetAtrasados>0?'red':''},{label:'Mensajeros Activos',val:conActividad.length+'/'+kpiPorMensajero.length,cls:''},{label:'Piezas c/Atraso en Entrega',val:historialDisponible?fleetPiezasAtraso:'—',cls:historialDisponible&&fleetPiezasAtraso>0?'red':''}].map(function(s){return statTile(s.label,s.val,s.cls);})
         )
       ),
 
@@ -447,7 +535,7 @@ function Analitica(){
       // ---- Ranking por mensajero ----
       React.createElement('div',{className:'panel'},
         React.createElement('div',{className:'panel-title'},'Detalle y ranking por mensajero'),
-        kpiPorMensajero.length===0?React.createElement('div',{className:'empty-state'},'Sin mensajeros registrados'):
+        kpiPorMensajero.length===0?React.createElement('div',{className:'empty-state'},cargando?'⏳ Cargando datos...':'Sin mensajeros registrados'):
         React.createElement('div',{className:'table-wrap'},React.createElement('table',null,
           React.createElement('thead',null,React.createElement('tr',null,
             React.createElement('th',null,'#'),React.createElement('th',null,'Mensajero'),
@@ -485,7 +573,8 @@ function Analitica(){
                      {label:'Horas activas',val:fmtHoras(m.horasActivas)},
                      {label:'Ritmo (entregas/h)',val:m.ritmo==null?'—':m.ritmo.toFixed(1)},
                      {label:'Duración prom. reparto',val:fmtMin(m.duracionRepartoProm)},
-                     {label:'$ Pendiente en ruta',val:fmt(m.montoPendiente)}
+                     {label:'$ Pendiente en ruta',val:fmt(m.montoPendiente)},
+                     {label:'Piezas c/atraso en entrega',val:m.entregasConAtraso==null?'—':m.entregasConAtraso.length,warn:m.entregasConAtraso&&m.entregasConAtraso.length>0}
                     ].map(function(x){return React.createElement('div',{key:x.label,style:{background:'#fff',borderRadius:8,padding:'10px 12px',border:'1px solid '+(x.warn?'rgba(176,48,48,0.3)':'var(--border)')}},
                       React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)',textTransform:'uppercase',letterSpacing:1,marginBottom:4}},x.label),
                       React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:16,fontWeight:700,color:x.warn?'var(--danger)':'var(--dark)'}},x.val)
@@ -504,6 +593,33 @@ function Analitica(){
                         return React.createElement('div',{key:es.val,style:{padding:'6px 12px',borderRadius:20,background:es.bg||'rgba(0,0,0,0.05)',border:'1px solid '+es.color,color:es.color,fontSize:11,fontWeight:700}},es.label+': '+v);
                       })
                     )
+                  ),
+                  m.entregasConAtraso&&m.entregasConAtraso.length>0&&React.createElement('div',{style:{marginTop:16}},
+                    React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:8}},
+                      React.createElement('div',{style:{fontSize:10,color:'var(--danger)',textTransform:'uppercase',letterSpacing:1,fontWeight:700}},'⚠ Piezas entregadas con atraso ('+m.entregasConAtraso.length+') — recibidas días antes de ser entregadas'),
+                      React.createElement('button',{onClick:function(ev){ev.stopPropagation();exportarAtrasoPDF(m);},style:{padding:'5px 12px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',fontWeight:700,fontSize:11,cursor:'pointer'}},'📄 Exportar reporte PDF')
+                    ),
+                    React.createElement('div',{style:{maxHeight:200,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8,background:'#fff'}},
+                      React.createElement('table',{style:{width:'100%',fontSize:11}},
+                        React.createElement('thead',null,React.createElement('tr',null,
+                          React.createElement('th',{style:{textAlign:'left',padding:'6px 10px'}},'Código'),
+                          React.createElement('th',{style:{padding:'6px 10px'}},'Cliente'),
+                          React.createElement('th',{style:{padding:'6px 10px'}},'Recepción'),
+                          React.createElement('th',{style:{padding:'6px 10px'}},'Entrega'),
+                          React.createElement('th',{style:{padding:'6px 10px'}},'Días')
+                        )),
+                        React.createElement('tbody',null,m.entregasConAtraso.slice(0,20).map(function(x){
+                          return React.createElement('tr',{key:x.codigo},
+                            React.createElement('td',{style:{padding:'5px 10px',fontFamily:'JetBrains Mono'}},x.codigo),
+                            React.createElement('td',{style:{padding:'5px 10px'}},x.cliente),
+                            React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},x.fechaRecepcion),
+                            React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},x.fechaEntrega),
+                            React.createElement('td',{style:{padding:'5px 10px',textAlign:'center',fontWeight:700,color:'var(--danger)'}},x.diasAtraso)
+                          );
+                        }))
+                      )
+                    ),
+                    m.entregasConAtraso.length>20&&React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginTop:4}},'Mostrando 20 de '+m.entregasConAtraso.length+' — exporta el PDF para ver el listado completo.')
                   )
                 )
               )));
