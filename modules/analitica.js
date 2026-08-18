@@ -42,6 +42,11 @@ function tieneFotoEntrega(raw){
   }catch(e){return false;}
 }
 function fmtHora(iso){try{return new Date(iso).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});}catch(e){return '—';}}
+// created_at viene en UTC (ej. "...T00:30:00+00:00"). Una entrega hecha a las 20:30 hora de Chile
+// queda guardada como 00:30 UTC del dia SIGUIENTE -- si se usara el string UTC tal cual (slice(0,10))
+// para agrupar "por dia" o comparar contra la fecha de recepcion, cualquier entrega de tarde/noche
+// (la mayoria) caeria en el dia equivocado. Esta funcion convierte a la fecha LOCAL real.
+function diaLocalDe(iso){try{var d=new Date(iso);if(isNaN(d.getTime()))return '';return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}catch(e){return '';}}
 // primeraAccion/ultimaAccion ahora son un promedio de minutos-desde-medianoche (no un timestamp),
 // ver calcularKpiPorMensajero -- se formatean con esta funcion en vez de fmtHora.
 function fmtMinDelDia(min){if(min==null||!isFinite(min))return '—';var h=Math.floor(min/60)%24,m=Math.round(min%60);var d=new Date();d.setHours(h,m,0,0);return d.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});}
@@ -157,7 +162,7 @@ function calcularKpiPorMensajero(enviosPeriodo, historial, mensajerosRoster, his
         var porDiaRider={};
         historialDelRider.forEach(function(h){
           var t=new Date(h.created_at).getTime();
-          var dia=(h.created_at||'').slice(0,10);
+          var dia=diaLocalDe(h.created_at);
           (porDiaRider[dia]=porDiaRider[dia]||[]).push(t);
         });
         Object.keys(porDiaRider).forEach(function(dia){
@@ -220,7 +225,7 @@ function calcularKpiPorMensajero(enviosPeriodo, historial, mensajerosRoster, his
         var hs=histPorCodigo[e.codigo]||[];
         var entregadoEv=hs.find(function(h){return h.estado==='entregado';});
         if(!entregadoEv)return;
-        var fechaEntrega=(entregadoEv.created_at||'').slice(0,10);
+        var fechaEntrega=diaLocalDe(entregadoEv.created_at);
         var fechaRecepcion=(e.fecha||'').slice(0,10);
         if(fechaEntrega&&fechaRecepcion&&fechaEntrega!==fechaRecepcion){
           var dias=Math.abs(Math.round((new Date(fechaEntrega+'T12:00:00')-new Date(fechaRecepcion+'T12:00:00'))/86400000));
