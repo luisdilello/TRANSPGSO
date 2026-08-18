@@ -42,9 +42,14 @@ function tieneFotoEntrega(raw){
   }catch(e){return false;}
 }
 function fmtHora(iso){try{return new Date(iso).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});}catch(e){return '—';}}
+// primeraAccion/ultimaAccion ahora son un promedio de minutos-desde-medianoche (no un timestamp),
+// ver calcularKpiPorMensajero -- se formatean con esta funcion en vez de fmtHora.
+function fmtMinDelDia(min){if(min==null||!isFinite(min))return '—';var h=Math.floor(min/60)%24,m=Math.round(min%60);var d=new Date();d.setHours(h,m,0,0);return d.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});}
 function fmtHoras(h){if(h==null||!isFinite(h))return '—';if(h<1)return Math.round(h*60)+' min';return h.toFixed(1)+' h';}
 function fmtMin(m){if(m==null||!isFinite(m))return '—';if(m<60)return Math.round(m)+' min';return (m/60).toFixed(1)+' h';}
-function badgeColor(pct){return pct>=80?'var(--success)':pct>=60?'var(--warning)':'var(--danger)';}
+// Regla unica de color para "efectividad" en toda Analitica: bajo 95% siempre rojo (antes habia
+// una zona intermedia amarilla 60-80% que ocultaba problemas reales de efectividad).
+function badgeColor(pct){return pct>=95?'var(--success)':'var(--danger)';}
 
 // ========================================================================
 // Mini gráfico de línea con hover (tendencia diaria / sparkline por mensajero)
@@ -139,30 +144,77 @@ function calcularKpiPorMensajero(enviosPeriodo, historial, mensajerosRoster, his
         if(enRutaCount>1)reintentos+=(enRutaCount-1);
         hs.forEach(function(h){if((h.nota||'').indexOf('Revertido desde')!==-1)correccionesAdmin++;});
       });
+      // Deteccion de TURNOS: mensajeros que reparten en 2 tandas (ej. manana y tarde con una pausa
+      // larga entre medio) antes contaban como "horas activas" el rango COMPLETO entre su primera y
+      // su ultima accion del periodo, incluyendo la pausa -- eso inflaba las horas activas y por lo
+      // tanto distorsionaba (hacia mas lento de lo real) el ritmo de entregas/h. Ahora se agrupan las
+      // acciones por dia y se cortan en "turnos" cuando hay un hueco sin actividad de mas de 2.5h;
+      // las horas activas son la SUMA de la duracion de cada turno, no el rango completo.
+      var UMBRAL_GAP_TURNO_MS=150*60000; // 2.5h sin actividad = corte de turno (evita partir un turno lento/disperso por error)
       var historialDelRider=historial.filter(function(h){return h.canal==='app_mensajero'&&normNombreLocal(h.usuario)===norm;});
+      var turnosRider=[]; // {dia, inicio, fin} — bloques de actividad continua del mensajero
       if(historialDelRider.length>0){
-        var tiempos=historialDelRider.map(function(h){return new Date(h.created_at).getTime();}).sort(function(a,b){return a-b;});
-        primeraAccion=tiempos[0]; ultimaAccion=tiempos[tiempos.length-1];
-        if(historialDelRider.length>=2){
-          horasActivas=(ultimaAccion-primeraAccion)/3600000;
-          if(horasActivas>0.15&&entregados>0)ritmo=entregados/horasActivas;
-        }
+        var porDiaRider={};
+        historialDelRider.forEach(function(h){
+          var t=new Date(h.created_at).getTime();
+          var dia=(h.created_at||'').slice(0,10);
+          (porDiaRider[dia]=porDiaRider[dia]||[]).push(t);
+        });
+        Object.keys(porDiaRider).forEach(function(dia){
+          var ts=porDiaRider[dia].sort(function(a,b){return a-b;});
+          var turnoIni=ts[0],turnoFin=ts[0];
+          for(var i=1;i<ts.length;i++){
+            if(ts[i]-turnoFin>UMBRAL_GAP_TURNO_MS){
+              turnosRider.push({dia:dia,inicio:turnoIni,fin:turnoFin});
+              turnoIni=ts[i];
+            }
+            turnoFin=ts[i];
+          }
+          turnosRider.push({dia:dia,inicio:turnoIni,fin:turnoFin});
+        });
+        horasActivas=turnosRider.reduce(function(a,t){return a+(t.fin-t.inicio)/3600000;},0);
+        if(horasActivas>0.15&&entregados>0)ritmo=entregados/horasActivas;
+        // "Inicio de reparto" / "Termino de reparto": promedio (en minutos desde medianoche) de la
+        // hora de inicio y de termino de cada dia con actividad en el periodo. Antes se tomaba el
+        // minimo/maximo timestamp de TODO el periodo y solo se mostraba la hora del reloj -- en
+        // periodos de varios dias (semana/mes/rango) eso podia mostrar una "ultima accion" con hora
+        // de reloj anterior a la "primera accion" simplemente porque venian de dias distintos.
+        var diasConActividad=Object.keys(porDiaRider);
+        var sumIniMin=0,sumFinMin=0;
+        diasConActividad.forEach(function(dia){
+          var turnosDia=turnosRider.filter(function(t){return t.dia===dia;});
+          var iniDia=Math.min.apply(null,turnosDia.map(function(t){return t.inicio;}));
+          var finDia=Math.max.apply(null,turnosDia.map(function(t){return t.fin;}));
+          var dIni=new Date(iniDia),dFin=new Date(finDia);
+          sumIniMin+=dIni.getHours()*60+dIni.getMinutes();
+          sumFinMin+=dFin.getHours()*60+dFin.getMinutes();
+        });
+        primeraAccion=Math.round(sumIniMin/diasConActividad.length);
+        ultimaAccion=Math.round(sumFinMin/diasConActividad.length);
       }
+      var turnoDe=function(ts){
+        for(var j=0;j<turnosRider.length;j++){if(ts>=turnosRider[j].inicio&&ts<=turnosRider[j].fin)return turnosRider[j];}
+        return null;
+      };
       var deltas=[];
       entregadosArr.forEach(function(e){
         var hs=histPorCodigo[e.codigo]||[];
         var enRutaEv=hs.find(function(h){return h.estado==='en_ruta';});
         var entregadoEv=hs.find(function(h){return h.estado==='entregado';});
         if(enRutaEv&&entregadoEv){
-          var delta=(new Date(entregadoEv.created_at)-new Date(enRutaEv.created_at))/60000;
-          if(delta>0&&delta<1080)deltas.push(delta);
+          var tEnRuta=new Date(enRutaEv.created_at).getTime(),tEntregado=new Date(entregadoEv.created_at).getTime();
+          var delta=(tEntregado-tEnRuta)/60000;
+          // Descarta el delta si cruza un hueco de turno del mensajero (pausa entre 2 tandas): si no,
+          // un paquete que quedo en el vehiculo durante la pausa infla la duracion promedio de reparto.
+          var turnoIni=turnoDe(tEnRuta);
+          var cruzaHueco=turnoIni?tEntregado>turnoIni.fin:false;
+          if(delta>0&&delta<1080&&!cruzaHueco)deltas.push(delta);
         }
       });
       if(deltas.length>0)duracionRepartoProm=deltas.reduce(function(a,b){return a+b;},0)/deltas.length;
 
-      // Piezas entregadas cuya fecha de ENTREGA (real, segun historial) cae en un dia posterior
-      // a su fecha de RECEPCION (e.fecha) -- es decir, el mensajero se quedo con el paquete uno
-      // o mas dias antes de entregarlo, en vez de despacharlo el mismo dia que lo recibio.
+      // Piezas entregadas cuya fecha de ENTREGA (real, segun historial) es DISTINTA a su fecha de
+      // RECEPCION (e.fecha) -- es decir, la pieza llego un dia y se entrego en otro (no el mismo).
       entregasConAtraso=[];
       entregadosArr.forEach(function(e){
         var hs=histPorCodigo[e.codigo]||[];
@@ -170,8 +222,8 @@ function calcularKpiPorMensajero(enviosPeriodo, historial, mensajerosRoster, his
         if(!entregadoEv)return;
         var fechaEntrega=(entregadoEv.created_at||'').slice(0,10);
         var fechaRecepcion=(e.fecha||'').slice(0,10);
-        if(fechaEntrega&&fechaRecepcion&&fechaEntrega>fechaRecepcion){
-          var dias=Math.round((new Date(fechaEntrega+'T12:00:00')-new Date(fechaRecepcion+'T12:00:00'))/86400000);
+        if(fechaEntrega&&fechaRecepcion&&fechaEntrega!==fechaRecepcion){
+          var dias=Math.abs(Math.round((new Date(fechaEntrega+'T12:00:00')-new Date(fechaRecepcion+'T12:00:00'))/86400000));
           entregasConAtraso.push({codigo:e.codigo,cliente:e.cliente,comuna:e.comuna,fechaRecepcion:fechaRecepcion,fechaEntrega:fechaEntrega,diasAtraso:dias});
         }
       });
@@ -438,7 +490,7 @@ function Analitica(){
         )
       ),
       React.createElement('div',{className:'stats-grid',style:{marginBottom:20}},
-        [{label:'Total',val:total,cls:''},{label:'Entregados',val:entregados,cls:'green'},{label:'En Ruta',val:enRuta,cls:'gold'},{label:'Reprogramados',val:reprog,cls:'red'},{label:'Cancelados',val:cancelados,cls:'red'},{label:'Efectividad',val:efectividad+'%',cls:efectividad>=80?'green':efectividad>=60?'gold':'red'}].map(function(s){
+        [{label:'Total',val:total,cls:''},{label:'Entregados',val:entregados,cls:'green'},{label:'En Ruta',val:enRuta,cls:'gold'},{label:'Reprogramados',val:reprog,cls:'red'},{label:'Cancelados',val:cancelados,cls:'red'},{label:'Efectividad',val:efectividad+'%',cls:efectividad>=95?'green':'red'}].map(function(s){
           return statTile(s.label,s.val,s.cls);
         })
       ),
@@ -516,7 +568,7 @@ function Analitica(){
           necesitanAtencion.length>0?React.createElement(React.Fragment,null,'Necesitan atención: ',React.createElement('strong',{style:{color:'var(--danger)'}},necesitanAtencion.map(function(m){return m.nombre;}).join(', ')),' (efectividad bajo 70%).'):''
         ),
         React.createElement('div',{className:'stats-grid'},
-          [{label:'Gestionados',val:fleetTotal,cls:''},{label:'Entregados',val:fleetEntregados,cls:'green'},{label:'Efectividad Flota',val:fleetEfectividad+'%',cls:fleetEfectividad>=80?'green':fleetEfectividad>=60?'gold':'red'},{label:'$ Cobrado',val:fmt(fleetMonto),cls:'green'},{label:'Atrasados',val:fleetAtrasados,cls:fleetAtrasados>0?'red':''},{label:'Mensajeros Activos',val:conActividad.length+'/'+kpiPorMensajero.length,cls:''},{label:'Piezas c/Atraso en Entrega',val:historialDisponible?fleetPiezasAtraso:'—',cls:historialDisponible&&fleetPiezasAtraso>0?'red':''}].map(function(s){return statTile(s.label,s.val,s.cls);})
+          [{label:'Gestionados',val:fleetTotal,cls:''},{label:'Entregados',val:fleetEntregados,cls:'green'},{label:'Efectividad Flota',val:fleetEfectividad+'%',cls:fleetEfectividad>=95?'green':'red'},{label:'$ Cobrado',val:fmt(fleetMonto),cls:'green'},{label:'Atrasados',val:fleetAtrasados,cls:fleetAtrasados>0?'red':''},{label:'Mensajeros Activos',val:conActividad.length+'/'+kpiPorMensajero.length,cls:''},{label:'Piezas c/Atraso en Entrega',val:historialDisponible?fleetPiezasAtraso:'—',cls:historialDisponible&&fleetPiezasAtraso>0?'red':''}].map(function(s){return statTile(s.label,s.val,s.cls);})
         )
       ),
 
@@ -568,8 +620,8 @@ function Analitica(){
                      {label:'Correcciones de admin',val:m.correccionesAdmin==null?'—':m.correccionesAdmin,warn:m.correccionesAdmin>0},
                      {label:'% Con foto evidencia',val:m.pctFoto==null?'—':m.pctFoto+'%',warn:m.pctFoto!=null&&m.pctFoto<80},
                      {label:'% Con nota',val:m.pctNota==null?'—':m.pctNota+'%'},
-                     {label:'Primera acción',val:m.primeraAccion?fmtHora(m.primeraAccion):'—'},
-                     {label:'Última acción',val:m.ultimaAccion?fmtHora(m.ultimaAccion):'—'},
+                     {label:'Inicio de reparto',val:m.primeraAccion!=null?fmtMinDelDia(m.primeraAccion):'—'},
+                     {label:'Término de reparto',val:m.ultimaAccion!=null?fmtMinDelDia(m.ultimaAccion):'—'},
                      {label:'Horas activas',val:fmtHoras(m.horasActivas)},
                      {label:'Ritmo (entregas/h)',val:m.ritmo==null?'—':m.ritmo.toFixed(1)},
                      {label:'Duración prom. reparto',val:fmtMin(m.duracionRepartoProm)},
