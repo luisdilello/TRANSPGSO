@@ -253,7 +253,8 @@ function calcularKpiPorMensajero(enviosPeriodo, historial, mensajerosRoster, his
       atrasados:atrasados, pendientesAtrasados:pendientesAtrasados, pctFoto:pctFoto, pctNota:pctNota,
       reintentos:reintentos, correccionesAdmin:correccionesAdmin,
       rutas:rutas, horasActivas:horasActivas, ritmo:ritmo,
-      duracionRepartoProm:duracionRepartoProm, entregasConAtraso:entregasConAtraso
+      duracionRepartoProm:duracionRepartoProm, entregasConAtraso:entregasConAtraso,
+      propios:propios
     };
   }).sort(function(a,b){
     if((a.total>0)!==(b.total>0))return a.total>0?-1:1;
@@ -341,6 +342,9 @@ function Analitica(){
   var _kfd=useState(''),kpiFechaDesde=_kfd[0],setKpiFechaDesde=_kfd[1];
   var _kfh=useState(''),kpiFechaHasta=_kfh[0],setKpiFechaHasta=_kfh[1];
   var _exp=useState(null),expandido=_exp[0],setExpandido=_exp[1];
+  // Filtro de estado dentro del detalle del mensajero expandido -- al estilo del Portal de
+  // Clientes (tarjetas de estado clickeables que filtran la tabla de abajo). 'todos' = sin filtro.
+  var _fem=useState('todos'),filtroEstadoDetalle=_fem[0],setFiltroEstadoDetalle=_fem[1];
   var enviosPeriodoKpi=useMemo(function(){return filtrarPorRango(envios,kpiFiltro,kpiFechaDesde,kpiFechaHasta);},[envios,kpiFiltro,kpiFechaDesde,kpiFechaHasta]);
 
   var _hist=useState([]),historialKpi=_hist[0],setHistorialKpi=_hist[1];
@@ -637,7 +641,7 @@ function Analitica(){
           React.createElement('tbody',null,[].concat.apply([],kpiPorMensajero.map(function(m,i){
             var posicion=(m.total>=3)?(rankeables.indexOf(m)+1):null;
             var isExp=expandido===m.norm;
-            var filas=[React.createElement('tr',{key:m.norm,style:{background:isExp?'rgba(200,168,75,0.06)':(i%2===0?'#fff':'var(--cream)'),cursor:'pointer',opacity:m.total===0?0.6:1},onClick:function(){setExpandido(isExp?null:m.norm);}},
+            var filas=[React.createElement('tr',{key:m.norm,style:{background:isExp?'rgba(200,168,75,0.06)':(i%2===0?'#fff':'var(--cream)'),cursor:'pointer',opacity:m.total===0?0.6:1},onClick:function(){setExpandido(isExp?null:m.norm);setFiltroEstadoDetalle('todos');}},
               React.createElement('td',{className:'mono',style:{textAlign:'center',color:'var(--text-soft)'}},posicion?('#'+posicion):'—'),
               React.createElement('td',{style:{fontWeight:700}},m.nombre,!m.enRosterActivo&&React.createElement('span',{style:{marginLeft:6,fontSize:9,color:'var(--text-soft)',fontWeight:400,fontStyle:'italic'}},'(inactivo/fuera de roster)')),
               React.createElement('td',{className:'mono',style:{textAlign:'center'}},m.total),
@@ -674,14 +678,58 @@ function Analitica(){
                     React.createElement('div',null,React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginBottom:6,textTransform:'uppercase',letterSpacing:1}},'Efectividad por día (14 días)'),React.createElement(MiniLineChart,{data:tendM.map(function(d){return{x:d.fecha,label:d.label,y:d.efectividad};}),color:'#C8A84B',compact:true,height:70,valueFmt:function(v){return v+'%';}}))
                   ),
                   React.createElement('div',null,
-                    React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginBottom:8,textTransform:'uppercase',letterSpacing:1}},'Estados en el período'),
-                    React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
-                      ESTADOS_ENVIO.map(function(es){
-                        var v=m.porEstado[es.val]||0;
-                        if(v===0)return null;
-                        return React.createElement('div',{key:es.val,style:{padding:'6px 12px',borderRadius:20,background:es.bg||'rgba(0,0,0,0.05)',border:'1px solid '+es.color,color:es.color,fontSize:11,fontWeight:700}},es.label+': '+v);
+                    React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginBottom:8,textTransform:'uppercase',letterSpacing:1}},'Estados en el período — clic en una tarjeta para filtrar la tabla de abajo'),
+                    // Mismas tarjetas de estado que el Dashboard (clases .stat-card/.stat-value/.stat-sub,
+                    // colores por estado), pero ademas clickeables como filtro -- al estilo del Portal de
+                    // Clientes: clic activa el filtro (resaltado con borde de color), clic de nuevo lo quita.
+                    React.createElement('div',{className:'stats-grid',style:{marginBottom:12}},
+                      [{val:'todos',label:'Total',color:'var(--gold)',cls:'gold',cnt:m.total}].concat(
+                        ESTADOS_ENVIO.filter(function(es){return (m.porEstado[es.val]||0)>0;}).map(function(es){
+                          var cls=es.val==='en_bodega'?'teal':es.val==='en_ruta'?'gold':es.val==='entregado'?'green':es.val==='reprogramado'?'purple':es.val==='cancelado'?'red':es.val==='siniestro'?'orange':es.val==='retorno'?'brown':es.val==='en_bodega_cancelado'?'rust':'orange';
+                          return{val:es.val,label:es.label,color:es.color,cls:cls,cnt:m.porEstado[es.val]||0};
+                        })
+                      ).map(function(s){
+                        var activo=filtroEstadoDetalle===s.val;
+                        return React.createElement('div',{
+                          key:s.val,
+                          className:'stat-card',
+                          onClick:function(ev){ev.stopPropagation();setFiltroEstadoDetalle(activo?'todos':s.val);},
+                          style:{cursor:'pointer','--card-accent':s.color,borderTop:'4px solid '+s.color,border:'2px solid '+(activo?s.color:'rgba(200,168,75,0.18)'),boxShadow:activo?'0 0 0 3px '+s.color+'22':undefined}
+                        },
+                          React.createElement('div',{className:'stat-label'},s.label),
+                          React.createElement('div',{className:'stat-value '+s.cls},s.cnt.toLocaleString('es-CL')),
+                          React.createElement('div',{className:'stat-sub'},m.total>0?(s.cnt/m.total*100).toFixed(1)+'%':'—')
+                        );
                       })
-                    )
+                    ),
+                    (function(){
+                      var listaFiltrada=m.propios.filter(function(e){return filtroEstadoDetalle==='todos'||e.estado===filtroEstadoDetalle;});
+                      return React.createElement(React.Fragment,null,
+                        React.createElement('div',{style:{maxHeight:240,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8,background:'#fff'}},
+                          React.createElement('table',{style:{width:'100%',fontSize:11}},
+                            React.createElement('thead',null,React.createElement('tr',null,
+                              React.createElement('th',{style:{textAlign:'left',padding:'6px 10px'}},'Código'),
+                              React.createElement('th',{style:{padding:'6px 10px'}},'Cliente'),
+                              React.createElement('th',{style:{padding:'6px 10px'}},'Comuna'),
+                              React.createElement('th',{style:{padding:'6px 10px'}},'Estado'),
+                              React.createElement('th',{style:{padding:'6px 10px'}},'Fecha'),
+                              React.createElement('th',{style:{padding:'6px 10px'}},'Monto')
+                            )),
+                            React.createElement('tbody',null,listaFiltrada.slice(0,200).map(function(e){
+                              return React.createElement('tr',{key:e.id||e.codigo},
+                                React.createElement('td',{style:{padding:'5px 10px',fontFamily:'JetBrains Mono'}},e.codigo),
+                                React.createElement('td',{style:{padding:'5px 10px'}},e.cliente),
+                                React.createElement('td',{style:{padding:'5px 10px'}},e.comuna),
+                                React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},estadoInfo(e.estado).label),
+                                React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},e.fecha),
+                                React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},fmt(e.monto))
+                              );
+                            }))
+                          )
+                        ),
+                        listaFiltrada.length>200&&React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginTop:4}},'Mostrando 200 de '+listaFiltrada.length+'.')
+                      );
+                    })()
                   ),
                   m.rutas&&m.rutas.length>0&&React.createElement('div',{style:{marginTop:16}},
                     React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginBottom:8,textTransform:'uppercase',letterSpacing:1,fontWeight:700}},'Rutas del período ('+m.rutas.length+') — turnos concretos detectados, no un promedio'),
