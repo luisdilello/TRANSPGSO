@@ -561,7 +561,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787174521;
+window.__MODULES_VERSION=1787193042;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1772,11 +1772,23 @@ function Dashboard(_ref7){
   // ── DATOS FILTRADOS ───────────────────────────────────────────
   const todos=useMemo(()=>{
     const locales=enviosLocales||[];
-    const fuenteExtra=periodo==='rango'&&rangoEnvios.length?rangoEnvios:periodo==='todos'&&todosHistorico.length?todosHistorico:extraEnvios;
+    // 'extraEnvios' solo es relevante (y se sigue refrescando cada 60s) mientras el período
+    // activo es justo el que lo alimenta -- si el usuario ya cambió a 'hoy'/'ayer', lo que haya
+    // quedado en extraEnvios es un remanente viejo de una visita anterior a Semana/Mes que ya
+    // dejó de actualizarse, así que no debe pisar nada.
+    const periodoConFetchPropio=periodo==='semana'||periodo==='mes'||periodo==='rango'||periodo==='todos';
+    const fuenteExtra=periodo==='rango'&&rangoEnvios.length?rangoEnvios:periodo==='todos'&&todosHistorico.length?todosHistorico:(periodoConFetchPropio?extraEnvios:[]);
     if(!fuenteExtra.length)return locales;
-    const codigosLocales=new Set(locales.map(e=>e.codigo));
-    const soloExtra=fuenteExtra.filter(e=>!codigosLocales.has(e.codigo));
-    return[...locales,...soloExtra];
+    // 'fuenteExtra' es una lectura directa y reciente a Supabase, acotada al período elegido --
+    // más confiable que el cache local ('enviosLocales'/enviosGestion, alimentado por acciones
+    // locales y un sync aparte de los últimos 8 días), que puede quedar con el estado viejo de
+    // un envío hasta su próximo ciclo. Antes 'locales' tenía prioridad: un código presente en
+    // ambos lados se quedaba pegado con el estado del cache local, lo que hacía que este panel
+    // no coincidiera con Analítica/KPI Mensajeros (que siempre lee directo de Supabase). Ahora
+    // 'fuenteExtra' gana para los códigos que trae.
+    const codigosExtra=new Set(fuenteExtra.map(e=>e.codigo));
+    const soloLocales=locales.filter(e=>!codigosExtra.has(e.codigo));
+    return[...soloLocales,...fuenteExtra];
   },[enviosLocales,extraEnvios,rangoEnvios,todosHistorico,periodo]);
   const filtrados=todos.filter(e=>enPeriodo(e));
   const total=filtrados.length;
@@ -1911,6 +1923,11 @@ function Dashboard(_ref7){
   const porMen={};
   filtrados.filter(e=>e.mensajero&&e.estado!=='en_bodega').forEach(e=>{const m=e.mensajero.replace(/,\s*/g,' ');if(!porMen[m])porMen[m]={nombre:m,total:0,entregado:0};porMen[m].total++;if(e.estado==='entregado')porMen[m].entregado++;});
   const mensajerosLista=Object.values(porMen).sort((a,b)=>b.total-a.total);
+  // Frase que acompaña al título del panel de abajo, para dejar claro que la lista/las barras
+  // muestran el acumulado del período elegido arriba (Hoy/Semana/Mes/Rango) y no solo lo que
+  // está literalmente en estado 'en_ruta' en este momento.
+  const FRASE_PERIODO_MENSAJEROS={hoy:'de hoy',ayer:'de ayer',semana:'de esta semana',mes:'del mes',rango:'del rango elegido',todos:'de todo el historial'};
+  const fraseMensajerosPeriodo=FRASE_PERIODO_MENSAJEROS[periodo]||'del período';
   // ── COLORES ───────────────────────────────────────────────────
   const ESTADO_COLORS={en_bodega:'#1a6b8a',en_ruta:'#C8A84B',entregado:'#2e7d4f',reprogramado:'#9c27b0',cancelado:'#b03030',siniestro:'#e65100',retorno:'#7a5c1a',en_bodega_cancelado:'#a15c1a'};
   const ESTADO_LABELS={en_bodega:'En Bodega',en_ruta:'En Ruta',entregado:'Entregado',reprogramado:'Reprogramado',cancelado:'Cancelado',siniestro:'Siniestro',retorno:'Retorno',en_bodega_cancelado:'En Bodega Cancelado'};
@@ -1972,7 +1989,7 @@ function Dashboard(_ref7){
       ),
       // ── MENSAJEROS EN RUTA (lista completa) ──
       React.createElement('div',{className:'panel'},
-        React.createElement('div',{className:'panel-title'},'Mensajeros en Ruta ('+mensajerosLista.length+')'),
+        React.createElement('div',{className:'panel-title'},'Mensajeros — envíos '+fraseMensajerosPeriodo+' ('+mensajerosLista.length+')'),
         mensajerosLista.length===0
           ?React.createElement('div',{style:{color:'var(--text-soft)',fontSize:13,textAlign:'center',padding:'20px 0'}},'Sin datos. Asigna mensajeros.')
           :React.createElement('div',{style:{maxHeight:420,overflowY:'auto',paddingRight:4}},
