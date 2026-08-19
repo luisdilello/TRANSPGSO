@@ -345,6 +345,11 @@ function Analitica(){
   // Filtro de estado dentro del detalle del mensajero expandido -- al estilo del Portal de
   // Clientes (tarjetas de estado clickeables que filtran la tabla de abajo). 'todos' = sin filtro.
   var _fem=useState('todos'),filtroEstadoDetalle=_fem[0],setFiltroEstadoDetalle=_fem[1];
+  // Granularidad de los mini-graficos "Entregas" / "Efectividad" dentro del detalle del
+  // mensajero expandido -- dia (14 dias), semana (12 semanas), quincena (8 quincenas) o mes
+  // (12 meses). Solo un mensajero puede estar expandido a la vez, asi que un unico estado
+  // alcanza para los dos graficos de esa fila.
+  var _tg=useState('dia'),tendGranularidad=_tg[0],setTendGranularidad=_tg[1];
   var enviosPeriodoKpi=useMemo(function(){return filtrarPorRango(envios,kpiFiltro,kpiFechaDesde,kpiFechaHasta);},[envios,kpiFiltro,kpiFechaDesde,kpiFechaHasta]);
 
   var _hist=useState([]),historialKpi=_hist[0],setHistorialKpi=_hist[1];
@@ -410,13 +415,64 @@ function Analitica(){
     return dias.map(function(d){var x=porDia[d];var dd=d.slice(8,10)+'-'+d.slice(5,7);return{fecha:d,label:dd,total:x.total,entregados:x.entregados,efectividad:x.total>0?Math.round(x.entregados/x.total*100):0};});
   },[envios,subTab]);
 
-  function tendenciaDeMensajero(norm){
-    var hoyD=new Date();var dias=[];
-    for(var i=13;i>=0;i--){var d=new Date(hoyD);d.setDate(d.getDate()-i);dias.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));}
-    var porDia={};dias.forEach(function(d){porDia[d]={total:0,entregados:0};});
-    envios.forEach(function(e){if(normNombreLocal(e.mensajero)!==norm)return;var f=(e.fecha||'').slice(0,10);if(porDia[f]){porDia[f].total++;if(e.estado==='entregado')porDia[f].entregados++;}});
-    return dias.map(function(d){var x=porDia[d];var dd=d.slice(8,10)+'-'+d.slice(5,7);return{fecha:d,label:dd,total:x.total,entregados:x.entregados,efectividad:x.total>0?Math.round(x.entregados/x.total*100):0};});
+  // Arma los "cajones" de tiempo (inicio/fin/etiqueta) para una granularidad dada, del mas
+  // viejo al mas nuevo, terminando en hoy. Usado tanto por el grafico de tendencia por
+  // mensajero como -- si se necesita mas adelante -- por cualquier otro grafico de periodo.
+  var MESES_CORTOS=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  function construirCajonesTiempo(granularidad){
+    var hoyD=new Date();hoyD.setHours(0,0,0,0);
+    var cajones=[];
+    if(granularidad==='semana'){
+      // 12 semanas (lunes a domingo), incluyendo la semana actual.
+      var lunesActual=lunesDe(hoyD);
+      for(var i=11;i>=0;i--){
+        var ini=new Date(lunesActual);ini.setDate(ini.getDate()-7*i);
+        var fin=new Date(ini);fin.setDate(fin.getDate()+6);
+        cajones.push({ini:ini,fin:fin,label:String(ini.getDate()).padStart(2,'0')+'/'+String(ini.getMonth()+1).padStart(2,'0')});
+      }
+    }else if(granularidad==='quincena'){
+      // 8 quincenas (bloques fijos de 15 dias) terminando hoy -- unos 4 meses hacia atras.
+      for(var i=7;i>=0;i--){
+        var fin2=new Date(hoyD);fin2.setDate(fin2.getDate()-15*i);
+        var ini2=new Date(fin2);ini2.setDate(ini2.getDate()-14);
+        cajones.push({ini:ini2,fin:fin2,label:String(ini2.getDate()).padStart(2,'0')+'/'+String(ini2.getMonth()+1).padStart(2,'0')+'–'+String(fin2.getDate()).padStart(2,'0')+'/'+String(fin2.getMonth()+1).padStart(2,'0')});
+      }
+    }else if(granularidad==='mes'){
+      // 12 meses calendario, incluyendo el actual.
+      for(var i=11;i>=0;i--){
+        var iniM=new Date(hoyD.getFullYear(),hoyD.getMonth()-i,1);
+        var finM=new Date(hoyD.getFullYear(),hoyD.getMonth()-i+1,0);
+        cajones.push({ini:iniM,fin:finM,label:MESES_CORTOS[iniM.getMonth()]+' '+String(iniM.getFullYear()).slice(2)});
+      }
+    }else{
+      // 'dia' (default): ultimos 14 dias, incluyendo hoy.
+      for(var i=13;i>=0;i--){
+        var d=new Date(hoyD);d.setDate(d.getDate()-i);
+        cajones.push({ini:new Date(d),fin:new Date(d),label:String(d.getDate()).padStart(2,'0')+'-'+String(d.getMonth()+1).padStart(2,'0')});
+      }
+    }
+    cajones.forEach(function(c){c.ini.setHours(0,0,0,0);c.fin.setHours(23,59,59,999);});
+    return cajones;
   }
+  // Agrupa una lista de envios en los cajones de la granularidad elegida -- total/entregados/
+  // efectividad por cajon. Cada envio cae en el primer cajon cuyo rango cubra su fecha.
+  function agruparPorCajones(listaEnvios,granularidad){
+    var cajones=construirCajonesTiempo(granularidad);
+    var acumuladores=cajones.map(function(){return{total:0,entregados:0};});
+    listaEnvios.forEach(function(e){
+      var f=new Date((e.fecha||'')+'T12:00:00');
+      if(isNaN(f.getTime()))return;
+      for(var i=0;i<cajones.length;i++){
+        if(f>=cajones[i].ini&&f<=cajones[i].fin){acumuladores[i].total++;if(e.estado==='entregado')acumuladores[i].entregados++;break;}
+      }
+    });
+    return cajones.map(function(c,i){var x=acumuladores[i];return{fecha:c.label,label:c.label,total:x.total,entregados:x.entregados,efectividad:x.total>0?Math.round(x.entregados/x.total*100):0};});
+  }
+  function tendenciaDeMensajero(norm,granularidad){
+    var propiosDelMen=envios.filter(function(e){return normNombreLocal(e.mensajero)===norm;});
+    return agruparPorCajones(propiosDelMen,granularidad||'dia');
+  }
+  var TEND_GRANULARIDAD_LABEL={dia:'14 días',semana:'12 semanas',quincena:'8 quincenas',mes:'12 meses'};
 
   // Cierre de flota (resumen automático del período elegido en KPI)
   var fleetTotal=enviosPeriodoKpi.length;
@@ -774,7 +830,7 @@ function Analitica(){
           React.createElement('tbody',null,[].concat.apply([],kpiPorMensajero.map(function(m,i){
             var posicion=(m.total>=3)?(rankeables.indexOf(m)+1):null;
             var isExp=expandido===m.norm;
-            var filas=[React.createElement('tr',{key:m.norm,style:{background:isExp?'rgba(200,168,75,0.06)':(i%2===0?'#fff':'var(--cream)'),cursor:'pointer',opacity:m.total===0?0.6:1},onClick:function(){setExpandido(isExp?null:m.norm);setFiltroEstadoDetalle('todos');}},
+            var filas=[React.createElement('tr',{key:m.norm,style:{background:isExp?'rgba(200,168,75,0.06)':(i%2===0?'#fff':'var(--cream)'),cursor:'pointer',opacity:m.total===0?0.6:1},onClick:function(){setExpandido(isExp?null:m.norm);setFiltroEstadoDetalle('todos');setTendGranularidad('dia');}},
               React.createElement('td',{className:'mono',style:{textAlign:'center',color:'var(--text-soft)'}},posicion?('#'+posicion):'—'),
               React.createElement('td',{style:{fontWeight:700}},m.nombre,!m.enRosterActivo&&React.createElement('span',{style:{marginLeft:6,fontSize:9,color:'var(--text-soft)',fontWeight:400,fontStyle:'italic'}},'(inactivo/fuera de roster)')),
               React.createElement('td',{className:'mono',style:{textAlign:'center'}},m.total),
@@ -787,7 +843,7 @@ function Analitica(){
               React.createElement('td',{style:{textAlign:'center',color:'var(--gold)',fontSize:11}},isExp?'▲ Cerrar':'▼ Ver detalle')
             )];
             if(isExp){
-              var tendM=tendenciaDeMensajero(m.norm);
+              var tendM=tendenciaDeMensajero(m.norm,tendGranularidad);
               filas.push(React.createElement('tr',{key:m.norm+'_det'},React.createElement('td',{colSpan:10,style:{padding:0}},
                 React.createElement('div',{style:{padding:'18px 20px',background:'var(--cream)',borderTop:'1px solid var(--border)',borderBottom:'2px solid var(--gold)'}},
                   React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:12,marginBottom:16}},
@@ -806,9 +862,18 @@ function Analitica(){
                       React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:16,fontWeight:700,color:x.warn?'var(--danger)':'var(--dark)'}},x.val)
                     );})
                   ),
+                  React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8,marginBottom:10}},
+                    React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',textTransform:'uppercase',letterSpacing:1}},'Tendencia del mensajero — '+TEND_GRANULARIDAD_LABEL[tendGranularidad]),
+                    React.createElement('div',{style:{display:'flex',gap:6},onClick:function(ev){ev.stopPropagation();}},
+                      [{val:'dia',label:'Día'},{val:'semana',label:'Semana'},{val:'quincena',label:'Quincena'},{val:'mes',label:'Mes'}].map(function(g){
+                        var activo=tendGranularidad===g.val;
+                        return React.createElement('button',{key:g.val,onClick:function(ev){ev.stopPropagation();setTendGranularidad(g.val);},style:{padding:'3px 10px',borderRadius:7,border:'1px solid '+(activo?'var(--gold)':'var(--border)'),background:activo?'rgba(200,168,75,0.14)':'#fff',color:activo?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:10.5,cursor:'pointer'}},g.label);
+                      })
+                    )
+                  ),
                   React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:16}},
-                    React.createElement('div',null,React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginBottom:6,textTransform:'uppercase',letterSpacing:1}},'Entregas por día (14 días)'),React.createElement(MiniLineChart,{data:tendM.map(function(d){return{x:d.fecha,label:d.label,y:d.entregados};}),color:'#2e7d4f',compact:true,height:70,valueFmt:function(v){return v+' entregas';}})),
-                    React.createElement('div',null,React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginBottom:6,textTransform:'uppercase',letterSpacing:1}},'Efectividad por día (14 días)'),React.createElement(MiniLineChart,{data:tendM.map(function(d){return{x:d.fecha,label:d.label,y:d.efectividad};}),color:'#C8A84B',compact:true,height:70,valueFmt:function(v){return v+'%';}}))
+                    React.createElement('div',null,React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginBottom:6,textTransform:'uppercase',letterSpacing:1}},'Entregas por período'),React.createElement(MiniLineChart,{data:tendM.map(function(d){return{x:d.fecha,label:d.label,y:d.entregados};}),color:'#2e7d4f',compact:true,height:70,valueFmt:function(v){return v+' entregas';}})),
+                    React.createElement('div',null,React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginBottom:6,textTransform:'uppercase',letterSpacing:1}},'Efectividad por período'),React.createElement(MiniLineChart,{data:tendM.map(function(d){return{x:d.fecha,label:d.label,y:d.efectividad};}),color:'#C8A84B',compact:true,height:70,valueFmt:function(v){return v+'%';}}))
                   ),
                   React.createElement('div',null,
                     React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginBottom:8,textTransform:'uppercase',letterSpacing:1}},'Estados en el período — clic en una tarjeta para filtrar la tabla de abajo'),
