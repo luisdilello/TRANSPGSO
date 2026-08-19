@@ -5,6 +5,16 @@ var estadoInfo=window.__app.estadoInfo, ESTADOS_ENVIO=window.__app.ESTADOS_ENVIO
 var esEnvioAtrasado=window.__app.esEnvioAtrasado, diasDesdeFecha=window.__app.diasDesdeFecha;
 var UMBRAL_ATRASO_DIAS=window.__app.UMBRAL_ATRASO_DIAS, KpiBar=window.__app.KpiBar, fmt=window.__app.fmt;
 var exportToExcel=window.__app.exportToExcel;
+var Modal=window.__app.Modal, FotosEntregaConRecarga=window.__app.FotosEntregaConRecarga, estadoBadge=window.__app.estadoBadge;
+
+// Igual que canalInfo() en gestion-envios.js -- identifica el canal que registró cada
+// entrada del historial (app del mensajero, panel admin, portal cliente o sistema).
+function canalInfo(canal){
+  if(canal==='app_mensajero')return{label:'📱 App Mensajero',bg:'rgba(46,125,79,0.12)',color:'#2e7d4f'};
+  if(canal==='panel_admin')return{label:'🖥 Panel Admin',bg:'rgba(27,58,107,0.12)',color:'#1B3A6B'};
+  if(canal==='cliente')return{label:'🌐 Cliente',bg:'rgba(200,168,75,0.15)',color:'#a0842a'};
+  return{label:'⚙ Sistema',bg:'rgba(122,125,106,0.12)',color:'#7a7d6a'};
+}
 
 // ========================================================================
 // Helpers compartidos (fechas, nombres, filtros de rango)
@@ -354,6 +364,20 @@ function Analitica(){
   // en la lista general como en el corte de las 8pm) -- clic en un mensajero muestra debajo el
   // detalle de sus paquetes pendientes (no entregados) sin salir de la pantalla. null = ninguno.
   var _cex=useState(null),chipExpandido=_cex[0],setChipExpandido=_cex[1];
+  // Envío seleccionado con el botón "Ver" dentro de la tabla "Estados en el período" -- abre
+  // el mismo modal de detalle que Gestión de Envíos (fotos de entrega, historial, etc.), en
+  // modo solo-lectura (sin editar cliente ni cambiar estado, para no interferir desde Analítica).
+  var _ve=useState(null),verEnvio=_ve[0],setVerEnvio=_ve[1];
+  var _vhr=useState([]),verHistorial=_vhr[0],setVerHistorial=_vhr[1];
+  var _vch=useState(false),verCargandoHistorial=_vch[0],setVerCargandoHistorial=_vch[1];
+  useEffect(function(){
+    if(!verEnvio){setVerHistorial([]);return;}
+    setVerCargandoHistorial(true);
+    db.from('historial_envios').select('id,estado,nota,usuario,canal,created_at').eq('codigo_envio',verEnvio.codigo).order('created_at',{ascending:false}).then(function(res){
+      setVerHistorial((res&&res.data)||[]);
+      setVerCargandoHistorial(false);
+    }).catch(function(){setVerHistorial([]);setVerCargandoHistorial(false);});
+  },[verEnvio&&verEnvio.codigo]);
   var enviosPeriodoKpi=useMemo(function(){return filtrarPorRango(envios,kpiFiltro,kpiFechaDesde,kpiFechaHasta);},[envios,kpiFiltro,kpiFechaDesde,kpiFechaHasta]);
 
   var _hist=useState([]),historialKpi=_hist[0],setHistorialKpi=_hist[1];
@@ -708,6 +732,43 @@ function Analitica(){
     exportToExcel('Pendientes_Atrasados_'+kpiFiltro+'_'+new Date().toISOString().slice(0,10),[{name:'Pendientes Atrasados',headers:headers,rows:rows}]);
   }
 
+  // Modal "Ver" del envío seleccionado en la tabla "Estados en el período" -- misma experiencia
+  // que el botón "Ver" de Gestión de Envíos (info del envío, historial y fotos de entrega vía
+  // FotosEntregaConRecarga), en modo solo-lectura: sin cambiar cliente, estado ni borrar nada.
+  var verEnvioModal=verEnvio&&React.createElement(Modal,{title:'Envío '+verEnvio.codigo,onClose:function(){setVerEnvio(null);}},
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}},
+      [['Código',verEnvio.codigo],['Cliente',verEnvio.cliente],['Comuna',verEnvio.comuna],['Mensajero',verEnvio.mensajero],['Fecha',verEnvio.fecha],['Monto',verEnvio.monto>0?'$'+Number(verEnvio.monto).toLocaleString('es-CL'):'—']].map(function(par){
+        var l=par[0],v=par[1];
+        return React.createElement('div',{key:l,style:{padding:'14px 16px',background:'linear-gradient(145deg,#ffffff,#f5eedc)',borderRadius:12,border:'1px solid rgba(200,168,75,0.25)',boxShadow:'5px 5px 10px rgba(43,46,32,0.12),-2px -2px 6px rgba(255,255,255,1),inset 0 1px 0 rgba(255,255,255,0.9)'}},
+          React.createElement('div',{style:{fontSize:13,color:'#C8A84B',letterSpacing:3,textTransform:'uppercase',marginBottom:8,fontFamily:'Bebas Neue',fontWeight:700,textShadow:'0 1px 2px rgba(200,168,75,0.3)'}},l),
+          React.createElement('div',{style:{fontSize:18,fontWeight:500,color:'#1a1d13',lineHeight:1.3}},v||'—')
+        );
+      })
+    ),
+    React.createElement('div',{style:{marginBottom:16}},estadoBadge(verEnvio.estado)),
+    verEnvio.nota&&React.createElement('div',{className:'obs-box',style:{marginBottom:16}},'📌 '+verEnvio.nota),
+    React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)',marginBottom:10}},'Historial'),
+    React.createElement('div',{style:{maxHeight:260,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8,marginBottom:16}},
+      verCargandoHistorial?React.createElement('div',{style:{padding:16,textAlign:'center',color:'var(--text-soft)',fontSize:12}},'Cargando historial...'):
+      verHistorial.length===0?React.createElement('div',{style:{padding:16,textAlign:'center',color:'var(--text-soft)',fontSize:12}},'Sin registros de historial detallado para este envío (puede ser un paquete anterior a esta función).'):
+      verHistorial.map(function(h,i){
+        return React.createElement('div',{key:h.id||i,style:{padding:'8px 12px',borderBottom:'1px solid var(--border)',display:'flex',gap:10,alignItems:'flex-start'}},
+          React.createElement('div',{style:{flex:1}},
+            React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}},
+              React.createElement('span',{style:{fontSize:13,fontWeight:700,color:estadoInfo(h.estado).color}},estadoInfo(h.estado).label),
+              React.createElement('span',{style:{fontSize:9,fontWeight:700,padding:'1px 7px',borderRadius:10,background:canalInfo(h.canal).bg,color:canalInfo(h.canal).color}},canalInfo(h.canal).label)
+            ),
+            React.createElement('div',{style:{fontSize:12,color:'var(--text-mid)',marginTop:3,fontWeight:600}},h.usuario||'Sistema'),
+            h.nota&&React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginTop:2,fontStyle:'italic'}},h.nota)
+          ),
+          React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',fontFamily:'JetBrains Mono',whiteSpace:'nowrap',textAlign:'right'}},new Date(h.created_at).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}))
+        );
+      })
+    ),
+    React.createElement(FotosEntregaConRecarga,{key:verEnvio.codigo,codigo:verEnvio.codigo,fotoEtiquetaInicial:null,esAdmin:false}),
+    React.createElement('div',{className:'modal-actions'},React.createElement('button',{className:'btn-secondary',onClick:function(){setVerEnvio(null);}},'Cerrar'))
+  );
+
   return React.createElement('div',null,
     React.createElement('div',{className:'section-head'},
       React.createElement('div',{className:'section-title'},'Anal',React.createElement('span',null,'ítica')),
@@ -976,7 +1037,8 @@ function Analitica(){
                               React.createElement('th',{style:{padding:'6px 10px'}},'Comuna'),
                               React.createElement('th',{style:{padding:'6px 10px'}},'Estado'),
                               React.createElement('th',{style:{padding:'6px 10px'}},'Fecha'),
-                              React.createElement('th',{style:{padding:'6px 10px'}},'Monto')
+                              React.createElement('th',{style:{padding:'6px 10px'}},'Monto'),
+                              React.createElement('th',{style:{padding:'6px 10px'}},'')
                             )),
                             React.createElement('tbody',null,listaFiltrada.slice(0,200).map(function(e){
                               return React.createElement('tr',{key:e.id||e.codigo},
@@ -985,7 +1047,10 @@ function Analitica(){
                                 React.createElement('td',{style:{padding:'5px 10px'}},e.comuna),
                                 React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},estadoInfo(e.estado).label),
                                 React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},e.fecha),
-                                React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},fmt(e.monto))
+                                React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},fmt(e.monto)),
+                                React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},
+                                  React.createElement('button',{className:'action-btn btn-edit',onClick:function(ev){ev.stopPropagation();setVerEnvio(e);}},'Ver')
+                                )
                               );
                             }))
                           )
@@ -1085,7 +1150,8 @@ function Analitica(){
           })))
         ))
       )
-    )
+    ),
+    verEnvioModal
   );
 }
 window.Analitica = Analitica;
