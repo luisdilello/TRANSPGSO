@@ -443,6 +443,24 @@ function Analitica(){
   var rankeables=conActividad.filter(function(m){return m.total>=3;});
   var mejorMen=rankeables.length>0?rankeables[0]:null; // ya viene ordenado por efectividad desc
   var necesitanAtencion=rankeables.filter(function(m){return m.efectividad<70;});
+  // Corte de las 8:00 PM (solo aplica viendo "Hoy"): mensajeros que a esta hora todavia no tienen
+  // resuelto (entregado) al menos el 80% de lo que se les asigno hoy -- alerta de RITMO durante el
+  // dia, distinta de "Necesitan atencion" (que mira el resultado final del periodo completo, sin
+  // importar la hora). Se usa la hora local del dispositivo, igual que el resto del sistema
+  // (fechaHoyCL en index.html tampoco fuerza zona horaria -- se asume que los equipos ya estan en
+  // hora de Chile).
+  var horaActualCL=new Date().getHours();
+  var corte8pmActivo=kpiFiltro==='hoy'&&horaActualCL>=20;
+  var bajo80a8pm=corte8pmActivo?rankeables.filter(function(m){return m.efectividad<80;}):[];
+  // Estado general de la flota para el indicador del panel (verde/amarillo/rojo).
+  var fleetSinIncidentes=fleetAtrasados===0&&fleetPendientesAtrasados.length===0&&bajo80a8pm.length===0;
+  var fleetEstado=(fleetEfectividad>=90&&fleetSinIncidentes)?'good':((fleetEfectividad<70||fleetAtrasados>0||bajo80a8pm.length>0)?'bad':'warn');
+  var ESTADO_FLOTA_INFO={
+    good:{icono:'🟢',texto:'Operación saludable',color:'var(--success)',bg:'rgba(46,125,79,0.08)',border:'rgba(46,125,79,0.35)'},
+    warn:{icono:'🟡',texto:'Con novedades',color:'var(--warning)',bg:'rgba(176,125,16,0.08)',border:'rgba(176,125,16,0.35)'},
+    bad:{icono:'🔴',texto:'Requiere atención',color:'var(--danger)',bg:'rgba(176,48,48,0.08)',border:'rgba(176,48,48,0.35)'}
+  };
+  var estadoInfoFlota=ESTADO_FLOTA_INFO[fleetEstado];
 
   var btnStyle=function(active){return{padding:'6px 16px',borderRadius:8,border:'1px solid '+(active?'var(--gold)':'var(--border)'),background:active?'rgba(200,168,75,0.12)':'#fff',color:active?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer'};};
   var subTabStyle=function(active){return{padding:'9px 20px',borderRadius:9,border:'1px solid '+(active?'var(--gold)':'var(--border)'),background:active?'linear-gradient(145deg,#fff,#f5eedc)':'#fff',color:active?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer',letterSpacing:0.5};};
@@ -450,6 +468,52 @@ function Analitica(){
   function statTile(label,val,cls){
     return React.createElement('div',{key:label,className:'stat-card'},React.createElement('div',{className:'stat-label'},label),React.createElement('div',{className:'stat-value '+(cls||'')},val));
   }
+
+  // Pastilla compacta "nombre + metrica" usada en el briefing de Cierre de Flota (Destacados /
+  // Requiere atencion), para reemplazar la lista de nombres en negrita dentro de una sola oracion
+  // larga por algo mas legible y moderno.
+  var CHIP_TONE_COLOR={good:'#2e7d4f',warn:'#b07d10',bad:'#b03030'};
+  function chipPersona(nombre,detalle,tone){
+    var c=CHIP_TONE_COLOR[tone]||CHIP_TONE_COLOR.warn;
+    return React.createElement('span',{key:nombre+'_'+(detalle||''),style:{display:'inline-flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:999,background:c+'14',border:'1px solid '+c+'40',fontSize:11.5,fontWeight:600,color:'var(--text)',lineHeight:1.3}},
+      React.createElement('span',{style:{width:6,height:6,borderRadius:99,background:c,flexShrink:0}}),
+      nombre,
+      detalle?React.createElement('span',{style:{color:c,fontWeight:800}},detalle):null
+    );
+  }
+  // Tarjeta de briefing (Destacados / Requiere atencion): titulo con acento de color a la izquierda
+  // y una nube de chips (o un mensaje "sin novedades"). 'extra' es un bloque opcional debajo (usado
+  // para el corte de las 8pm dentro de la tarjeta de "Requiere atencion").
+  function briefCard(icon,titulo,tone,contenido,extra){
+    var c=tone==='good'?CHIP_TONE_COLOR.good:CHIP_TONE_COLOR.bad;
+    return React.createElement('div',{style:{flex:'1 1 320px',background:'#fff',borderRadius:12,border:'1px solid var(--border)',borderLeft:'4px solid '+c,padding:'14px 16px 16px',boxShadow:'0 2px 10px rgba(43,46,32,0.05)'}},
+      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:7,marginBottom:10,fontSize:11.5,fontWeight:800,letterSpacing:0.6,color:c,textTransform:'uppercase'}},icon,' ',titulo),
+      contenido.length>0?React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:7}},contenido):React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',fontStyle:'italic'}},'Sin novedades por ahora.'),
+      extra||null
+    );
+  }
+
+  // ---- Contenido del briefing "Destacados" (lo positivo) ----
+  var destacadosChips=[];
+  if(mejorMen)destacadosChips.push(chipPersona(mejorMen.nombre,mejorMen.efectividad+'% · '+mejorMen.entregados+' entregas','good'));
+  if(fleetEfectividad>=85)destacadosChips.push(chipPersona('Efectividad de flota',fleetEfectividad+'%','good'));
+  if(fleetAtrasados===0)destacadosChips.push(chipPersona('Sin envíos atrasados en ruta',null,'good'));
+  if(fleetPendientesAtrasados.length===0)destacadosChips.push(chipPersona('Sin pendientes atrasados',null,'good'));
+  var mensajerosPerfectos=conActividad.filter(function(m){return m.total>=3&&m.efectividad===100;});
+  if(mensajerosPerfectos.length>0)destacadosChips.push(chipPersona(mensajerosPerfectos.length+' mensajero'+(mensajerosPerfectos.length!==1?'s':'')+' con 100% de efectividad',null,'good'));
+
+  // ---- Contenido del briefing "Requiere atención" (lo urgente) ----
+  var urgentesChips=[];
+  necesitanAtencion.forEach(function(m){urgentesChips.push(chipPersona(m.nombre,m.efectividad+'%','bad'));});
+  if(fleetAtrasados>0)urgentesChips.push(chipPersona('Envíos atrasados en ruta',String(fleetAtrasados),'bad'));
+  if(fleetPendientesAtrasados.length>0)urgentesChips.push(chipPersona('Pendientes sin entregar 2+ días',String(fleetPendientesAtrasados.length),'bad'));
+
+  // Bloque aparte (con su propio titulo) dentro de la tarjeta "Requiere atencion": solo aparece
+  // viendo "Hoy" y desde las 8:00 PM en adelante -- mensajeros bajo 80% de efectividad a esa hora.
+  var corte8pmBlock=corte8pmActivo?React.createElement('div',{style:{marginTop:12,paddingTop:12,borderTop:'1px dashed rgba(176,48,48,0.3)'}},
+    React.createElement('div',{style:{fontSize:11,fontWeight:800,color:'var(--danger)',marginBottom:7,display:'flex',alignItems:'center',gap:6}},'🕗 CORTE 8:00 PM — bajo 80% de efectividad'),
+    bajo80a8pm.length>0?React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:7}},bajo80a8pm.map(function(m){return chipPersona(m.nombre,m.efectividad+'% · faltan '+(m.total-m.entregados),'bad');})):React.createElement('div',{style:{fontSize:11.5,color:'var(--success)',fontWeight:600}},'✓ Todos sobre el 80% a esta hora.')
+  ):null;
 
   // Reporte individual (por mensajero) de piezas entregadas con fecha de recepcion de dias
   // anteriores a su entrega -- formato "profesional" TransPgso SpA (mismo estilo de membrete/pie
@@ -618,17 +682,32 @@ function Analitica(){
       cargandoHistKpi&&React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginBottom:12}},'⏳ Cargando historial detallado de tiempos y calidad...'),
 
       // ---- Cierre de flota ----
+      // Rediseño "briefing ejecutivo": antes era una sola oración larga con nombres en negrita
+      // mezclados -- ahora es un encabezado con indicador de estado + hora, una línea compacta de
+      // cifras clave, y dos tarjetas separadas (Destacados / Requiere atención) con pastillas
+      // legibles en vez de texto corrido. El corte de las 8:00 PM (mensajeros bajo 80% de
+      // efectividad a esa hora, viendo "Hoy") vive dentro de la tarjeta de "Requiere atención".
       React.createElement('div',{className:'panel',style:{marginBottom:20,background:'linear-gradient(145deg,#ffffff,#f5eedc)',border:'1px solid rgba(200,168,75,0.3)'}},
-        React.createElement('div',{className:'panel-title'},'🏁 Cierre de Flota'),
-        React.createElement('div',{style:{fontSize:13,color:'var(--text-mid)',lineHeight:1.6,marginBottom:14}},
-          'En este período se gestionaron ',React.createElement('strong',null,fleetTotal.toLocaleString('es-CL')),' envíos entre ',React.createElement('strong',null,conActividad.length),' mensajero'+(conActividad.length!==1?'s':'')+' con actividad',
-          sinActividad.length>0?(' (y '+sinActividad.length+' sin actividad registrada)'):'',
-          '. Se entregaron ',React.createElement('strong',{style:{color:badgeColor(fleetEfectividad)}},fleetEntregados+' ('+fleetEfectividad+'%)'),
-          ', se cobraron ',React.createElement('strong',null,fmt(fleetMonto)),' en contraentrega',
-          fleetAtrasados>0?React.createElement(React.Fragment,null,' y hay ',React.createElement('strong',{style:{color:'var(--danger)'}},fleetAtrasados),' envío'+(fleetAtrasados!==1?'s':'')+' atrasado'+(fleetAtrasados!==1?'s':'')+' (más de '+UMBRAL_ATRASO_DIAS+' días en ruta)'):'',
-          '. ',
-          mejorMen?React.createElement(React.Fragment,null,'Mejor desempeño: ',React.createElement('strong',{style:{color:'var(--success)'}},mejorMen.nombre),' ('+mejorMen.efectividad+'% efectividad, '+mejorMen.entregados+' entregas). '):'',
-          necesitanAtencion.length>0?React.createElement(React.Fragment,null,'Necesitan atención: ',React.createElement('strong',{style:{color:'var(--danger)'}},necesitanAtencion.map(function(m){return m.nombre;}).join(', ')),' (efectividad bajo 70%).'):''
+        React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10,marginBottom:2}},
+          React.createElement('div',{className:'panel-title',style:{marginBottom:0}},'🏁 Cierre de Flota'),
+          React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}},
+            corte8pmActivo&&React.createElement('span',{style:{fontSize:10,fontWeight:800,letterSpacing:0.5,padding:'5px 12px',borderRadius:999,background:'rgba(176,48,48,0.1)',border:'1px solid rgba(176,48,48,0.35)',color:'var(--danger)'}},'🕗 CORTE 8:00 PM ACTIVO'),
+            React.createElement('span',{style:{fontSize:10,fontWeight:800,letterSpacing:0.5,padding:'5px 12px',borderRadius:999,background:estadoInfoFlota.bg,border:'1px solid '+estadoInfoFlota.border,color:estadoInfoFlota.color}},estadoInfoFlota.icono+' '+estadoInfoFlota.texto.toUpperCase())
+          )
+        ),
+        React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:'6px 16px',alignItems:'baseline',fontSize:12.5,color:'var(--text-soft)',margin:'10px 0 16px',fontFamily:'JetBrains Mono'}},
+          React.createElement('span',null,React.createElement('strong',{style:{color:'var(--text)',fontSize:15}},fleetTotal.toLocaleString('es-CL')),' gestionados'),
+          React.createElement('span',{style:{opacity:0.4}},'·'),
+          React.createElement('span',null,React.createElement('strong',{style:{color:'var(--success)',fontSize:15}},fleetEntregados.toLocaleString('es-CL')),' entregados ('+fleetEfectividad+'%)'),
+          React.createElement('span',{style:{opacity:0.4}},'·'),
+          React.createElement('span',null,React.createElement('strong',{style:{color:'var(--text)',fontSize:15}},conActividad.length+'/'+kpiPorMensajero.length),' mensajeros activos'),
+          sinActividad.length>0&&React.createElement(React.Fragment,null,React.createElement('span',{style:{opacity:0.4}},'·'),React.createElement('span',null,sinActividad.length+' sin actividad registrada')),
+          React.createElement('span',{style:{opacity:0.4}},'·'),
+          React.createElement('span',null,React.createElement('strong',{style:{color:'var(--text)',fontSize:15}},fmt(fleetMonto)),' cobrado')
+        ),
+        React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:14,marginBottom:18}},
+          briefCard('✅','Destacados','good',destacadosChips,null),
+          briefCard('⚠','Requiere atención','bad',urgentesChips,corte8pmBlock)
         ),
         React.createElement('div',{className:'stats-grid'},
           [{label:'Gestionados',val:fleetTotal,cls:''},{label:'Entregados',val:fleetEntregados,cls:'green'},{label:'Restante Pendiente',val:fleetPendiente,cls:fleetPendiente>0?'gold':''},{label:'Efectividad Flota',val:fleetEfectividad+'%',cls:fleetEfectividad>=95?'green':'red'},{label:'$ Cobrado',val:fmt(fleetMonto),cls:'green'},{label:'Atrasados',val:fleetAtrasados,cls:fleetAtrasados>0?'red':''},{label:'Mensajeros Activos',val:conActividad.length+'/'+kpiPorMensajero.length,cls:''},{label:'Piezas c/Atraso en Entrega',val:historialDisponible?fleetPiezasAtraso:'—',cls:historialDisponible&&fleetPiezasAtraso>0?'red':''}].map(function(s){return statTile(s.label,s.val,s.cls);})
