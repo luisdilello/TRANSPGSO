@@ -355,6 +355,9 @@ function Analitica(){
   // Filtro de estado dentro del detalle del mensajero expandido -- al estilo del Portal de
   // Clientes (tarjetas de estado clickeables que filtran la tabla de abajo). 'todos' = sin filtro.
   var _fem=useState('todos'),filtroEstadoDetalle=_fem[0],setFiltroEstadoDetalle=_fem[1];
+  // Texto de busqueda dentro de la tabla "Estados en el período" del mensajero expandido --
+  // busca por código, cliente o comuna, combinado con el filtro de estado de arriba.
+  var _besq=useState(''),buscarEnvioDetalle=_besq[0],setBuscarEnvioDetalle=_besq[1];
   // Granularidad de los mini-graficos "Entregas" / "Efectividad" dentro del detalle del
   // mensajero expandido -- dia (14 dias), semana (12 semanas), quincena (8 quincenas) o mes
   // (12 meses). Solo un mensajero puede estar expandido a la vez, asi que un unico estado
@@ -956,7 +959,7 @@ function Analitica(){
           React.createElement('tbody',null,[].concat.apply([],kpiPorMensajero.map(function(m,i){
             var posicion=(m.total>=3)?(rankeables.indexOf(m)+1):null;
             var isExp=expandido===m.norm;
-            var filas=[React.createElement('tr',{key:m.norm,style:{background:isExp?'rgba(200,168,75,0.06)':(i%2===0?'#fff':'var(--cream)'),cursor:'pointer',opacity:m.total===0?0.6:1},onClick:function(){setExpandido(isExp?null:m.norm);setFiltroEstadoDetalle('todos');setTendGranularidad('dia');}},
+            var filas=[React.createElement('tr',{key:m.norm,style:{background:isExp?'rgba(200,168,75,0.06)':(i%2===0?'#fff':'var(--cream)'),cursor:'pointer',opacity:m.total===0?0.6:1},onClick:function(){setExpandido(isExp?null:m.norm);setFiltroEstadoDetalle('todos');setBuscarEnvioDetalle('');setTendGranularidad('dia');}},
               React.createElement('td',{className:'mono',style:{textAlign:'center',color:'var(--text-soft)'}},posicion?('#'+posicion):'—'),
               React.createElement('td',{style:{fontWeight:700}},m.nombre,!m.enRosterActivo&&React.createElement('span',{style:{marginLeft:6,fontSize:9,color:'var(--text-soft)',fontWeight:400,fontStyle:'italic'}},'(inactivo/fuera de roster)')),
               React.createElement('td',{className:'mono',style:{textAlign:'center'}},m.total),
@@ -1027,8 +1030,17 @@ function Analitica(){
                       })
                     ),
                     (function(){
-                      var listaFiltrada=m.propios.filter(function(e){return filtroEstadoDetalle==='todos'||e.estado===filtroEstadoDetalle;});
+                      var qEnvioDetalle=(buscarEnvioDetalle||'').trim().toLowerCase();
+                      var listaFiltrada=m.propios.filter(function(e){
+                        if(filtroEstadoDetalle!=='todos'&&e.estado!==filtroEstadoDetalle)return false;
+                        if(qEnvioDetalle&&(String(e.codigo||'').toLowerCase().indexOf(qEnvioDetalle)===-1&&String(e.cliente||'').toLowerCase().indexOf(qEnvioDetalle)===-1&&String(e.comuna||'').toLowerCase().indexOf(qEnvioDetalle)===-1))return false;
+                        return true;
+                      });
                       return React.createElement(React.Fragment,null,
+                        React.createElement('div',{onClick:function(ev){ev.stopPropagation();},style:{position:'relative',marginBottom:8,maxWidth:280}},
+                          React.createElement('input',{type:'text',value:buscarEnvioDetalle,onChange:function(ev){setBuscarEnvioDetalle(ev.target.value);},placeholder:'🔎 Buscar por código, cliente o comuna...',style:{width:'100%',padding:'7px 12px',borderRadius:7,border:'1px solid var(--border)',fontSize:11.5,background:'#fff',boxSizing:'border-box'}}),
+                          buscarEnvioDetalle&&React.createElement('button',{onClick:function(ev){ev.stopPropagation();setBuscarEnvioDetalle('');},title:'Limpiar búsqueda',style:{position:'absolute',right:6,top:'50%',transform:'translateY(-50%)',border:'none',background:'none',color:'var(--text-soft)',cursor:'pointer',fontSize:13,fontWeight:700,padding:'2px 4px'}},'✕')
+                        ),
                         React.createElement('div',{style:{maxHeight:240,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8,background:'#fff'}},
                           React.createElement('table',{style:{width:'100%',fontSize:11}},
                             React.createElement('thead',null,React.createElement('tr',null,
@@ -1040,19 +1052,22 @@ function Analitica(){
                               React.createElement('th',{style:{padding:'6px 10px'}},'Monto'),
                               React.createElement('th',{style:{padding:'6px 10px'}},'')
                             )),
-                            React.createElement('tbody',null,listaFiltrada.slice(0,200).map(function(e){
-                              return React.createElement('tr',{key:e.id||e.codigo},
-                                React.createElement('td',{style:{padding:'5px 10px',fontFamily:'JetBrains Mono'}},e.codigo),
-                                React.createElement('td',{style:{padding:'5px 10px'}},e.cliente),
-                                React.createElement('td',{style:{padding:'5px 10px'}},e.comuna),
-                                React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},estadoInfo(e.estado).label),
-                                React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},e.fecha),
-                                React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},fmt(e.monto)),
-                                React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},
-                                  React.createElement('button',{className:'action-btn btn-edit',onClick:function(ev){ev.stopPropagation();setVerEnvio(e);}},'Ver')
-                                )
-                              );
-                            }))
+                            React.createElement('tbody',null,
+                              listaFiltrada.length===0?React.createElement('tr',null,React.createElement('td',{colSpan:7,style:{padding:'16px 10px',textAlign:'center',color:'var(--text-soft)',fontSize:11.5}},qEnvioDetalle?'Sin resultados para "'+buscarEnvioDetalle+'".':'Sin envíos para este filtro.')):
+                              listaFiltrada.slice(0,200).map(function(e){
+                                return React.createElement('tr',{key:e.id||e.codigo},
+                                  React.createElement('td',{style:{padding:'5px 10px',fontFamily:'JetBrains Mono'}},e.codigo),
+                                  React.createElement('td',{style:{padding:'5px 10px'}},e.cliente),
+                                  React.createElement('td',{style:{padding:'5px 10px'}},e.comuna),
+                                  React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},estadoInfo(e.estado).label),
+                                  React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},e.fecha),
+                                  React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},fmt(e.monto)),
+                                  React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},
+                                    React.createElement('button',{className:'action-btn btn-edit',onClick:function(ev){ev.stopPropagation();setVerEnvio(e);}},'Ver')
+                                  )
+                                );
+                              })
+                            )
                           )
                         ),
                         listaFiltrada.length>200&&React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginTop:4}},'Mostrando 200 de '+listaFiltrada.length+'.')
