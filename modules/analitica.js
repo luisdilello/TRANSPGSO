@@ -350,6 +350,10 @@ function Analitica(){
   // (12 meses). Solo un mensajero puede estar expandido a la vez, asi que un unico estado
   // alcanza para los dos graficos de esa fila.
   var _tg=useState('dia'),tendGranularidad=_tg[0],setTendGranularidad=_tg[1];
+  // Chip de mensajero expandido dentro del briefing "Requiere atención" de Cierre de Flota (tanto
+  // en la lista general como en el corte de las 8pm) -- clic en un mensajero muestra debajo el
+  // detalle de sus paquetes pendientes (no entregados) sin salir de la pantalla. null = ninguno.
+  var _cex=useState(null),chipExpandido=_cex[0],setChipExpandido=_cex[1];
   var enviosPeriodoKpi=useMemo(function(){return filtrarPorRango(envios,kpiFiltro,kpiFechaDesde,kpiFechaHasta);},[envios,kpiFiltro,kpiFechaDesde,kpiFechaHasta]);
 
   var _hist=useState([]),historialKpi=_hist[0],setHistorialKpi=_hist[1];
@@ -537,6 +541,27 @@ function Analitica(){
       detalle?React.createElement('span',{style:{color:c,fontWeight:800}},detalle):null
     );
   }
+  // Paquetes que un mensajero todavia no entrega (en bodega, en ruta o reprogramado) -- usado por
+  // el chip clickeable de "Requiere atencion" para desplegar el detalle de lo pendiente.
+  var ESTADOS_PENDIENTES_ENTREGA_MEN={en_bodega:true,en_ruta:true,reprogramado:true};
+  function pendientesDeMensajero(m){
+    return (m.propios||[]).filter(function(e){return ESTADOS_PENDIENTES_ENTREGA_MEN[e.estado];})
+      .map(function(e){return{codigo:e.codigo,cliente:e.cliente,comuna:e.comuna,estado:e.estado,fecha:e.fecha,dias:diasDesdeFecha(e.fecha)};})
+      .sort(function(a,b){return b.dias-a.dias;});
+  }
+  // Igual que chipPersona pero clickeable: representa a un mensajero concreto (no una cifra suelta)
+  // dentro de "Requiere atencion" -- clic despliega/oculta su detalle de pendientes debajo.
+  function chipMensajeroPendiente(m,detalle,tone){
+    var c=CHIP_TONE_COLOR[tone]||CHIP_TONE_COLOR.warn;
+    var activo=chipExpandido===m.norm;
+    return React.createElement('span',{key:'chipmen_'+m.norm+'_'+(detalle||''),onClick:function(ev){ev.stopPropagation();setChipExpandido(activo?null:m.norm);},
+      style:{display:'inline-flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:999,background:activo?c+'26':c+'14',border:'1.5px solid '+(activo?c:c+'40'),fontSize:11.5,fontWeight:600,color:'var(--text)',lineHeight:1.3,cursor:'pointer'}},
+      React.createElement('span',{style:{width:6,height:6,borderRadius:99,background:c,flexShrink:0}}),
+      m.nombre,
+      detalle?React.createElement('span',{style:{color:c,fontWeight:800}},detalle):null,
+      React.createElement('span',{style:{fontSize:9,opacity:0.6,marginLeft:1}},activo?'▲':'▼')
+    );
+  }
   // Tarjeta de briefing (Destacados / Requiere atencion): titulo con acento de color a la izquierda
   // y una nube de chips (o un mensaje "sin novedades"). 'extra' es un bloque opcional debajo (usado
   // para el corte de las 8pm dentro de la tarjeta de "Requiere atencion").
@@ -559,8 +584,10 @@ function Analitica(){
   if(mensajerosPerfectos.length>0)destacadosChips.push(chipPersona(mensajerosPerfectos.length+' mensajero'+(mensajerosPerfectos.length!==1?'s':'')+' con 100% de efectividad',null,'good'));
 
   // ---- Contenido del briefing "Requiere atención" (lo urgente) ----
+  // Los chips de mensajero (no las cifras sueltas de flota) son clickeables: clic despliega su
+  // detalle de pendientes en el panel compartido mas abajo (chipDetallePanel).
   var urgentesChips=[];
-  necesitanAtencion.forEach(function(m){urgentesChips.push(chipPersona(m.nombre,m.efectividad+'%','bad'));});
+  necesitanAtencion.forEach(function(m){urgentesChips.push(chipMensajeroPendiente(m,m.efectividad+'%','bad'));});
   if(fleetAtrasados>0)urgentesChips.push(chipPersona('Envíos atrasados en ruta',String(fleetAtrasados),'bad'));
   if(fleetPendientesAtrasados.length>0)urgentesChips.push(chipPersona('Pendientes sin entregar 2+ días',String(fleetPendientesAtrasados.length),'bad'));
 
@@ -568,8 +595,46 @@ function Analitica(){
   // viendo "Hoy" y desde las 8:00 PM en adelante -- mensajeros bajo 80% de efectividad a esa hora.
   var corte8pmBlock=corte8pmActivo?React.createElement('div',{style:{marginTop:12,paddingTop:12,borderTop:'1px dashed rgba(176,48,48,0.3)'}},
     React.createElement('div',{style:{fontSize:11,fontWeight:800,color:'var(--danger)',marginBottom:7,display:'flex',alignItems:'center',gap:6}},'🕗 CORTE 8:00 PM — bajo 80% de efectividad'),
-    bajo80a8pm.length>0?React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:7}},bajo80a8pm.map(function(m){return chipPersona(m.nombre,m.efectividad+'% · faltan '+(m.total-m.entregados),'bad');})):React.createElement('div',{style:{fontSize:11.5,color:'var(--success)',fontWeight:600}},'✓ Todos sobre el 80% a esta hora.')
+    bajo80a8pm.length>0?React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:7}},bajo80a8pm.map(function(m){return chipMensajeroPendiente(m,m.efectividad+'% · faltan '+(m.total-m.entregados),'bad');})):React.createElement('div',{style:{fontSize:11.5,color:'var(--success)',fontWeight:600}},'✓ Todos sobre el 80% a esta hora.')
   ):null;
+
+  // Panel compartido: se abre debajo de la tarjeta "Requiere atencion" al hacer clic en CUALQUIER
+  // chip de mensajero (de la lista general o del corte 8pm) -- muestra el detalle concreto de sus
+  // paquetes todavia pendientes por entregar.
+  var mensajeroChipExpandido=chipExpandido?rankeables.find(function(m){return m.norm===chipExpandido;}):null;
+  var chipDetallePanel=mensajeroChipExpandido?(function(){
+    var pend=pendientesDeMensajero(mensajeroChipExpandido);
+    return React.createElement('div',{style:{marginTop:12,paddingTop:12,borderTop:'1px dashed rgba(176,48,48,0.3)'}},
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,gap:8,flexWrap:'wrap'}},
+        React.createElement('div',{style:{fontSize:11,fontWeight:800,color:'var(--danger)'}},'📦 Pendientes de '+mensajeroChipExpandido.nombre+' ('+pend.length+')'),
+        React.createElement('button',{onClick:function(){setChipExpandido(null);},style:{border:'none',background:'none',color:'var(--text-soft)',fontSize:11,fontWeight:700,cursor:'pointer'}},'✕ Cerrar')
+      ),
+      pend.length===0?React.createElement('div',{style:{fontSize:11.5,color:'var(--success)',fontWeight:600}},'✓ No tiene paquetes pendientes por entregar en este período.'):
+      React.createElement('div',{style:{maxHeight:220,overflowY:'auto',border:'1px solid rgba(176,48,48,0.2)',borderRadius:8,background:'#fff'}},
+        React.createElement('table',{style:{width:'100%',fontSize:11}},
+          React.createElement('thead',null,React.createElement('tr',{style:{background:'rgba(176,48,48,0.08)',position:'sticky',top:0}},
+            React.createElement('th',{style:{textAlign:'left',padding:'6px 10px'}},'Código'),
+            React.createElement('th',{style:{padding:'6px 10px'}},'Cliente'),
+            React.createElement('th',{style:{padding:'6px 10px'}},'Comuna'),
+            React.createElement('th',{style:{padding:'6px 10px'}},'Estado'),
+            React.createElement('th',{style:{padding:'6px 10px'}},'Recepción'),
+            React.createElement('th',{style:{padding:'6px 10px'}},'Días esperando')
+          )),
+          React.createElement('tbody',null,pend.slice(0,100).map(function(x,i){
+            return React.createElement('tr',{key:x.codigo+'_'+i,style:{background:i%2===0?'rgba(176,48,48,0.04)':'#fff'}},
+              React.createElement('td',{style:{padding:'5px 10px',fontFamily:'JetBrains Mono'}},x.codigo),
+              React.createElement('td',{style:{padding:'5px 10px'}},x.cliente),
+              React.createElement('td',{style:{padding:'5px 10px'}},x.comuna),
+              React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},estadoInfo(x.estado).label),
+              React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},x.fecha),
+              React.createElement('td',{style:{padding:'5px 10px',textAlign:'center',fontWeight:700,color:x.dias>=UMBRAL_ATRASO_DIAS?'var(--danger)':'var(--text-soft)'}},x.dias+' día'+(x.dias!==1?'s':''))
+            );
+          }))
+        )
+      ),
+      pend.length>100&&React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',padding:'6px 0'}},'Mostrando 100 de '+pend.length+'.')
+    );
+  })():null;
 
   // Reporte individual (por mensajero) de piezas entregadas con fecha de recepcion de dias
   // anteriores a su entrega -- formato "profesional" TransPgso SpA (mismo estilo de membrete/pie
@@ -763,7 +828,7 @@ function Analitica(){
         ),
         React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:14,marginBottom:18}},
           briefCard('✅','Destacados','good',destacadosChips,null),
-          briefCard('⚠','Requiere atención','bad',urgentesChips,corte8pmBlock)
+          briefCard('⚠','Requiere atención','bad',urgentesChips,React.createElement(React.Fragment,null,corte8pmBlock,chipDetallePanel))
         ),
         React.createElement('div',{className:'stats-grid'},
           [{label:'Gestionados',val:fleetTotal,cls:''},{label:'Entregados',val:fleetEntregados,cls:'green'},{label:'Restante Pendiente',val:fleetPendiente,cls:fleetPendiente>0?'gold':''},{label:'Efectividad Flota',val:fleetEfectividad+'%',cls:fleetEfectividad>=95?'green':'red'},{label:'$ Cobrado',val:fmt(fleetMonto),cls:'green'},{label:'Atrasados',val:fleetAtrasados,cls:fleetAtrasados>0?'red':''},{label:'Mensajeros Activos',val:conActividad.length+'/'+kpiPorMensajero.length,cls:''},{label:'Piezas c/Atraso en Entrega',val:historialDisponible?fleetPiezasAtraso:'—',cls:historialDisponible&&fleetPiezasAtraso>0?'red':''}].map(function(s){return statTile(s.label,s.val,s.cls);})
