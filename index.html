@@ -561,7 +561,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787146175;
+window.__MODULES_VERSION=1787160965;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7862,12 +7862,24 @@ function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout,me
     }).catch(()=>{});
   }
 },[]);useEffect(()=>{if(!verGanancias&&riderTab==='ganancias')setRiderTab('envios');},[verGanancias]);useEffect(function(){var prev=document.body.style.background;var prevHtml=document.documentElement.style.background;document.body.style.background=T.pageBg;document.documentElement.style.background=T.pageBg;return function(){document.body.style.background=prev;document.documentElement.style.background=prevHtml;};},[tema]);
-// GPS Tracking - actualizar ubicación cada 30 segundos
+// GPS Tracking - actualizar ubicación cada 30 segundos como maximo, o antes si se movio bastante
 useEffect(function(){
   var watchId=null;
   var intervalId=null;
   var lastPos=null;
   var avisoPermisoDado=false;
+  // watchPosition con enableHighAccuracy puede disparar su callback muchas veces por minuto
+  // mientras el mensajero se mueve (cada pocos metros/segundos segun el GPS del celular) -- sin
+  // limite, cada una de esas llamadas era un upsert a Supabase. Ahora se manda como maximo cada
+  // MIN_INTERVALO_MS, salvo que se haya movido mas de MIN_DISTANCIA_M (ahi se manda al toque para
+  // no perder fidelidad en la ruta que ve el admin).
+  var MIN_INTERVALO_MS=20000;var MIN_DISTANCIA_M=25;
+  var ultimoEnvioTs=0;var ultimoEnvioLat=null;var ultimoEnvioLng=null;
+  function distanciaMetros(lat1,lng1,lat2,lng2){
+    var R=6371000;var dLat=(lat2-lat1)*Math.PI/180;var dLng=(lng2-lng1)*Math.PI/180;
+    var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
+    return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  }
   function enviarUbicacion(lat,lng,accuracy){
     try{
       db.from('ubicaciones_mensajeros').upsert({
@@ -7880,6 +7892,13 @@ useEffect(function(){
       },{onConflict:'mensajero'}).then(function(){}).catch(function(){});
     }catch(e){}
   }
+  function enviarUbicacionThrottled(lat,lng,accuracy,forzar){
+    var ahora=Date.now();
+    var movioSuficiente=ultimoEnvioLat==null||distanciaMetros(ultimoEnvioLat,ultimoEnvioLng,lat,lng)>=MIN_DISTANCIA_M;
+    if(!forzar&&(ahora-ultimoEnvioTs)<MIN_INTERVALO_MS&&!movioSuficiente)return;
+    ultimoEnvioTs=ahora;ultimoEnvioLat=lat;ultimoEnvioLng=lng;
+    enviarUbicacion(lat,lng,accuracy);
+  }
   function onGpsError(err){
     console.warn('GPS error:',err.message);
     if(err.code===1&&!avisoPermisoDado){ // PERMISSION_DENIED
@@ -7891,7 +7910,7 @@ useEffect(function(){
     if(!navigator.geolocation)return;
     navigator.geolocation.getCurrentPosition(function(pos){
       lastPos={lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy};
-      enviarUbicacion(lastPos.lat,lastPos.lng,lastPos.accuracy);
+      enviarUbicacionThrottled(lastPos.lat,lastPos.lng,lastPos.accuracy,true);
     },onGpsError,{enableHighAccuracy:true,maximumAge:10000,timeout:15000});
   }
   function onVisibilityChange(){
@@ -7901,10 +7920,12 @@ useEffect(function(){
   if(navigator.geolocation){
     watchId=navigator.geolocation.watchPosition(function(pos){
       lastPos={lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy};
-      enviarUbicacion(lastPos.lat,lastPos.lng,lastPos.accuracy);
+      enviarUbicacionThrottled(lastPos.lat,lastPos.lng,lastPos.accuracy,false);
     },onGpsError,{enableHighAccuracy:true,maximumAge:30000,timeout:15000});
     intervalId=setInterval(function(){
-      if(lastPos) enviarUbicacion(lastPos.lat,lastPos.lng,lastPos.accuracy);
+      // Forzado: sirve de latido cada 30s aunque el mensajero este quieto (sin esto, alguien
+      // parado en un punto dejaria de reportar ubicacion despues del primer envio).
+      if(lastPos) enviarUbicacionThrottled(lastPos.lat,lastPos.lng,lastPos.accuracy,true);
     },30000);
     document.addEventListener('visibilitychange',onVisibilityChange);
   }
@@ -8801,17 +8822,33 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
     var m={en_bodega:'En bodega',en_ruta:'En ruta',entregado:'Entregado',reprogramado:'Reprogramado',cancelado:'Cancelado',siniestro:'Siniestro',retorno:'Retorno',en_bodega_cancelado:'En bodega cancelado'};
     return t(m[estado]||estado);
   }
+  // Construye el mismo filtro de fecha que aplicaba enRangoMapa(), pero como condición de
+  // Supabase en vez de traer TODO el historial del cliente y filtrar en el navegador -- el
+  // período seleccionado (Hoy/Semana/Mes/Personalizado) ya limitaba lo que se veía, así que
+  // esto no cambia lo que el cliente ve, solo evita leer filas que después se iban a descartar.
+  function filtroFechaMapaSQL(){
+    if(periodo==='hoy')return{gte:hoyStrMapa,lte:hoyStrMapa};
+    if(periodo==='semana'){var d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));var lunesStr=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');return{gte:lunesStr,lte:hoyStrMapa};}
+    if(periodo==='mes'){var mesStr=hoyStrMapa.slice(0,7);return{gte:mesStr+'-01',lte:hoyStrMapa};}
+    if(periodo==='personalizado'&&fechaDesde&&fechaHasta)return{gte:fechaDesde,lte:fechaHasta};
+    return null;
+  }
   React.useEffect(function(){
     var cancelado=false;
+    var filtroFecha=filtroFechaMapaSQL();
     // Paginado en bloques de 1000: igual que el fetch del cliente en "Mis Envíos", una sola
     // consulta sin rango se trunca server-side (tope PostgREST) para clientes con más de ~1000
-    // envíos históricos, dejando pines faltantes en el mapa sin ningún aviso.
+    // envíos en el período visible, dejando pines faltantes en el mapa sin ningún aviso.
     async function cargar(){
       if(!cancelado)setCargandoMapaCliente(true);
       try{
         var acumulado=[];var offset=0;var bloque=1000;
         while(true){
-          var res=await db.from('envios').select('codigo,destinatario,direccion,comuna,estado,fecha,lat,lng').eq('cliente',nombreCliente).neq('estado','eliminado').range(offset,offset+bloque-1);
+          var q=db.from('envios').select('codigo,destinatario,direccion,comuna,estado,fecha,lat,lng').eq('cliente',nombreCliente).neq('estado','eliminado');
+          // Los envíos sin fecha registrada siempre se incluyen (igual que antes), el resto se
+          // acota al período seleccionado en vez de traer todo el histórico del cliente.
+          if(filtroFecha)q=q.or('fecha.is.null,and(fecha.gte.'+filtroFecha.gte+',fecha.lte.'+filtroFecha.lte+')');
+          var res=await q.range(offset,offset+bloque-1);
           if(res.error||!res.data||res.data.length===0)break;
           acumulado=acumulado.concat(res.data);
           // Se pinta el mapa apenas llega el primer bloque en vez de esperar todos los bloques,
@@ -8829,9 +8866,11 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
     cargar();
     var canalId='envios-cliente-'+nombreCliente.replace(/[^a-zA-Z0-9]/g,'_');
     var canal=db.channel(canalId).on('postgres_changes',{event:'*',schema:'public',table:'envios',filter:'cliente=eq.'+nombreCliente},function(){cargar();}).subscribe();
-    var iv=setInterval(cargar,30000);
+    // El canal realtime ya cubre los cambios al instante -- este intervalo es solo una red de
+    // seguridad por si se pierde algún evento, así que puede ser mucho más espaciado que antes.
+    var iv=setInterval(cargar,300000);
     return function(){cancelado=true;db.removeChannel(canal);clearInterval(iv);};
-  },[nombreCliente]);
+  },[nombreCliente,periodo,fechaDesde,fechaHasta]);
   React.useEffect(function(){
     function tryInit(){
       if(!mapRef.current||mapObj.current)return;
