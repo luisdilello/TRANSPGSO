@@ -425,6 +425,19 @@ function Analitica(){
   var fleetMonto=enviosPeriodoKpi.filter(function(e){return e.estado==='entregado';}).reduce(function(a,e){return a+(e.monto||0);},0);
   var fleetAtrasados=enviosPeriodoKpi.filter(function(e){return esEnvioAtrasado(e);}).length;
   var fleetPiezasAtraso=kpiPorMensajero.reduce(function(a,m){return a+(m.entregasConAtraso?m.entregasConAtraso.length:0);},0);
+  // Restante pendiente: de todo lo gestionado en el período, cuánto todavía no llega a destino
+  // (en bodega, en ruta o reprogramado -- no entregado/cancelado/retorno/siniestro).
+  var fleetPendiente=enviosPeriodoKpi.filter(function(e){return e.estado==='en_bodega'||e.estado==='en_ruta'||e.estado==='reprogramado';}).length;
+  // Lista unica de TODA la flota (no solo un mensajero) de paquetes que todavia no se entregan y
+  // ya llevan UMBRAL_ATRASO_DIAS+ dias desde su recepcion -- junta el "pendientesAtrasados" que ya
+  // se calcula por mensajero, agregando a quien pertenece cada paquete.
+  var fleetPendientesAtrasados=[];
+  kpiPorMensajero.forEach(function(m){
+    (m.pendientesAtrasados||[]).forEach(function(x){
+      fleetPendientesAtrasados.push({codigo:x.codigo,cliente:x.cliente,comuna:x.comuna,estado:x.estado,fecha:x.fecha,dias:x.dias,mensajero:m.nombre});
+    });
+  });
+  fleetPendientesAtrasados.sort(function(a,b){return b.dias-a.dias;});
   var conActividad=kpiPorMensajero.filter(function(m){return m.total>0;});
   var sinActividad=kpiPorMensajero.filter(function(m){return m.total===0;});
   var rankeables=conActividad.filter(function(m){return m.total>=3;});
@@ -500,6 +513,14 @@ function Analitica(){
         m.entregasConAtraso==null?'—':m.entregasConAtraso.length];
     });
     exportToExcel('KPI_Mensajeros_'+kpiFiltro+'_'+new Date().toISOString().slice(0,10),[{name:'KPI Mensajeros',headers:headers,rows:rows}]);
+  }
+
+  function exportarFleetPendientesAtrasadosExcel(){
+    var headers=['Código','Cliente','Comuna','Mensajero','Estado','Recepción','Días esperando'];
+    var rows=fleetPendientesAtrasados.map(function(x){
+      return[x.codigo,x.cliente,x.comuna,x.mensajero,estadoInfo(x.estado).label,x.fecha,x.dias];
+    });
+    exportToExcel('Pendientes_Atrasados_'+kpiFiltro+'_'+new Date().toISOString().slice(0,10),[{name:'Pendientes Atrasados',headers:headers,rows:rows}]);
   }
 
   return React.createElement('div',null,
@@ -610,8 +631,41 @@ function Analitica(){
           necesitanAtencion.length>0?React.createElement(React.Fragment,null,'Necesitan atención: ',React.createElement('strong',{style:{color:'var(--danger)'}},necesitanAtencion.map(function(m){return m.nombre;}).join(', ')),' (efectividad bajo 70%).'):''
         ),
         React.createElement('div',{className:'stats-grid'},
-          [{label:'Gestionados',val:fleetTotal,cls:''},{label:'Entregados',val:fleetEntregados,cls:'green'},{label:'Efectividad Flota',val:fleetEfectividad+'%',cls:fleetEfectividad>=95?'green':'red'},{label:'$ Cobrado',val:fmt(fleetMonto),cls:'green'},{label:'Atrasados',val:fleetAtrasados,cls:fleetAtrasados>0?'red':''},{label:'Mensajeros Activos',val:conActividad.length+'/'+kpiPorMensajero.length,cls:''},{label:'Piezas c/Atraso en Entrega',val:historialDisponible?fleetPiezasAtraso:'—',cls:historialDisponible&&fleetPiezasAtraso>0?'red':''}].map(function(s){return statTile(s.label,s.val,s.cls);})
+          [{label:'Gestionados',val:fleetTotal,cls:''},{label:'Entregados',val:fleetEntregados,cls:'green'},{label:'Restante Pendiente',val:fleetPendiente,cls:fleetPendiente>0?'gold':''},{label:'Efectividad Flota',val:fleetEfectividad+'%',cls:fleetEfectividad>=95?'green':'red'},{label:'$ Cobrado',val:fmt(fleetMonto),cls:'green'},{label:'Atrasados',val:fleetAtrasados,cls:fleetAtrasados>0?'red':''},{label:'Mensajeros Activos',val:conActividad.length+'/'+kpiPorMensajero.length,cls:''},{label:'Piezas c/Atraso en Entrega',val:historialDisponible?fleetPiezasAtraso:'—',cls:historialDisponible&&fleetPiezasAtraso>0?'red':''}].map(function(s){return statTile(s.label,s.val,s.cls);})
         )
+      ),
+
+      // ---- Pendientes atrasados de toda la flota (agregado de todos los mensajeros) ----
+      fleetPendientesAtrasados.length>0&&React.createElement('div',{style:{marginBottom:20,border:'2px solid var(--danger)',borderRadius:10,overflow:'hidden',boxShadow:'0 2px 10px rgba(176,48,48,0.25)'}},
+        React.createElement('div',{style:{background:'var(--danger)',color:'#fff',padding:'12px 18px',fontSize:13,fontWeight:700,letterSpacing:0.3,display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8}},
+          React.createElement('span',null,'🚨 PENDIENTES ATRASADOS DE LA FLOTA ('+fleetPendientesAtrasados.length+') — sin entregar hace '+UMBRAL_ATRASO_DIAS+'+ días desde su recepción'),
+          React.createElement('button',{onClick:function(){exportarFleetPendientesAtrasadosExcel();},style:{padding:'5px 12px',borderRadius:8,border:'1px solid rgba(255,255,255,0.5)',background:'rgba(255,255,255,0.15)',color:'#fff',fontWeight:700,fontSize:11,cursor:'pointer'}},'📥 Exportar Excel')
+        ),
+        React.createElement('div',{style:{maxHeight:320,overflowY:'auto',background:'#fff'}},
+          React.createElement('table',{style:{width:'100%',fontSize:11}},
+            React.createElement('thead',null,React.createElement('tr',{style:{background:'rgba(176,48,48,0.08)',position:'sticky',top:0}},
+              React.createElement('th',{style:{textAlign:'left',padding:'6px 10px'}},'Código'),
+              React.createElement('th',{style:{padding:'6px 10px'}},'Cliente'),
+              React.createElement('th',{style:{padding:'6px 10px'}},'Comuna'),
+              React.createElement('th',{style:{padding:'6px 10px'}},'Mensajero'),
+              React.createElement('th',{style:{padding:'6px 10px'}},'Estado'),
+              React.createElement('th',{style:{padding:'6px 10px'}},'Recepción'),
+              React.createElement('th',{style:{padding:'6px 10px'}},'Días esperando')
+            )),
+            React.createElement('tbody',null,fleetPendientesAtrasados.slice(0,200).map(function(x,i){
+              return React.createElement('tr',{key:x.codigo+'_'+i,style:{background:i%2===0?'rgba(176,48,48,0.04)':'#fff'}},
+                React.createElement('td',{style:{padding:'5px 10px',fontFamily:'JetBrains Mono'}},x.codigo),
+                React.createElement('td',{style:{padding:'5px 10px'}},x.cliente),
+                React.createElement('td',{style:{padding:'5px 10px'}},x.comuna),
+                React.createElement('td',{style:{padding:'5px 10px'}},x.mensajero),
+                React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},estadoInfo(x.estado).label),
+                React.createElement('td',{style:{padding:'5px 10px',textAlign:'center'}},x.fecha),
+                React.createElement('td',{style:{padding:'5px 10px',textAlign:'center',fontWeight:700,color:'var(--danger)'}},x.dias+' día'+(x.dias!==1?'s':''))
+              );
+            }))
+          )
+        ),
+        fleetPendientesAtrasados.length>200&&React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',padding:'6px 10px',background:'#fff'}},'Mostrando 200 de '+fleetPendientesAtrasados.length+'.')
       ),
 
       // ---- Tendencia 14 días ----
