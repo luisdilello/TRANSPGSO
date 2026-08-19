@@ -6,6 +6,7 @@ var esEnvioAtrasado=window.__app.esEnvioAtrasado, diasDesdeFecha=window.__app.di
 var UMBRAL_ATRASO_DIAS=window.__app.UMBRAL_ATRASO_DIAS, KpiBar=window.__app.KpiBar, fmt=window.__app.fmt;
 var exportToExcel=window.__app.exportToExcel;
 var Modal=window.__app.Modal, FotosEntregaConRecarga=window.__app.FotosEntregaConRecarga, estadoBadge=window.__app.estadoBadge;
+var fechaHoyCL=window.__app.fechaHoyCL;
 
 // Igual que canalInfo() en gestion-envios.js -- identifica el canal que registró cada
 // entrada del historial (app del mensajero, panel admin, portal cliente o sistema).
@@ -292,6 +293,19 @@ function Analitica(){
       try{
         var COLS='id,codigo,cliente,comuna,fecha,estado,mensajero,monto,nota,fotos_entrega,created_at,updated_at';
         var rows=[];
+        // Acotado al periodo activo de la pestaña visible (Resumen o KPI Mensajeros) -- antes se
+        // traia SIEMPRE la tabla completa de envios sin filtro de fecha, sin importar el periodo
+        // que se estuviera viendo (mismo problema que ya se habia corregido en Gestion de Envios).
+        // Ver limitesPeriodoAnalitica() mas abajo.
+        var lim=limitesPeriodoAnalitica();
+        // La compuerta de "Rango sin ambas fechas -> no traer nada" solo aplica en Resumen: en
+        // KPI Mensajeros 'lim' siempre trae la ventana de 12 meses (ver limitesPeriodoAnalitica),
+        // el 'kpiFiltro' puntual se sigue aplicando despues en el navegador via filtrarPorRango.
+        if(subTab==='resumen'&&filtro==='personalizado'&&(!lim.desde||!lim.hasta)){
+          // Igual que en Gestion de Envios: mientras no esten elegidas ambas fechas del Rango,
+          // no se trae nada (antes caia en el fallback sin filtro y traia todo el historico).
+          setEnvios([]);setUltimaActualizacion(new Date());setCargando(false);return;
+        }
         // Paginado por cursor de 'id' (igual que el resto del sistema, ver fetchPaginadoParalelo
         // en index.html) en vez de .range(offset,...): con range/OFFSET cada pagina siguiente se
         // pone mas pesada a medida que crece el historico (Postgres tiene que escanear y
@@ -301,7 +315,10 @@ function Analitica(){
         // se vea la info aparecer progresivamente en vez de una pantalla vacia varios segundos.
         var cursor='00000000-0000-0000-0000-000000000000';var BLOQUE=1000;
         while(true){
-          var r=await db.from('envios').select(COLS).neq('estado','eliminado').gt('id',cursor).order('id',{ascending:true}).limit(BLOQUE);
+          var q=db.from('envios').select(COLS).neq('estado','eliminado');
+          if(lim.desde)q=q.gte('fecha',lim.desde);
+          if(lim.hasta)q=q.lte('fecha',lim.hasta);
+          var r=await q.gt('id',cursor).order('id',{ascending:true}).limit(BLOQUE);
           if(r.error)throw r.error;
           var data=r.data||[];
           if(!data.length)break;
@@ -317,7 +334,6 @@ function Analitica(){
       setCargando(false);
     })();
   }
-  useEffect(function(){cargarEnvios();},[]);
 
   // Roster de mensajeros (para mostrar tambien a quienes NO tuvieron actividad en el período)
   var _mr=useState([]),mensajerosRoster=_mr[0],setMensajerosRoster=_mr[1];
@@ -351,6 +367,32 @@ function Analitica(){
   var _kf=useState('hoy'),kpiFiltro=_kf[0],setKpiFiltro=_kf[1];
   var _kfd=useState(''),kpiFechaDesde=_kfd[0],setKpiFechaDesde=_kfd[1];
   var _kfh=useState(''),kpiFechaHasta=_kfh[0],setKpiFechaHasta=_kfh[1];
+
+  // Calcula el rango de fechas a pedirle a Supabase segun la pestaña visible en este momento.
+  // OJO: en KPI Mensajeros el grafico "Tendencia del mensajero" puede mostrar hasta 12 meses de
+  // historial hacia atras (12 quincenas/meses) sin importar el filtro principal (kpiFiltro) que
+  // se este viendo -- por eso ese caso siempre pide una ventana de 12 meses (antes se resolvia
+  // trayendo TODO el historico completo, sin ningun tope). En Resumen, que no usa ese grafico,
+  // se acota exactamente al filtro activo, igual que filtrarPorRango().
+  function limitesPeriodoAnalitica(){
+    var hoy=fechaHoyCL();
+    if(subTab==='kpi'){
+      var doce=new Date(hoy+'T12:00:00');doce.setMonth(doce.getMonth()-12);
+      var doceStr=doce.getFullYear()+'-'+String(doce.getMonth()+1).padStart(2,'0')+'-'+String(doce.getDate()).padStart(2,'0');
+      var fD=kpiFiltro==='personalizado'&&kpiFechaDesde?kpiFechaDesde:null;
+      return{desde:(fD&&fD<doceStr)?fD:doceStr,hasta:null};
+    }
+    if(filtro==='hoy')return{desde:hoy,hasta:hoy};
+    if(filtro==='ayer'){var d=new Date(hoy+'T12:00:00');d.setDate(d.getDate()-1);var ay=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');return{desde:ay,hasta:ay};}
+    if(filtro==='semana'){var dd=new Date();dd.setDate(dd.getDate()-((dd.getDay()+6)%7));var lunes=dd.getFullYear()+'-'+String(dd.getMonth()+1).padStart(2,'0')+'-'+String(dd.getDate()).padStart(2,'0');return{desde:lunes,hasta:null};}
+    if(filtro==='mes')return{desde:hoy.slice(0,7)+'-01',hasta:null};
+    if(filtro==='personalizado')return{desde:fechaDesde||null,hasta:fechaHasta||null};
+    return{desde:null,hasta:null}; // 'todo' -- solo existe como opcion en Resumen
+  }
+  // Se re-ejecuta al cambiar de pestaña o de periodo (igual que sincronizarDesdeSupabase en
+  // Gestion de Envios), no solo una vez al entrar -- asi cada fetch queda acotado al periodo
+  // que el usuario esta viendo en ese momento, sin importar cual sea.
+  useEffect(function(){cargarEnvios();},[subTab,filtro,fechaDesde,fechaHasta,kpiFiltro,kpiFechaDesde,kpiFechaHasta]);
   var _exp=useState(null),expandido=_exp[0],setExpandido=_exp[1];
   // Filtro de estado dentro del detalle del mensajero expandido -- al estilo del Portal de
   // Clientes (tarjetas de estado clickeables que filtran la tabla de abajo). 'todos' = sin filtro.
