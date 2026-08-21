@@ -561,7 +561,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787193900;
+window.__MODULES_VERSION=1787194100;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -10445,6 +10445,26 @@ function MapaRutas(props){
     }
     return pin;
   },[envios,pinFiltro,estadoFiltroPin,pinFiltroMensajero]);
+  // Desglose "cuántos lleva y cuántos por estado" del mensajero filtrado con el botón 📍.
+  // Respeta el período activo (hoy/pendientes/todos) pero IGNORA el filtro de estado — así se
+  // ve el desglose completo (cuántos en bodega, en ruta, entregados, etc.) aunque arriba esté
+  // aplicado un solo estado.
+  var statsPinMensajero=React.useMemo(function(){
+    if(!pinFiltroMensajero)return null;
+    var hoy=fechaHoyCL();
+    var conDir=envios.filter(function(e){return e.direccion&&e.comuna&&e.mensajero===pinFiltroMensajero;});
+    var base;
+    if(pinFiltro==='hoy'){
+      base=conDir.filter(function(e){return e.fecha===hoy;});
+    }else if(pinFiltro==='pendientes'){
+      base=conDir.filter(function(e){return e.estado!=='entregado'&&e.estado!=='cancelado'&&e.estado!=='siniestro';});
+    }else{
+      base=conDir;
+    }
+    var porEstado={};
+    base.forEach(function(e){porEstado[e.estado]=(porEstado[e.estado]||0)+1;});
+    return {total:base.length,porEstado:porEstado};
+  },[envios,pinFiltro,pinFiltroMensajero]);
   // Límite de pines dibujados en el mapa por rendimiento — a diferencia de antes, ahora se
   // avisa en pantalla cuando aplica (antes se recortaba en silencio a 2000 y no había forma
   // de saber que faltaban pines sin contarlos a mano).
@@ -11351,6 +11371,20 @@ function MapaRutas(props){
         return React.createElement('button',{key:est.val,onClick:function(){setEstadoFiltroPin(est.val);},style:{padding:'4px 12px',borderRadius:20,border:'1px solid '+(isAct?est.color:'rgba(255,255,255,0.1)'),background:isAct?est.color+'22':'transparent',color:isAct?est.color:'rgba(255,255,255,0.4)',cursor:'pointer',fontSize:10.5,fontWeight:700,display:'flex',alignItems:'center',gap:5}},
           React.createElement('span',{style:{width:7,height:7,borderRadius:'50%',background:est.color,display:'inline-block'}}),
           est.label);
+      })
+    ),
+    // Desglose "cuántos lleva y por estado" del mensajero filtrado con 📍 — solo aparece
+    // cuando hay un filtro de mensajero activo en los pines del mapa.
+    statsPinMensajero&&React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,padding:'8px 14px',background:'rgba(74,159,216,0.08)',borderBottom:'1px solid rgba(74,159,216,0.25)',flexShrink:0,flexWrap:'wrap'}},
+      React.createElement('span',{style:{fontSize:10,color:'#6bb8ea',letterSpacing:1.5,fontFamily:'Bebas Neue'}},'📍 '+pinFiltroMensajero+':'),
+      React.createElement('span',{style:{fontSize:11,fontWeight:700,color:'#fff',background:'rgba(74,159,216,0.22)',border:'1px solid #4a9fd8',borderRadius:20,padding:'3px 10px'}},'Total '+statsPinMensajero.total),
+      statsPinMensajero.total===0&&React.createElement('span',{style:{fontSize:10.5,color:'rgba(255,255,255,0.4)'}},'(sin envíos en este período)'),
+      ESTADOS_ENVIO.map(function(est){
+        var n=statsPinMensajero.porEstado[est.val]||0;
+        if(n===0)return null;
+        return React.createElement('span',{key:est.val,style:{fontSize:10.5,fontWeight:700,color:est.color,background:est.color+'22',border:'1px solid '+est.color,borderRadius:20,padding:'3px 10px',display:'flex',alignItems:'center',gap:5}},
+          React.createElement('span',{style:{width:6,height:6,borderRadius:'50%',background:est.color,display:'inline-block'}}),
+          est.label+': '+n);
       })
     ),
     React.createElement('div',{style:{display:'flex',flex:1,overflow:'hidden',flexDirection:isMobile?'column':'row'}},
