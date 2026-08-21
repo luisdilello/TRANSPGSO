@@ -561,7 +561,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787193200;
+window.__MODULES_VERSION=1787193600;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -10367,6 +10367,19 @@ function MapaRutas(props){
   var markersMensajerosRef=React.useRef({});
   var mensajeroBadgesRef=React.useRef([]); // carnets digitales activos en el mapa
   var geocoderRef=React.useRef(null);
+  // ── Seguir a un mensajero en vivo ──────────────────────────
+  // ubicaciones_mensajeros solo guarda la posicion ACTUAL (upsert), no un historial -- asi que
+  // el "rastro"/ruta que se dibuja mientras se sigue a alguien es solo de esta sesion del
+  // navegador (se arma en memoria a medida que llegan actualizaciones de GPS), no queda guardado.
+  var _sig=React.useState(null);var mensajeroSeguido=_sig[0];var setMensajeroSeguido=_sig[1];
+  var mensajeroSeguidoRef=React.useRef(null);
+  var trailPuntosRef=React.useRef([]);
+  var trailPolylineRef=React.useRef(null);
+  React.useEffect(function(){
+    mensajeroSeguidoRef.current=mensajeroSeguido;
+    trailPuntosRef.current=[];
+    if(trailPolylineRef.current){trailPolylineRef.current.setMap(null);trailPolylineRef.current=null;}
+  },[mensajeroSeguido]);
   var _ml=React.useState(false);var mapaListo=_ml[0];var setMapaListo=_ml[1];
   var _im=React.useState(window.innerWidth<=768);var isMobile=_im[0];var setIsMobile=_im[1];
   var _pa=React.useState(window.innerWidth>768);var panelAbierto=_pa[0];var setPanelAbierto=_pa[1];
@@ -10702,7 +10715,32 @@ function MapaRutas(props){
       var activo=ubicaciones.find(function(u){return u.mensajero===nombre;});
       if(!activo) markersMensajerosRef.current[nombre].marker.setMap(null);
     });
-  },[ubicaciones,mapaListo]);
+
+    // Si hay un mensajero en modo "seguir": centrar el mapa en su posición actual y extender
+    // el rastro (polyline) con el nuevo punto, para que se vea la ruta que va haciendo.
+    if(mensajeroSeguidoRef.current){
+      var uSeguido=ubicaciones.find(function(u){return u.mensajero===mensajeroSeguidoRef.current;});
+      if(uSeguido){
+        var posSeguido={lat:parseFloat(uSeguido.lat),lng:parseFloat(uSeguido.lng)};
+        map.panTo(posSeguido);
+        var trail=trailPuntosRef.current;
+        var ultimo=trail[trail.length-1];
+        if(!ultimo||ultimo.lat!==posSeguido.lat||ultimo.lng!==posSeguido.lng){
+          trail.push(posSeguido);
+          if(trail.length>300)trail.shift();
+          if(!trailPolylineRef.current){
+            trailPolylineRef.current=new google.maps.Polyline({
+              path:trail,geodesic:true,strokeColor:'#C8A84B',strokeOpacity:0.85,strokeWeight:4,map:map,zIndex:900
+            });
+          }else{
+            trailPolylineRef.current.setPath(trail);
+          }
+        }
+        var mkSeguido=markersMensajerosRef.current[uSeguido.mensajero];
+        if(mkSeguido)mkSeguido.marker.setZIndex(2000);
+      }
+    }
+  },[ubicaciones,mapaListo,mensajeroSeguido]);
   var _b=React.useState(null);var activoId=_b[0];var setActivoId=_b[1];
   // Estado separado de activoId: 'solo localizar' (Referencia / buscador) NO debe armar el
   // modo de asignación instantánea por click en el mapa (ese modo es SOLO el de la lista del
@@ -11243,7 +11281,8 @@ function MapaRutas(props){
         ubicaciones.map(function(u){
           var mins=Math.round((Date.now()-new Date(u.updated_at).getTime())/60000);
           var color=mins<5?'#4caf84':mins<15?'#C8A84B':'#e57373';
-          return React.createElement('div',{key:u.mensajero,style:{background:'linear-gradient(145deg,#252820,#1e2118)',border:'1px solid rgba(200,168,75,0.15)',borderRadius:12,padding:'14px 16px',display:'flex',alignItems:'center',gap:12,boxShadow:'3px 3px 8px rgba(0,0,0,0.3),-1px -1px 4px rgba(255,255,255,0.03)',transition:'all 0.2s'}},
+          var siguiendoEste=mensajeroSeguido===u.mensajero;
+          return React.createElement('div',{key:u.mensajero,style:{background:siguiendoEste?'linear-gradient(145deg,#2f2a1a,#25200f)':'linear-gradient(145deg,#252820,#1e2118)',border:siguiendoEste?'1px solid var(--gold)':'1px solid rgba(200,168,75,0.15)',borderRadius:12,padding:'14px 16px',display:'flex',alignItems:'center',gap:12,boxShadow:siguiendoEste?'0 0 14px rgba(200,168,75,0.25)':'3px 3px 8px rgba(0,0,0,0.3),-1px -1px 4px rgba(255,255,255,0.03)',transition:'all 0.2s'}},
             React.createElement('div',{style:{width:42,height:42,borderRadius:'50%',background:'linear-gradient(145deg,rgba(200,168,75,0.2),rgba(200,168,75,0.08))',border:'2px solid var(--gold)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0,boxShadow:'0 0 8px rgba(200,168,75,0.2)'}},'◉'),
             React.createElement('div',{style:{flex:1}},
               React.createElement('div',{style:{fontWeight:700,color:'#fff',fontSize:13}},u.mensajero),
@@ -11252,6 +11291,14 @@ function MapaRutas(props){
             ),
             React.createElement('div',{style:{textAlign:'right'}},
               React.createElement('div',{style:{fontSize:11,fontWeight:700,color:color}},mins===0?'Ahora':mins+'min'),
+              React.createElement('button',{
+                onClick:function(){
+                  setMensajeroSeguido(siguiendoEste?null:u.mensajero);
+                  setMapaTab('rutas');
+                  if(toastFn)toastFn(siguiendoEste?('Dejaste de seguir a '+u.mensajero):('🎯 Siguiendo a '+u.mensajero+' en el mapa'));
+                },
+                style:{fontSize:10,color:siguiendoEste?'#1a1d13':'var(--gold)',background:siguiendoEste?'var(--gold)':'transparent',border:'1px solid var(--gold)',borderRadius:6,padding:'3px 8px',marginTop:4,cursor:'pointer',fontWeight:700}
+              },siguiendoEste?'🎯 Siguiendo':'🎯 Seguir en mapa'),
               React.createElement('a',{href:'https://maps.google.com/?q='+u.lat+','+u.lng,target:'_blank',style:{fontSize:10,color:'var(--gold)',textDecoration:'none',marginTop:4,display:'block'}},'Ver en Maps →')
             )
           );
@@ -11379,18 +11426,33 @@ function MapaRutas(props){
             var cnt=Object.values(asig).filter(function(v){return (v||[]).map(String).includes(String(m.id));}).length;
             var zCnt=zonas.filter(function(z){return String(z.mensajero_id)===String(m.id);}).length;
             var mc=mColor(m,idx);
+            var tieneGPS=ubicaciones.some(function(u){return u.mensajero===m.nombre;});
+            var siguiendoEste=mensajeroSeguido===m.nombre;
             return React.createElement('div',{key:m.id,
               onClick:function(){if(!dibujando){setActivoId(isAct?null:m.id);setPanelComuna(null);}},
               style:{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:10,cursor:'pointer',marginBottom:4,
                 opacity:m.activo===false?0.55:1,
-                border:isAct?'1px solid '+mc:'1px solid rgba(255,255,255,0.04)',
-                background:isAct?'rgba('+hexToRgb(mc)+',0.12)':'rgba(255,255,255,0.02)',
-                boxShadow:isAct?'0 0 12px rgba('+hexToRgb(mc)+',0.25),inset 0 1px 0 rgba(255,255,255,0.05)':'none',
+                border:isAct?'1px solid '+mc:siguiendoEste?'1px solid var(--gold)':'1px solid rgba(255,255,255,0.04)',
+                background:isAct?'rgba('+hexToRgb(mc)+',0.12)':siguiendoEste?'rgba(200,168,75,0.1)':'rgba(255,255,255,0.02)',
+                boxShadow:isAct?'0 0 12px rgba('+hexToRgb(mc)+',0.25),inset 0 1px 0 rgba(255,255,255,0.05)':siguiendoEste?'0 0 12px rgba(200,168,75,0.25)':'none',
                 transition:'all 0.2s'}
             },
               React.createElement('div',{style:{width:10,height:10,borderRadius:'50%',background:mc,flexShrink:0,boxShadow:'0 0 6px '+mc}}),
               React.createElement('span',{style:{flex:1,fontSize:11,fontWeight:isAct?700:500,color:isAct?'#fff':'rgba(255,255,255,0.7)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:0.5}},
                 m.nombre, m.activo===false&&React.createElement('span',{style:{fontSize:9,color:'rgba(255,255,255,0.35)',marginLeft:5}},'(pausado)')),
+              React.createElement('button',{
+                title:!tieneGPS?'Sin GPS activo ahora mismo':siguiendoEste?'Dejar de seguir':'Seguir en vivo en el mapa',
+                onClick:function(e){
+                  e.stopPropagation();
+                  if(!tieneGPS){if(toastFn)toastFn('◉ '+m.nombre+' — sin GPS activo ahora mismo');return;}
+                  if(siguiendoEste){setMensajeroSeguido(null);if(toastFn)toastFn('Dejaste de seguir a '+m.nombre);}
+                  else{setMensajeroSeguido(m.nombre);if(toastFn)toastFn('🎯 Siguiendo a '+m.nombre+' en el mapa');}
+                },
+                style:{flexShrink:0,width:22,height:22,borderRadius:'50%',border:'none',cursor:tieneGPS?'pointer':'default',
+                  background:siguiendoEste?'var(--gold)':tieneGPS?'rgba(200,168,75,0.18)':'rgba(255,255,255,0.05)',
+                  color:siguiendoEste?'#1a1d13':tieneGPS?'var(--gold)':'rgba(255,255,255,0.2)',
+                  fontSize:11,display:'flex',alignItems:'center',justifyContent:'center',padding:0}
+              },'🎯'),
               cnt>0&&React.createElement('span',{style:{fontSize:9,color:mc,background:'rgba('+hexToRgb(mc)+',0.15)',border:'1px solid rgba('+hexToRgb(mc)+',0.3)',padding:'2px 6px',borderRadius:10,fontFamily:'JetBrains Mono',fontWeight:700}},cnt),
               zCnt>0&&React.createElement('span',{style:{fontSize:9,color:'#F39C12',background:'rgba(243,156,18,0.12)',border:'1px solid rgba(243,156,18,0.25)',padding:'2px 6px',borderRadius:10,fontFamily:'JetBrains Mono'}},zCnt+'z')
             );
@@ -11437,6 +11499,31 @@ function MapaRutas(props){
     // ── MAPA ─────────────────────────────────────────────
     React.createElement('div',{style:{flex:1,position:'relative'}},
       React.createElement('div',{ref:mapRef,style:{width:'100%',height:'100%',minHeight:500}}),
+
+      // Aviso "siguiendo a X" — mientras esté activo, el mapa se centra solo en su posición
+      // y se va dibujando el recorrido (ver efecto de 'Mensajeros en tiempo real en el mapa').
+      mensajeroSeguido&&(function(){
+        var uSeg=ubicaciones.find(function(u){return u.mensajero===mensajeroSeguido;});
+        var mins=uSeg?Math.round((Date.now()-new Date(uSeg.updated_at).getTime())/60000):null;
+        var colorFrescura=mins===null?'#b03030':mins<5?'#4caf84':mins<15?'#C8A84B':'#b03030';
+        return React.createElement('div',{style:{
+          position:'absolute',top:10,left:10,zIndex:600,
+          background:'linear-gradient(145deg,#2b2e20,#1a1d13)',border:'1px solid var(--gold)',
+          borderRadius:10,padding:'10px 14px',display:'flex',alignItems:'center',gap:10,
+          boxShadow:'0 4px 16px rgba(0,0,0,0.5)',maxWidth:280
+        }},
+          React.createElement('span',{style:{width:9,height:9,borderRadius:'50%',background:colorFrescura,flexShrink:0,boxShadow:'0 0 6px '+colorFrescura,animation:'pulse 2s infinite'}}),
+          React.createElement('div',{style:{flex:1,minWidth:0}},
+            React.createElement('div',{style:{fontSize:11,fontWeight:700,color:'#fff',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},'🎯 '+mensajeroSeguido),
+            React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.5)',marginTop:1}},uSeg?(mins===0?'Actualizado ahora':mins+' min atrás'):'Sin GPS activo ahora mismo')
+          ),
+          React.createElement('button',{
+            onClick:function(){setMensajeroSeguido(null);},
+            title:'Dejar de seguir',
+            style:{background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.7)',borderRadius:6,padding:'4px 8px',fontSize:11,cursor:'pointer',flexShrink:0}
+          },'✕')
+        );
+      })(),
 
       // Panel asignación comuna — FIX: botones explícitos en vez de onChange
       panelComuna&&!panelZona&&(function(){
