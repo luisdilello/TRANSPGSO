@@ -561,7 +561,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787193042;
+window.__MODULES_VERSION=1787193200;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -910,7 +910,7 @@ async function subirVideoStorage(blob,codigo,tag){
     // Mismo folder que las fotos ('entregas/'), por si las politicas de Storage estan
     // limitadas a esa ruta especifica en vez del bucket completo.
     const fn='entregas/'+codigo+'_vid_'+tag+'_'+Date.now()+'.'+ext;
-    const {error}=await db.storage.from('evidencias').upload(fn,blob,{upsert:true,contentType:blob.type||'video/webm'});
+    const {error}=await conTimeout(db.storage.from('evidencias').upload(fn,blob,{upsert:true,contentType:blob.type||'video/webm'}),25000,'subida video '+codigo);
     if(error){console.warn('Video upload error:',error.message);return{url:null,error:error.message};}
     const {data}=db.storage.from('evidencias').getPublicUrl(fn);
     return{url:(data&&data.publicUrl)||null,error:null};
@@ -940,11 +940,11 @@ async function enviarNotificacionPush(mensajero,title,message,url){
 // marca en historial_envios) pero unificado en una sola funcion que se puede llamar tanto al
 // toque (hay señal) como mas tarde desde la cola offline (cuando se recupera la señal).
 async function sincronizarEntregaOffline(payload){
-  const fotosUrls=[];
-  for(let i=0;i<(payload.fotosB64||[]).length;i++){
-    const url=await subirFotoStorage(payload.fotosB64[i],payload.codigo,'o'+i);
-    if(url)fotosUrls.push(url);
-  }
+  // Subir todas las fotos en paralelo (4 a la vez) en vez de una por una - con varias fotos
+  // el timeout de 15s por foto acumulado secuencialmente podia hacer esperar al mensajero
+  // mucho mas de lo necesario, o incluso agotar la señal a mitad de camino.
+  const fotosUrlsRaw=await procesarConcurrencia(payload.fotosB64||[],function(f,i){return subirFotoStorage(f,payload.codigo,'o'+i);},4);
+  const fotosUrls=fotosUrlsRaw.filter(function(u){return!!u;});
   let videoUrlSubido=null;
   if(payload.videoBlob){
     const _rv=await subirVideoStorage(payload.videoBlob,payload.codigo,'o');
@@ -8408,13 +8408,13 @@ async function guardarConEstado(estadoFinal){
   if(mountedRef.current)setGuardando(false);
 }
 async function guardarCambio(){if(!estadoSel){return;}setGuardando(true);window.__TRANSPGSO_GUARDANDO_CRITICO=(window.__TRANSPGSO_GUARDANDO_CRITICO||0)+1;try{
-      const fotosB64=[];
-      for(let i=0;i<fotos.length;i++){
-        try{
-          const b64=await new Promise(res=>{const img=new Image();img.onload=()=>{const MAX=800;const scale=Math.min(1,MAX/Math.max(img.width,img.height));const canvas=document.createElement('canvas');canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);res(canvas.toDataURL('image/jpeg',0.7));};img.onerror=()=>res(null);img.src=fotos[i].data;});
-          if(b64) fotosB64.push(b64);
-        }catch(e){console.warn('Foto compress error:',e.message);}
-      }
+      // Comprimir en paralelo (4 a la vez), igual que guardarConEstado - antes esto era
+      // secuencial (una foto esperaba a que la anterior terminara) y con varias fotos grandes
+      // (sobre todo las de Galería sin comprimir) esto podia demorar mucho o trabar la app.
+      const fotosB64Raw=await procesarConcurrencia(fotos,function(f){
+        return new Promise(function(res){var img=new Image();img.onload=function(){var MAX=800;var scale=Math.min(1,MAX/Math.max(img.width,img.height));var canvas=document.createElement('canvas');canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);res(canvas.toDataURL('image/jpeg',0.7));};img.onerror=function(){res(null);};img.src=f.data;});
+      },4);
+      const fotosB64=fotosB64Raw.filter(function(b){return!!b;});
       // Igual que en guardarConEstado: se arma el payload y se intenta via la cola offline-safe,
       // asi si no hay señal (o se corta a mitad de la subida) queda guardado en el celular y se
       // reintenta solo -- nunca se pierde la entrega.
@@ -8480,7 +8480,7 @@ React.createElement("div",{style:{marginBottom:20}},
 React.createElement("div",{style:{fontSize:11,color:'rgba(255,255,255,0.4)',letterSpacing:2,textTransform:'uppercase',marginBottom:10}},"📷 FOTOS (",fotos.filter(Boolean).length,")"),
 React.createElement("div",{style:{display:'flex',gap:8,marginBottom:10}},
   React.createElement("button",{onClick:abrirCamaraPropia,style:{flex:1,padding:'10px',borderRadius:8,border:'none',background:'var(--gold)',color:'var(--dark-deep)',fontWeight:700,cursor:'pointer',fontSize:13}},"📸 Tomar fotos"),
-  React.createElement("button",{onClick:function(){var inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.multiple=true;inp.onchange=function(ev){Array.from(ev.target.files).forEach(function(file){var reader=new FileReader();reader.onload=function(re){setFotos(function(prev){return[...prev,{data:re.target.result}];});};reader.readAsDataURL(file);});};document.body.appendChild(inp);inp.click();setTimeout(function(){document.body.removeChild(inp);},1000);},style:{padding:'10px 14px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',background:'transparent',color:'var(--gold)',cursor:'pointer',fontSize:13}},"🖼 Galería"),
+  React.createElement("button",{onClick:function(){var inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.multiple=true;inp.onchange=function(ev){var cupo=MAX_FOTOS-fotos.length;var archivos=Array.from(ev.target.files).slice(0,Math.max(0,cupo));if(ev.target.files.length>archivos.length)setAvisoFotos('⚠ Máximo '+MAX_FOTOS+' fotos por entrega — se cargaron '+archivos.length+' de '+ev.target.files.length+' seleccionadas');archivos.forEach(function(file){var reader=new FileReader();reader.onload=function(re){var img=new Image();img.onload=function(){var MAX=800;var scale=Math.min(1,MAX/Math.max(img.width,img.height));var canvas=document.createElement('canvas');canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);var b64=canvas.toDataURL('image/jpeg',0.65);setFotos(function(prev){return prev.length>=MAX_FOTOS?prev:[...prev,{data:b64}];});};img.onerror=function(){};img.src=re.target.result;};reader.readAsDataURL(file);});};document.body.appendChild(inp);inp.click();setTimeout(function(){document.body.removeChild(inp);},1000);},style:{padding:'10px 14px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',background:'transparent',color:'var(--gold)',cursor:'pointer',fontSize:13}},"🖼 Galería"),
   !videoGrabado&&React.createElement("button",{onClick:abrirGrabadora,style:{padding:'10px 14px',borderRadius:8,border:'1px solid rgba(176,48,48,0.4)',background:'transparent',color:'#b03030',cursor:'pointer',fontSize:13}},"🎥 Video (prueba)")
 ),
 fotos.filter(Boolean).length>0&&React.createElement("div",{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}},
