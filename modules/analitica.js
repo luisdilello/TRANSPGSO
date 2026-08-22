@@ -644,13 +644,28 @@ function Analitica(){
   }
 
   // ---- Contenido del briefing "Destacados" (lo positivo) ----
+  // Antes solo se mostraba UN mensajero (el "mejor" del período) y el resto de los que también
+  // van con 100% de efectividad quedaban escondidos detrás de un conteo agregado ("4 mensajeros
+  // con 100%"). Ahora se lista a CADA UNO de los que van con 100% (ya vienen ordenados por más
+  // entregas primero, mismo criterio que el ranking general) -- así se ve quién específicamente
+  // ya terminó su período sin fallar ni uno, no solo el más destacado. Si nadie llegó al 100% se
+  // deja al menos el mejor del período como referencia, para que la tarjeta no quede vacía.
   var destacadosChips=[];
-  if(mejorMen)destacadosChips.push(chipPersona(mejorMen.nombre,mejorMen.efectividad+'% · '+mejorMen.entregados+' entregas','good'));
+  var LIMITE_CHIPS_PERFECTOS=12; // tope visual -- si hay mas, se avisa cuantos quedan sin mostrar
+  var mensajerosPerfectos=conActividad.filter(function(m){return m.total>=3&&m.efectividad===100;});
+  if(mensajerosPerfectos.length>0){
+    mensajerosPerfectos.slice(0,LIMITE_CHIPS_PERFECTOS).forEach(function(m){
+      destacadosChips.push(chipPersona(m.nombre,m.efectividad+'% · '+m.entregados+' entregas','good'));
+    });
+    if(mensajerosPerfectos.length>LIMITE_CHIPS_PERFECTOS){
+      destacadosChips.push(chipPersona('+'+(mensajerosPerfectos.length-LIMITE_CHIPS_PERFECTOS)+' más con 100%',null,'good'));
+    }
+  }else if(mejorMen){
+    destacadosChips.push(chipPersona(mejorMen.nombre,mejorMen.efectividad+'% · '+mejorMen.entregados+' entregas','good'));
+  }
   if(fleetEfectividad>=85)destacadosChips.push(chipPersona('Efectividad de flota',fleetEfectividad+'%','good'));
   if(fleetAtrasados===0)destacadosChips.push(chipPersona('Sin envíos atrasados en ruta',null,'good'));
   if(fleetPendientesAtrasados.length===0)destacadosChips.push(chipPersona('Sin pendientes atrasados',null,'good'));
-  var mensajerosPerfectos=conActividad.filter(function(m){return m.total>=3&&m.efectividad===100;});
-  if(mensajerosPerfectos.length>0)destacadosChips.push(chipPersona(mensajerosPerfectos.length+' mensajero'+(mensajerosPerfectos.length!==1?'s':'')+' con 100% de efectividad',null,'good'));
 
   // ---- Contenido del briefing "Requiere atención" (lo urgente) ----
   // Los chips de mensajero (no las cifras sueltas de flota) son clickeables: clic despliega su
