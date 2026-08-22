@@ -561,7 +561,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787195300;
+window.__MODULES_VERSION=1787196000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8176,6 +8176,7 @@ const videoRefCamEA=React.useRef(null);
 const streamRefCamEA=React.useRef(null);
 const _useCamCountEA=useState(0),fotosSesion=_useCamCountEA[0],setFotosSesion=_useCamCountEA[1];
 const fotosSesionRefEA=React.useRef(0);
+const fotosSesionDataRefEA=React.useRef([]);
 const _useCamErrEA=useState(''),errorCamara=_useCamErrEA[0],setErrorCamara=_useCamErrEA[1];
 const _useLintEA=useState(false),linternaOn=_useLintEA[0],setLinternaOn=_useLintEA[1];
 const _useVideoEA=useState(null),videoGrabado=_useVideoEA[0],setVideoGrabado=_useVideoEA[1];
@@ -8194,6 +8195,7 @@ async function abrirCamaraPropia(){
     const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
     streamRefCamEA.current=stream;
     fotosSesionRefEA.current=0;
+    fotosSesionDataRefEA.current=[];
     setFotosSesion(0);
     setShowCamara(true);
     setTimeout(()=>{if(videoRefCamEA.current)videoRefCamEA.current.srcObject=stream;},50);
@@ -8221,6 +8223,11 @@ function cerrarCamaraPropia(){
   if(streamRefCamEA.current){streamRefCamEA.current.getTracks().forEach(t=>t.stop());streamRefCamEA.current=null;}
   setShowCamara(false);
   setLinternaOn(false);
+  if(fotosSesionDataRefEA.current.length>0){
+    const tomadas=fotosSesionDataRefEA.current.slice();
+    fotosSesionDataRefEA.current=[];
+    guardarFotosEnGaleria(tomadas);
+  }
 }
 function dispararFoto(){
   const video=videoRefCamEA.current;
@@ -8233,14 +8240,16 @@ function dispararFoto(){
   canvas.getContext('2d').drawImage(video,0,0,canvas.width,canvas.height);
   const b64=canvas.toDataURL('image/jpeg',0.65);
   // Índice sincrónico por ref: dos disparos seguidos (doble tap, dedo rápido) NUNCA
-  // deben recibir el mismo número — si lo tuvieran, Chrome intenta descargar dos veces
-  // el mismo nombre de archivo y muestra el diálogo "¿Deseas volver a descargar?",
-  // interrumpiendo al mensajero en medio de la entrega.
+  // deben recibir el mismo número.
   const idxFoto=++fotosSesionRefEA.current;
   setFotos(prev=>[...prev,{data:b64}]);
   setFotosSesion(idxFoto);
   setAvisoFotos('');
-  guardarFotoEnDispositivo(b64,idxFoto);
+  // Ya NO se descarga cada foto al instante: eso disparaba el diálogo nativo "Elige dónde
+  // descargarlo" en cada disparo, interrumpiendo al mensajero en plena entrega. Ahora solo
+  // se acumula en memoria y el guardado al dispositivo se hace una sola vez, junto, cuando
+  // el mensajero termina y presiona "Listo" (ver cerrarCamaraPropia).
+  fotosSesionDataRefEA.current.push(b64);
 }
 
 // ── Grabacion de video corto (respaldo de entrega, prueba) ──
@@ -8323,16 +8332,40 @@ useEffect(function(){
   }catch(e){}
 },[fotos]);
 function limpiarBorradorFotos(){try{localStorage.removeItem(fotosDraftKey);}catch(e){}}
-// Guarda además una copia de cada foto en el dispositivo (Descargas/Galería según el
-// navegador) — antes las fotos solo vivían en la nube, sin respaldo local para el mensajero.
-function guardarFotoEnDispositivo(b64,indice){
+// Guarda además una copia de las fotos en el dispositivo — antes las fotos solo vivían en
+// la nube, sin respaldo local para el mensajero. Se intenta SIEMPRE por la Web Share API
+// (abre el selector nativo "Compartir" con "Guardar en Fotos/Galería" como opción) porque
+// esa vía NUNCA muestra el diálogo de descarga "Elige dónde descargarlo" que interrumpía al
+// mensajero — ese diálogo es del gestor de Descargas de Chrome, no de Compartir. Solo si el
+// navegador no soporta compartir archivos (muy poco común hoy) se usa la descarga clásica
+// como respaldo. Se llama UNA sola vez con todas las fotos de la sesión (no una por una) para
+// no interrumpir al mensajero en cada disparo.
+async function guardarFotosEnGaleria(datosFotos){
+  if(!datosFotos||datosFotos.length===0)return;
   try{
-    const a=document.createElement('a');
-    a.href=b64;
-    a.download='TransPgso_'+envio.codigo+'_'+(indice!=null?indice:Date.now())+'.jpg';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const files=await Promise.all(datosFotos.map(async function(b64,i){
+      const resp=await fetch(b64);
+      const blob=await resp.blob();
+      return new File([blob],'TransPgso_'+envio.codigo+'_'+(i+1)+'.jpg',{type:'image/jpeg'});
+    }));
+    if(navigator.canShare&&navigator.canShare({files})&&navigator.share){
+      await navigator.share({files:files,title:'Fotos entrega '+envio.codigo});
+      return;
+    }
+  }catch(e){
+    // Si el mensajero cierra el selector de "Compartir" sin elegir nada (AbortError) no hay
+    // que hacer nada más — las fotos igual quedan a salvo en la nube al guardar la entrega.
+    if(e&&e.name==='AbortError')return;
+  }
+  try{
+    datosFotos.forEach(function(b64,i){
+      const a=document.createElement('a');
+      a.href=b64;
+      a.download='TransPgso_'+envio.codigo+'_'+(i+1)+'.jpg';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
   }catch(e){}
 }
 if(showCamara){
