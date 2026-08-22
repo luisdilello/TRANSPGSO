@@ -586,7 +586,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787196500;
+window.__MODULES_VERSION=1787197000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -4215,10 +4215,20 @@ function extraerCodigoQR(raw){
 // Función que analiza una foto de etiqueta con Claude Vision
 async function rotarImagenSiVertical(base64img){
   return new Promise(resolve=>{
+    // Los 4 lugares que llaman a esta función pasan el base64 "pelado" (sin el prefijo
+    // "data:image/jpeg;base64,") porque es lo que necesita luego la API de Claude Vision. El
+    // problema es que `img.src` SÍ necesita ese prefijo para poder cargar la imagen — sin él,
+    // el navegador interpreta el base64 como una URL relativa inválida y siempre dispara
+    // onerror. En la práctica esto significaba que esta función NUNCA lograba enderezar una
+    // foto vertical (fallaba en silencio y mandaba la foto tal cual, girada, a la IA) — una
+    // causa directa de que las fotos tomadas "de lado" no se leyeran bien. Ahora se arma el
+    // data URI completo solo para poder cargarla, y siempre se devuelve el base64 pelado (con
+    // o sin rotación) para no romper el contrato con quien llama a esta función.
+    const soloBase64=v=>(v&&v.indexOf('data:')===0)?v.slice(v.indexOf(',')+1):v;
     const img=new Image();
     img.onload=()=>{
       const{width,height}=img;
-      if(height<=width*1.2){resolve(base64img);return;}
+      if(height<=width*1.2){resolve(soloBase64(base64img));return;}
       // Imagen vertical: rotar 90° CW
       const cv=document.createElement('canvas');
       cv.width=height;cv.height=width;
@@ -4226,14 +4236,61 @@ async function rotarImagenSiVertical(base64img){
       ctx.translate(height/2,width/2);
       ctx.rotate(Math.PI/2);
       ctx.drawImage(img,-width/2,-height/2);
-      resolve(cv.toDataURL('image/jpeg',0.85));
+      resolve(soloBase64(cv.toDataURL('image/jpeg',0.85)));
     };
-    img.onerror=()=>resolve(base64img);
-    img.src=base64img;
+    img.onerror=()=>resolve(soloBase64(base64img));
+    img.src=(base64img&&base64img.indexOf('data:')===0)?base64img:'data:image/jpeg;base64,'+base64img;
+  });
+}
+// Mide qué tan nítida (enfocada) está una foto usando la varianza del Laplaciano — una técnica
+// estándar de detección de foto movida/desenfocada: una imagen nítida tiene bordes marcados
+// (alta varianza), una imagen movida los "difumina" (varianza baja). Se calcula sobre una
+// versión chica de la imagen (300px de ancho) para que sea rápido y no gaste batería.
+// Umbral conservador: solo rechaza fotos MUY movidas (como la que reportó el cliente, donde
+// ni el ojo humano puede leer la etiqueta) — mejor dejar pasar alguna foto dudosa que rechazar
+// fotos válidas y frustrar al mensajero.
+const UMBRAL_NITIDEZ_MINIMA=12;
+async function medirNitidez(base64img){
+  return new Promise(function(resolve){
+    try{
+      const img=new Image();
+      img.onload=function(){
+        try{
+          const MAXW=300;
+          const scale=Math.min(1,MAXW/(img.width||MAXW));
+          const w=Math.max(3,Math.round((img.width||MAXW)*scale)),h=Math.max(3,Math.round((img.height||MAXW)*scale));
+          const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+          const ctx=cv.getContext('2d');
+          ctx.drawImage(img,0,0,w,h);
+          const data=ctx.getImageData(0,0,w,h).data;
+          const gray=new Float32Array(w*h);
+          for(let i=0,p=0;i<data.length;i+=4,p++){gray[p]=0.299*data[i]+0.587*data[i+1]+0.114*data[i+2];}
+          let sum=0,sumSq=0,n=0;
+          for(let y=1;y<h-1;y++){
+            for(let x=1;x<w-1;x++){
+              const idx=y*w+x;
+              const lap=gray[idx-1]+gray[idx+1]+gray[idx-w]+gray[idx+w]-4*gray[idx];
+              sum+=lap;sumSq+=lap*lap;n++;
+            }
+          }
+          if(n===0){resolve(999);return;}
+          const media=sum/n;
+          resolve((sumSq/n)-(media*media));
+        }catch(e){resolve(999);} // si algo falla al medir, no bloqueamos al mensajero por un error nuestro
+      };
+      img.onerror=function(){resolve(999);};
+      img.src=base64img.indexOf('data:')===0?base64img:'data:image/jpeg;base64,'+base64img;
+    }catch(e){resolve(999);}
   });
 }
 async function analizarEtiqueta(base64img,mediaType,_retry=0){
   try{
+    if(_retry===0){
+      const nitidez=await medirNitidez(base64img);
+      if(nitidez<UMBRAL_NITIDEZ_MINIMA){
+        return{_error:'📷 Foto movida o borrosa — no se alcanza a leer. Vuelve a tomarla sujetando firme el celular.',_borrosa:true};
+      }
+    }
     const resp=await fetch('https://transpgso-ai.luisdilellopadrino.workers.dev',{
       method:'POST',
       headers:{
@@ -4274,13 +4331,24 @@ async function analizarEtiqueta(base64img,mediaType,_retry=0){
     const clean=text.replace(/```json|```/g,'').trim();
     let parsed;
     try{ parsed=JSON.parse(clean); }catch(e){
-      // Intentar extraer datos parciales del texto libre
+      // Intentar extraer datos parciales del texto libre (el JSON completo no cerró bien, pero
+      // puede que igual traiga campos legibles línea por línea, ej: `"comuna": "MAIPU",`).
       var parcial={_parcial:true};
       var mCod=clean.match(/([0-9]{10,15})/);if(mCod)parcial.codigo=mCod[1];
-      clean.split('\n').forEach(function(ln){var t=ln.replace(/["{}]/g,'').trim();var ki=t.indexOf(':');if(ki<1)return;var k=t.slice(0,ki).toLowerCase().trim();var v=t.slice(ki+1).trim();
+      clean.split('\n').forEach(function(ln){
+        var t=ln.replace(/["{}]/g,'').trim();
+        var ki=t.indexOf(':');if(ki<1)return;
+        var k=t.slice(0,ki).toLowerCase().trim();
+        // OJO: al sacar las comillas queda la coma de cierre del JSON pegada al valor (ej:
+        // `"comuna": null,` → `comuna: null,`) — antes esto se guardaba tal cual y el campo
+        // terminaba mostrando literalmente el texto "null," en vez de quedar vacío. Ahora se
+        // saca la coma final Y se descarta el valor si es el literal "null" (significa que el
+        // propio modelo dijo "no pude leer este campo", no que el dato sea la palabra "null").
+        var v=t.slice(ki+1).trim().replace(/,\s*$/,'').trim();
+        if(/^null$/i.test(v))return;
         if(v.length>2){if(k.indexOf('destinatario')>=0||k.indexOf('nombre')>=0){if(!parcial.destinatario)parcial.destinatario=v;}
           if(k.indexOf('direccion')>=0){if(!parcial.direccion)parcial.direccion=v;}
-          if(k==='comuna'||k==='"comuna"'){if(!parcial.comuna)parcial.comuna=v;}
+          if(k==='comuna'){if(!parcial.comuna)parcial.comuna=v;}
         }});
       if(Object.keys(parcial).length>1) return parcial;
       return{_error:'No se pudo leer la etiqueta',_raw:clean.slice(0,120)};
@@ -4293,6 +4361,11 @@ async function analizarEtiqueta(base64img,mediaType,_retry=0){
         parsed.codigo=parsed.codigo.toString().replace(/[^0-9]/g,'');
       }
     }
+    // Defensa extra: si el modelo devolvió la palabra "null" como texto (en vez del valor JSON
+    // null, que es lo que se le pide) para algún campo, tratarlo igual como "no se pudo leer".
+    ['comuna','direccion','referencia','destinatario','telefono'].forEach(function(k){
+      if(parsed[k]!=null&&/^null$/i.test(String(parsed[k]).trim())) parsed[k]=null;
+    });
     if(!parsed.destinatario&&!parsed.direccion&&!parsed.codigo){
       return{_error:'Sin datos extraídos — verifica que la foto sea legible'};
     }
@@ -4518,7 +4591,13 @@ function RetiroMasivoRider(_ref_rm){
         });});
         // El registro base ya se guardó — completar con los datos de dirección que detectó
         // la IA (si no está protegido por PDF, en cuyo caso esos datos no se tocan).
-        if(!esPDFRefRM.current.has(codigo)&&datos){
+        // ANTES: esto se ejecutaba también cuando `datos` era un error (foto borrosa, límite de
+        // API, sin señal) porque un objeto {_error:'...'} también es "truthy" — el resultado era
+        // que apenas fallaba el análisis, se guardaban destinatario/dirección/comuna/teléfono
+        // VACÍOS igual, pisando cualquier dato bueno y sin dejar ningún rastro del error. Ahora,
+        // si vino con _error, no se toca la base — el paquete queda marcado para que el
+        // mensajero lo revise a mano en la pantalla de revisión (ver más abajo, "Sin datos IA").
+        if(!esPDFRefRM.current.has(codigo)&&datos&&!datos._error){
           db.from('envios').update({destinatario:datos.destinatario||'',direccion:datos.direccion||'',telefono:datos.telefono||'',comuna:datos.comuna||'',referencia:datos.referencia||''}).eq('codigo',codigo).then(function(r2){
             if(!r2.error) setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{syncEstado:'guardado'}):p;});});
           }).catch(function(){});
@@ -4826,6 +4905,7 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
   // FASE REVISIÓN
   if(fase==='revision'){
     var analizando=paquetes.filter(function(p){return p.analizandoIA;}).length;
+    var incompletosRM=paquetes.filter(function(p){var d=p.datosIA||{};return!p.analizandoIA&&(d._error||!d.destinatario||!d.direccion||!d.comuna);}).length;
     return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
       React.createElement('div',{style:{background:'var(--dark)',padding:'14px 16px',paddingTop:'max(14px,env(safe-area-inset-top))',borderBottom:'2px solid var(--gold)',flexShrink:0}},
         React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center'}},
@@ -4841,7 +4921,15 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
         paquetes.map(function(p,i){
           var d=p.datosIA||{};
           var editando=p.editando||false;
-          return React.createElement('div',{key:p.codigo,style:{background:'rgba(255,255,255,0.03)',border:'1px solid '+(editando?'var(--gold)':'rgba(200,168,75,0.15)'),borderRadius:10,marginBottom:8,overflow:'hidden',transition:'border 0.2s'}},
+          // Antes solo se avisaba "Sin datos IA" cuando NO había destinatario NI dirección — si
+          // faltaba solo la dirección o la comuna (como en el caso reportado: foto movida, la IA
+          // sí sacó algo pero dirección/comuna quedaron vacías) no había ningún aviso y el
+          // paquete se confirmaba igual con datos incompletos, sin que el mensajero se diera
+          // cuenta. Ahora se marca como incompleto apenas falte destinatario, dirección o
+          // comuna, con un borde de color imposible de pasar por alto.
+          var tieneErrorIA=!p.analizandoIA&&d&&d._error;
+          var datosIncompletos=!p.analizandoIA&&!editando&&(tieneErrorIA||!d.destinatario||!d.direccion||!d.comuna);
+          return React.createElement('div',{key:p.codigo,style:{background:datosIncompletos?'rgba(176,48,48,0.06)':'rgba(255,255,255,0.03)',border:'1px solid '+(editando?'var(--gold)':(datosIncompletos?'#b03030':'rgba(200,168,75,0.15)')),borderRadius:10,marginBottom:8,overflow:'hidden',transition:'border 0.2s'}},
             React.createElement('div',{style:{display:'flex',gap:10,padding:10,alignItems:'flex-start'}},
               // Foto clickeable para zoom
               p.foto
@@ -4864,7 +4952,9 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
                 ),
                 !p.analizandoIA&&!editando&&d.destinatario&&React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.7)',marginBottom:1}},d.destinatario),
                 !p.analizandoIA&&!editando&&d.direccion&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)'}},d.direccion+(d.comuna?' · '+d.comuna:'')),
-                !p.analizandoIA&&!d.destinatario&&!d.direccion&&!editando&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.3)'}},'Sin datos IA')
+                datosIncompletos&&React.createElement('div',{style:{fontSize:11,color:'#ff8a8a',fontWeight:700,marginTop:2}},
+                  tieneErrorIA?('⚠ '+(d._error||'No se pudo leer la etiqueta')+' — toca ✎ para escribir los datos a mano'):'⚠ Datos incompletos (falta destinatario, dirección o comuna) — revisa con ✎'
+                )
               ),
               React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:6,flexShrink:0}},
                 // Botón editar/guardar
@@ -4902,6 +4992,7 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
       ),
       React.createElement('div',{style:{padding:'12px 16px',paddingBottom:'max(12px,env(safe-area-inset-bottom))',borderTop:'1px solid rgba(200,168,75,0.2)',background:'var(--dark)'}},
         analizando>0&&React.createElement('div',{style:{textAlign:'center',fontSize:12,color:'rgba(200,168,75,0.6)',marginBottom:8}},'Aún procesando algunos paquetes, puedes confirmar igual'),
+        analizando===0&&incompletosRM>0&&React.createElement('div',{style:{textAlign:'center',fontSize:12,color:'#ff8a8a',fontWeight:700,marginBottom:8}},'⚠ '+incompletosRM+' paquete'+(incompletosRM>1?'s':'')+' con datos incompletos (marcados en rojo arriba) — revísalos antes de confirmar si puedes'),
         React.createElement('div',{style:{display:'flex',gap:10}},
           React.createElement('button',{onClick:function(){setFase('seleccion');setPaquetes([]);codigosRef.current=new Set();},style:{flex:1,padding:'14px',borderRadius:10,border:'1px solid rgba(255,255,255,0.15)',background:'transparent',color:'rgba(255,255,255,0.4)',fontFamily:'Bebas Neue',fontSize:15,cursor:'pointer'}},'CANCELAR'),
           React.createElement('button',{onClick:confirmarRetiro,disabled:guardando||paquetes.length===0,style:{flex:2,padding:'14px',borderRadius:10,border:'none',background:guardando?'rgba(200,168,75,0.3)':'linear-gradient(135deg,#2e7d4f,#1a5c38)',color:'#fff',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,cursor:guardando?'not-allowed':'pointer'}},guardando?'GUARDANDO...':'✅ CONFIRMAR '+paquetes.length+' PAQUETES')
