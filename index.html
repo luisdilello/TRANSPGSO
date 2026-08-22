@@ -21,25 +21,50 @@
 // recargar la página -- cortaría una subida de fotos o un guardado a mitad de camino. Cada
 // función crítica lo sube al empezar y lo baja al terminar (ver más abajo en el archivo).
 window.__TRANSPGSO_GUARDANDO_CRITICO = 0;
+// ANTES: apenas llegaba una actualización nueva, esto recargaba la página sola (con un tope
+// de solo 20 segundos de espera si había un guardado crítico en curso). El problema es que
+// esto no tenía en cuenta si el mensajero seguía usando la app en pantalla -- tomando fotos,
+// escribiendo una nota, mirando una lista -- y a mitad de eso la app se recargaba de golpe sin
+// avisar, sintiéndose como si "se cerrara sola". Como además desplegamos actualizaciones
+// seguido, esto podía pasar varias veces en una misma entrega.
+// AHORA: si el mensajero tiene la pantalla abierta y mirando, la actualización se avisa con un
+// cartel chico y discreto (no interrumpe nada) y se aplica solo cuando él lo decide. Si en
+// cambio la pantalla está en segundo plano (bloqueó el celular, cambió de app) la actualización
+// se aplica sola en ese momento -- no se nota, porque no la está mirando.
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.addEventListener('controllerchange',function(){
+  var _swActualizacionPendiente = false;
+  function _swPuedeRecargarAhora(){
     var last = parseInt(sessionStorage.getItem('sw_last_reload')||'0',10);
-    var now = Date.now();
-    if(now - last > 5000){ // nunca recargar más de una vez cada 5 segundos (evita loops)
-      // Si hay un guardado crítico en curso, esperamos a que termine antes de recargar (hasta
-      // ~20s) en vez de cortarlo a mitad de camino -- antes esto solo miraba el tiempo desde
-      // el último reload, sin fijarse si el mensajero estaba justo guardando algo.
-      (function esperarYRecargar(intentos){
-        intentos = intentos || 0;
-        if(window.__TRANSPGSO_GUARDANDO_CRITICO > 0 && intentos < 20){
-          setTimeout(function(){ esperarYRecargar(intentos + 1); }, 1000);
-          return;
-        }
-        sessionStorage.setItem('sw_last_reload', String(now));
-        window.location.reload();
-      })();
-    }
+    return (Date.now() - last) > 5000; // nunca recargar más de una vez cada 5 segundos (evita loops)
+  }
+  function _swAplicarActualizacion(){
+    if(!_swActualizacionPendiente)return;
+    if(window.__TRANSPGSO_GUARDANDO_CRITICO > 0)return; // nunca a mitad de un guardado crítico
+    if(!_swPuedeRecargarAhora())return;
+    sessionStorage.setItem('sw_last_reload', String(Date.now()));
+    window.location.reload();
+  }
+  navigator.serviceWorker.addEventListener('controllerchange',function(){
+    _swActualizacionPendiente = true;
+    if(document.visibilityState === 'hidden'){ _swAplicarActualizacion(); return; }
+    if(document.body){ _swMostrarAvisoActualizacion(); }
+    else{ document.addEventListener('DOMContentLoaded',_swMostrarAvisoActualizacion); }
   });
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState === 'hidden') _swAplicarActualizacion();
+  });
+  window._swMostrarAvisoActualizacion = function _swMostrarAvisoActualizacion(){
+    if(document.getElementById('sw-update-banner'))return;
+    var b = document.createElement('div');
+    b.id = 'sw-update-banner';
+    b.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;bottom:max(12px,env(safe-area-inset-bottom));z-index:999999;background:linear-gradient(135deg,#C8A84B,#a87d2a);color:#1a1d13;padding:12px 14px;border-radius:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:"DM Sans",Arial,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,0.35);';
+    b.innerHTML = '<span style="font-weight:700;font-size:12.5px;line-height:1.35">🔄 Hay una versión nueva de la app<br/><span style="font-weight:400;opacity:0.85">Se aplica sola cuando dejes de usarla, o toca para actualizar ya</span></span><button id="sw-update-btn" style="background:#1a1d13;color:#C8A84B;border:none;border-radius:8px;padding:10px 16px;font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap;flex-shrink:0">Actualizar</button>';
+    document.body.appendChild(b);
+    document.getElementById('sw-update-btn').onclick = function(){
+      sessionStorage.setItem('sw_last_reload', String(Date.now()));
+      window.location.reload();
+    };
+  };
 }
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
@@ -561,7 +586,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787196000;
+window.__MODULES_VERSION=1787196500;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3551,22 +3576,25 @@ function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoE
     // Fotos de entrega agrupadas por intento
     intentosEntrega.length>0&&React.createElement("div",null,
       React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:1.5,color:'var(--dark)',marginBottom:10}},"📷 FOTOS DE ENTREGA — "+intentosEntrega.reduce((a,it)=>a+(it.fotos||[]).length,0)+" fotos en "+intentosEntrega.length+" intento"+(intentosEntrega.length>1?"s":"")),
-      intentosEntrega.map((it,ii)=>React.createElement("div",{key:ii,style:{marginBottom:12,borderRadius:8,border:`1px solid ${estadoColor(it.estado)}44`,overflow:'hidden'}},
-        React.createElement("div",{style:{background:`${estadoColor(it.estado)}18`,padding:'7px 12px',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',borderBottom:`1px solid ${estadoColor(it.estado)}33`}},
-          React.createElement("span",{style:{fontFamily:'Bebas Neue',fontSize:12,letterSpacing:1,color:estadoColor(it.estado)}},"INTENTO ",it.intento),
-          React.createElement("span",{style:{fontSize:11,fontWeight:700,color:estadoColor(it.estado),background:`${estadoColor(it.estado)}22`,padding:'2px 8px',borderRadius:10}},estadoInfo(it.estado)?.label||it.estado),
-          it.mensajero&&React.createElement("span",{style:{fontSize:10,color:'var(--text-soft)'}},"· ",it.mensajero),
-          it.fecha&&React.createElement("span",{style:{fontSize:10,color:'var(--text-soft)',marginLeft:(esAdmin&&onBorrarIntento)?0:'auto',fontFamily:'JetBrains Mono'}},new Date(it.fecha).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})),
-          esAdmin&&onBorrarIntento&&React.createElement("button",{onClick:()=>onBorrarIntento(ii),style:{marginLeft:'auto',padding:'3px 10px',borderRadius:6,border:'1px solid #b03030',background:'rgba(176,48,48,0.08)',color:'#b03030',fontWeight:700,fontSize:10,cursor:'pointer',whiteSpace:'nowrap'}},"🗑 Borrar fotos"),
-          it.nota&&React.createElement("div",{style:{width:'100%',fontSize:10,color:'var(--text-soft)',fontStyle:'italic',marginTop:2}},"",it.nota)
+      intentosEntrega.map((it,ii)=>React.createElement("div",{key:ii,style:{marginBottom:14,borderRadius:10,border:`1px solid ${estadoColor(it.estado)}55`,overflow:'hidden',boxShadow:'0 1px 4px rgba(43,46,32,0.06)'}},
+        React.createElement("div",{style:{background:`${estadoColor(it.estado)}18`,padding:'10px 14px',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',borderBottom:`1px solid ${estadoColor(it.estado)}33`}},
+          React.createElement("span",{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1,color:estadoColor(it.estado)}},"INTENTO ",it.intento),
+          React.createElement("span",{style:{fontSize:11,fontWeight:700,color:estadoColor(it.estado),background:`${estadoColor(it.estado)}22`,padding:'3px 10px',borderRadius:10}},estadoInfo(it.estado)?.label||it.estado),
+          it.mensajero&&React.createElement("span",{style:{fontSize:12,fontWeight:700,color:'var(--dark)'}},"· ",it.mensajero),
+          it.fecha&&React.createElement("span",{style:{fontSize:11,color:'var(--text-soft)',marginLeft:(esAdmin&&onBorrarIntento)?0:'auto',fontFamily:'JetBrains Mono'}},new Date(it.fecha).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})),
+          esAdmin&&onBorrarIntento&&React.createElement("button",{onClick:()=>onBorrarIntento(ii),style:{marginLeft:'auto',padding:'4px 11px',borderRadius:6,border:'1px solid #b03030',background:'rgba(176,48,48,0.08)',color:'#b03030',fontWeight:700,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}},"🗑 Borrar fotos")
         ),
-        React.createElement("div",{style:{display:'flex',gap:6,flexWrap:'wrap',padding:8}},
+        it.nota&&React.createElement("div",{style:{margin:'10px 14px 0',padding:'10px 12px',background:`${estadoColor(it.estado)}0d`,border:`1px solid ${estadoColor(it.estado)}40`,borderLeft:`4px solid ${estadoColor(it.estado)}`,borderRadius:7}},
+          React.createElement("div",{style:{fontSize:10,fontWeight:800,letterSpacing:1.2,textTransform:'uppercase',color:estadoColor(it.estado),marginBottom:3}},"📝 Nota del mensajero"),
+          React.createElement("div",{style:{fontSize:13,color:'var(--dark)',lineHeight:1.45}},it.nota)
+        ),
+        React.createElement("div",{style:{display:'flex',gap:6,flexWrap:'wrap',padding:10}},
           (it.fotos||[]).map((f,fi)=>React.createElement("div",{key:fi,onClick:()=>setZoomFoto(f.url||f),style:{position:'relative',borderRadius:7,overflow:'hidden',border:`2px solid ${estadoColor(it.estado)}`,width:90,height:90,flexShrink:0,cursor:'zoom-in',transition:'transform 0.15s'},onMouseEnter:e=>e.currentTarget.style.transform='scale(1.05)',onMouseLeave:e=>e.currentTarget.style.transform='scale(1)'},
             React.createElement("img",{src:f.url||f,style:{width:'100%',height:'100%',objectFit:'cover'},onError:e=>e.target.style.display='none'}),
             React.createElement("div",{style:{position:'absolute',bottom:0,left:0,right:0,background:'rgba(0,0,0,0.5)',fontSize:8,color:'#fff',textAlign:'center',padding:'1px 0'}},(fi+1)+"/"+(it.fotos||[]).length)
           ))
         ),
-        it.video&&React.createElement("div",{style:{padding:'0 8px 8px'}},
+        it.video&&React.createElement("div",{style:{padding:'0 10px 10px'}},
           React.createElement("div",{style:{fontSize:10,fontWeight:700,color:estadoColor(it.estado),marginBottom:4}},"🎥 VIDEO DE RESPALDO"),
           React.createElement("video",{src:it.video,controls:true,playsInline:true,style:{width:'100%',maxWidth:260,borderRadius:8,display:'block',background:'#000'}})
         )
