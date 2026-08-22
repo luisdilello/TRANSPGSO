@@ -561,7 +561,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787195000;
+window.__MODULES_VERSION=1787195300;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8998,6 +8998,8 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
 function PortalCliente({usuario,onLogout}){
   var nombreCliente=(usuario.cliente_nombre||usuario.nombre||'').toUpperCase().trim();
   var _t=useState('dashboard'),tab=_t[0],setTab=_t[1];
+  var _navMobCli=useState(false),navMobileOpenCli=_navMobCli[0],setNavMobileOpenCli=_navMobCli[1];
+  function irACli(id){setTab(id);setNavMobileOpenCli(false);}
   var _e=useState([]),envios=_e[0],setEnvios=_e[1];
   var _l=useState(true),loading=_l[0],setLoading=_l[1];
   var _d=useState(null),detalle=_d[0],setDetalle=_d[1];
@@ -9158,6 +9160,7 @@ function PortalCliente({usuario,onLogout}){
         )
       ),
       React.createElement('div',{className:'header-right',style:{display:'flex',alignItems:'center',gap:10}},
+        React.createElement('button',{className:'nav-mobile-toggle',onClick:function(){setNavMobileOpenCli(function(o){return!o;});},'aria-label':'Menu'},navMobileOpenCli?'✕':'☰'),
         React.createElement('div',{style:{display:'flex',border:'1px solid rgba(200,168,75,0.25)',borderRadius:8,overflow:'hidden'}},
           [['es','ES'],['en','EN'],['zh','中文']].map(function(l){
             var act=idiomaCliente===l[0];
@@ -9169,9 +9172,9 @@ function PortalCliente({usuario,onLogout}){
       )
     ),
     // Nav
-    React.createElement('div',{className:'nav'},
+    React.createElement('div',{className:'nav'+(navMobileOpenCli?' nav-open':'')},
       [{id:'dashboard',label:'Dashboard'},{id:'envios',label:'Mis Envíos'},{id:'mapa',label:'Mapa'},{id:'etiquetas',label:'Carga de Envíos'}].map(function(nv){
-        return React.createElement('button',{key:nv.id,className:'nav-btn '+(tab===nv.id?'active':''),onClick:function(){setTab(nv.id);}},t(nv.label));
+        return React.createElement('button',{key:nv.id,className:'nav-btn '+(tab===nv.id?'active':''),onClick:function(){irACli(nv.id);}},t(nv.label));
       })
     ),
     // Main
