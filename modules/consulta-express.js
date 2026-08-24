@@ -73,7 +73,7 @@ function ConsultaExpress(_ref_ce){
       const CHUNK=150;
       const chunks=[];
       for(let k=0;k<lista.length;k+=CHUNK)chunks.push(lista.slice(k,k+CHUNK));
-      const respuestas=await Promise.all(chunks.map(ch=>db.from('envios').select('id,codigo,cliente,destinatario,telefono,direccion,comuna,mensajero,estado,monto,foto_etiqueta,updated_at,fecha').in('codigo',ch)));
+      const respuestas=await Promise.all(chunks.map(ch=>db.from('envios').select('id,codigo,cliente,destinatario,telefono,direccion,comuna,mensajero,estado,monto,foto_etiqueta,updated_at,fecha,valor_siniestro,tuvo_siniestro').in('codigo',ch)));
       const conError=respuestas.find(r=>r.error);
       if(conError)throw conError.error;
       const mapa={};
@@ -181,8 +181,8 @@ function ConsultaExpress(_ref_ce){
           /*#__PURE__*/React.createElement('thead',null,/*#__PURE__*/React.createElement('tr',null,
             /*#__PURE__*/React.createElement('th',null,'Código'),/*#__PURE__*/React.createElement('th',null,'Cliente'),/*#__PURE__*/React.createElement('th',null,'Destinatario'),/*#__PURE__*/React.createElement('th',null,'Comuna'),/*#__PURE__*/React.createElement('th',null,'Mensajero'),/*#__PURE__*/React.createElement('th',null,'Estado'),/*#__PURE__*/React.createElement('th',null,'Actualizado')
           )),
-          /*#__PURE__*/React.createElement('tbody',null,resultadosFiltrados.map(function(e){return/*#__PURE__*/React.createElement('tr',{key:e.codigo,style:{background:esEnvioAtrasado(e)?'rgba(176,48,48,0.06)':'',borderLeft:esEnvioAtrasado(e)?'3px solid var(--danger)':'3px solid transparent'}},
-            /*#__PURE__*/React.createElement('td',{style:{fontFamily:'JetBrains Mono',fontSize:11,fontWeight:700}},e.codigo),
+          /*#__PURE__*/React.createElement('tbody',null,resultadosFiltrados.map(function(e){return/*#__PURE__*/React.createElement('tr',{key:e.codigo,style:{background:e.tuvo_siniestro?'rgba(198,40,40,0.08)':(esEnvioAtrasado(e)?'rgba(176,48,48,0.06)':''),borderLeft:e.tuvo_siniestro?'3px solid #C62828':(esEnvioAtrasado(e)?'3px solid var(--danger)':'3px solid transparent')}},
+            /*#__PURE__*/React.createElement('td',{style:{fontFamily:'JetBrains Mono',fontSize:11,fontWeight:700}},e.codigo,e.tuvo_siniestro&&/*#__PURE__*/React.createElement('span',{title:'Este código tuvo un siniestro registrado',style:{marginLeft:6,fontSize:9,background:'#C62828',color:'#fff',padding:'1px 6px',borderRadius:4,fontWeight:700,letterSpacing:0.5,whiteSpace:'nowrap'}},'⚠ SINIESTRO')),
             /*#__PURE__*/React.createElement('td',{style:{fontSize:12}},e.cliente||'—'),
             /*#__PURE__*/React.createElement('td',{style:{fontSize:12}},e.destinatario||'—'),
             /*#__PURE__*/React.createElement('td',{style:{fontSize:11}},e.comuna||'—'),
