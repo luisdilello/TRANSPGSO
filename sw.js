@@ -1,10 +1,16 @@
-// TransPgso SW v1786906992
+// TransPgso SW v1787603300
 // Antes este service worker borraba TODO el cache al instalar y no guardaba nada -- eso
 // significaba que si el mensajero se quedaba sin señal, la app ni siquiera podía abrir
 // (pantalla en blanco). Ahora precachea lo minimo necesario para que la app y las librerias
 // de las que depende (React, Supabase, el lector de codigo de barras) sigan funcionando sin
 // conexion, y actualiza ese cache solo cuando SI hay señal.
-const APP_VERSION = '1786906992';
+// OJO: cada vez que se despliega un fix de JS en index.html, hay que bumpear este
+// APP_VERSION también (aunque este archivo sw.js no haya cambiado de lógica) — eso obliga
+// al navegador a instalar un Service Worker "nuevo" y dispara el aviso/recarga automática
+// que ya tiene la app (ver controllerchange en index.html). Si no se bumpea, un mensajero
+// que dejó la PWA abierta en segundo plano sigue corriendo el JS viejo indefinidamente,
+// aunque el index.html ya esté actualizado en GitHub Pages.
+const APP_VERSION = '1787603300';
 const CACHE_NAME = 'transpgso-' + APP_VERSION;
 const LOGO_ICON = 'logo.jpg';
 
