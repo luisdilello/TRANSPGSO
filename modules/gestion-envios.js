@@ -89,6 +89,8 @@ async function sincronizarDesdeSupabase(){setSincronizando(true);try{
   }).catch(function(){setHistorialReal([]);setCargandoHistorial(false);});
 }
 useEffect(()=>{cargarHistorialReal(detalleEnvio&&detalleEnvio.codigo);},[detalleEnvio&&detalleEnvio.codigo]);
+const _useSiniDet=useState([]),siniestroDetalle=_useSiniDet[0],setSiniestroDetalle=_useSiniDet[1];
+useEffect(()=>{if(!detalleEnvio||!detalleEnvio.tuvo_siniestro){setSiniestroDetalle([]);return;}db.from('siniestros').select('*').eq('codigo',detalleEnvio.codigo).order('created_at',{ascending:false}).then(function(res){setSiniestroDetalle((res&&res.data)||[]);}).catch(function(){setSiniestroDetalle([]);});},[detalleEnvio&&detalleEnvio.codigo,detalleEnvio&&detalleEnvio.tuvo_siniestro]);
 function canalInfo(canal){
   if(canal==='app_mensajero')return{label:'📱 App Mensajero',bg:'rgba(46,125,79,0.12)',color:'#2e7d4f'};
   if(canal==='panel_admin')return{label:'🖥 Panel Admin',bg:'rgba(27,58,107,0.12)',color:'#1B3A6B'};
@@ -667,6 +669,18 @@ asignarModal&&/*#__PURE__*/React.createElement(Modal,{title:'Asignar '+selected.
       )
     ),
     /*#__PURE__*/React.createElement("div",{style:{fontSize:10,color:'rgba(200,168,75,0.5)',textAlign:'right',maxWidth:100,lineHeight:1.5,fontStyle:'italic'}},'Cambia el cliente de este envío')
+  ),
+  // ── Banner de siniestro ──
+  /*#__PURE__*/detalleEnvio.tuvo_siniestro&&React.createElement('div',{style:{marginBottom:16,padding:'10px 14px',background:'rgba(198,40,40,0.08)',border:'1px solid rgba(198,40,40,0.35)',borderRadius:8,color:'#C62828'}},
+    React.createElement('div',{style:{fontWeight:700,fontSize:13}},'⚠ Este código tuvo un Siniestro registrado'),
+    siniestroDetalle.length===0?React.createElement('div',{style:{fontSize:11,marginTop:4,opacity:0.8}},'Cargando detalle del siniestro...'):
+    siniestroDetalle.map(function(s){return React.createElement('div',{key:s.id,style:{fontSize:12,marginTop:6,lineHeight:1.6}},
+      'Fecha: '+(s.fecha_siniestro||'—')+' · Mensajero: '+(s.mensajero||'—')+' · Valor del paquete: '+(detalleEnvio.valor_siniestro?'$'+Number(detalleEnvio.valor_siniestro).toLocaleString('es-CL'):'—'),
+      React.createElement('br',null),
+      'Descuento a cliente: ',s.descontado_cliente?'✓ Aplicado ($'+Number(s.descontado_cliente_valor||0).toLocaleString('es-CL')+')':'Pendiente',
+      ' · Descuento a mensajero: ',s.descontado_mensajero?'✓ Aplicado ($'+Number(s.descontado_mensajero_valor||0).toLocaleString('es-CL')+', semana '+s.descontado_mensajero_semana+')':'Pendiente'
+    );}),
+    React.createElement('div',{style:{fontSize:11,marginTop:6,opacity:0.85}},'Para aplicar o deshacer un descuento, ve a la sección "⚠ Siniestros".')
   ),
   // ── Datos grid ──
   /*#__PURE__*/React.createElement("div",{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}},[['Código',detalleEnvio.codigo],['Destinatario',detalleEnvio.destinatario],['Teléfono',detalleEnvio.telefono],['Dirección',detalleEnvio.direccion],['Comuna',detalleEnvio.comuna],['Mensajero',((_detalleEnvio$mensaje=detalleEnvio.mensajero)==null?void 0:_detalleEnvio$mensaje.replace(/,\s*/g,' '))||'Sin asignar'],['Fecha',fmtFecha(detalleEnvio.fecha)],['Monto',detalleEnvio.monto>0?'$'+detalleEnvio.monto.toLocaleString('es-CL'):'—']].map(_ref27=>{let l=_ref27[0],v=_ref27[1];return/*#__PURE__*/React.createElement("div",{key:l,style:{padding:'14px 16px',background:'linear-gradient(145deg,#ffffff,#f5eedc)',borderRadius:12,border:'1px solid rgba(200,168,75,0.25)',boxShadow:'5px 5px 10px rgba(43,46,32,0.12),-2px -2px 6px rgba(255,255,255,1),inset 0 1px 0 rgba(255,255,255,0.9)'}},/*#__PURE__*/React.createElement("div",{style:{fontSize:13,color:'#C8A84B',letterSpacing:3,textTransform:'uppercase',marginBottom:8,fontFamily:'Bebas Neue',fontWeight:700,textShadow:'0 1px 2px rgba(200,168,75,0.3)'}},l),/*#__PURE__*/React.createElement("div",{style:{fontSize:18,fontWeight:500,color:'#1a1d13',lineHeight:1.3,filter:'drop-shadow(0 1px 1px rgba(43,46,32,0.1))'}},v||'—'));})),/*#__PURE__*/React.createElement("div",{style:{marginBottom:16}},estadoBadge(detalleEnvio.estado)),detalleEnvio.nota&&/*#__PURE__*/React.createElement("div",{className:"obs-box",style:{marginBottom:16}},"\uD83D\uDCCC ",detalleEnvio.nota),/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)',marginBottom:10}},"Historial"),/*#__PURE__*/React.createElement("div",{style:{maxHeight:260,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8,marginBottom:16}},

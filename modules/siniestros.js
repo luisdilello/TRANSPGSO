@@ -1,7 +1,8 @@
 (function(){
 var useEffect=React.useEffect, useState=React.useState;
 var db=window.__app.db, Modal=window.__app.Modal, estadoInfo=window.__app.estadoInfo,
-    fechaHoyCL=window.__app.fechaHoyCL, registrarSiniestro=window.__app.registrarSiniestro;
+    fechaHoyCL=window.__app.fechaHoyCL, registrarSiniestro=window.__app.registrarSiniestro,
+    exportToExcel=window.__app.exportToExcel;
 
 function fmtCLP(n){
   var v=parseFloat(n)||0;
@@ -91,6 +92,25 @@ function Siniestros(props){
   var _modalMensajero=useState(null), modalMensajero=_modalMensajero[0], setModalMensajero=_modalMensajero[1];
   var _modalNuevo=useState(false), modalNuevo=_modalNuevo[0], setModalNuevo=_modalNuevo[1];
   var _valorEdit=useState({}), valorEdit=_valorEdit[0], setValorEdit=_valorEdit[1];
+  var _rango=useState('todos'), rango=_rango[0], setRango=_rango[1]; // todos|hoy|semana|mes|rango
+  var _rangoDesde=useState(''), rangoDesde=_rangoDesde[0], setRangoDesde=_rangoDesde[1];
+  var _rangoHasta=useState(''), rangoHasta=_rangoHasta[0], setRangoHasta=_rangoHasta[1];
+
+  // Límites de fecha (formato YYYY-MM-DD, igual que fecha_siniestro) según el preset elegido.
+  function limitesRango(){
+    var hoy=fechaHoyCL();
+    if(rango==='hoy')return{desde:hoy,hasta:hoy};
+    if(rango==='semana'){
+      var d=new Date(); var lunes=new Date(d); lunes.setDate(d.getDate()-((d.getDay()+6)%7));
+      return{desde:fechaHoyCL(lunes),hasta:hoy};
+    }
+    if(rango==='mes'){
+      var d2=new Date(); var primero=new Date(d2.getFullYear(),d2.getMonth(),1);
+      return{desde:fechaHoyCL(primero),hasta:hoy};
+    }
+    if(rango==='rango')return{desde:rangoDesde||null,hasta:rangoHasta||null};
+    return{desde:null,hasta:null};
+  }
 
   function cargar(){
     setCargando(true);
@@ -116,13 +136,46 @@ function Siniestros(props){
   }
   useEffect(function(){cargar();},[]);
 
-  var filtrados=registros.filter(function(r){
+  var lim=limitesRango();
+  var enRango=registros.filter(function(r){
+    if(!lim.desde&&!lim.hasta)return true;
+    var f=r.fecha_siniestro;
+    if(!f)return false;
+    if(lim.desde&&f<lim.desde)return false;
+    if(lim.hasta&&f>lim.hasta)return false;
+    return true;
+  });
+  var filtrados=enRango.filter(function(r){
     if(filtro==='pendientes')return!r.descontado_cliente||!r.descontado_mensajero;
     if(filtro==='cliente-pendiente')return!r.descontado_cliente;
     if(filtro==='mensajero-pendiente')return!r.descontado_mensajero;
     if(filtro==='resueltos')return r.descontado_cliente&&r.descontado_mensajero;
     return true;
   });
+
+  // Totales acumulados del período/filtro actual — para hacerle seguimiento rápido a pagos y descuentos.
+  var totales=enRango.reduce(function(a,r){
+    var v=parseFloat(r.valor_siniestro)||0;
+    a.cantidad+=1;
+    a.valorTotal+=v;
+    if(r.descontado_cliente){a.clienteAplicado+=parseFloat(r.descontado_cliente_valor)||0;}else{a.clientePendiente+=v;}
+    if(r.descontado_mensajero){a.mensajeroAplicado+=parseFloat(r.descontado_mensajero_valor)||0;}else{a.mensajeroPendiente+=v;}
+    return a;
+  },{cantidad:0,valorTotal:0,clienteAplicado:0,clientePendiente:0,mensajeroAplicado:0,mensajeroPendiente:0});
+
+  function exportarExcel(){
+    var headers=['Código','Cliente','Mensajero','Estado actual','Fecha siniestro','Valor','Descuento cliente','Fecha desc. cliente','Descuento mensajero','Semana desc. mensajero','Nota'];
+    var rows=filtrados.map(function(r){
+      var est=estadoInfo?estadoInfo(r.estado):{label:r.estado};
+      return[r.codigo,r.cliente,(r.mensajero||'—').replace(/,\s*/g,' '),est.label,r.fecha_siniestro||'',r.valor_siniestro||0,
+        r.descontado_cliente?(r.descontado_cliente_valor||0):'Pendiente',
+        r.descontado_cliente?fmtFechaHora(r.descontado_cliente_fecha):'',
+        r.descontado_mensajero?(r.descontado_mensajero_valor||0):'Pendiente',
+        r.descontado_mensajero?(r.descontado_mensajero_semana||''):'',
+        r.nota||''];
+    });
+    exportToExcel('Siniestros_TransPgso_'+fechaHoyCL(),[{name:'Siniestros',headers:headers,rows:rows}]);
+  }
 
   function guardarValor(row){
     var val=valorEdit[row.id];
@@ -188,14 +241,54 @@ function Siniestros(props){
     {val:'todos',label:'Todos'}
   ];
 
+  var RANGOS=[
+    {val:'todos',label:'Todo el historial'},
+    {val:'hoy',label:'Hoy'},
+    {val:'semana',label:'Esta semana'},
+    {val:'mes',label:'Este mes'},
+    {val:'rango',label:'Rango personalizado'}
+  ];
+  var STATS=[
+    {label:'Siniestros en el período',val:totales.cantidad,color:'var(--dark)'},
+    {label:'Valor total',val:fmtCLP(totales.valorTotal),color:'var(--dark)'},
+    {label:'Cliente: pendiente',val:fmtCLP(totales.clientePendiente),color:'var(--danger)'},
+    {label:'Cliente: descontado',val:fmtCLP(totales.clienteAplicado),color:'var(--success)'},
+    {label:'Mensajero: pendiente',val:fmtCLP(totales.mensajeroPendiente),color:'var(--danger)'},
+    {label:'Mensajero: descontado',val:fmtCLP(totales.mensajeroAplicado),color:'var(--success)'}
+  ];
+
   return React.createElement('div',null,
     React.createElement('div',{className:'section-head'},
       React.createElement('div',{className:'section-title'},'Siniestros'),
-      React.createElement('button',{className:'btn-add',onClick:function(){setModalNuevo(true);}},'+ Registrar siniestro')),
+      React.createElement('div',{style:{display:'flex',gap:8}},
+        React.createElement('button',{className:'btn-add',onClick:function(){setModalNuevo(true);}},'+ Registrar siniestro'),
+        React.createElement('button',{className:'action-btn btn-edit',disabled:filtrados.length===0,onClick:exportarExcel},'📊 Exportar Excel'))),
     React.createElement('div',{className:'info-banner'},
       '⚠ Aquí quedan registrados todos los códigos que alguna vez pasaron por estado "Siniestro", ',
       'aunque después salgan a despacho o se entreguen. El descuento al cliente y al mensajero ',
       'se hace manualmente, cuando tú decidas — nunca automático.'),
+    React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginBottom:6}},'Período'),
+    React.createElement('div',{style:{display:'flex',gap:8,marginBottom:rango==='rango'?10:16,flexWrap:'wrap',alignItems:'center'}},
+      RANGOS.map(function(r){
+        return React.createElement('button',{key:r.val,onClick:function(){setRango(r.val);},
+          style:{padding:'8px 14px',borderRadius:20,border:'1px solid '+(rango===r.val?'var(--gold)':'var(--border)'),
+            background:rango===r.val?'rgba(200,168,75,0.15)':'#fff',color:rango===r.val?'#8a6d1a':'var(--text-mid)',
+            fontSize:12,fontWeight:700,cursor:'pointer'}},r.label);
+      })),
+    rango==='rango'&&React.createElement('div',{style:{display:'flex',gap:10,marginBottom:16,flexWrap:'wrap',alignItems:'flex-end'}},
+      React.createElement('div',null,
+        React.createElement('label',{style:{fontSize:11,color:'var(--text-soft)',display:'block',marginBottom:4}},'Desde'),
+        React.createElement('input',{type:'date',className:'form-input',value:rangoDesde,onChange:function(e){setRangoDesde(e.target.value);},style:{margin:0}})),
+      React.createElement('div',null,
+        React.createElement('label',{style:{fontSize:11,color:'var(--text-soft)',display:'block',marginBottom:4}},'Hasta'),
+        React.createElement('input',{type:'date',className:'form-input',value:rangoHasta,onChange:function(e){setRangoHasta(e.target.value);},style:{margin:0}}))),
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:10,marginBottom:18}},
+      STATS.map(function(s,i){
+        return React.createElement('div',{key:i,style:{padding:'12px 14px',background:'#fff',border:'1px solid var(--border)',borderRadius:10}},
+          React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',textTransform:'uppercase',letterSpacing:0.5,marginBottom:6}},s.label),
+          React.createElement('div',{style:{fontSize:16,fontWeight:700,color:s.color,fontFamily:'JetBrains Mono'}},s.val));
+      })),
+    React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginBottom:6}},'Estado del descuento'),
     React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}},
       FILTROS.map(function(f){
         return React.createElement('button',{key:f.val,onClick:function(){setFiltro(f.val);},
