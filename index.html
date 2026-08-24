@@ -586,7 +586,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787538507;
+window.__MODULES_VERSION=1787539699;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8652,6 +8652,57 @@ var UMBRAL_ATRASO_DIAS=2; // dias en 'en_ruta' antes de marcar el envio como atr
 function diasDesdeFecha(fechaStr){if(!fechaStr)return 0;try{var f=new Date(fechaStr+'T00:00:00');var hoy=new Date(fechaHoyCL()+'T00:00:00');return Math.round((hoy-f)/86400000);}catch(e){return 0;}}
 function esEnvioAtrasado(e){if(!e)return false;return e.estado==='en_ruta'&&diasDesdeFecha(e.fecha)>=UMBRAL_ATRASO_DIAS;}
 
+// Deteccion de envios 'tardios': paquetes de un mismo cliente/dia que se registraron en el
+// sistema varias horas despues que el resto (tipicamente porque llegaron despues de que los
+// mensajeros ya salieron a ruta con la 'corredera' de la manana, y quedan sin avisarle al
+// cliente antes de cobrar). Se comparan contra el envio MAS TEMPRANO de ese mismo cliente+fecha
+// usando la hora real de creacion (created_at), no la fecha (que solo tiene dia, no hora).
+//
+// OJO: un grupo cliente+fecha con MUCHOS envios 'tarde' casi siempre es una segunda tanda
+// legitima (ej. un cliente de alto volumen que hace Retiro Masivo dos veces en el dia), no
+// paquetes rezagados — probamos esto contra datos reales y clientes de volumen alto (cientos de
+// envios/dia) generaban decenas de 'falsos tardios' si solo se miraba la hora. Por eso, dentro de
+// cada grupo, solo se marca como alerta el sub-grupo tardio si es CHICO en relacion al total del
+// dia (pocos rezagados sueltos) — si es grande, se asume carga nueva y no se marca nada.
+var UMBRAL_TARDIO_HORAS=2; // horas de diferencia contra el inicio de la 'corredera' de ese cliente/dia
+var TARDIO_MAX_ABS=3; // un grupo tardio de hasta esta cantidad siempre se marca (aunque sea alto % en clientes chicos)
+var TARDIO_MAX_FRACCION=0.10; // por sobre eso, solo se marca si es <=10% del total del dia para ese cliente
+function calcularBaseTardio(envios){
+  var grupos={};
+  (envios||[]).forEach(function(e){
+    if(!e||!e.cliente||!e.fecha||!e.created_at||!e.codigo)return;
+    var key=e.cliente+'|'+e.fecha;
+    var t=new Date(e.created_at).getTime();
+    if(isNaN(t))return;
+    if(!grupos[key])grupos[key]=[];
+    grupos[key].push({codigo:e.codigo,t:t});
+  });
+  var resultado={};
+  Object.keys(grupos).forEach(function(key){
+    var items=grupos[key];
+    var base=items.reduce(function(min,x){return x.t<min?x.t:min;},items[0].t);
+    var candidatos=items.filter(function(x){return(x.t-base)>=UMBRAL_TARDIO_HORAS*3600000;});
+    var esRezago=candidatos.length>0&&(candidatos.length<=TARDIO_MAX_ABS||candidatos.length<=items.length*TARDIO_MAX_FRACCION);
+    var tardios={};
+    if(esRezago)candidatos.forEach(function(x){tardios[x.codigo]=true;});
+    resultado[key]={base:base,tardios:tardios};
+  });
+  return resultado;
+}
+function esEnvioTardio(e,basePorGrupo){
+  if(!e||!e.cliente||!e.fecha||!e.codigo)return false;
+  var g=basePorGrupo&&basePorGrupo[e.cliente+'|'+e.fecha];
+  return!!(g&&g.tardios[e.codigo]);
+}
+function horasTardanza(e,basePorGrupo){
+  if(!e||!e.cliente||!e.fecha||!e.created_at)return 0;
+  var g=basePorGrupo&&basePorGrupo[e.cliente+'|'+e.fecha];
+  if(!g)return 0;
+  var t=new Date(e.created_at).getTime();
+  if(isNaN(t))return 0;
+  return Math.round((t-g.base)/3600000*10)/10;
+}
+
 // ══════════════════════ MODO OFFLINE (mensajeros) ══════════════════════
 // Objetivo: el mensajero SIEMPRE puede seguir trabajando -- entregar, hacer colecta, tomar
 // paquetes por escaneo -- tenga señal o no. Si una accion no se puede guardar en el momento
@@ -10144,6 +10195,7 @@ window.__app = {
   Badge, COMUNAS_RM_LIST, DocumentosMensajero, KpiBar, PestanasMensajero,
   enviarNotificacionPush, fmt, ConteoAyudas, HistorialCierres, PlanillaRetiros,
   normNombre, sbSelect, EnvioDetalleCard, UMBRAL_ATRASO_DIAS, EtiquetaPreview,
+  UMBRAL_TARDIO_HORAS, calcularBaseTardio, esEnvioTardio, horasTardanza,
   sbUpdateEstado, sbRegistrarHistorial, sbRegistrarHistorialLote, fetchPaginadoParalelo, fetchPorDiasParalelo
 };
 function App(){useEffect(()=>{
