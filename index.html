@@ -413,6 +413,9 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 /* ── BOTONES FUTURISTAS ── */
 @keyframes shimmer{0%{background-position:200% center}100%{background-position:-200% center}}
 @keyframes glow-pulse{0%,100%{box-shadow:0 0 8px rgba(200,168,75,0.3),4px 4px 10px rgba(43,46,32,0.25)}50%{box-shadow:0 0 16px rgba(200,168,75,0.5),4px 4px 10px rgba(43,46,32,0.25)}}
+/* Aviso urgente de paquete sin datos durante el escaneo — tiene que ser imposible de no ver,
+   porque el mensajero está mirando la cámara, no la lista, cuando pasa esto. */
+@keyframes alertaVacioPulse{0%,100%{box-shadow:0 0 10px rgba(255,30,30,0.5)}50%{box-shadow:0 0 26px rgba(255,30,30,0.9)}}
 
 .btn-futurista{position:relative;padding:10px 20px;border-radius:10px;border:none;cursor:pointer;font-family:'Bebas Neue';font-size:13px;letter-spacing:2px;font-weight:700;transition:all 0.2s cubic-bezier(0.34,1.56,0.64,1);overflow:hidden;}
 .btn-futurista::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.15) 50%,transparent 100%);background-size:200% 100%;opacity:0;transition:opacity 0.3s;}
@@ -586,7 +589,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787592300;
+window.__MODULES_VERSION=1787593400;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -4440,6 +4443,9 @@ function RetiroMasivoRider(_ref_rm){
   // se aceptan con datos parciales), se le pide al mensajero volver a fotografiar ese código
   // puntual sin tener que reiniciar todo el escaneo del lote.
   var _s11rm=useState(null),reescaneando=_s11rm[0],setReescaneando=_s11rm[1];
+  var reescaneandoResumeScannerRef=useRef(false); // si el reescaneo se abrió durante el escaneo en vivo, hay que reanudar el lector de códigos al cerrar
+  var pendingRescanStreamRef=useRef(null); // stream de cámara ya obtenido, esperando a que el <video> del modal de reescaneo termine de montarse para conectarlo (ver useEffect más abajo)
+  var alertadosVaciosRef=useRef(new Set()); // códigos por los que ya se avisó con sonido/vibración, para no repetir el aviso en cada render
   var videoRef=useRef();
   var canvasRef=useRef();
   var scannerRef=useRef(null);
@@ -4609,17 +4615,41 @@ function RetiroMasivoRider(_ref_rm){
   // códigos de barra (acá no hace falta detectar nada, solo tomar una foto nueva).
   async function iniciarReescaneo(codigo){
     try{
+      // Si esto se dispara desde plena corredera de escaneo (el aviso instantáneo de paquete
+      // vacío), hay que apagar primero el lector de códigos de barra — comparte la misma cámara
+      // (videoRef) — y recordar reanudarlo apenas se cierre el reescaneo, para no dejar al
+      // mensajero sin poder seguir escaneando el resto del lote.
+      reescaneandoResumeScannerRef.current=(fase==='escaneando');
+      if(fase==='escaneando') detenerScanner();
       var stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}});
-      if(videoRef.current){
-        videoRef.current.srcObject=stream;
-        await videoRef.current.play();
-      }
-      scannerRef.current={stream:stream};
+      // No conectar el stream a videoRef.current acá todavía: en fase 'escaneando' este mismo
+      // stream se pide ANTES de que React desmonte el <video> del escáner y monte el del modal
+      // de reescaneo (ambos usan el mismo ref) — asignarlo ahora quedaría pegado al nodo viejo,
+      // que está por desaparecer, y el modal se vería en negro. Se deja listo en un ref y el
+      // useEffect de abajo lo conecta apenas el <video> correcto ya esté montado.
+      pendingRescanStreamRef.current=stream;
       setReescaneando(codigo);
     }catch(e){
       toast('⚠ Sin acceso a cámara: '+(e.message||''));
     }
   }
+  // Conecta el stream de reescaneo al <video> del modal apenas React lo termina de montar.
+  useEffect(function(){
+    if(reescaneando&&pendingRescanStreamRef.current&&videoRef.current){
+      videoRef.current.srcObject=pendingRescanStreamRef.current;
+      videoRef.current.play().catch(function(){});
+      scannerRef.current={stream:pendingRescanStreamRef.current};
+      pendingRescanStreamRef.current=null;
+    }
+  },[reescaneando]);
+  // Reanuda el lector de códigos apenas React vuelve a montar el <video> del escáner (mismo
+  // motivo que arriba: hacerlo antes de que el DOM se actualice apuntaría al nodo equivocado).
+  useEffect(function(){
+    if(!reescaneando&&reescaneandoResumeScannerRef.current){
+      reescaneandoResumeScannerRef.current=false;
+      iniciarScanner();
+    }
+  },[reescaneando]);
   function cancelarReescaneo(){
     detenerScanner();
     setReescaneando(null);
@@ -4927,6 +4957,44 @@ function RetiroMasivoRider(_ref_rm){
 
   var erroresSyncRM=paquetes.filter(function(p){return p.syncEstado==='error';}).length;
 
+  // Paquetes con la etiqueta completa y CERO datos (ni de la IA ni a mano) — misma condición
+  // que bloquea el CONFIRMAR final, pero acá sirve para avisar EN EL MOMENTO, mientras el
+  // mensajero sigue escaneando en plena corredera, en vez de que se entere recién al terminar
+  // todo el lote y no sepa cuál paquete específico quedó mal.
+  var vaciosEnVivo=paquetes.filter(function(p){return paqueteVacioTotal(p);});
+  var vaciosEnVivoKey=vaciosEnVivo.map(function(p){return p.codigo;}).join(',');
+  useEffect(function(){
+    vaciosEnVivo.forEach(function(p){
+      if(!alertadosVaciosRef.current.has(p.codigo)){
+        alertadosVaciosRef.current.add(p.codigo);
+        playSound('error');
+        try{ if(navigator.vibrate) navigator.vibrate([250,120,250]); }catch(e){}
+      }
+    });
+    var actuales=new Set(vaciosEnVivo.map(function(p){return p.codigo;}));
+    alertadosVaciosRef.current.forEach(function(c){ if(!actuales.has(c)) alertadosVaciosRef.current.delete(c); });
+  },[vaciosEnVivoKey]);
+
+  // Modal de reescaneo — cámara enfocada solo en el código que quedó sin datos. Se muestra
+  // igual durante el escaneo en vivo (aviso instantáneo) que en la pantalla de revisión.
+  var modalReescaneo=reescaneando&&React.createElement('div',{style:{position:'fixed',inset:0,background:'#000',zIndex:10001,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
+    React.createElement('div',{style:{position:'absolute',top:0,left:0,right:0,zIndex:10,background:'linear-gradient(to bottom,rgba(0,0,0,0.85),transparent)',padding:'16px',paddingTop:'max(16px,env(safe-area-inset-top))',textAlign:'center'}},
+      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:16,color:'var(--gold)',letterSpacing:2}},'🔁 REESCANEAR FOTO'),
+      React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.6)',marginTop:2,fontFamily:'JetBrains Mono'}},reescaneando)
+    ),
+    React.createElement('video',{ref:videoRef,autoPlay:true,playsInline:true,muted:true,style:{width:'100%',height:'100%',objectFit:'cover'}}),
+    React.createElement('div',{style:{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',pointerEvents:'none'}},
+      React.createElement('div',{style:{width:260,height:260,border:'3px solid rgba(200,168,75,0.85)',borderRadius:12}})
+    ),
+    React.createElement('div',{style:{position:'absolute',bottom:0,left:0,right:0,background:'linear-gradient(to top,rgba(0,0,0,0.9),transparent)',padding:'20px 16px',paddingBottom:'max(20px,env(safe-area-inset-bottom))'}},
+      React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.6)',textAlign:'center',marginBottom:14}},'Encuadra la etiqueta completa, bien enfocada y derecha'),
+      React.createElement('div',{style:{display:'flex',gap:10}},
+        React.createElement('button',{onClick:cancelarReescaneo,style:{flex:1,padding:'14px',borderRadius:10,border:'1px solid rgba(255,255,255,0.2)',background:'transparent',color:'rgba(255,255,255,0.6)',fontFamily:'Bebas Neue',fontSize:15,cursor:'pointer'}},'CANCELAR'),
+        React.createElement('button',{onClick:confirmarFotoReescaneo,style:{flex:2,padding:'14px',borderRadius:10,border:'none',background:'linear-gradient(135deg,var(--gold),#a87d2a)',color:'var(--dark-deep)',fontFamily:'Bebas Neue',fontSize:17,letterSpacing:2,cursor:'pointer'}},'📸 CAPTURAR FOTO')
+      )
+    )
+  );
+
   // SESIÓN RECUPERABLE — se muestra antes que cualquier otra fase si hay escaneos sin confirmar
   if(sesionRecuperableRM) return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:24,color:'#fff',fontFamily:'DM Sans,sans-serif'}},
     React.createElement('div',{style:{fontSize:48,marginBottom:12}},'🚛'),
@@ -4984,8 +5052,11 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
         )
       )
     ),
-    // Video
-    React.createElement('video',{ref:videoRef,autoPlay:true,playsInline:true,muted:true,style:{width:'100%',height:'100%',objectFit:'cover'}}),
+    // Video — se desmonta mientras el modal de reescaneo está abierto: los dos comparten el
+    // mismo videoRef (ver comentario en iniciarReescaneo) y React solo puede apuntarlo a UN
+    // nodo del DOM a la vez. Tenerlos montados los dos juntos dejaba a videoRef.current
+    // apuntando al que React procesa último, con el otro mostrando pantalla negra.
+    !reescaneando&&React.createElement('video',{ref:videoRef,autoPlay:true,playsInline:true,muted:true,style:{width:'100%',height:'100%',objectFit:'cover'}}),
     // Overlay con mira dinámica
     React.createElement('div',{style:{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',pointerEvents:'none'}},
       React.createElement('div',{style:{width:280,height:180,position:'relative',transition:'all 0.2s'}},
@@ -5024,6 +5095,16 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
     erroresSyncRM>0&&React.createElement('div',{style:{position:'absolute',top:78,left:0,right:0,zIndex:15,display:'flex',justifyContent:'center',padding:'0 16px'}},
       React.createElement('div',{onClick:reintentarPendientesRM,style:{background:'rgba(200,0,0,0.95)',padding:'10px 18px',borderRadius:10,fontSize:13,fontWeight:800,color:'#fff',cursor:'pointer',boxShadow:'0 0 20px rgba(255,0,0,0.5)',textAlign:'center'}},'⚠ '+erroresSyncRM+' sin guardar — toca para reintentar')
     ),
+    // Aviso EN EL MOMENTO de paquete sin ningún dato — no hay que esperar a terminar todo el
+    // lote para enterarse: apenas la IA termina de leer una foto y sale vacía, aparece acá
+    // mismo, con el código puntual, para reescanearlo altiro mientras el paquete todavía está
+    // a la mano (parpadea para que se note aunque el mensajero esté mirando la mira, no la
+    // pantalla completa).
+    vaciosEnVivo.length>0&&React.createElement('div',{style:{position:'absolute',top:erroresSyncRM>0?134:78,left:0,right:0,zIndex:16,display:'flex',justifyContent:'center',padding:'0 16px'}},
+      React.createElement('div',{onClick:function(){iniciarReescaneo(vaciosEnVivo[0].codigo);},style:{background:'rgba(220,20,20,0.97)',padding:'10px 18px',borderRadius:10,fontSize:13,fontWeight:800,color:'#fff',cursor:'pointer',textAlign:'center',animation:'alertaVacioPulse 1s ease-in-out infinite',border:'1px solid rgba(255,255,255,0.3)'}},
+        '🚫 SIN DATOS: '+vaciosEnVivo[0].codigo+' — toca para reescanear'+(vaciosEnVivo.length>1?' (+'+(vaciosEnVivo.length-1)+' más)':'')
+      )
+    ),
     // Último scan
     lastScan&&React.createElement('div',{style:{position:'absolute',bottom:120,left:0,right:0,display:'flex',justifyContent:'center',pointerEvents:'none'}},
       React.createElement('div',{style:{background:lastScan.duplicado?'rgba(200,0,0,0.95)':lastScan.esperandoFoto?'rgba(200,168,75,0.95)':'rgba(0,180,80,0.95)',padding:'14px 28px',borderRadius:24,fontSize:15,fontWeight:800,fontFamily:'JetBrains Mono',letterSpacing:1.5,boxShadow:lastScan.duplicado?'0 0 20px rgba(255,0,0,0.6)':lastScan.esperandoFoto?'0 0 20px rgba(200,168,75,0.6)':'0 0 20px rgba(0,255,100,0.5)',border:lastScan.duplicado?'2px solid #ff4444':lastScan.esperandoFoto?'2px solid var(--gold)':'2px solid #00ff88',transition:'all 0.2s'}},
@@ -5047,7 +5128,8 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
           React.createElement('button',{onClick:procesarManual,style:{flex:2,padding:'10px',borderRadius:8,border:'none',background:'var(--gold)',color:'var(--dark-deep)',fontFamily:'Bebas Neue',fontSize:15,cursor:'pointer'}},'AGREGAR')
         )
       )
-    )
+    ),
+    modalReescaneo
   );
 
   // FASE REVISIÓN
@@ -5162,24 +5244,7 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
           React.createElement('button',{onClick:confirmarRetiro,disabled:guardando||paquetes.length===0||vaciosTotalRM>0,style:{flex:2,padding:'14px',borderRadius:10,border:'none',background:guardando?'rgba(200,168,75,0.3)':(vaciosTotalRM>0?'rgba(120,120,120,0.3)':'linear-gradient(135deg,#2e7d4f,#1a5c38)'),color:vaciosTotalRM>0?'rgba(255,255,255,0.4)':'#fff',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,cursor:(guardando||vaciosTotalRM>0)?'not-allowed':'pointer'}},guardando?'GUARDANDO...':(vaciosTotalRM>0?'🚫 RESUELVE LOS VACÍOS PARA CONFIRMAR':'✅ CONFIRMAR '+paquetes.length+' PAQUETES'))
         )
       ),
-      // Modal de reescaneo — cámara enfocada solo en el código que quedó sin datos.
-      reescaneando&&React.createElement('div',{style:{position:'fixed',inset:0,background:'#000',zIndex:10001,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
-        React.createElement('div',{style:{position:'absolute',top:0,left:0,right:0,zIndex:10,background:'linear-gradient(to bottom,rgba(0,0,0,0.85),transparent)',padding:'16px',paddingTop:'max(16px,env(safe-area-inset-top))',textAlign:'center'}},
-          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:16,color:'var(--gold)',letterSpacing:2}},'🔁 REESCANEAR FOTO'),
-          React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.6)',marginTop:2,fontFamily:'JetBrains Mono'}},reescaneando)
-        ),
-        React.createElement('video',{ref:videoRef,autoPlay:true,playsInline:true,muted:true,style:{width:'100%',height:'100%',objectFit:'cover'}}),
-        React.createElement('div',{style:{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',pointerEvents:'none'}},
-          React.createElement('div',{style:{width:260,height:260,border:'3px solid rgba(200,168,75,0.85)',borderRadius:12}})
-        ),
-        React.createElement('div',{style:{position:'absolute',bottom:0,left:0,right:0,background:'linear-gradient(to top,rgba(0,0,0,0.9),transparent)',padding:'20px 16px',paddingBottom:'max(20px,env(safe-area-inset-bottom))'}},
-          React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.6)',textAlign:'center',marginBottom:14}},'Encuadra la etiqueta completa, bien enfocada y derecha'),
-          React.createElement('div',{style:{display:'flex',gap:10}},
-            React.createElement('button',{onClick:cancelarReescaneo,style:{flex:1,padding:'14px',borderRadius:10,border:'1px solid rgba(255,255,255,0.2)',background:'transparent',color:'rgba(255,255,255,0.6)',fontFamily:'Bebas Neue',fontSize:15,cursor:'pointer'}},'CANCELAR'),
-            React.createElement('button',{onClick:confirmarFotoReescaneo,style:{flex:2,padding:'14px',borderRadius:10,border:'none',background:'linear-gradient(135deg,var(--gold),#a87d2a)',color:'var(--dark-deep)',fontFamily:'Bebas Neue',fontSize:17,letterSpacing:2,cursor:'pointer'}},'📸 CAPTURAR FOTO')
-          )
-        )
-      )
+      modalReescaneo
     );
   }
 
