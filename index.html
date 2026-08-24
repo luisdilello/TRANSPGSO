@@ -586,7 +586,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787591800;
+window.__MODULES_VERSION=1787592300;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -4382,6 +4382,47 @@ async function analizarEtiqueta(base64img,mediaType,_retry=0){
     return{_error:e.message};
   }
 }
+// Girar 180° — para el caso, bastante común, de una etiqueta fotografiada boca abajo. A
+// diferencia de una foto "de lado" (que rotarImagenSiVertical sí detecta, porque cambia el
+// ancho x alto), una foto al revés sigue midiendo igual de vertical que una derecha — no hay
+// forma de detectarla solo por proporción. Y en la práctica el modelo de IA falla mucho más
+// leyendo texto boca abajo que texto de lado, aunque el prompt le diga que puede venir en
+// cualquier orientación. Se usa como reintento (ver analizarConFallback180), no como paso fijo.
+async function rotar180(base64img){
+  return new Promise(resolve=>{
+    const soloBase64=v=>(v&&v.indexOf('data:')===0)?v.slice(v.indexOf(',')+1):v;
+    const img=new Image();
+    img.onload=()=>{
+      const cv=document.createElement('canvas');
+      cv.width=img.width;cv.height=img.height;
+      const ctx=cv.getContext('2d');
+      ctx.translate(img.width/2,img.height/2);
+      ctx.rotate(Math.PI);
+      ctx.drawImage(img,-img.width/2,-img.height/2);
+      resolve(soloBase64(cv.toDataURL('image/jpeg',0.85)));
+    };
+    img.onerror=()=>resolve(soloBase64(base64img));
+    img.src=(base64img&&base64img.indexOf('data:')===0)?base64img:'data:image/jpeg;base64,'+base64img;
+  });
+}
+function _analisisVacio(datos){
+  return!datos||datos._error||(!datos.destinatario&&!datos.direccion&&!datos.comuna&&!datos.telefono&&!datos.referencia);
+}
+// Blindaje central: si la primera lectura no sacó NADA, se reintenta UNA vez con la foto
+// girada 180° antes de darla por perdida. Así una etiqueta completa y legible pero
+// fotografiada al revés termina con datos igual, sin que el mensajero tenga que hacer nada —
+// el reescaneo manual queda solo para los casos que de verdad están borrosos, dañados o con
+// la etiqueta parcialmente tapada/doblada.
+async function analizarConFallback180(base64img,mediaType){
+  var primero=await analizarEtiqueta(base64img,mediaType);
+  if(!_analisisVacio(primero)) return primero;
+  try{
+    var girado=await rotar180(base64img);
+    var segundo=await analizarEtiqueta(girado,mediaType);
+    if(!_analisisVacio(segundo)) return segundo;
+  }catch(e){}
+  return primero;
+}
 function RetiroMasivoRider(_ref_rm){
   var usuario=_ref_rm.usuario,clientes=_ref_rm.clientes,toast=_ref_rm.toast,onClose=_ref_rm.onClose;
   var _s1=useState('seleccion'),fase=_s1[0],setFase=_s1[1];
@@ -4598,7 +4639,7 @@ function RetiroMasivoRider(_ref_rm){
     try{ db.from('envios').update({foto_etiqueta:foto}).eq('codigo',codigo).then(function(){}).catch(function(){}); }catch(e){}
     var b64=foto.split(',')[1];
     rotarImagenSiVertical(b64).then(function(b64r){
-      return analizarEtiqueta(b64r,'image/jpeg');
+      return analizarConFallback180(b64r,'image/jpeg');
     }).then(function(datos){
       setPaquetes(function(prev){return prev.map(function(p){
         if(p.codigo!==codigo) return p;
@@ -4668,7 +4709,7 @@ function RetiroMasivoRider(_ref_rm){
       if(foto){
       var b64=foto.split(',')[1];
       rotarImagenSiVertical(b64).then(function(b64r){
-        return analizarEtiqueta(b64r,'image/jpeg');
+        return analizarConFallback180(b64r,'image/jpeg');
       }).then(function(datos){
         setPaquetes(function(prev){return prev.map(function(p){
           if(p.codigo!==codigo) return p;
@@ -5390,7 +5431,7 @@ function ColectaRider(_ref_cr){
       const {codigo,base64,mediaType}=e.detail;
       setFotoAnalisis({codigo,base64,mediaType,analizando:true,datos:null});
       toast('🤖 Analizando...');
-      rotarImagenSiVertical(base64).then(b64r=>analizarEtiqueta(b64r,mediaType)).then(datos=>{
+      rotarImagenSiVertical(base64).then(b64r=>analizarConFallback180(b64r,mediaType)).then(datos=>{
         setFotoAnalisis({codigo,base64,mediaType,analizando:false,datos});
         if(datos&&!datos._error){
           var codigoFinalIA=codigo;
@@ -5525,7 +5566,7 @@ function ColectaRider(_ref_cr){
             r.readAsDataURL(item.file);
           });
           const mediaType=item.file.type||'image/jpeg';
-          const b64r=await rotarImagenSiVertical(b64);const datos=await analizarEtiqueta(b64r,mediaType);
+          const b64r=await rotarImagenSiVertical(b64);const datos=await analizarConFallback180(b64r,mediaType);
           // Limpiar código de espacios
           if(datos?.codigo) datos.codigo=datos.codigo.toString().replace(/[^0-9]/g,'');
           // Si hay _error pero también datos parciales, no bloquear como error
@@ -7448,7 +7489,7 @@ function RetirosRider(_ref_rr){
             r.readAsDataURL(item.file);
           });
           const mediaType=item.file.type||'image/jpeg';
-          const b64r=await rotarImagenSiVertical(b64);const datos=await analizarEtiqueta(b64r,mediaType);
+          const b64r=await rotarImagenSiVertical(b64);const datos=await analizarConFallback180(b64r,mediaType);
           // Limpiar código de espacios
           if(datos&&datos.codigo) datos.codigo=datos.codigo.toString().replace(/[^0-9]/g,'');
           setFotosRespaldo(prev=>prev.map((f,j)=>j===item.idx?Object.assign({},f,{analizando:false,datos,error:datos&&datos._error||null}):f));
@@ -10338,7 +10379,7 @@ window.__app = {
   normNombre, sbSelect, EnvioDetalleCard, UMBRAL_ATRASO_DIAS, EtiquetaPreview,
   UMBRAL_TARDIO_HORAS, calcularBaseTardio, esEnvioTardio, horasTardanza,
   sbUpdateEstado, sbRegistrarHistorial, sbRegistrarHistorialLote, fetchPaginadoParalelo, fetchPorDiasParalelo,
-  analizarEtiqueta, rotarImagenSiVertical
+  analizarEtiqueta, rotarImagenSiVertical, analizarConFallback180, rotar180
 };
 function App(){useEffect(()=>{
   sincronizarContadorPGSO();
