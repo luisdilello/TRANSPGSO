@@ -92,6 +92,7 @@ function Siniestros(props){
   var _modalMensajero=useState(null), modalMensajero=_modalMensajero[0], setModalMensajero=_modalMensajero[1];
   var _modalNuevo=useState(false), modalNuevo=_modalNuevo[0], setModalNuevo=_modalNuevo[1];
   var _valorEdit=useState({}), valorEdit=_valorEdit[0], setValorEdit=_valorEdit[1];
+  var _notaEdit=useState({}), notaEdit=_notaEdit[0], setNotaEdit=_notaEdit[1];
   var _rango=useState('todos'), rango=_rango[0], setRango=_rango[1]; // todos|hoy|semana|mes|rango
   var _rangoDesde=useState(''), rangoDesde=_rangoDesde[0], setRangoDesde=_rangoDesde[1];
   var _rangoHasta=useState(''), rangoHasta=_rangoHasta[0], setRangoHasta=_rangoHasta[1];
@@ -197,6 +198,17 @@ function Siniestros(props){
       setRegistros(function(prev){return prev.map(function(x){return x.id===row.id?Object.assign({},x,{valor_siniestro:num}):x;});});
       setValorEdit(function(prev){var n=Object.assign({},prev);delete n[row.id];return n;});
       toast&&toast('✓ Valor actualizado');
+    });
+  }
+
+  function guardarNota(row){
+    var val=notaEdit[row.id];
+    if(val==null)return;
+    db.from('siniestros').update({nota:val}).eq('id',row.id).then(function(r){
+      if(r.error){toast&&toast('⚠ Error guardando nota: '+r.error.message);return;}
+      setRegistros(function(prev){return prev.map(function(x){return x.id===row.id?Object.assign({},x,{nota:val}):x;});});
+      setNotaEdit(function(prev){var n=Object.assign({},prev);delete n[row.id];return n;});
+      toast&&toast('✓ Nota actualizada');
     });
   }
 
@@ -354,7 +366,12 @@ function Siniestros(props){
                   React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)'}},row.descontado_mensajero_semana),
                   React.createElement('button',{onClick:function(){deshacerMensajero(row);},style:{marginTop:2,fontSize:9,color:'var(--danger)',background:'none',border:'none',cursor:'pointer',textDecoration:'underline',padding:0}},'deshacer')):
                 React.createElement('button',{className:'action-btn btn-edit',onClick:function(){setModalMensajero(row);}},'🧾 Descontar')),
-            React.createElement('td',{style:{fontSize:11,color:'var(--text-mid)',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'},title:row.nota||''},row.nota||'—'));
+            React.createElement('td',null,
+              React.createElement('input',{type:'text',style:{width:150,padding:'4px 6px',border:'1px solid var(--border)',borderRadius:6,fontSize:11,color:'var(--text-mid)'},
+                value:notaEdit[row.id]!=null?notaEdit[row.id]:(row.nota||''),
+                placeholder:'¿Qué pasó?',
+                onChange:function(e){setNotaEdit(function(prev){var n=Object.assign({},prev);n[row.id]=e.target.value;return n;});},
+                onBlur:function(){if(notaEdit[row.id]!=null)guardarNota(row);}})));
         })))),
     modalMensajero&&React.createElement(ModalSemana,{row:modalMensajero,onClose:function(){setModalMensajero(null);},onConfirm:function(semana){return confirmarDescuentoMensajero(modalMensajero,semana);}}),
     modalNuevo&&React.createElement(ModalNuevo,{mensajeros:mensajeros,onClose:function(){setModalNuevo(false);},onCreado:function(){setModalNuevo(false);cargar();toast&&toast('✓ Siniestro registrado');}}));
