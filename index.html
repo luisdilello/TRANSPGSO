@@ -586,7 +586,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787539699;
+window.__MODULES_VERSION=1787589861;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -4228,8 +4228,15 @@ async function rotarImagenSiVertical(base64img){
     const img=new Image();
     img.onload=()=>{
       const{width,height}=img;
-      if(height<=width*1.2){resolve(soloBase64(base64img));return;}
-      // Imagen vertical: rotar 90° CW
+      // OJO: esta condición estaba invertida. Una foto de celular de una etiqueta vertical
+      // sostenida DERECHA (el caso normal) sale con height>width — eso es lo CORRECTO, no hay
+      // que tocarla. Antes se rotaba igual (por creer que "vertical = de lado"), dejando la
+      // etiqueta de costado justo antes de mandarla a leer por IA — la app mostraba la foto
+      // original (derecha, se ve perfecta) pero la IA recibía una versión girada e ilegible,
+      // por eso fallaba en extraer destinatario/dirección aunque la foto se viera bien. Ahora
+      // solo se rota si la foto salió HORIZONTAL (el mensajero sostuvo el celular de lado).
+      if(width<=height*1.2){resolve(soloBase64(base64img));return;}
+      // Imagen horizontal: rotar 90° CW para enderezarla
       const cv=document.createElement('canvas');
       cv.width=height;cv.height=width;
       const ctx=cv.getContext('2d');
@@ -4598,9 +4605,23 @@ function RetiroMasivoRider(_ref_rm){
         // si vino con _error, no se toca la base — el paquete queda marcado para que el
         // mensajero lo revise a mano en la pantalla de revisión (ver más abajo, "Sin datos IA").
         if(!esPDFRefRM.current.has(codigo)&&datos&&!datos._error){
-          db.from('envios').update({destinatario:datos.destinatario||'',direccion:datos.direccion||'',telefono:datos.telefono||'',comuna:datos.comuna||'',referencia:datos.referencia||''}).eq('codigo',codigo).then(function(r2){
-            if(!r2.error) setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{syncEstado:'guardado'}):p;});});
-          }).catch(function(){});
+          // Solo se manda a guardar lo que la IA SÍ pudo leer en esta pasada — nunca se pisa un
+          // campo con vacío. Antes se guardaba destinatario/direccion/etc. con '' cuando la IA
+          // no los detectaba, así que si el mismo código se escaneaba dos veces (ej. duplicado
+          // sin querer) y la segunda pasada leía peor que la primera, borraba datos buenos que
+          // ya estaban guardados. Ahora un resultado parcial solo completa lo que falta, nunca
+          // borra lo que ya se había guardado bien.
+          const upd={};
+          if(datos.destinatario) upd.destinatario=datos.destinatario;
+          if(datos.direccion) upd.direccion=datos.direccion;
+          if(datos.telefono) upd.telefono=datos.telefono;
+          if(datos.comuna) upd.comuna=datos.comuna;
+          if(datos.referencia) upd.referencia=datos.referencia;
+          if(Object.keys(upd).length>0){
+            db.from('envios').update(upd).eq('codigo',codigo).then(function(r2){
+              if(!r2.error) setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{syncEstado:'guardado'}):p;});});
+            }).catch(function(){});
+          }
         }
       }).catch(function(){
         setPaquetes(function(prev){return prev.map(function(p){
