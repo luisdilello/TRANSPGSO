@@ -177,6 +177,17 @@ function Siniestros(props){
     exportToExcel('Siniestros_TransPgso_'+fechaHoyCL(),[{name:'Siniestros',headers:headers,rows:rows}]);
   }
 
+  // Corrige el mensajero de un registro de siniestro ya creado — por ejemplo cuando el envío
+  // se reasignó de mensajero antes de que ocurriera el siniestro y quedó guardado el nombre
+  // equivocado. Solo toca la tabla siniestros (no el envío en sí).
+  function guardarMensajero(row,nuevoMensajero){
+    db.from('siniestros').update({mensajero:nuevoMensajero}).eq('id',row.id).then(function(r){
+      if(r.error){toast&&toast('⚠ Error guardando mensajero: '+r.error.message);return;}
+      setRegistros(function(prev){return prev.map(function(x){return x.id===row.id?Object.assign({},x,{mensajero:nuevoMensajero}):x;});});
+      toast&&toast('✓ Mensajero corregido');
+    });
+  }
+
   function guardarValor(row){
     var val=valorEdit[row.id];
     if(val==null)return;
@@ -315,7 +326,12 @@ function Siniestros(props){
           return React.createElement('tr',{key:row.id,style:{background:'rgba(198,40,40,0.03)'}},
             React.createElement('td',{style:{fontFamily:'JetBrains Mono',fontWeight:700,fontSize:11,color:'var(--dark)'}},row.codigo),
             React.createElement('td',{style:{fontSize:12}},row.cliente),
-            React.createElement('td',{style:{fontSize:12}},(row.mensajero||'—').replace(/,\s*/g,' ')),
+            React.createElement('td',null,
+              React.createElement('select',{value:row.mensajero||'',
+                onChange:function(e){guardarMensajero(row,e.target.value);},
+                style:{fontSize:11,padding:'4px 6px',border:'1px solid var(--border)',borderRadius:6,background:'#fff',color:'var(--text-mid)',maxWidth:130}},
+                React.createElement('option',{value:''},'Sin mensajero'),
+                mensajeros.map(function(m){return React.createElement('option',{key:m.id||m.nombre,value:m.nombre},m.nombre.replace(/,\s*/g,' '));}))),
             React.createElement('td',null,React.createElement('span',{style:{fontSize:11,fontWeight:700,color:est.color}},est.label)),
             React.createElement('td',{style:{fontFamily:'JetBrains Mono',fontSize:11,color:'var(--text-soft)'}},row.fecha_siniestro||'—'),
             React.createElement('td',null,
