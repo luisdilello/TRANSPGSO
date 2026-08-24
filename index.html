@@ -589,7 +589,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787601100;
+window.__MODULES_VERSION=1787602200;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3370,19 +3370,19 @@ function EnvioDetalleCard(_ref_edc){
         );})
       )
     ),
-    /*#__PURE__*/React.createElement('div',{className:'panel-title'},'📜 Historial de Estados'),
+    /*#__PURE__*/React.createElement('div',{className:'panel-title'},'📷 Fotos de Entrega'),
+    /*#__PURE__*/React.createElement(FotosEntregaConRecarga,{codigo:envio.codigo,fotoEtiquetaInicial:envio.foto_etiqueta}),
+    /*#__PURE__*/React.createElement('div',{className:'panel-title',style:{marginTop:20}},'📜 Historial de Estados'),
     historial.length===0?/*#__PURE__*/React.createElement('div',{className:'empty-state'},'Sin historial registrado para este envío.'):
     /*#__PURE__*/React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:10,marginBottom:20}},
-      historial.map(function(h,i){return/*#__PURE__*/React.createElement('div',{key:i,style:{display:'flex',gap:12,alignItems:'flex-start',padding:'10px 14px',background:'var(--cream)',borderRadius:8,borderLeft:'3px solid var(--gold)'}},
+      historial.map(function(h,i){const info=estadoInfo(h.estado);return/*#__PURE__*/React.createElement('div',{key:i,style:{display:'flex',gap:12,alignItems:'flex-start',padding:'10px 14px',background:info.bg||'var(--cream)',borderRadius:8,borderLeft:'3px solid '+(info.color||'var(--gold)')}},
         /*#__PURE__*/React.createElement('div',{style:{minWidth:130,fontSize:11,fontFamily:'JetBrains Mono',color:'var(--text-soft)'}},fmtFH(h.created_at)),
         /*#__PURE__*/React.createElement('div',{style:{flex:1}},
-          /*#__PURE__*/React.createElement('div',{style:{fontWeight:700}},estadoInfo(h.estado).label,' ',/*#__PURE__*/React.createElement('span',{style:{fontWeight:400,fontSize:11,color:'var(--text-soft)'}},'· '+(h.usuario||'Sistema'))),
+          /*#__PURE__*/React.createElement('div',{style:{fontWeight:700,color:info.color||'var(--dark)'}},info.label,' ',/*#__PURE__*/React.createElement('span',{style:{fontWeight:400,fontSize:11,color:'var(--text-soft)'}},'· '+(h.usuario||'Sistema'))),
           h.nota&&/*#__PURE__*/React.createElement('div',{style:{fontSize:12,color:'var(--text-mid)',marginTop:2}},h.nota)
         )
       );})
-    ),
-    /*#__PURE__*/React.createElement('div',{className:'panel-title'},'📷 Fotos de Entrega'),
-    /*#__PURE__*/React.createElement(FotosEntregaConRecarga,{codigo:envio.codigo,fotoEtiquetaInicial:envio.foto_etiqueta})
+    )
   );
 }
 /* ConsultaExpress se carga en modules/consulta-express.js (lazy-load) */
