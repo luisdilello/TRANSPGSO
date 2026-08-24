@@ -586,7 +586,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787589861;
+window.__MODULES_VERSION=1787591800;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -4394,6 +4394,11 @@ function RetiroMasivoRider(_ref_rm){
   var _s8=useState(false),showManual=_s8[0],setShowManual=_s8[1];
   var _s9=useState('idle'),scanEstado=_s9[0],setScanEstado=_s9[1]; // idle | alineando | capturando
   var _s10rm=useState(null),resultadoErrorRM=_s10rm[0],setResultadoErrorRM=_s10rm[1];
+  // Reescaneo: cuando la foto de un paquete salió sin nada de información legible (etiqueta
+  // completa pero mal enfocada/con reflejo, no una etiqueta chica doblada a la mitad — esas sí
+  // se aceptan con datos parciales), se le pide al mensajero volver a fotografiar ese código
+  // puntual sin tener que reiniciar todo el escaneo del lote.
+  var _s11rm=useState(null),reescaneando=_s11rm[0],setReescaneando=_s11rm[1];
   var videoRef=useRef();
   var canvasRef=useRef();
   var scannerRef=useRef(null);
@@ -4558,6 +4563,80 @@ function RetiroMasivoRider(_ref_rm){
     }catch(e){return null;}
   }
 
+  // ── Reescaneo de foto para un código puntual (blindaje anti-paquete-vacío) ──────────
+  // Se abre la cámara solo para ese código, sin tocar el resto del lote ni el escáner de
+  // códigos de barra (acá no hace falta detectar nada, solo tomar una foto nueva).
+  async function iniciarReescaneo(codigo){
+    try{
+      var stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}});
+      if(videoRef.current){
+        videoRef.current.srcObject=stream;
+        await videoRef.current.play();
+      }
+      scannerRef.current={stream:stream};
+      setReescaneando(codigo);
+    }catch(e){
+      toast('⚠ Sin acceso a cámara: '+(e.message||''));
+    }
+  }
+  function cancelarReescaneo(){
+    detenerScanner();
+    setReescaneando(null);
+  }
+  function confirmarFotoReescaneo(){
+    var codigo=reescaneando;
+    if(!codigo) return;
+    var foto=capturarFoto();
+    detenerScanner();
+    setReescaneando(null);
+    if(!foto){ toast('⚠ No se pudo capturar la foto, intenta de nuevo'); return; }
+    playSound('foto');
+    // Se limpia lo anterior (datosIA/edición manual previa) porque la foto nueva reemplaza a
+    // la vieja — si el reintento tampoco lee nada, el paquete sigue marcado como vacío y el
+    // mensajero puede completar los datos a mano, que es la salida de emergencia que ya existía.
+    setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{foto:foto,analizandoIA:true,datosIA:null,editando:false,editDest:undefined,editDir:undefined,editComuna:undefined}):p;});});
+    try{ db.from('envios').update({foto_etiqueta:foto}).eq('codigo',codigo).then(function(){}).catch(function(){}); }catch(e){}
+    var b64=foto.split(',')[1];
+    rotarImagenSiVertical(b64).then(function(b64r){
+      return analizarEtiqueta(b64r,'image/jpeg');
+    }).then(function(datos){
+      setPaquetes(function(prev){return prev.map(function(p){
+        if(p.codigo!==codigo) return p;
+        return Object.assign({},p,{datosIA:datos,analizandoIA:false});
+      });});
+      if(!esPDFRefRM.current.has(codigo)&&datos&&!datos._error){
+        const upd={};
+        if(datos.destinatario) upd.destinatario=datos.destinatario;
+        if(datos.direccion) upd.direccion=datos.direccion;
+        if(datos.telefono) upd.telefono=datos.telefono;
+        if(datos.comuna) upd.comuna=datos.comuna;
+        if(datos.referencia) upd.referencia=datos.referencia;
+        if(Object.keys(upd).length>0){
+          db.from('envios').update(upd).eq('codigo',codigo).then(function(){}).catch(function(){});
+        }
+      }
+    }).catch(function(){
+      setPaquetes(function(prev){return prev.map(function(p){
+        return p.codigo===codigo?Object.assign({},p,{analizandoIA:false}):p;
+      });});
+    });
+  }
+  // Un paquete está "vacío total" cuando, terminado el análisis, no hay NINGÚN dato usable —
+  // ni lo que sacó la IA ni lo que el mensajero corrigió a mano. Esto es distinto del aviso
+  // suave de "datos incompletos" (que salta con solo UN campo faltante): una etiqueta chica
+  // doblada a la mitad puede legítimamente traer solo destinatario y nada más, y eso está bien.
+  // Lo que nunca debe pasar es confirmar un paquete con la etiqueta completa y cero información.
+  function paqueteVacioTotal(p){
+    if(p.analizandoIA) return false;
+    var d=p.datosIA||{};
+    var dest=(p.editDest!=null?p.editDest:(d.destinatario||'')).trim();
+    var dir=(p.editDir!=null?p.editDir:(d.direccion||'')).trim();
+    var com=(p.editComuna!=null?p.editComuna:(d.comuna||'')).trim();
+    var tel=(d.telefono||'').trim();
+    var ref=(d.referencia||'').trim();
+    return!dest&&!dir&&!com&&!tel&&!ref;
+  }
+
   function procesarCodigo(codigo,canvas){
     if(codigosRef.current.has(codigo)){
       playSound('error');
@@ -4675,6 +4754,13 @@ function RetiroMasivoRider(_ref_rm){
 
   async function confirmarRetiro(){
     if(paquetes.length===0) return;
+    // Segunda barrera además del botón deshabilitado: aunque algo llame a confirmarRetiro()
+    // directamente, nunca debe pasar un paquete con la etiqueta completa y cero datos.
+    var vaciosBloqueoRM=paquetes.filter(function(p){return paqueteVacioTotal(p);}).length;
+    if(vaciosBloqueoRM>0){
+      toast('🚫 '+vaciosBloqueoRM+' paquete'+(vaciosBloqueoRM>1?'s':'')+' sin ningún dato — reescanea la foto o completa a mano antes de confirmar');
+      return;
+    }
     setGuardando(true);
     window.__TRANSPGSO_GUARDANDO_CRITICO=(window.__TRANSPGSO_GUARDANDO_CRITICO||0)+1;
     var clienteNombre=clienteSel&&clienteSel.nombre?clienteSel.nombre:'Sin cliente';
@@ -4927,6 +5013,7 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
   if(fase==='revision'){
     var analizando=paquetes.filter(function(p){return p.analizandoIA;}).length;
     var incompletosRM=paquetes.filter(function(p){var d=p.datosIA||{};return!p.analizandoIA&&(d._error||!d.destinatario||!d.direccion||!d.comuna);}).length;
+    var vaciosTotalRM=paquetes.filter(function(p){return paqueteVacioTotal(p);}).length;
     return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
       React.createElement('div',{style:{background:'var(--dark)',padding:'14px 16px',paddingTop:'max(14px,env(safe-area-inset-top))',borderBottom:'2px solid var(--gold)',flexShrink:0}},
         React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center'}},
@@ -4950,7 +5037,11 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
           // comuna, con un borde de color imposible de pasar por alto.
           var tieneErrorIA=!p.analizandoIA&&d&&d._error;
           var datosIncompletos=!p.analizandoIA&&!editando&&(tieneErrorIA||!d.destinatario||!d.direccion||!d.comuna);
-          return React.createElement('div',{key:p.codigo,style:{background:datosIncompletos?'rgba(176,48,48,0.06)':'rgba(255,255,255,0.03)',border:'1px solid '+(editando?'var(--gold)':(datosIncompletos?'#b03030':'rgba(200,168,75,0.15)')),borderRadius:10,marginBottom:8,overflow:'hidden',transition:'border 0.2s'}},
+          // Vacío total: ni un solo dato, ni de la IA ni escrito a mano — este caso se marca
+          // aparte y más fuerte que el aviso suave de "incompleto", porque a diferencia de una
+          // etiqueta parcial (chica, doblada) acá no hay nada que mostrarle al cliente al cobrar.
+          var esVacioTotal=!editando&&paqueteVacioTotal(p);
+          return React.createElement('div',{key:p.codigo,style:{background:esVacioTotal?'rgba(255,30,30,0.14)':(datosIncompletos?'rgba(176,48,48,0.06)':'rgba(255,255,255,0.03)'),border:'1px solid '+(editando?'var(--gold)':(esVacioTotal?'#ff2222':(datosIncompletos?'#b03030':'rgba(200,168,75,0.15)'))),boxShadow:esVacioTotal?'0 0 10px rgba(255,30,30,0.35)':'none',borderRadius:10,marginBottom:8,overflow:'hidden',transition:'border 0.2s'}},
             React.createElement('div',{style:{display:'flex',gap:10,padding:10,alignItems:'flex-start'}},
               // Foto clickeable para zoom
               p.foto
@@ -4973,7 +5064,10 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
                 ),
                 !p.analizandoIA&&!editando&&d.destinatario&&React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.7)',marginBottom:1}},d.destinatario),
                 !p.analizandoIA&&!editando&&d.direccion&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)'}},d.direccion+(d.comuna?' · '+d.comuna:'')),
-                datosIncompletos&&React.createElement('div',{style:{fontSize:11,color:'#ff8a8a',fontWeight:700,marginTop:2}},
+                esVacioTotal&&React.createElement('div',{style:{fontSize:11,color:'#ff5555',fontWeight:800,marginTop:2}},
+                  '🚫 Sin ningún dato — toca 🔁 para reescanear la foto o ✎ para escribir los datos a mano'
+                ),
+                !esVacioTotal&&datosIncompletos&&React.createElement('div',{style:{fontSize:11,color:'#ff8a8a',fontWeight:700,marginTop:2}},
                   tieneErrorIA?('⚠ '+(d._error||'No se pudo leer la etiqueta')+' — toca ✎ para escribir los datos a mano'):'⚠ Datos incompletos (falta destinatario, dirección o comuna) — revisa con ✎'
                 )
               ),
@@ -5000,6 +5094,10 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
                     setPaquetes(function(prev){return prev.map(function(x,j){return j===i?Object.assign({},x,{editando:true,codigoEdit:x.codigo}):x;});});
                   }
                 },style:{background:editando?'rgba(46,125,79,0.3)':'rgba(200,168,75,0.1)',border:'1px solid '+(editando?'#2e7d4f':'rgba(200,168,75,0.4)'),borderRadius:6,color:editando?'#4caf84':'var(--gold)',width:28,height:28,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}},editando?'✓':'✎'),
+                // Botón reescanear foto — solo tiene sentido ofrecerlo cuando el análisis ya
+                // terminó y el resultado quedó incompleto o vacío (una foto que ya salió bien no
+                // necesita repetirse).
+                !editando&&!p.analizandoIA&&datosIncompletos&&React.createElement('button',{onClick:function(){iniciarReescaneo(p.codigo);},title:'Reescanear foto',style:{background:esVacioTotal?'rgba(255,30,30,0.18)':'rgba(200,168,75,0.1)',border:'1px solid '+(esVacioTotal?'#ff2222':'rgba(200,168,75,0.4)'),borderRadius:6,color:esVacioTotal?'#ff5555':'var(--gold)',width:28,height:28,cursor:'pointer',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center'}},'🔁'),
                 // Botón eliminar
                 React.createElement('button',{onClick:function(){setPaquetes(function(prev){return prev.filter(function(_,j){return j!==i;});});codigosRef.current.delete(p.codigo);},style:{background:'rgba(176,48,48,0.2)',border:'none',borderRadius:6,color:'#e88',width:28,height:28,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}},'✕')
               )
@@ -5013,10 +5111,32 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
       ),
       React.createElement('div',{style:{padding:'12px 16px',paddingBottom:'max(12px,env(safe-area-inset-bottom))',borderTop:'1px solid rgba(200,168,75,0.2)',background:'var(--dark)'}},
         analizando>0&&React.createElement('div',{style:{textAlign:'center',fontSize:12,color:'rgba(200,168,75,0.6)',marginBottom:8}},'Aún procesando algunos paquetes, puedes confirmar igual'),
-        analizando===0&&incompletosRM>0&&React.createElement('div',{style:{textAlign:'center',fontSize:12,color:'#ff8a8a',fontWeight:700,marginBottom:8}},'⚠ '+incompletosRM+' paquete'+(incompletosRM>1?'s':'')+' con datos incompletos (marcados en rojo arriba) — revísalos antes de confirmar si puedes'),
+        analizando===0&&vaciosTotalRM>0&&React.createElement('div',{style:{textAlign:'center',fontSize:12,color:'#ff5555',fontWeight:800,marginBottom:8}},'🚫 '+vaciosTotalRM+' paquete'+(vaciosTotalRM>1?'s':'')+' sin ningún dato (marcados en rojo fuerte arriba) — reescanea la foto con 🔁 o escribe los datos a mano con ✎ para poder confirmar'),
+        analizando===0&&vaciosTotalRM===0&&incompletosRM>0&&React.createElement('div',{style:{textAlign:'center',fontSize:12,color:'#ff8a8a',fontWeight:700,marginBottom:8}},'⚠ '+incompletosRM+' paquete'+(incompletosRM>1?'s':'')+' con datos incompletos (marcados en rojo arriba) — revísalos antes de confirmar si puedes'),
         React.createElement('div',{style:{display:'flex',gap:10}},
           React.createElement('button',{onClick:function(){setFase('seleccion');setPaquetes([]);codigosRef.current=new Set();},style:{flex:1,padding:'14px',borderRadius:10,border:'1px solid rgba(255,255,255,0.15)',background:'transparent',color:'rgba(255,255,255,0.4)',fontFamily:'Bebas Neue',fontSize:15,cursor:'pointer'}},'CANCELAR'),
-          React.createElement('button',{onClick:confirmarRetiro,disabled:guardando||paquetes.length===0,style:{flex:2,padding:'14px',borderRadius:10,border:'none',background:guardando?'rgba(200,168,75,0.3)':'linear-gradient(135deg,#2e7d4f,#1a5c38)',color:'#fff',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,cursor:guardando?'not-allowed':'pointer'}},guardando?'GUARDANDO...':'✅ CONFIRMAR '+paquetes.length+' PAQUETES')
+          // Blindaje: mientras haya paquetes con la etiqueta completa y CERO datos, no se puede
+          // confirmar el lote — hay que reescanear o completar a mano primero. Los incompletos
+          // (falta solo un campo, típico de etiquetas chicas dobladas) NO bloquean, solo avisan.
+          React.createElement('button',{onClick:confirmarRetiro,disabled:guardando||paquetes.length===0||vaciosTotalRM>0,style:{flex:2,padding:'14px',borderRadius:10,border:'none',background:guardando?'rgba(200,168,75,0.3)':(vaciosTotalRM>0?'rgba(120,120,120,0.3)':'linear-gradient(135deg,#2e7d4f,#1a5c38)'),color:vaciosTotalRM>0?'rgba(255,255,255,0.4)':'#fff',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,cursor:(guardando||vaciosTotalRM>0)?'not-allowed':'pointer'}},guardando?'GUARDANDO...':(vaciosTotalRM>0?'🚫 RESUELVE LOS VACÍOS PARA CONFIRMAR':'✅ CONFIRMAR '+paquetes.length+' PAQUETES'))
+        )
+      ),
+      // Modal de reescaneo — cámara enfocada solo en el código que quedó sin datos.
+      reescaneando&&React.createElement('div',{style:{position:'fixed',inset:0,background:'#000',zIndex:10001,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
+        React.createElement('div',{style:{position:'absolute',top:0,left:0,right:0,zIndex:10,background:'linear-gradient(to bottom,rgba(0,0,0,0.85),transparent)',padding:'16px',paddingTop:'max(16px,env(safe-area-inset-top))',textAlign:'center'}},
+          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:16,color:'var(--gold)',letterSpacing:2}},'🔁 REESCANEAR FOTO'),
+          React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.6)',marginTop:2,fontFamily:'JetBrains Mono'}},reescaneando)
+        ),
+        React.createElement('video',{ref:videoRef,autoPlay:true,playsInline:true,muted:true,style:{width:'100%',height:'100%',objectFit:'cover'}}),
+        React.createElement('div',{style:{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',pointerEvents:'none'}},
+          React.createElement('div',{style:{width:260,height:260,border:'3px solid rgba(200,168,75,0.85)',borderRadius:12}})
+        ),
+        React.createElement('div',{style:{position:'absolute',bottom:0,left:0,right:0,background:'linear-gradient(to top,rgba(0,0,0,0.9),transparent)',padding:'20px 16px',paddingBottom:'max(20px,env(safe-area-inset-bottom))'}},
+          React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.6)',textAlign:'center',marginBottom:14}},'Encuadra la etiqueta completa, bien enfocada y derecha'),
+          React.createElement('div',{style:{display:'flex',gap:10}},
+            React.createElement('button',{onClick:cancelarReescaneo,style:{flex:1,padding:'14px',borderRadius:10,border:'1px solid rgba(255,255,255,0.2)',background:'transparent',color:'rgba(255,255,255,0.6)',fontFamily:'Bebas Neue',fontSize:15,cursor:'pointer'}},'CANCELAR'),
+            React.createElement('button',{onClick:confirmarFotoReescaneo,style:{flex:2,padding:'14px',borderRadius:10,border:'none',background:'linear-gradient(135deg,var(--gold),#a87d2a)',color:'var(--dark-deep)',fontFamily:'Bebas Neue',fontSize:17,letterSpacing:2,cursor:'pointer'}},'📸 CAPTURAR FOTO')
+          )
         )
       )
     );
@@ -10217,7 +10337,8 @@ window.__app = {
   enviarNotificacionPush, fmt, ConteoAyudas, HistorialCierres, PlanillaRetiros,
   normNombre, sbSelect, EnvioDetalleCard, UMBRAL_ATRASO_DIAS, EtiquetaPreview,
   UMBRAL_TARDIO_HORAS, calcularBaseTardio, esEnvioTardio, horasTardanza,
-  sbUpdateEstado, sbRegistrarHistorial, sbRegistrarHistorialLote, fetchPaginadoParalelo, fetchPorDiasParalelo
+  sbUpdateEstado, sbRegistrarHistorial, sbRegistrarHistorialLote, fetchPaginadoParalelo, fetchPorDiasParalelo,
+  analizarEtiqueta, rotarImagenSiVertical
 };
 function App(){useEffect(()=>{
   sincronizarContadorPGSO();
