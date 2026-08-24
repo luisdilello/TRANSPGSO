@@ -589,7 +589,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787595600;
+window.__MODULES_VERSION=1787596700;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3306,6 +3306,7 @@ function HistorialPrestamos(_ref_hp){var nombre=_ref_hp.nombre,db=_ref_hp.db;
 function EnvioDetalleCard(_ref_edc){
   const envio=_ref_edc.envio;
   const [historial,setHistorial]=useState([]);
+  const [siniestroRegs,setSiniestroRegs]=useState([]);
   const [visible,setVisible]=useState(false);
   const cargadoRef=useRef(false);
   const elRef=useRef(null);
@@ -3327,9 +3328,17 @@ function EnvioDetalleCard(_ref_edc){
     if(!visible||cargadoRef.current)return;
     cargadoRef.current=true;
     let activo=true;
-    db.from('historial_envios').select('*').eq('codigo_envio',envio.codigo).order('fecha',{ascending:true})
+    // OJO: historial_envios NO tiene columna 'fecha' (solo 'created_at') -- ordenar/leer por
+    // 'fecha' hacia error silencioso en Supabase y esta tarjeta caia siempre al catch mostrando
+    // "Sin historial registrado", aunque sí hubiera historial completo guardado.
+    db.from('historial_envios').select('*').eq('codigo_envio',envio.codigo).order('created_at',{ascending:true})
       .then(function(r){if(activo)setHistorial(r.data||[]);})
       .catch(function(){if(activo)setHistorial([]);});
+    if(envio.tuvo_siniestro){
+      db.from('siniestros').select('*').eq('codigo',envio.codigo).order('created_at',{ascending:false})
+        .then(function(r){if(activo)setSiniestroRegs(r.data||[]);})
+        .catch(function(){if(activo)setSiniestroRegs([]);});
+    }
     return function(){activo=false;};
   },[visible,envio.codigo]);
   const fmtCLPce=n=>'$'+Math.round(n||0).toLocaleString('es-CL');
@@ -3339,6 +3348,17 @@ function EnvioDetalleCard(_ref_edc){
   }
   return/*#__PURE__*/React.createElement('div',{ref:elRef},
     /*#__PURE__*/React.createElement('div',{className:'panel',style:{background:'var(--cream)',marginBottom:16}},
+      envio.tuvo_siniestro&&/*#__PURE__*/React.createElement('div',{style:{marginBottom:12,padding:'10px 14px',background:'rgba(198,40,40,0.08)',border:'1px solid rgba(198,40,40,0.35)',borderRadius:8,color:'#C62828'}},
+        /*#__PURE__*/React.createElement('div',{style:{fontWeight:700,fontSize:13}},'⚠ Este código tuvo un Siniestro registrado'),
+        siniestroRegs.length===0?/*#__PURE__*/React.createElement('div',{style:{fontSize:11,marginTop:4,opacity:0.8}},'Cargando detalle del siniestro...'):
+        siniestroRegs.map(function(s){return/*#__PURE__*/React.createElement('div',{key:s.id,style:{fontSize:12,marginTop:6,lineHeight:1.6}},
+          'Fecha: '+(s.fecha_siniestro||'—')+' · Mensajero: '+(s.mensajero||'—')+' · Valor del paquete: '+fmtCLPce(envio.valor_siniestro),
+          /*#__PURE__*/React.createElement('br',null),
+          'Descuento a cliente: ',s.descontado_cliente?'✓ Aplicado ('+fmtCLPce(s.descontado_cliente_valor)+')':'Pendiente',
+          ' · Descuento a mensajero: ',s.descontado_mensajero?'✓ Aplicado ('+fmtCLPce(s.descontado_mensajero_valor)+', semana '+s.descontado_mensajero_semana+')':'Pendiente'
+        );}),
+        /*#__PURE__*/React.createElement('div',{style:{fontSize:11,marginTop:6,opacity:0.85}},'Para aplicar o deshacer un descuento, ve a la sección "⚠ Siniestros".')
+      ),
       esEnvioAtrasado(envio)&&/*#__PURE__*/React.createElement('div',{style:{marginBottom:12,padding:'8px 12px',background:'rgba(176,48,48,0.1)',border:'1px solid rgba(176,48,48,0.3)',borderRadius:8,color:'var(--danger)',fontWeight:700,fontSize:12}},'⚠ Atrasado: lleva '+diasDesdeFecha(envio.fecha)+' día(s) sin ser entregado'),
       /*#__PURE__*/React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12,fontSize:13}},
         [['Código',envio.codigo],['Cliente',envio.cliente],['Destinatario',envio.destinatario],
@@ -3354,7 +3374,7 @@ function EnvioDetalleCard(_ref_edc){
     historial.length===0?/*#__PURE__*/React.createElement('div',{className:'empty-state'},'Sin historial registrado para este envío.'):
     /*#__PURE__*/React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:10,marginBottom:20}},
       historial.map(function(h,i){return/*#__PURE__*/React.createElement('div',{key:i,style:{display:'flex',gap:12,alignItems:'flex-start',padding:'10px 14px',background:'var(--cream)',borderRadius:8,borderLeft:'3px solid var(--gold)'}},
-        /*#__PURE__*/React.createElement('div',{style:{minWidth:130,fontSize:11,fontFamily:'JetBrains Mono',color:'var(--text-soft)'}},fmtFH(h.fecha)),
+        /*#__PURE__*/React.createElement('div',{style:{minWidth:130,fontSize:11,fontFamily:'JetBrains Mono',color:'var(--text-soft)'}},fmtFH(h.created_at)),
         /*#__PURE__*/React.createElement('div',{style:{flex:1}},
           /*#__PURE__*/React.createElement('div',{style:{fontWeight:700}},estadoInfo(h.estado).label,' ',/*#__PURE__*/React.createElement('span',{style:{fontWeight:400,fontSize:11,color:'var(--text-soft)'}},'· '+(h.usuario||'Sistema'))),
           h.nota&&/*#__PURE__*/React.createElement('div',{style:{fontSize:12,color:'var(--text-mid)',marginTop:2}},h.nota)
