@@ -598,7 +598,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787682900;
+window.__MODULES_VERSION=1787684100;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1090,11 +1090,14 @@ async function fetchPorDiasParalelo(desde,hasta,build){
   }
   return acumulado;
 }
-async function fetchPaginadoParalelo(build){
+async function fetchPaginadoParalelo(build,cursorInicial){
   const BLOQUE=1000;
   // 'id' en la tabla envios es UUID (no numerico), asi que el cursor inicial (mas chico posible)
   // es el UUID todo-ceros, no el numero 0 — comparar '0' contra una columna uuid falla en Postgres.
-  let acumulado=[];let cursor='00000000-0000-0000-0000-000000000000';
+  // Otras tablas (ej. historial_envios) usan 'id' numerico serial, asi que el que llama puede
+  // pasar cursorInicial=0 en esos casos -- por defecto se asume UUID para no romper a quien
+  // ya usaba esta funcion sin el segundo parametro.
+  let acumulado=[];let cursor=(cursorInicial!==undefined&&cursorInicial!==null)?cursorInicial:'00000000-0000-0000-0000-000000000000';
   while(true){
     const r=await build(cursor,BLOQUE);
     if(r.error)throw r.error;
@@ -7090,6 +7093,10 @@ function CalendarioEntregasRider(_ref_cal){
   const _sc4=useState(null),diaSeleccionado=_sc4[0],setDiaSeleccionado=_sc4[1];
   const _sc5=useState([]),detalleDia=_sc5[0],setDetalleDia=_sc5[1];
   const _sc6=useState(false),cargandoDetalle=_sc6[0],setCargandoDetalle=_sc6[1];
+  // Fecha real en que cada envío pasó a 'entregado', según historial_envios — ver comentario
+  // en fechaEntregaReal más abajo. Mapa codigo -> created_at (string ISO) del último paso a
+  // 'entregado'.
+  const _sc7=useState({}),mapaEntregaReal=_sc7[0],setMapaEntregaReal=_sc7[1];
 
   useEffect(()=>{
     let cancelado=false;
@@ -7117,6 +7124,27 @@ function CalendarioEntregasRider(_ref_cal){
         // otro mensajero que comparte primer nombre (ej. MARCOS GIOVACCHINI / MARCOS FUENTEALBA).
         const propio=acumulado.filter(e=>normNombre(e.mensajero||'')===normNombre(usuario.nombre));
         if(!cancelado)setEntregas(propio);
+        // Traer, para los ya entregados, la fecha REAL en que pasaron a 'entregado' (no la
+        // fecha de asignación) — así "Mis Entregas" calza con lo que paga Pagos Mensajeros
+        // (que usa el mismo criterio). Se pide en lotes por si el mensajero tiene miles de
+        // entregas históricas (un .in() con demasiados códigos de una sola vez puede fallar
+        // por largo de URL).
+        const codigosEntregados=propio.filter(e=>e.estado==='entregado').map(e=>e.codigo);
+        const mapaReal={};
+        const LOTE=250;
+        for(let i=0;i<codigosEntregados.length;i+=LOTE){
+          if(cancelado)return;
+          const lote=codigosEntregados.slice(i,i+LOTE);
+          try{
+            const{data:histData}=await db.from('historial_envios').select('codigo_envio,created_at')
+              .eq('estado','entregado').in('codigo_envio',lote);
+            (histData||[]).forEach(h=>{
+              const actual=mapaReal[h.codigo_envio];
+              if(!actual||new Date(h.created_at)>new Date(actual))mapaReal[h.codigo_envio]=h.created_at;
+            });
+          }catch(eHist){}
+        }
+        if(!cancelado)setMapaEntregaReal(mapaReal);
       }catch(e){console.warn('Error cargando calendario de entregas:',e.message);}
       if(!cancelado)setCargando(false);
     }
@@ -7128,21 +7156,35 @@ function CalendarioEntregasRider(_ref_cal){
     const dt=d?new Date(d):new Date();
     return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
   }
-  // La fecha de referencia para agrupar es la del propio envío (columna 'fecha', el día en que
-  // se asignó/salió a ruta) — el mismo criterio que ya usa el Dashboard para "Top Mensajeros"
-  // (total asignado vs. entregado), así los números de este calendario calzan con el admin.
+  // La fecha de referencia para agrupar lo ASIGNADO es la del propio envío (columna 'fecha',
+  // el día en que se asignó/salió a ruta) — el mismo criterio que ya usa el Dashboard para
+  // "Top Mensajeros" (total asignado vs. entregado).
   function fechaAsignacion(e){return e.fecha||localDateStr(e.updated_at);}
+  // ANTES el conteo de "entregado" por día usaba esta misma fecha de asignación, aunque el
+  // paquete se hubiera entregado recién días después (típicamente cruzando fin de semana:
+  // cargado sábado, entregado lunes). Eso inflaba la semana de carga en vez de la semana real
+  // de entrega, y no calzaba con lo que efectivamente se paga (Pagos Mensajeros ya usa la
+  // fecha real de entrega — ver calcularEnviosSemana). Ahora "entregado" se cuenta en el día
+  // en que REALMENTE pasó a entregado (historial_envios), no en el día en que se asignó.
+  function fechaEntregaReal(e){
+    const real=mapaEntregaReal[e.codigo];
+    return real?localDateStr(real):fechaAsignacion(e); // respaldo si no hay historial registrado
+  }
 
   const conteoPorDia=useMemo(()=>{
     const mapa={};
     entregas.forEach(e=>{
-      const key=fechaAsignacion(e);
-      if(!mapa[key])mapa[key]={total:0,entregado:0};
-      mapa[key].total++;
-      if(e.estado==='entregado')mapa[key].entregado++;
+      const keyAsig=fechaAsignacion(e);
+      if(!mapa[keyAsig])mapa[keyAsig]={total:0,entregado:0};
+      mapa[keyAsig].total++;
+      if(e.estado==='entregado'){
+        const keyEnt=fechaEntregaReal(e);
+        if(!mapa[keyEnt])mapa[keyEnt]={total:0,entregado:0};
+        mapa[keyEnt].entregado++;
+      }
     });
     return mapa;
-  },[entregas]);
+  },[entregas,mapaEntregaReal]);
 
   const codigosPorDia=useMemo(()=>{
     const mapa={};
