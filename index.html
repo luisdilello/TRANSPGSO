@@ -589,7 +589,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787604400;
+window.__MODULES_VERSION=1787673300;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -4242,7 +4242,16 @@ function crearEntradaHistorial(estado,nota,usuario){
 }
 // ── SCANNER DE CÓDIGOS ────────────────────────────────────────────
 function extraerCodigoQR(raw){
-  // El QR puede traer JSON {"id":"47181633581","sender_id":...} o texto plano
+  // El QR puede traer JSON {"id":"47181633581","sender_id":...} o texto plano.
+  // OJO: antes, si ninguno de los campos conocidos (id/codigo/tracking/hash_code) traía un
+  // valor válido, se caía a un fallback que tomaba el PRIMER valor de TODO el objeto que
+  // pareciera un código (Object.values(obj)) — si el QR traía más de un número de 11+ dígitos
+  // (ej: sender_id, número de documento, teléfono, etc.) se podía terminar registrando el
+  // número equivocado en vez del código real, sin ningún aviso ni error (así se coló el caso
+  // del código 642135299197 mal registrado en vez del 47849499579 real). Ahora ese fallback
+  // solo se usa si hay EXACTAMENTE un candidato válido en todo el objeto — si hay más de uno,
+  // se considera ambiguo y se rechaza el escaneo (ver 'return null' abajo) para que quien
+  // llama muestre el error y pida ingresarlo manualmente, en vez de adivinar.
   function validarCodigo(cod){
     if(!cod) return null;
     const c=String(cod).trim().replace(/\s+/g,'');
@@ -4258,12 +4267,22 @@ function extraerCodigoQR(raw){
   }
   try{
     const obj=JSON.parse(raw);
-    const campos=['id','codigo','tracking','hash_code'];
-    for(const k of campos){
-      if(obj[k]){const v=validarCodigo(obj[k]);if(v)return v;}
+    const camposConocidos=['id','codigo','tracking','hash_code'];
+    // Comparación case-insensitive de las claves conocidas (alguna plataforma manda "Id"/"ID").
+    const clavesObj=Object.keys(obj);
+    for(const campo of camposConocidos){
+      const clave=clavesObj.find(k=>k.toLowerCase()===campo);
+      if(clave&&obj[clave]){const v=validarCodigo(obj[clave]);if(v)return v;}
     }
-    const vals=Object.values(obj).filter(v=>typeof v==='string'||typeof v==='number');
-    for(const v of vals){const r=validarCodigo(v);if(r)return r;}
+    // Ningún campo conocido validó — en vez de adivinar con cualquier valor del objeto, solo
+    // se acepta si queda UN ÚNICO candidato posible sin ambigüedad.
+    const candidatos=Object.values(obj)
+      .filter(v=>typeof v==='string'||typeof v==='number')
+      .map(v=>validarCodigo(v))
+      .filter(Boolean);
+    const unicos=Array.from(new Set(candidatos));
+    if(unicos.length===1) return unicos[0];
+    return null;
   }catch(e){}
   // No es JSON - código directo
   return validarCodigo(raw);
@@ -4612,7 +4631,16 @@ function RetiroMasivoRider(_ref_rm){
               procesandoRef.current=true;
               var raw=codes[0].rawValue.trim();
               var codigo=extraerCodigoQR(raw);
-              if(codigo) procesarCodigo(codigo,canvas);
+              if(codigo){
+                procesarCodigo(codigo,canvas);
+              }else{
+                // Código inválido o QR ambiguo (más de un número posible) — avisar en vez de
+                // quedarse en silencio, para que no siga intentando el mismo paquete sin saber
+                // por qué no "agarra".
+                playSound('error');
+                setLastScan({noLeido:true});
+                setTimeout(function(){setLastScan(null);},1500);
+              }
               setTimeout(function(){procesandoRef.current=false;},1200);
             }
           }catch(e){}
@@ -4637,6 +4665,10 @@ function RetiroMasivoRider(_ref_rm){
             canvas2.height=videoRef.current.videoHeight;
             canvas2.getContext('2d').drawImage(videoRef.current,0,0);
             procesarCodigo(codigo,canvas2);
+          }else{
+            playSound('error');
+            setLastScan({noLeido:true});
+            setTimeout(function(){setLastScan(null);},1500);
           }
           setTimeout(function(){procesandoRef.current=false;},1200);
         });
@@ -5162,8 +5194,8 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
     ),
     // Último scan
     lastScan&&React.createElement('div',{style:{position:'absolute',bottom:120,left:0,right:0,display:'flex',justifyContent:'center',pointerEvents:'none'}},
-      React.createElement('div',{style:{background:lastScan.duplicado?'rgba(200,0,0,0.95)':lastScan.esperandoFoto?'rgba(200,168,75,0.95)':'rgba(0,180,80,0.95)',padding:'14px 28px',borderRadius:24,fontSize:15,fontWeight:800,fontFamily:'JetBrains Mono',letterSpacing:1.5,boxShadow:lastScan.duplicado?'0 0 20px rgba(255,0,0,0.6)':lastScan.esperandoFoto?'0 0 20px rgba(200,168,75,0.6)':'0 0 20px rgba(0,255,100,0.5)',border:lastScan.duplicado?'2px solid #ff4444':lastScan.esperandoFoto?'2px solid var(--gold)':'2px solid #00ff88',transition:'all 0.2s'}},
-        lastScan.duplicado?'YA ESCANEADO':lastScan.esperandoFoto?'📸 '+lastScan.codigo+'...':'✅ '+lastScan.codigo
+      React.createElement('div',{style:{background:lastScan.noLeido?'rgba(180,80,0,0.95)':lastScan.duplicado?'rgba(200,0,0,0.95)':lastScan.esperandoFoto?'rgba(200,168,75,0.95)':'rgba(0,180,80,0.95)',padding:'14px 28px',borderRadius:24,fontSize:15,fontWeight:800,fontFamily:'JetBrains Mono',letterSpacing:1.5,boxShadow:lastScan.noLeido?'0 0 20px rgba(255,140,0,0.6)':lastScan.duplicado?'0 0 20px rgba(255,0,0,0.6)':lastScan.esperandoFoto?'0 0 20px rgba(200,168,75,0.6)':'0 0 20px rgba(0,255,100,0.5)',border:lastScan.noLeido?'2px solid #ff9800':lastScan.duplicado?'2px solid #ff4444':lastScan.esperandoFoto?'2px solid var(--gold)':'2px solid #00ff88',transition:'all 0.2s'}},
+        lastScan.noLeido?'⚠ NO SE PUDO LEER':lastScan.duplicado?'YA ESCANEADO':lastScan.esperandoFoto?'📸 '+lastScan.codigo+'...':'✅ '+lastScan.codigo
       )
     ),
     // Bottom bar
@@ -5477,7 +5509,15 @@ function ColectaRider(_ref_cr){
 
   function escaneado(raw){
     const codigo=extraerCodigoQR(raw);
-    if(!codigo) return;
+    if(!codigo){
+      // Antes esto no hacía nada (ni sonido ni aviso) — el mensajero sentía que el escáner
+      // "no reaccionaba" y volvía a intentar una y otra vez el mismo paquete sin saber por
+      // qué, perdiendo tiempo. Ahora se avisa que no se pudo leer (código inválido o QR
+      // ambiguo con más de un número posible) para que ingrese el código a mano.
+      playSound('error');
+      setLastScan({noLeido:true});
+      return;
+    }
     // Bloquear duplicados usando ref síncrona (no stale state)
     if(codigosRef.current.has(codigo)){
       playSound('error');
@@ -6151,17 +6191,18 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
       React.createElement('input',{value:manualCode,onChange:e=>setManualCode(e.target.value),onKeyDown:e=>{if(e.key==='Enter'){e.preventDefault();enviarManual();}},placeholder:'Código del paquete...',autoFocus:true,autoCapitalize:'none',autoCorrect:'off',style:{flex:1,padding:'12px 14px',background:'rgba(255,255,255,0.08)',border:'2px solid rgba(200,168,75,0.4)',borderRadius:8,color:'#fff',fontFamily:'JetBrains Mono',fontSize:14,outline:'none'}}),
       React.createElement('button',{onClick:enviarManual,disabled:!manualCode.trim(),style:{padding:'12px 16px',background:manualCode.trim()?'var(--gold)':'rgba(255,255,255,0.1)',border:'none',borderRadius:8,color:'var(--dark)',fontWeight:700,cursor:manualCode.trim()?'pointer':'default',fontSize:15}},'✓')
     ),
-    lastScan&&React.createElement('div',{style:{padding:'12px 16px',flexShrink:0,background:lastScan.duplicado?'rgba(200,0,0,0.95)':fotoAnalisis?.analizando?'rgba(200,168,75,0.95)':'rgba(0,180,80,0.95)',borderTop:'1px solid rgba(255,255,255,0.1)',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',boxShadow:lastScan.duplicado?'0 0 20px rgba(255,0,0,0.5)':fotoAnalisis?.analizando?'0 0 12px rgba(200,168,75,0.4)':'0 0 16px rgba(0,255,100,0.4)'}},
-      React.createElement('div',{style:{fontSize:22}},lastScan.duplicado?'🚫':fotoAnalisis?.analizando?'⏳':'✅'),
+    lastScan&&React.createElement('div',{style:{padding:'12px 16px',flexShrink:0,background:lastScan.noLeido?'rgba(180,80,0,0.95)':lastScan.duplicado?'rgba(200,0,0,0.95)':fotoAnalisis?.analizando?'rgba(200,168,75,0.95)':'rgba(0,180,80,0.95)',borderTop:'1px solid rgba(255,255,255,0.1)',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',boxShadow:lastScan.noLeido?'0 0 20px rgba(255,140,0,0.5)':lastScan.duplicado?'0 0 20px rgba(255,0,0,0.5)':fotoAnalisis?.analizando?'0 0 12px rgba(200,168,75,0.4)':'0 0 16px rgba(0,255,100,0.4)'}},
+      React.createElement('div',{style:{fontSize:22}},lastScan.noLeido?'⚠':lastScan.duplicado?'🚫':fotoAnalisis?.analizando?'⏳':'✅'),
       React.createElement('div',{style:{flex:1}},
-        React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:12,color:'var(--gold)',fontWeight:700}},lastScan.codigo),
+        !lastScan.noLeido&&React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:12,color:'var(--gold)',fontWeight:700}},lastScan.codigo),
         React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:1}},
+          lastScan.noLeido?'No se pudo leer el código — ingrésalo a mano en modo ⌨ MANUAL':
           lastScan.duplicado?'YA ESCANEADO':
           fotoAnalisis?.analizando?'🤖 Analizando etiqueta...':
           fotoAnalisis?.datos&&fotoAnalisis.codigo===lastScan.codigo?'✓ Datos extraídos':'✓ Escaneado · foto opcional'
         )
       ),
-      !lastScan.duplicado&&!(fotoAnalisis?.analizando)&&!(fotoAnalisis?.datos&&fotoAnalisis.codigo===lastScan.codigo)&&
+      !lastScan.noLeido&&!lastScan.duplicado&&!(fotoAnalisis?.analizando)&&!(fotoAnalisis?.datos&&fotoAnalisis.codigo===lastScan.codigo)&&
       React.createElement('button',{
         onClick:()=>tomarFotoEtiqueta(lastScan.codigo),
         style:{padding:'6px 12px',borderRadius:8,border:'1px solid rgba(200,168,75,0.5)',
@@ -6307,7 +6348,11 @@ function AsignacionRider(_ref_ar){
 
   function escaneadoAsig(raw){
     const codigo=extraerCodigoQR(raw);
-    if(!codigo) return;
+    if(!codigo){
+      playSound('error');
+      setLastScan({noLeido:true});
+      return;
+    }
     if(codigosRef.current.has(codigo)){
       playSound('error');
       setLastScan({codigo,duplicado:true});
@@ -6475,11 +6520,11 @@ function AsignacionRider(_ref_ar){
       React.createElement('input',{value:manualCode,onChange:e=>setManualCode(e.target.value),onKeyDown:e=>{if(e.key==='Enter'){e.preventDefault();enviarManual();}},placeholder:'Código del paquete...',autoFocus:true,autoCapitalize:'none',autoCorrect:'off',style:{flex:1,padding:'11px 14px',background:'rgba(255,255,255,0.08)',border:'2px solid rgba(200,168,75,0.4)',borderRadius:8,color:'#fff',fontFamily:'JetBrains Mono',fontSize:14,outline:'none'}}),
       React.createElement('button',{onClick:enviarManual,disabled:!manualCode.trim(),style:{padding:'11px 16px',background:manualCode.trim()?'var(--gold)':'rgba(255,255,255,0.1)',border:'none',borderRadius:8,color:'var(--dark)',fontWeight:700,cursor:manualCode.trim()?'pointer':'default',fontSize:15}},'✓')
     ),
-    lastScan&&React.createElement('div',{style:{padding:'12px 16px',flexShrink:0,background:lastScan.duplicado?'rgba(200,0,0,0.95)':'rgba(0,180,80,0.95)',borderTop:'1px solid rgba(255,255,255,0.1)',display:'flex',alignItems:'center',gap:10,boxShadow:lastScan.duplicado?'0 0 20px rgba(255,0,0,0.5)':'0 0 16px rgba(0,255,100,0.4)'}},
-      React.createElement('div',{style:{fontSize:22}},lastScan.duplicado?'🚫':'✅'),
+    lastScan&&React.createElement('div',{style:{padding:'12px 16px',flexShrink:0,background:lastScan.noLeido?'rgba(180,80,0,0.95)':lastScan.duplicado?'rgba(200,0,0,0.95)':'rgba(0,180,80,0.95)',borderTop:'1px solid rgba(255,255,255,0.1)',display:'flex',alignItems:'center',gap:10,boxShadow:lastScan.noLeido?'0 0 20px rgba(255,140,0,0.5)':lastScan.duplicado?'0 0 20px rgba(255,0,0,0.5)':'0 0 16px rgba(0,255,100,0.4)'}},
+      React.createElement('div',{style:{fontSize:22}},lastScan.noLeido?'⚠':lastScan.duplicado?'🚫':'✅'),
       React.createElement('div',null,
-        React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:12,color:'var(--gold)',fontWeight:700}},lastScan.codigo),
-        React.createElement('div',{style:{fontSize:12,fontWeight:700,color:'#fff',marginTop:1}},lastScan.duplicado?'YA ESCANEADO':'✓ AGREGADO')
+        !lastScan.noLeido&&React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:12,color:'var(--gold)',fontWeight:700}},lastScan.codigo),
+        React.createElement('div',{style:{fontSize:12,fontWeight:700,color:'#fff',marginTop:1}},lastScan.noLeido?'No se pudo leer — intenta de nuevo o ingresa manual':lastScan.duplicado?'YA ESCANEADO':'✓ AGREGADO')
       )
     ),
     React.createElement('div',{style:{flex:1,overflowY:'auto',padding:'0 12px 8px'}},
@@ -6619,7 +6664,15 @@ function detenerScanner(){
 }
 
 async function procesarCodigo(codigo){
-  if(!codigo||!codigo.trim())return;
+  if(!codigo||!codigo.trim()){
+    // Antes esto se quedaba en silencio con la cámara ya detenida — el mensajero veía la
+    // pantalla congelada sin saber si escaneó algo o no. Ahora avisa y deja abierto el botón
+    // de reintentar / ingresar manual, igual que los demás casos de error de este flujo.
+    playSound('error');
+    setModo('error');
+    setResultado({msg:'No se pudo leer el código — vuelve a intentar o ingrésalo a mano'});
+    return;
+  }
   const cod=codigo.trim();
   setModo('buscando');
   setResultado({codigo:cod});
