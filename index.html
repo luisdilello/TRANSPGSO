@@ -21,6 +21,12 @@
 // recargar la página -- cortaría una subida de fotos o un guardado a mitad de camino. Cada
 // función crítica lo sube al empezar y lo baja al terminar (ver más abajo en el archivo).
 window.__TRANSPGSO_GUARDANDO_CRITICO = 0;
+// Igual que GUARDANDO_CRITICO pero para todo el tiempo que dura un escaneo de Retiro Masivo o
+// Colecta (no solo el instante puntual de un guardado): mientras sea > 0, tampoco se aplica la
+// actualización aunque la pantalla se oculte, porque justo ese "segundo plano" (celular
+// bloqueado sin querer, una llamada, cambiar de app un segundo) es lo que antes gatillaba una
+// recarga que sacaba al mensajero a mitad del escaneo (ver ColectaRider/RetiroMasivoRider).
+window.__TRANSPGSO_ESCANEO_ACTIVO = 0;
 // ANTES: apenas llegaba una actualización nueva, esto recargaba la página sola (con un tope
 // de solo 20 segundos de espera si había un guardado crítico en curso). El problema es que
 // esto no tenía en cuenta si el mensajero seguía usando la app en pantalla -- tomando fotos,
@@ -30,7 +36,9 @@ window.__TRANSPGSO_GUARDANDO_CRITICO = 0;
 // AHORA: si el mensajero tiene la pantalla abierta y mirando, la actualización se avisa con un
 // cartel chico y discreto (no interrumpe nada) y se aplica solo cuando él lo decide. Si en
 // cambio la pantalla está en segundo plano (bloqueó el celular, cambió de app) la actualización
-// se aplica sola en ese momento -- no se nota, porque no la está mirando.
+// se aplica sola en ese momento -- no se nota, porque no la está mirando -- SALVO que justo esté
+// en medio de un Retiro Masivo o Colecta, caso en que se espera a que termine (ver
+// ESCANEO_ACTIVO más arriba).
 if('serviceWorker' in navigator){
   var _swActualizacionPendiente = false;
   function _swPuedeRecargarAhora(){
@@ -40,6 +48,7 @@ if('serviceWorker' in navigator){
   function _swAplicarActualizacion(){
     if(!_swActualizacionPendiente)return;
     if(window.__TRANSPGSO_GUARDANDO_CRITICO > 0)return; // nunca a mitad de un guardado crítico
+    if(window.__TRANSPGSO_ESCANEO_ACTIVO > 0)return; // nunca mientras Retiro Masivo/Colecta está abierto, aunque la pantalla esté oculta
     if(!_swPuedeRecargarAhora())return;
     sessionStorage.setItem('sw_last_reload', String(Date.now()));
     window.location.reload();
@@ -589,7 +598,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787681500;
+window.__MODULES_VERSION=1787682900;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -5606,6 +5615,24 @@ function ColectaRider(_ref_cr){
   const videoRef=useRef();
   const linternaRef=useRef(false);
   const [linternaOn,setLinternaOn]=useState(false);
+
+  // ── No interrumpir un escaneo en curso ──────────────────────────────
+  // Antes, si el mensajero dejaba la pantalla en segundo plano un instante a mitad de un
+  // Retiro Masivo o Colecta (por ejemplo: se bloqueó el celular sin querer, entró una llamada,
+  // cambió de app un segundo para revisar algo), y justo en ese momento había una actualización
+  // nueva de la app esperando, el Service Worker aprovechaba ese instante "oculto" para
+  // recargar la página solo -- sacándolo de golpe de la pantalla de escaneo (lo escaneado no se
+  // pierde gracias a la sesión recuperable de más abajo, pero igual se siente como que "la app
+  // lo echó" a mitad del trabajo). Ahora, mientras esta pantalla esté abierta, se avisa al
+  // Service Worker que NO recargue solo aunque se oculte un instante -- la actualización queda
+  // pendiente y se aplica recién cuando el mensajero cierra Retiro Masivo/Colecta (o si sigue
+  // con la app abierta, la próxima vez que la deje en segundo plano ya fuera de esta pantalla).
+  useEffect(function(){
+    window.__TRANSPGSO_ESCANEO_ACTIVO=(window.__TRANSPGSO_ESCANEO_ACTIVO||0)+1;
+    return function(){
+      window.__TRANSPGSO_ESCANEO_ACTIVO=Math.max(0,(window.__TRANSPGSO_ESCANEO_ACTIVO||0)-1);
+    };
+  },[]);
 
   // ── Sesión recuperable ──────────────────────────────────────────────
   // Si la app se cierra, se cae o se pierde la señal a mitad de una Colecta (cámara o
