@@ -589,7 +589,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787680300;
+window.__MODULES_VERSION=1787681500;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -2852,6 +2852,57 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
     var canal=db.channel('planilla-retiros-admin-'+retiroFecha).on('postgres_changes',{event:'*',schema:'public',table:'retiros',filter:'fecha=eq.'+retiroFecha},function(){sincronizarDesdeSupabaseRetiros(false);}).subscribe();
     return function(){clearInterval(interval);db.removeChannel(canal);};
   },[retiroFecha]);
+
+  // ── Piezas ligadas a la colecta real del día ──────────────────────────────
+  // Antes "Piezas" era un número suelto que cada admin tenía que escribir a mano -- por eso
+  // salía en 0 casi siempre. Ahora refleja el conteo real de envíos que ya quedaron registrados
+  // para ese cliente en esa fecha (Colecta AM/PM, Colecta Galería, Retiro Masivo, Excel, PDF,
+  // etc. -- cualquier modalidad, igual que el "Resumen de Colecta" del Dashboard), así el
+  // mensajero sigue quedando registrado en la fila pero el número ya no hay que contarlo ni
+  // tipearlo dos veces. Se sigue pudiendo corregir a mano si hace falta: mientras el admin no
+  // toque el campo, se mantiene sincronizado solo; si lo edita, se respeta lo que escribió. Al
+  // marcar "Confirmado" el número queda congelado (no se sigue moviendo si el mensajero escanea
+  // más paquetes después).
+  var _colecta=React.useState({}),colectaPorCliente=_colecta[0],setColectaPorCliente=_colecta[1];
+  var piezasAutoRef=React.useRef({});
+  function cargarColectaDelDia(){
+    db.from('envios').select('cliente').eq('fecha',retiroFecha).then(function(res){
+      if(!res.data)return;
+      var mapa={};
+      res.data.forEach(function(e){
+        var c=e.cliente||'';
+        if(!c)return;
+        mapa[c]=(mapa[c]||0)+1;
+      });
+      setColectaPorCliente(mapa);
+    }).catch(function(){});
+  }
+  React.useEffect(function(){
+    cargarColectaDelDia();
+    var interval=setInterval(cargarColectaDelDia,20000);
+    var canal=db.channel('planilla-retiros-colecta-'+retiroFecha).on('postgres_changes',{event:'*',schema:'public',table:'envios',filter:'fecha=eq.'+retiroFecha},cargarColectaDelDia).subscribe();
+    return function(){clearInterval(interval);db.removeChannel(canal);};
+  },[retiroFecha]);
+  React.useEffect(function(){
+    setFilas(function(prev){
+      var cambio=false;
+      var nueva=prev.map(function(fila){
+        if(!fila.cliente)return fila;
+        var real=colectaPorCliente[fila.cliente]||0;
+        var actualEsAuto=fila.piezas===''||fila.piezas===undefined||piezasAutoRef.current[fila.id]===(parseInt(fila.piezas)||0);
+        if(!actualEsAuto||fila.confirmado)return fila; // no pisar un valor corregido a mano, ni tocar retiros ya confirmados
+        if((parseInt(fila.piezas)||0)===real)return fila;
+        cambio=true;
+        piezasAutoRef.current[fila.id]=real;
+        var actualizado=Object.assign({},fila,{piezas:real});
+        actualizado.cobro=real>0&&real<MIN_PIEZAS?TARIFA_MIN:0;
+        return actualizado;
+      });
+      if(!cambio)return prev;
+      guardarRetirosDia(retiroFecha,nueva);
+      return nueva;
+    });
+  },[colectaPorCliente,filas]);
 
   function actualizarFila(idx,campo,valor){
     setFilas(function(prev){
