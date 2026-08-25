@@ -598,7 +598,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787685400;
+window.__MODULES_VERSION=1787689000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3035,6 +3035,18 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
   });
 
   var totalCobro=filas.reduce(function(a,r){return a+(r.cobro||0);},0);
+  // Totalizador de la vista Diario -- antes había que sumar Piezas/Pago Mensajero/Cobro Cliente
+  // a mano fila por fila para el cierre de mes; ahora se calculan solos y se muestran al pie
+  // de la tabla.
+  var totalPiezasDia=filas.reduce(function(a,r){return a+(parseInt(r.piezas)||0);},0);
+  var totalPagoMensajerosDia=filas.reduce(function(a,r){return a+(parseFloat(r.pagoMensajero)||0);},0);
+  var totalConfirmadosDia=filas.filter(function(r){return r.confirmado;}).length;
+  // Totales del Resumen (por mensajero y por cliente) -- suman todas las filas de la tabla
+  // correspondiente para no tener que sumarlas a mano al cerrar el mes.
+  var totalRetirosMen=Object.keys(resumenMen).reduce(function(a,k){return a+resumenMen[k].retiros;},0);
+  var totalPagoMen=Object.keys(resumenMen).reduce(function(a,k){return a+resumenMen[k].total;},0);
+  var totalRetirosCli=Object.keys(resumenCli).reduce(function(a,k){return a+resumenCli[k].retiros;},0);
+  var totalCobroCli=Object.keys(resumenCli).reduce(function(a,k){return a+resumenCli[k].cobro;},0);
 
   var inputStyle={padding:'4px 6px',borderRadius:5,border:'1px solid var(--border)',fontSize:11,background:'#fff',width:'100%'};
   var chkStyle={width:16,height:16,cursor:'pointer',accentColor:'var(--gold)'};
@@ -3154,6 +3166,19 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
                   )
                 );
               })
+          ),
+          filas.length>0&&React.createElement('tfoot',null,
+            React.createElement('tr',{style:{background:'var(--dark)',color:'var(--gold)',fontWeight:800,borderTop:'2px solid var(--gold)'}},
+              React.createElement('td',{style:{padding:'8px 6px',whiteSpace:'nowrap'}},'TOTAL ('+filas.length+' clientes)'),
+              React.createElement('td',{style:{padding:'8px 6px'}}),
+              React.createElement('td',{style:{padding:'8px 6px'}}),
+              React.createElement('td',{style:{padding:'8px 6px',textAlign:'center'}},totalConfirmadosDia+'/'+filas.length),
+              React.createElement('td',{style:{padding:'8px 6px',textAlign:'center',fontFamily:'JetBrains Mono'}},totalPiezasDia),
+              React.createElement('td',{style:{padding:'8px 6px'}}),
+              React.createElement('td',{style:{padding:'8px 6px',textAlign:'center',fontFamily:'JetBrains Mono',color:'var(--success)'}},'$'+totalPagoMensajerosDia.toLocaleString('es-CL')),
+              React.createElement('td',{style:{padding:'8px 6px',textAlign:'center',fontFamily:'JetBrains Mono',color:totalCobro>0?'#fff':'var(--gold)'}},'$'+totalCobro.toLocaleString('es-CL')),
+              React.createElement('td',null)
+            )
           )
         )
       )
@@ -3186,7 +3211,14 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
               React.createElement('td',{style:{padding:'6px 8px',textAlign:'center',fontFamily:'JetBrains Mono'}},x[1].retiros),
               React.createElement('td',{style:{padding:'6px 8px',textAlign:'right',fontFamily:'JetBrains Mono',color:'var(--success)',fontWeight:700}},'$'+x[1].total.toLocaleString('es-CL'))
             );
-          }))
+          })),
+          React.createElement('tfoot',null,
+            React.createElement('tr',{style:{background:'var(--dark)',color:'var(--gold)',fontWeight:800,borderTop:'2px solid var(--gold)'}},
+              React.createElement('td',{style:{padding:'8px'}},'TOTAL'),
+              React.createElement('td',{style:{padding:'8px',textAlign:'center',fontFamily:'JetBrains Mono'}},totalRetirosMen),
+              React.createElement('td',{style:{padding:'8px',textAlign:'right',fontFamily:'JetBrains Mono'}},'$'+totalPagoMen.toLocaleString('es-CL'))
+            )
+          )
         )
       ),
       // Por cliente
@@ -3205,7 +3237,14 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
               React.createElement('td',{style:{padding:'6px 8px',textAlign:'center',fontFamily:'JetBrains Mono'}},x[1].retiros),
               React.createElement('td',{style:{padding:'6px 8px',textAlign:'right',fontFamily:'JetBrains Mono',fontWeight:700,color:x[1].cobro>0?'#b03030':'var(--text-soft)'}},x[1].cobro>0?'$'+x[1].cobro.toLocaleString('es-CL'):'$0')
             );
-          }))
+          })),
+          React.createElement('tfoot',null,
+            React.createElement('tr',{style:{background:'var(--dark)',color:'var(--gold)',fontWeight:800,borderTop:'2px solid var(--gold)'}},
+              React.createElement('td',{style:{padding:'8px'}},'TOTAL'),
+              React.createElement('td',{style:{padding:'8px',textAlign:'center',fontFamily:'JetBrains Mono'}},totalRetirosCli),
+              React.createElement('td',{style:{padding:'8px',textAlign:'right',fontFamily:'JetBrains Mono'}},'$'+totalCobroCli.toLocaleString('es-CL'))
+            )
+          )
         )
       )
     ))
