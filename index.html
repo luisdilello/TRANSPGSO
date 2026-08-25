@@ -598,7 +598,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787684100;
+window.__MODULES_VERSION=1787685400;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7195,14 +7195,41 @@ function CalendarioEntregasRider(_ref_cal){
     });
     return mapa;
   },[entregas]);
+  // Espejo de codigosPorDia pero por fecha REAL de entrega — necesario porque un envío
+  // asignado un día puede haberse entregado otro (ver fechaEntregaReal). Sin esto, al tocar
+  // el día donde SÍ se entregó, el paquete no aparecía en la lista (solo aparecía en el día en
+  // que se asignó), aunque el número de "entregado" de ese día sí lo estuviera contando —
+  // confusión reportada por Luis con un caso de Guillermo: cargado sábado, entregado lunes.
+  const codigosEntregadosPorDiaReal=useMemo(()=>{
+    const mapa={};
+    entregas.forEach(e=>{
+      if(e.estado!=='entregado')return;
+      const key=fechaEntregaReal(e);
+      if(!mapa[key])mapa[key]=[];
+      mapa[key].push(e.codigo);
+    });
+    return mapa;
+  },[entregas,mapaEntregaReal]);
+  // Fecha de asignación y de entrega real por código, para que el modal de detalle pueda
+  // mostrar ambas cuando difieren (transparencia: que el mensajero vea POR QUÉ un paquete
+  // cuenta en tal o cual día).
+  const fechasPorCodigo=useMemo(()=>{
+    const mapa={};
+    entregas.forEach(e=>{
+      mapa[e.codigo]={asignacion:fechaAsignacion(e),entregaReal:e.estado==='entregado'?fechaEntregaReal(e):null};
+    });
+    return mapa;
+  },[entregas,mapaEntregaReal]);
 
-  // Al elegir un día, se trae el detalle completo (destinatario, dirección, fotos, estado) SOLO
-  // para los códigos de ese día — el historial liviano ya nos dice exactamente cuáles son, así
-  // que no hay riesgo de desalinearse con lo mostrado en la grilla.
+  // Al elegir un día, se trae el detalle completo (destinatario, dirección, fotos, estado) para
+  // la UNIÓN de: lo asignado ese día + lo realmente entregado ese día (aunque se haya asignado
+  // otro día) — así la lista siempre incluye todo lo que explica el número mostrado en la grilla.
   useEffect(()=>{
     if(!diaSeleccionado){setDetalleDia([]);return;}
     let cancelado=false;
-    const codigos=codigosPorDia[diaSeleccionado]||[];
+    const asignados=codigosPorDia[diaSeleccionado]||[];
+    const entregadosReal=codigosEntregadosPorDiaReal[diaSeleccionado]||[];
+    const codigos=Array.from(new Set(asignados.concat(entregadosReal)));
     if(codigos.length===0){setDetalleDia([]);return;}
     setCargandoDetalle(true);
     db.from('envios').select('codigo,destinatario,direccion,comuna,telefono,nota,monto,estado,updated_at,foto_etiqueta')
@@ -7214,7 +7241,7 @@ function CalendarioEntregasRider(_ref_cal){
       }).catch(()=>{if(!cancelado)setDetalleDia([]);})
       .finally(()=>{if(!cancelado)setCargandoDetalle(false);});
     return()=>{cancelado=true;};
-  },[diaSeleccionado]);
+  },[diaSeleccionado,codigosPorDia,codigosEntregadosPorDiaReal]);
 
   const semanas=useMemo(()=>{
     const anio=mesVisible.getFullYear();
@@ -7233,20 +7260,28 @@ function CalendarioEntregasRider(_ref_cal){
       for(let i=0;i<7;i++){
         const fechaStr=localDateStr(cursor);
         const d=conteoPorDia[fechaStr]||{total:0,entregado:0};
+        // ¿Alguno de los "entregado" de este día viene de un envío asignado OTRO día (típico:
+        // cargado sábado, entregado lunes)? Si es así se marca con un punto en la celda, para
+        // que se note sin tener que tocarla — transparencia pedida por Luis tras el caso de
+        // Guillermo.
+        const asignadosHoy=new Set(codigosPorDia[fechaStr]||[]);
+        const entregadosHoyReal=codigosEntregadosPorDiaReal[fechaStr]||[];
+        const tieneCruce=entregadosHoyReal.some(cod=>!asignadosHoy.has(cod));
         semana.push({
           fecha:new Date(cursor),
           fechaStr,
           enMes:cursor.getMonth()===mes,
           esHoy:fechaStr===hoyStr,
           total:d.total,
-          entregado:d.entregado
+          entregado:d.entregado,
+          tieneCruce
         });
         cursor.setDate(cursor.getDate()+1);
       }
       semanasArr.push(semana);
     }
     return semanasArr;
-  },[mesVisible,conteoPorDia]);
+  },[mesVisible,conteoPorDia,codigosPorDia,codigosEntregadosPorDiaReal]);
 
   const totalMes=useMemo(()=>{
     const anio=mesVisible.getFullYear();
@@ -7310,9 +7345,14 @@ function CalendarioEntregasRider(_ref_cal){
         return React.createElement('div',{key:wi,style:{display:'grid',gridTemplateColumns:'repeat(7,1fr) 52px',gap:4,marginBottom:4}},
           semana.map((dia,di)=>{
             const col=colorEfectividad(dia.total,dia.entregado);
-            return React.createElement('div',{key:di,onClick:dia.total>0?()=>setDiaSeleccionado(dia.fechaStr):undefined,style:{aspectRatio:'1',borderRadius:8,background:col.bg,border:dia.esHoy?'2px solid var(--gold)':'1px solid '+col.border,opacity:dia.enMes?1:0.3,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:46,cursor:dia.total>0?'pointer':'default'}},
+            // Un día puede no tener nada ASIGNADO (total=0) y aun así mostrar entregas reales
+            // (cargadas otro día, entregadas este) — hay que poder verlo y tocarlo igual, si no
+            // ese número desaparece de la vista aunque sí se sume en el total de la semana.
+            const tieneAlgo=dia.total>0||dia.entregado>0;
+            return React.createElement('div',{key:di,onClick:tieneAlgo?()=>setDiaSeleccionado(dia.fechaStr):undefined,style:{aspectRatio:'1',borderRadius:8,background:col.bg,border:dia.esHoy?'2px solid var(--gold)':'1px solid '+col.border,opacity:dia.enMes?1:0.3,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:46,cursor:tieneAlgo?'pointer':'default',position:'relative'}},
+              dia.tieneCruce&&React.createElement('div',{title:'Incluye entregas cargadas otro día',style:{position:'absolute',top:3,right:3,width:6,height:6,borderRadius:'50%',background:'var(--gold)'}}),
               React.createElement('div',{style:{fontSize:10,color:dia.enMes?'rgba(255,255,255,0.5)':'rgba(255,255,255,0.25)',fontWeight:600}},dia.fecha.getDate()),
-              dia.total>0&&React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:13,color:dia.enMes?col.texto:'rgba(255,255,255,0.4)',lineHeight:1,marginTop:2}},dia.entregado+'/'+dia.total)
+              tieneAlgo&&React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:13,color:dia.enMes?col.texto:'rgba(255,255,255,0.4)',lineHeight:1,marginTop:2}},dia.entregado+'/'+dia.total)
             );
           }),
           React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',borderRadius:8,background:totalSemana>0?barColor(efSemana)+'26':'rgba(255,255,255,0.03)',border:'1px solid '+(totalSemana>0?barColor(efSemana)+'55':'rgba(255,255,255,0.05)')}},
@@ -7328,25 +7368,32 @@ function CalendarioEntregasRider(_ref_cal){
       fecha:diaSeleccionado,
       entregas:detalleDia,
       cargando:cargandoDetalle,
+      fechasPorCodigo:fechasPorCodigo,
       onClose:()=>setDiaSeleccionado(null)
     })
   );
 }
 
 function DiaDetalleModal(_ref_dd){
-  let fecha=_ref_dd.fecha,entregas=_ref_dd.entregas,cargando=_ref_dd.cargando,onClose=_ref_dd.onClose;
+  let fecha=_ref_dd.fecha,entregas=_ref_dd.entregas,cargando=_ref_dd.cargando,onClose=_ref_dd.onClose,fechasPorCodigo=_ref_dd.fechasPorCodigo||{};
   const _ex=useState(null),expandido=_ex[0],setExpandido=_ex[1];
   const fechaFmt=new Date(fecha+'T12:00:00').toLocaleDateString('es-CL',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  function fmtCorta(f){return f?new Date(f+'T12:00:00').toLocaleDateString('es-CL',{weekday:'short',day:'numeric',month:'short'}):'';}
   return React.createElement('div',{onClick:onClose,style:{position:'fixed',inset:0,background:'rgba(10,12,6,0.8)',zIndex:600,display:'flex',alignItems:'flex-end',WebkitBackdropFilter:'blur(4px)',backdropFilter:'blur(4px)'}},
     React.createElement('div',{onClick:e=>e.stopPropagation(),style:{width:'100%',maxHeight:'85vh',overflowY:'auto',background:'linear-gradient(180deg,#232619,#14150e)',borderTop:'1px solid rgba(200,168,75,0.4)',borderRadius:'20px 20px 0 0',padding:'20px 16px calc(20px + env(safe-area-inset-bottom,0px))',boxShadow:'0 -10px 40px rgba(200,168,75,0.15)'}},
       React.createElement('div',{style:{width:40,height:4,background:'rgba(200,168,75,0.3)',borderRadius:2,margin:'0 auto 16px'}}),
       React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,color:'var(--gold)',letterSpacing:1.5,textTransform:'capitalize',marginBottom:2}},fechaFmt),
-      React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.4)',marginBottom:16}},entregas.length+' envío'+(entregas.length===1?'':'s')+' asignado'+(entregas.length===1?'':'s')+' este día · toca uno para ver el detalle'),
+      React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.4)',marginBottom:16}},entregas.length+' envío'+(entregas.length===1?'':'s')+' relacionado'+(entregas.length===1?'':'s')+' con este día · toca uno para ver el detalle'),
       cargando&&React.createElement('div',{style:{textAlign:'center',padding:20,color:'rgba(255,255,255,0.4)',fontSize:12}},'Cargando detalle...'),
       !cargando&&entregas.map(function(e){
         const abierto=expandido===e.codigo;
         const hora=e.updated_at?new Date(e.updated_at).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}):'';
-        return React.createElement('div',{key:e.codigo,style:{background:'rgba(255,255,255,0.04)',borderRadius:12,marginBottom:10,border:'1px solid rgba(200,168,75,0.15)',overflow:'hidden'}},
+        // Transparencia: si este envío se asignó un día y se entregó otro (típicamente cruzando
+        // fin de semana), mostrarlo explícito — así el mensajero ve exactamente por qué cuenta
+        // en el día que está mirando, en vez de solo ver una fecha y desconfiar del número.
+        const fInfo=fechasPorCodigo[e.codigo];
+        const cruzaFecha=fInfo&&fInfo.entregaReal&&fInfo.asignacion!==fInfo.entregaReal;
+        return React.createElement('div',{key:e.codigo,style:{background:'rgba(255,255,255,0.04)',borderRadius:12,marginBottom:10,border:cruzaFecha?'1px solid rgba(200,168,75,0.4)':'1px solid rgba(200,168,75,0.15)',overflow:'hidden'}},
           React.createElement('button',{onClick:()=>setExpandido(abierto?null:e.codigo),style:{width:'100%',textAlign:'left',padding:'12px 14px',background:'none',border:'none',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}},
             React.createElement('div',{style:{flex:1,minWidth:0}},
               React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6,marginBottom:3}},
@@ -7354,7 +7401,8 @@ function DiaDetalleModal(_ref_dd){
                 React.createElement('span',{style:{fontSize:9,fontWeight:700,padding:'1px 7px',borderRadius:10,background:estadoInfo(e.estado).color+'26',color:estadoInfo(e.estado).color}},estadoInfo(e.estado).label)
               ),
               React.createElement('div',{style:{fontWeight:700,fontSize:14,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},e.destinatario||'—'),
-              React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.5)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},(e.direccion||'—')+(e.comuna?', '+e.comuna:''))
+              React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.5)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},(e.direccion||'—')+(e.comuna?', '+e.comuna:'')),
+              cruzaFecha&&React.createElement('div',{style:{fontSize:10,color:'var(--gold)',marginTop:3,fontWeight:700}},'📦 Cargado '+fmtCorta(fInfo.asignacion)+' · 🚚 Entregado '+fmtCorta(fInfo.entregaReal))
             ),
             React.createElement('span',{style:{color:'var(--gold)',fontSize:16,flexShrink:0}},abierto?'▲':'▼')
           ),
@@ -7417,6 +7465,7 @@ function GananciasRider(_ref_gr){
   const _sgEnt=useState([]),enviosEntregados=_sgEnt[0],setEnviosEntregados=_sgEnt[1];
   const _sgEntLoading=useState(true),cargandoEntregados=_sgEntLoading[0],setCargandoEntregados=_sgEntLoading[1];
   const _sgTarComuna=useState({}),tarifasComunaRider=_sgTarComuna[0],setTarifasComunaRider=_sgTarComuna[1];
+  const _sgEntReal=useState({}),mapaEntregaReal=_sgEntReal[0],setMapaEntregaReal=_sgEntReal[1];
   useEffect(()=>{
     let cancelado=false;
     async function cargarTodasLasEntregas(){
@@ -7448,6 +7497,30 @@ function GananciasRider(_ref_gr){
         // normalizado antes de mostrar ganancias — mismo criterio que RiderApp.cargarEnvios.
         const acumuladoPropio=acumulado.filter(e=>normNombre(e.mensajero||'')===normNombre(usuario.nombre));
         if(!cancelado)setEnviosEntregados(acumuladoPropio);
+        // Fecha REAL de entrega (historial_envios), para que "Hoy/Semana/Mes" filtren por el
+        // día en que de verdad se entregó y no por cuándo se tocó el registro por última vez.
+        // ANTES 'fechaEntrega' intentaba leer e.historial (un campo que esta consulta nunca
+        // trae — no existe como columna en 'envios', es una tabla aparte) y en la práctica
+        // siempre caía a e.updated_at, que se mueve con CUALQUIER edición posterior del envío
+        // (no solo la entrega) — un mensajero podía ver un paquete "moverse" de fecha en
+        // Ganancias si alguien lo editaba semanas después. Se pide en lotes por si el
+        // mensajero tiene miles de entregas históricas.
+        const codigosEnt=acumuladoPropio.map(e=>e.codigo);
+        const mapaReal={};
+        const LOTE=250;
+        for(let i=0;i<codigosEnt.length;i+=LOTE){
+          if(cancelado)return;
+          const lote=codigosEnt.slice(i,i+LOTE);
+          try{
+            const{data:histData}=await db.from('historial_envios').select('codigo_envio,created_at')
+              .eq('estado','entregado').in('codigo_envio',lote);
+            (histData||[]).forEach(h=>{
+              const actual=mapaReal[h.codigo_envio];
+              if(!actual||new Date(h.created_at)>new Date(actual))mapaReal[h.codigo_envio]=h.created_at;
+            });
+          }catch(eHist){}
+        }
+        if(!cancelado)setMapaEntregaReal(mapaReal);
         // Tarifas especiales por comuna para este mensajero (mismo criterio que Pagos y Cobros).
         // Coincidencia EXACTA de nombre completo — el fallback por primer nombre traia tarifas
         // de otro mensajero con el mismo primer nombre.
@@ -7470,11 +7543,11 @@ function GananciasRider(_ref_gr){
   },[usuario.nombre]);
 
   function fechaEntrega(e){
-    // Buscar en historial la última entrada con estado entregado
-    if(e.historial&&e.historial.length>0){
-      const ent=[...e.historial].reverse().find(h=>h.estado==='entregado');
-      if(ent) return new Date(ent.fecha);
-    }
+    // Fecha real de entrega desde historial_envios (mapaEntregaReal, cargado arriba). Si no
+    // hay registro (caso raro: datos antiguos de antes de que existiera el historial), se
+    // recurre a updated_at/fecha como respaldo, igual que antes.
+    const real=mapaEntregaReal[e.codigo];
+    if(real) return new Date(real);
     return new Date(e.updated_at||e.fecha||0);
   }
   function localDateStr(d){
@@ -7683,7 +7756,7 @@ function GananciasRider(_ref_gr){
     React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,padding:'0 12px',marginBottom:16}},
       [
         {label:'Hoy',val:hoyCount,pesos:hoyEntregas.reduce((a,e)=>a+montoEnvio(e),0)},
-        {label:'Esta semana',val:(()=>{const l=new Date();l.setDate(l.getDate()-l.getDay()+1);l.setHours(0,0,0,0);return todosEntregados.filter(e=>new Date(e.actualizado_en||e.updated_at||e.fecha||0)>=l).length;})(),pesos:null},
+        {label:'Esta semana',val:(()=>{const l=new Date();l.setDate(l.getDate()-((l.getDay()+6)%7));l.setHours(0,0,0,0);return todosEntregados.filter(e=>fechaEntrega(e)>=l).length;})(),pesos:null},
         {label:'Total histórico',val:todosEntregados.length,pesos:todosEntregados.reduce((a,e)=>a+montoEnvio(e),0)},
       ].map((s,i)=>React.createElement('div',{key:i,style:{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:10,padding:'12px 10px',textAlign:'center'}},
         React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:24,color:'var(--gold)',lineHeight:1}},s.val),
@@ -7694,18 +7767,26 @@ function GananciasRider(_ref_gr){
     // Lista de entregas del periodo
     filtrados.length>0&&React.createElement('div',{style:{padding:'0 12px'}},
       React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'rgba(255,255,255,0.3)',marginBottom:10}},'DETALLE DE ENTREGAS'),
-      filtrados.slice(0,50).map((e,i)=>React.createElement('div',{key:e.id||e.codigo||i,style:{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:8,background:'rgba(255,255,255,0.04)',border:'1px solid rgba(46,125,79,0.2)',marginBottom:6}},
+      filtrados.slice(0,50).map((e,i)=>{
+        // Fecha de carga vs. fecha real de entrega — si difieren (cargado un día, entregado
+        // otro, típicamente cruzando fin de semana), se muestran ambas explícitas en vez de
+        // una sola fecha ambigua, para que el mensajero vea con qué día cuenta esta entrega.
+        const fEnt=localDateStr(fechaEntrega(e));
+        const fAsig=(e.fecha||'').slice(0,10);
+        const cruza=fAsig&&fAsig!==fEnt;
+        return React.createElement('div',{key:e.id||e.codigo||i,style:{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:8,background:'rgba(255,255,255,0.04)',border:cruza?'1px solid rgba(200,168,75,0.5)':'1px solid rgba(46,125,79,0.2)',marginBottom:6}},
         React.createElement('div',{style:{fontSize:18}},'✅'),
         React.createElement('div',{style:{flex:1}},
           React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:11,color:'var(--gold)',fontWeight:700}},e.codigo),
           React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.5)',marginTop:2}},e.destinatario||'Sin destinatario'),
-          e.comuna&&React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.3)'}},e.comuna)
+          e.comuna&&React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.3)'}},e.comuna),
+          cruza&&React.createElement('div',{style:{fontSize:10,color:'var(--gold)',marginTop:3,fontWeight:700}},'📦 Cargado '+fAsig+' · 🚚 Entregado '+fEnt)
         ),
         React.createElement('div',{style:{textAlign:'right'}},
           React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:16,color:'var(--gold)'}},'$'+montoEnvio(e).toLocaleString('es-CL')),
-          React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.3)',marginTop:2}},(e.actualizado_en||e.fecha||'').slice(0,10))
+          !cruza&&React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.3)',marginTop:2}},fEnt)
         )
-      )),
+      );}),
       filtrados.length>50&&React.createElement('div',{style:{textAlign:'center',padding:12,fontSize:12,color:'rgba(255,255,255,0.3)'}},'+' +(filtrados.length-50)+' más entregas')
     ),
     filtrados.length===0&&React.createElement('div',{style:{textAlign:'center',padding:'40px 20px',color:'rgba(255,255,255,0.3)'}},
