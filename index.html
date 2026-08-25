@@ -589,7 +589,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787678200;
+window.__MODULES_VERSION=1787680300;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -2737,32 +2737,40 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
   function cargarRetirosDia(fecha){
     try{var r=localStorage.getItem(lsKeyRetiros(fecha));return r?JSON.parse(r):[];}catch(e){return[];}
   }
+  function filaARow(fecha,r){
+    return{
+      fecha:fecha,
+      cliente:r.cliente||'',
+      direccion:r.direccion||'',
+      mensajero:r.mensajero||'',
+      confirmado:r.confirmado?true:false,
+      piezas:parseInt(r.piezas)||0,
+      retirado:r.retirado?true:false,
+      en_bodega:r.enBodega?true:false,
+      respaldos:r.respaldos?true:false,
+      pago_mensajero:parseFloat(r.pagoMensajero)||0,
+      cobro:parseFloat(r.cobro)||0
+    };
+  }
+  function rowAFila(row){
+    return{
+      id:row.id,
+      cliente:row.cliente||'',
+      direccion:row.direccion||'',
+      mensajero:row.mensajero||'',
+      confirmado:!!row.confirmado,
+      piezas:row.piezas||row.piezas===0?row.piezas:'',
+      retirado:!!row.retirado,
+      enBodega:!!row.en_bodega,
+      respaldos:!!row.respaldos,
+      pagoMensajero:row.pago_mensajero||row.pago_mensajero===0?row.pago_mensajero:'',
+      cobro:parseFloat(row.cobro)||0
+    };
+  }
   function guardarRetirosDia(fecha,data){
     try{localStorage.setItem(lsKeyRetiros(fecha),JSON.stringify(data));}catch(e){}
     setRetirosDB(data);
-    // Sincronizar con Supabase los retiros confirmados
-    try{
-      var confirmados=data.filter(function(r){return r.confirmado&&r.mensajero&&r.cliente;});
-      if(confirmados.length>0){
-        confirmados.forEach(function(r){
-          var row={
-            fecha:fecha,
-            cliente:r.cliente||'',
-            direccion:r.direccion||'',
-            mensajero:r.mensajero||'',
-            confirmado:r.confirmado?true:false,
-            piezas:parseInt(r.piezas)||0,
-            retirado:r.retirado?true:false,
-            en_bodega:r.enBodega?true:false,
-            respaldos:r.respaldos?true:false,
-            pago_mensajero:parseFloat(r.pagoMensajero)||0,
-            cobro:parseFloat(r.cobro)||0
-          };
-          db.from('retiros').upsert(row,{onConflict:'fecha,cliente,mensajero'}).then(function(){}).catch(function(){});
-        });
-      }
-    }catch(ex){}
-    // También guardar en localStorage general
+    // También guardar en localStorage general (respaldo/histórico offline)
     try{
       var all=JSON.parse(localStorage.getItem('transpgso_v2_retiros_historial')||'[]');
       var sinEstaFecha=all.filter(function(r){return r.fecha!==fecha;});
@@ -2773,37 +2781,75 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
 
   // Estado de filas del día
   var _fd=React.useState(function(){return cargarRetirosDia(retiroFecha);}),filas=_fd[0],setFilas=_fd[1];
-  function sincronizarDesdeSupabaseRetiros(){
-    // También leer desde Supabase para tener datos actualizados del mensajero
+
+  // Recuerda, por fila, el último nombre de cliente que quedó guardado en Supabase. La clave
+  // única allá es (fecha,cliente): si el admin cambia el cliente de una fila ya sincronizada,
+  // hay que borrar la fila vieja antes de guardar la nueva, o queda un "fantasma" duplicado
+  // (esto ya había pasado antes: dos filas del mismo cliente y fecha con distinto mensajero,
+  // porque antes la clave única incluía también el mensajero).
+  var clienteSincronizadoRef=React.useRef({});
+
+  // Sube TODAS las filas con cliente asignado a Supabase -- antes solo se subían las que ya
+  // estaban "Confirmado", por eso lo que Yohana cargaba en su dispositivo nunca aparecía en el
+  // de otro admin hasta confirmar, y como confirmar exigía tener el Pago Mensajero puesto a
+  // mano, muchas filas se quedaban sin subir nunca. Con debounce para no pegarle a Supabase en
+  // cada tecla escrita.
+  React.useEffect(function(){
+    var t=setTimeout(function(){
+      filas.forEach(function(r){
+        if(!r.cliente)return;
+        var clienteAntes=clienteSincronizadoRef.current[r.id];
+        var previo=(clienteAntes&&clienteAntes!==r.cliente)
+          ?db.from('retiros').delete().eq('fecha',retiroFecha).eq('cliente',clienteAntes).then(function(){}).catch(function(){})
+          :Promise.resolve();
+        previo.then(function(){
+          db.from('retiros').upsert(filaARow(retiroFecha,r),{onConflict:'fecha,cliente'}).then(function(res){
+            if(!res.error)clienteSincronizadoRef.current[r.id]=r.cliente;
+          }).catch(function(){});
+        });
+      });
+    },700);
+    return function(){clearTimeout(t);};
+  },[filas,retiroFecha]);
+
+  function sincronizarDesdeSupabaseRetiros(fusionCompleta){
+    // Trae los retiros de este día desde Supabase. En la carga inicial (fusionCompleta=true) esa
+    // lista SE USA COMO BASE completa -- así, si otro admin (ej. Yohana) ya cargó retiros desde
+    // otro dispositivo, aparecen de inmediato en vez de mostrar la planilla vacía (el bug
+    // reportado). En el polling/tiempo real posteriores solo se agregan filas nuevas que falten
+    // y se refresca lo que el mensajero puede haber marcado desde su propia app (retirado/en
+    // bodega), sin pisar lo que el admin esté escribiendo en este momento en piezas, pago, etc.
     db.from('retiros').select('*').eq('fecha',retiroFecha)
       .then(function(res){
-        if(res.data){
-          // Actualizar campos que el mensajero puede haber cambiado
+        if(!res.data)return;
+        res.data.forEach(function(row){clienteSincronizadoRef.current[row.id]=row.cliente;});
+        if(fusionCompleta){
           setFilas(function(prev){
-            return prev.map(function(fila){
-              var supaRow=res.data.find(function(r){
-                return r.cliente===fila.cliente&&
-                  (r.mensajero||'').replace(/,\s*/g,' ').toUpperCase().trim()===(fila.mensajero||'').replace(/,\s*/g,' ').toUpperCase().trim();
-              });
-              if(!supaRow)return fila;
-              return Object.assign({},fila,{
-                piezas:supaRow.piezas||fila.piezas,
-                retirado:supaRow.retirado||fila.retirado,
-                enBodega:supaRow.en_bodega||fila.enBodega,
-                respaldos:supaRow.respaldos||fila.respaldos
-              });
-            });
+            var borradores=prev.filter(function(f){return!f.cliente;});
+            return res.data.map(rowAFila).concat(borradores);
           });
+          return;
         }
+        setFilas(function(prev){
+          var yaPresentes={};
+          prev.forEach(function(f){if(f.cliente)yaPresentes[f.cliente]=true;});
+          var nuevas=res.data.filter(function(row){return row.cliente&&!yaPresentes[row.cliente];}).map(rowAFila);
+          var actualizadas=prev.map(function(fila){
+            var supaRow=res.data.find(function(r){return r.cliente===fila.cliente;});
+            if(!supaRow)return fila;
+            return Object.assign({},fila,{retirado:!!supaRow.retirado,enBodega:!!supaRow.en_bodega});
+          });
+          return nuevas.length>0?actualizadas.concat(nuevas):actualizadas;
+        });
       }).catch(function(){});
   }
   React.useEffect(function(){
     var data=cargarRetirosDia(retiroFecha);
     setFilas(data);
     setRetirosDB(data);
-    sincronizarDesdeSupabaseRetiros();
-    var interval=setInterval(sincronizarDesdeSupabaseRetiros,15000);
-    var canal=db.channel('planilla-retiros-admin-'+retiroFecha).on('postgres_changes',{event:'*',schema:'public',table:'retiros',filter:'fecha=eq.'+retiroFecha},sincronizarDesdeSupabaseRetiros).subscribe();
+    sincronizarDesdeSupabaseRetiros(true);
+    var interval=setInterval(function(){sincronizarDesdeSupabaseRetiros(false);},15000);
+    var canal=db.channel('planilla-retiros-admin-'+retiroFecha).on('postgres_changes',{event:'*',schema:'public',table:'retiros',filter:'fecha=eq.'+retiroFecha},function(){sincronizarDesdeSupabaseRetiros(false);}).subscribe();
     return function(){clearInterval(interval);db.removeChannel(canal);};
   },[retiroFecha]);
 
@@ -2856,29 +2902,20 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
   }
 
   function agregarFila(){
-    setFilas(function(prev){
-      var nueva=prev.concat([{
-        id:Date.now(),cliente:'',direccion:'',mensajero:'',
-        confirmado:false,piezas:'',retirado:false,enBodega:false,
-        respaldos:false,cobro:0
-      }]);
-      guardarRetirosDia(retiroFecha,nueva.concat([]));
-      return nueva.concat([{
-        id:Date.now(),cliente:'',direccion:'',mensajero:'',
-        confirmado:false,piezas:'',retirado:false,enBodega:false,
-        respaldos:false,cobro:0
-      }]);
-    });
-    // Más simple:
-    var nueva=filas.concat([{id:Date.now(),cliente:'',direccion:'',mensajero:'',confirmado:false,piezas:'',retirado:false,enBodega:false,respaldos:false,cobro:0}]);
+    var nueva=filas.concat([{id:Date.now(),cliente:'',direccion:'',mensajero:'',confirmado:false,piezas:'',pagoMensajero:'',retirado:false,enBodega:false,respaldos:false,cobro:0}]);
     setFilas(nueva);
     guardarRetirosDia(retiroFecha,nueva);
   }
 
   function eliminarFila(idx){
+    var fila=filas[idx];
     var nueva=filas.filter(function(_,i){return i!==idx;});
     setFilas(nueva);
     guardarRetirosDia(retiroFecha,nueva);
+    if(fila&&fila.cliente){
+      db.from('retiros').delete().eq('fecha',retiroFecha).eq('cliente',fila.cliente).then(function(){}).catch(function(){});
+      delete clienteSincronizadoRef.current[fila.id];
+    }
   }
 
   // Rango de fechas para la vista Resumen (independiente del día único de Diario)
@@ -2902,7 +2939,7 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
     var clientesYaEnLista={};
     filas.forEach(function(f){if(f.cliente)clientesYaEnLista[f.cliente]=true;});
     var nuevasFilas=clientesOpts.filter(function(c){return!clientesYaEnLista[c.nombre];}).map(function(c,i){
-      return{id:Date.now()+i,cliente:c.nombre,direccion:c.direccion||'',mensajero:'',confirmado:false,piezas:'',retirado:false,enBodega:false,respaldos:false,cobro:0};
+      return{id:Date.now()+i,cliente:c.nombre,direccion:c.direccion||'',mensajero:'',confirmado:false,piezas:'',pagoMensajero:'',retirado:false,enBodega:false,respaldos:false,cobro:0};
     });
     if(nuevasFilas.length===0){toast('Ya están todos los clientes activos en la lista de hoy.');return;}
     var nueva=filas.concat(nuevasFilas);
@@ -2982,8 +3019,6 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
               React.createElement('th',{style:{padding:'8px 6px',textAlign:'left',whiteSpace:'nowrap'}},'Mensajero'),
               React.createElement('th',{style:{padding:'8px 6px',textAlign:'center',whiteSpace:'nowrap'}},'Confirmado'),
               React.createElement('th',{style:{padding:'8px 6px',textAlign:'center',whiteSpace:'nowrap'}},'Piezas'),
-              React.createElement('th',{style:{padding:'8px 6px',textAlign:'center',whiteSpace:'nowrap'}},'Retirado'),
-              React.createElement('th',{style:{padding:'8px 6px',textAlign:'center',whiteSpace:'nowrap'}},'En Bodega'),
               React.createElement('th',{style:{padding:'8px 6px',textAlign:'center',whiteSpace:'nowrap'}},'Respaldos'),
               React.createElement('th',{style:{padding:'8px 6px',textAlign:'center',whiteSpace:'nowrap'}},'Pago Mens.'),React.createElement('th',{style:{padding:'8px 6px',textAlign:'center',whiteSpace:'nowrap'}},'Cobro Cliente'),
               React.createElement('th',{style:{width:28}})
@@ -2991,7 +3026,7 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
           ),
           React.createElement('tbody',null,
             filas.length===0
-              ?React.createElement('tr',null,React.createElement('td',{colSpan:11,style:{textAlign:'center',padding:'20px',color:'var(--text-soft)',fontStyle:'italic'}},'Sin retiros registrados para esta fecha. Haz clic en "+ Agregar fila".'))
+              ?React.createElement('tr',null,React.createElement('td',{colSpan:9,style:{textAlign:'center',padding:'20px',color:'var(--text-soft)',fontStyle:'italic'}},'Sin retiros registrados para esta fecha. Haz clic en "+ Agregar fila".'))
               :filas.map(function(fila,idx){
                 var piezas=parseInt(fila.piezas)||0;
                 var esRojo=piezas>0&&piezas<MIN_PIEZAS;
@@ -3018,7 +3053,14 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
                   ),
                   // Mensajero
                   React.createElement('td',{style:{padding:'4px 6px',minWidth:130}},
-                    React.createElement('select',{style:inputStyle,value:fila.mensajero||'',onChange:function(e){actualizarFila(idx,'mensajero',e.target.value);}},
+                    React.createElement('select',{style:inputStyle,value:fila.mensajero||'',onChange:function(e){
+                      var nombreMen=e.target.value;
+                      actualizarFila(idx,'mensajero',nombreMen);
+                      if(!(parseFloat(fila.pagoMensajero)>0)){
+                        var menObj=mensajerosOpts.find(function(m){return m.nombre===nombreMen;});
+                        if(menObj)actualizarFila(idx,'pagoMensajero',menObj.tarifaRetiro||500);
+                      }
+                    }},
                       React.createElement('option',{value:''},'— Mensajero —'),
                       mensajerosOpts.filter(function(m){return m.activo!==false;}).map(function(m){return React.createElement('option',{key:m.id||m.nombre,value:m.nombre},(m.nombre||'').replace(/,\s*/g,' '));})
                     )
@@ -3030,14 +3072,6 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
                   // Piezas
                   React.createElement('td',{style:{padding:'4px 6px',textAlign:'center',width:70}},
                     React.createElement('input',{type:'number',min:0,style:Object.assign({},inputStyle,{textAlign:'center',fontFamily:'JetBrains Mono',fontWeight:700,color:esRojo?'#b03030':'inherit',background:esRojo?'rgba(176,48,48,0.08)':'#fff'}),value:fila.piezas===undefined||fila.piezas===''?'':fila.piezas,onChange:function(e){actualizarFila(idx,'piezas',e.target.value);}})
-                  ),
-                  // Retirado
-                  React.createElement('td',{style:{padding:'4px',textAlign:'center'}},
-                    React.createElement('input',{type:'checkbox',style:chkStyle,checked:!!fila.retirado,readOnly:true,onChange:function(){}})
-                  ),
-                  // En Bodega
-                  React.createElement('td',{style:{padding:'4px',textAlign:'center'}},
-                    React.createElement('input',{type:'checkbox',style:chkStyle,checked:!!fila.enBodega,readOnly:true,onChange:function(){}})
                   ),
                   // Respaldos
                   React.createElement('td',{style:{padding:'4px',textAlign:'center'}},

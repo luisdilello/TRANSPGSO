@@ -1,4 +1,4 @@
-// TransPgso SW v1787678200
+// TransPgso SW v1787680300
 // Antes este service worker borraba TODO el cache al instalar y no guardaba nada -- eso
 // significaba que si el mensajero se quedaba sin señal, la app ni siquiera podía abrir
 // (pantalla en blanco). Ahora precachea lo minimo necesario para que la app y las librerias
@@ -10,7 +10,7 @@
 // que ya tiene la app (ver controllerchange en index.html). Si no se bumpea, un mensajero
 // que dejó la PWA abierta en segundo plano sigue corriendo el JS viejo indefinidamente,
 // aunque el index.html ya esté actualizado en GitHub Pages.
-const APP_VERSION = '1787678200';
+const APP_VERSION = '1787680300';
 const CACHE_NAME = 'transpgso-' + APP_VERSION;
 const LOGO_ICON = 'logo.jpg';
 
