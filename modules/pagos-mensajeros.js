@@ -2,7 +2,7 @@
 
 var useEffect=React.useEffect, useRef=React.useRef, useState=React.useState;
 
-var ConteoAyudas=window.__app.ConteoAyudas, ExportBtn=window.__app.ExportBtn, HistorialCierres=window.__app.HistorialCierres, PlanillaRetiros=window.__app.PlanillaRetiros, db=window.__app.db, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, fetchPorDiasParalelo=window.__app.fetchPorDiasParalelo;
+var ConteoAyudas=window.__app.ConteoAyudas, ExportBtn=window.__app.ExportBtn, HistorialCierres=window.__app.HistorialCierres, PlanillaRetiros=window.__app.PlanillaRetiros, db=window.__app.db, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, fetchPorDiasParalelo=window.__app.fetchPorDiasParalelo, fetchPaginadoParalelo=window.__app.fetchPaginadoParalelo;
 
 // Registro de consumo local (colaciones, bebidas, etc.) por mensajero, ítem por ítem.
 // Cada entrada queda guardada en Supabase (tabla consumos_mensajeros) asociada a la
@@ -650,37 +650,89 @@ useEffect(()=>{
 
   try{
 
-    // Consulta directa a envios con columnas correctas: mensajero, estado, fecha, comuna.
+    // ANTES: se armaba el listado de "entregados del período" buscando envíos cuya columna
 
-    // Se pagina por cursor (id) y por dia en paralelo con fetchPorDiasParalelo -- una sola
+    // 'fecha' (la fecha en que se ASIGNÓ/cargó el envío, no en que se entregó) cayera dentro
 
-    // consulta .select() sin paginar queda cortada por Supabase en 1000 filas, lo que hacia
+    // del rango pedido. El problema: un paquete cargado un sábado pero entregado recién el
 
-    // que semanas con mas de 1000 entregas calcularan pagos de menos (bug detectado: semana
+    // lunes siguiente cruza de semana, y con ese criterio se contaba (y pagaba) en la semana
 
-    // con 1.034 entregados solo calculaba 1000).
+    // de carga en vez de la semana real de entrega — inflando esa semana en uno y de paso
 
-    // IMPORTANTE: 'id' tiene que estar en el select aunque no se use despues -- fetchPorDiasParalelo
+    // descuadrando el conteo que ve el propio mensajero en "Mis Entregas" (caso detectado por
 
-    // necesita leer el id de la ultima fila de cada pagina para pedir la siguiente (cursor).
+    // Luis: Domingo cobró 174 y el sistema mostraba 175/177 esa semana).
 
-    // Sin 'id' en el select, en dias con mas de 1000 entregas (ej. 1.393 el 10/08) la segunda
+    // AHORA: se usa la fecha real en que CADA paquete pasó a 'entregado', tomada de
 
-    // pagina pedia .gt('id',undefined) y Postgres tiraba error 22P02, cortando el calculo entero.
+    // historial_envios — una bitácora de eventos que no se pisa después aunque el envío se
 
-    var data=await fetchPorDiasParalelo(fechaInicio,fechaFin,(fecha,cursor,limite)=>db.from('envios')
+    // edite más tarde (a diferencia de la columna 'fecha' o 'updated_at', que si cambian con
 
-      .select('id,mensajero,estado,fecha,comuna')
+    // cualquier edición posterior). Solo se recurre a la fecha de asignación como respaldo
 
-      .eq('estado','entregado')
+    // para el puñado de envíos entregados que no tienen ese evento registrado (datos
 
-      .eq('fecha',fecha)
+    // antiguos, de antes de que existiera el historial, o cargados por importación masiva).
 
-      .gt('id',cursor)
+    // Se trae TODO sin acotar por fecha (paginado) porque la fecha real de entrega puede
 
-      .order('id',{ascending:true})
+    // caer fuera del rango que se buscaría si se acotara por la fecha de asignación.
 
-      .limit(limite));
+    var todosEntregados=await fetchPaginadoParalelo(function(cursor,limite){
+
+      return db.from('envios').select('id,codigo,mensajero,estado,fecha,comuna')
+
+        .eq('estado','entregado').gt('id',cursor).order('id',{ascending:true}).limit(limite);
+
+    });
+
+    var porCodigo={};
+
+    todosEntregados.forEach(function(e){porCodigo[e.codigo]=e;});
+
+    var histEntregas=await fetchPaginadoParalelo(function(cursor,limite){
+
+      return db.from('historial_envios').select('id,codigo_envio,created_at')
+
+        .eq('estado','entregado').gt('id',cursor).order('id',{ascending:true}).limit(limite);
+
+    },0);
+
+    // Si un envío pasó a 'entregado' más de una vez (ej. se deshizo por error y se volvió a
+
+    // marcar), vale la última vez real.
+
+    var ultimaEntregaPorCodigo={};
+
+    histEntregas.forEach(function(h){
+
+      var actual=ultimaEntregaPorCodigo[h.codigo_envio];
+
+      if(!actual||new Date(h.created_at)>new Date(actual.created_at))ultimaEntregaPorCodigo[h.codigo_envio]=h;
+
+    });
+
+    var data=[];
+
+    var sinHistorial=0;
+
+    Object.keys(porCodigo).forEach(function(cod){
+
+      var e=porCodigo[cod];
+
+      var h=ultimaEntregaPorCodigo[cod];
+
+      var fechaRealEntrega=h?fechaHoyCL(new Date(h.created_at)):e.fecha; // respaldo: fecha de asignación
+
+      if(!h)sinHistorial++;
+
+      if(fechaRealEntrega>=fechaInicio&&fechaRealEntrega<=fechaFin)data.push(e);
+
+    });
+
+    if(sinHistorial>0)console.warn('calcularEnviosSemana: '+sinHistorial+' envíos entregados sin registro en historial_envios (se usó su fecha de asignación como respaldo).');
 
     toast(''+data.length+' registros encontrados...');
 
