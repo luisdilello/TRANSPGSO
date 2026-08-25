@@ -598,7 +598,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787689000;
+window.__MODULES_VERSION=1787690000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -2744,6 +2744,32 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
   var TARIFA_MIN=cfgRetiro.tarifa_minima;
   var MIN_PIEZAS=cfgRetiro.min_piezas;
 
+  // ── Rango de fechas en Diario ──────────────────────────────────────────────
+  // Antes Diario solo mostraba un día a la vez -- para sacar cuentas de un rango
+  // (ej. el mes completo) había que ir día por día sumando a mano, o cambiarse a la
+  // pestaña Resumen (que solo agrupa por mensajero/cliente, sin el detalle fila por
+  // fila). Ahora "Hasta" se puede extender: si queda igual a "Desde" (el caso normal,
+  // un solo día) todo funciona exactamente igual que antes -- edición en vivo,
+  // sincronización con Supabase, piezas automáticas desde la colecta. Si se extiende
+  // a más de un día, la tabla pasa a modo solo lectura mostrando todas las filas de
+  // ese rango (con su fecha) tal como quedaron guardadas, con el total al pie.
+  var _dh=React.useState(retiroFecha),diarioHasta=_dh[0],setDiarioHasta=_dh[1];
+  React.useEffect(function(){setDiarioHasta(retiroFecha);},[retiroFecha]);
+  var modoRangoDiario=subVista==='diario'&&diarioHasta&&diarioHasta>retiroFecha;
+  var _frg=React.useState([]),filasRango=_frg[0],setFilasRango=_frg[1];
+  var _frgC=React.useState(false),cargandoRango=_frgC[0],setCargandoRango=_frgC[1];
+  React.useEffect(function(){
+    if(!modoRangoDiario)return;
+    setCargandoRango(true);
+    db.from('retiros').select('*').gte('fecha',retiroFecha).lte('fecha',diarioHasta).order('fecha',{ascending:true})
+      .then(function(res){setFilasRango(res.data||[]);setCargandoRango(false);})
+      .catch(function(){setCargandoRango(false);});
+  },[modoRangoDiario,retiroFecha,diarioHasta]);
+  var totalPiezasRango=filasRango.reduce(function(a,r){return a+(parseInt(r.piezas)||0);},0);
+  var totalPagoMensajerosRango=filasRango.reduce(function(a,r){return a+(parseFloat(r.pago_mensajero)||0);},0);
+  var totalCobroRango=filasRango.reduce(function(a,r){return a+(parseFloat(r.cobro)||0);},0);
+  var totalConfirmadosRango=filasRango.filter(function(r){return r.confirmado;}).length;
+
   // Cargar retiros del día seleccionado
   function lsKeyRetiros(fecha){return 'transpgso_v2_retiros_dia_'+fecha;}
   function cargarRetirosDia(fecha){
@@ -3063,8 +3089,11 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
         btnSV('diario','Diario'),
         btnSV('resumen','Resumen'),
         React.createElement('input',{type:'date',value:retiroFecha,onChange:function(e){setRetiroFecha(e.target.value);},style:{padding:'6px 12px',borderRadius:8,border:'1px solid var(--border)',fontSize:12,fontFamily:'JetBrains Mono'}}),
-        subVista==='diario'&&React.createElement('button',{className:'btn-add',onClick:agregarFila},'+ Agregar fila'),
-        subVista==='diario'&&React.createElement('button',{className:'btn-add',style:{background:'var(--dark)'},onClick:cargarTodosClientes},'📋 Cargar todos los clientes'),
+        subVista==='diario'&&React.createElement('span',{style:{fontSize:12,color:'var(--text-soft)'}},'hasta'),
+        subVista==='diario'&&React.createElement('input',{type:'date',value:diarioHasta,min:retiroFecha,onChange:function(e){setDiarioHasta(e.target.value);},style:{padding:'6px 12px',borderRadius:8,border:'1px solid '+(modoRangoDiario?'var(--gold)':'var(--border)'),fontSize:12,fontFamily:'JetBrains Mono'}}),
+        modoRangoDiario&&React.createElement('button',{className:'btn-add',style:{background:'transparent',border:'1px solid var(--border)',color:'var(--text-soft)'},onClick:function(){setDiarioHasta(retiroFecha);}},'✕ Quitar rango'),
+        subVista==='diario'&&!modoRangoDiario&&React.createElement('button',{className:'btn-add',onClick:agregarFila},'+ Agregar fila'),
+        subVista==='diario'&&!modoRangoDiario&&React.createElement('button',{className:'btn-add',style:{background:'var(--dark)'},onClick:cargarTodosClientes},'📋 Cargar todos los clientes'),
         subVista==='diario'&&React.createElement('button',{className:'btn-add',style:{background:'transparent',border:'1px solid var(--gold)',color:'var(--gold)'},onClick:function(){setEditandoCfg(!editandoCfg);}},'⚙ Cobro mínimo ('+MIN_PIEZAS+' piezas · $'+TARIFA_MIN.toLocaleString('es-CL')+')')
       )
     ),
@@ -3080,8 +3109,66 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
       React.createElement('span',{style:{fontSize:10,color:'var(--text-soft)'}},'Aplica a los cálculos nuevos de piezas (no recalcula los ya guardados).')
     ),
 
-    // Vista diario
-    subVista==='diario'&&React.createElement('div',null,
+    // Vista diario -- en modo rango (Hasta > Desde) se muestra la tabla de solo lectura con
+    // todas las fechas del rango; en modo normal (un solo día) se muestra la tabla editable
+    // de siempre, sin ningún cambio de comportamiento.
+    subVista==='diario'&&modoRangoDiario&&React.createElement('div',null,
+      React.createElement('div',{style:{background:'rgba(200,168,75,0.08)',border:'1px solid var(--gold)',borderRadius:8,padding:'8px 14px',marginBottom:12,fontSize:12,color:'var(--dark)',fontWeight:700}},
+        (cargandoRango?'Cargando rango...':'Mostrando '+filasRango.length+' retiro(s) entre '+retiroFecha+' y '+diarioHasta)+' — vista de solo lectura. Para editar, volvé a un solo día ("✕ Quitar rango").'
+      ),
+      React.createElement('div',{style:{overflowX:'auto'}},
+        React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:11}},
+          React.createElement('thead',null,
+            React.createElement('tr',{style:{background:'var(--dark)',color:'var(--gold)'}},
+              React.createElement('th',{style:{padding:'8px 6px',textAlign:'left',whiteSpace:'nowrap'}},'Fecha'),
+              React.createElement('th',{style:{padding:'8px 6px',textAlign:'left',whiteSpace:'nowrap'}},'Cliente'),
+              React.createElement('th',{style:{padding:'8px 6px',textAlign:'left',whiteSpace:'nowrap'}},'Dirección retiro'),
+              React.createElement('th',{style:{padding:'8px 6px',textAlign:'left',whiteSpace:'nowrap'}},'Mensajero'),
+              React.createElement('th',{style:{padding:'8px 6px',textAlign:'center',whiteSpace:'nowrap'}},'Confirmado'),
+              React.createElement('th',{style:{padding:'8px 6px',textAlign:'center',whiteSpace:'nowrap'}},'Piezas'),
+              React.createElement('th',{style:{padding:'8px 6px',textAlign:'center',whiteSpace:'nowrap'}},'Respaldos'),
+              React.createElement('th',{style:{padding:'8px 6px',textAlign:'center',whiteSpace:'nowrap'}},'Pago Mens.'),
+              React.createElement('th',{style:{padding:'8px 6px',textAlign:'center',whiteSpace:'nowrap'}},'Cobro Cliente')
+            )
+          ),
+          React.createElement('tbody',null,
+            filasRango.length===0
+              ?React.createElement('tr',null,React.createElement('td',{colSpan:9,style:{textAlign:'center',padding:'20px',color:'var(--text-soft)',fontStyle:'italic'}},cargandoRango?'Cargando...':'Sin retiros registrados en este rango.'))
+              :filasRango.map(function(fila,idx){
+                var piezas=parseInt(fila.piezas)||0;
+                var esRojo=piezas>0&&piezas<MIN_PIEZAS;
+                var rowBg=idx%2===0?'#fff':'var(--cream)';
+                if(esRojo)rowBg='rgba(176,48,48,0.07)';
+                return React.createElement('tr',{key:fila.id||idx,style:{background:rowBg,borderBottom:'1px solid var(--border)'}},
+                  React.createElement('td',{style:{padding:'6px',fontFamily:'JetBrains Mono',whiteSpace:'nowrap'}},fila.fecha),
+                  React.createElement('td',{style:{padding:'6px',fontWeight:600}},fila.cliente||'—'),
+                  React.createElement('td',{style:{padding:'6px'}},fila.direccion||'—'),
+                  React.createElement('td',{style:{padding:'6px'}},(fila.mensajero||'—').replace(/,\s*/g,' ')),
+                  React.createElement('td',{style:{padding:'4px',textAlign:'center'}},fila.confirmado?'✓':'—'),
+                  React.createElement('td',{style:{padding:'4px 6px',textAlign:'center',fontFamily:'JetBrains Mono',fontWeight:700,color:esRojo?'#b03030':'inherit'}},piezas),
+                  React.createElement('td',{style:{padding:'4px',textAlign:'center'}},fila.respaldos?'✓':'—'),
+                  React.createElement('td',{style:{padding:'4px 6px',textAlign:'center',fontFamily:'JetBrains Mono',fontWeight:700,color:'var(--success)'}},'$'+(parseFloat(fila.pago_mensajero)||0).toLocaleString('es-CL')),
+                  React.createElement('td',{style:{padding:'4px 6px',textAlign:'center',fontFamily:'JetBrains Mono',fontWeight:700,color:fila.cobro>0?'#b03030':'var(--text-soft)'}},fila.cobro>0?'$'+parseFloat(fila.cobro).toLocaleString('es-CL'):'—')
+                );
+              })
+          ),
+          filasRango.length>0&&React.createElement('tfoot',null,
+            React.createElement('tr',{style:{background:'var(--dark)',color:'var(--gold)',fontWeight:800,borderTop:'2px solid var(--gold)'}},
+              React.createElement('td',{style:{padding:'8px 6px',whiteSpace:'nowrap'}},'TOTAL ('+filasRango.length+' retiros)'),
+              React.createElement('td',{style:{padding:'8px 6px'}}),
+              React.createElement('td',{style:{padding:'8px 6px'}}),
+              React.createElement('td',{style:{padding:'8px 6px'}}),
+              React.createElement('td',{style:{padding:'8px 6px',textAlign:'center'}},totalConfirmadosRango+'/'+filasRango.length),
+              React.createElement('td',{style:{padding:'8px 6px',textAlign:'center',fontFamily:'JetBrains Mono'}},totalPiezasRango),
+              React.createElement('td',{style:{padding:'8px 6px'}}),
+              React.createElement('td',{style:{padding:'8px 6px',textAlign:'center',fontFamily:'JetBrains Mono',color:'var(--success)'}},'$'+totalPagoMensajerosRango.toLocaleString('es-CL')),
+              React.createElement('td',{style:{padding:'8px 6px',textAlign:'center',fontFamily:'JetBrains Mono',color:totalCobroRango>0?'#fff':'var(--gold)'}},'$'+totalCobroRango.toLocaleString('es-CL'))
+            )
+          )
+        )
+      )
+    ),
+    subVista==='diario'&&!modoRangoDiario&&React.createElement('div',null,
       totalCobro>0&&React.createElement('div',{style:{background:'rgba(176,48,48,0.08)',border:'1px solid rgba(176,48,48,0.3)',borderRadius:8,padding:'8px 14px',marginBottom:12,fontSize:12,color:'#b03030',fontWeight:700}},
         '⚠ Cobro mínimo del día: $'+totalCobro.toLocaleString('es-CL')+' ('+filas.filter(function(r){return r.cobro>0;}).length+' cliente(s) con menos de '+MIN_PIEZAS+' piezas)'
       ),
