@@ -598,7 +598,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787691000;
+window.__MODULES_VERSION=1787692000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8796,22 +8796,30 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
         /*#__PURE__*/React.createElement("button",{onClick:()=>setMostrarPicker(true),style:{padding:'7px 14px',borderRadius:8,border:'none',background:'var(--danger)',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}},"Dividir con compañero →")
       ),
       /*#__PURE__*/React.createElement("div",{style:{padding:'6px 16px 0',fontSize:10,color:'rgba(255,255,255,0.35)',flexShrink:0}},"Tocá ▲ ▼ para mover una parada · cada parada tiene su código único (no cambia aunque se reordene) y botones para abrir Waze o Maps directo a esa dirección"),
-      /*#__PURE__*/React.createElement("div",{style:{flex:'1 1 auto',minHeight:'42vh',overflowY:'auto',padding:'10px 16px 30px'}},stopsOrdenados.map((p,i)=>{const colorEstado=RUTA_ESTADO_COLORS[p.envio.estado]||'#8a8a7a';return/*#__PURE__*/React.createElement("div",{key:p.envio.codigo,style:{display:'flex',alignItems:'center',gap:8,padding:'12px 6px',borderRadius:8,borderBottom:'1px solid rgba(255,255,255,0.08)',background:seleccionados.has(p.envio.codigo)?'rgba(204,53,53,0.08)':'transparent',transition:'background 0.15s'}},
-        /*#__PURE__*/React.createElement("input",{type:"checkbox",checked:seleccionados.has(p.envio.codigo),onChange:()=>toggleSeleccion(p.envio.codigo),style:{width:18,height:18,flexShrink:0}}),
-        /*#__PURE__*/React.createElement("div",{style:{width:24,height:24,borderRadius:'50%',background:'var(--gold)',color:'var(--dark-deep)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:11,flexShrink:0}},i+1),
+      /*#__PURE__*/React.createElement("div",{style:{flex:'1 1 auto',minHeight:'42vh',overflowY:'auto',padding:'10px 16px 30px'}},stopsOrdenados.map((p,i)=>{
+        const colorEstado=RUTA_ESTADO_COLORS[p.envio.estado]||'#8a8a7a';
+        // Una parada "terminada" (entregada/cancelada/siniestro) ya no requiere visitarse -- se
+        // atenúa y se desactivan sus acciones (mover, Waze, Maps), pero se queda en su misma
+        // posición: si se sacara de la lista o se corriera el número, el mensajero perdería la
+        // referencia física que ya anotó en el paquete de al lado.
+        const terminada=p.envio.estado==='entregado'||p.envio.estado==='cancelado'||p.envio.estado==='siniestro';
+        const entregada=p.envio.estado==='entregado';
+        return/*#__PURE__*/React.createElement("div",{key:p.envio.codigo,style:{display:'flex',alignItems:'center',gap:8,padding:'12px 6px',borderRadius:8,borderBottom:'1px solid rgba(255,255,255,0.08)',background:seleccionados.has(p.envio.codigo)?'rgba(204,53,53,0.08)':'transparent',opacity:terminada?0.45:1,transition:'background 0.15s, opacity 0.2s'}},
+        /*#__PURE__*/React.createElement("input",{type:"checkbox",checked:seleccionados.has(p.envio.codigo),onChange:()=>toggleSeleccion(p.envio.codigo),disabled:terminada,style:{width:18,height:18,flexShrink:0}}),
+        /*#__PURE__*/React.createElement("div",{style:{width:24,height:24,borderRadius:'50%',background:terminada?colorEstado:'var(--gold)',color:terminada?'#fff':'var(--dark-deep)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:11,flexShrink:0}},terminada?(entregada?'✓':'✕'):i+1),
         /*#__PURE__*/React.createElement("span",{title:(p.envio.estado||'').replace('_',' '),style:{width:10,height:10,borderRadius:'50%',background:colorEstado,flexShrink:0,boxShadow:'0 0 6px '+colorEstado}}),
         /*#__PURE__*/React.createElement("div",{style:{flex:1,minWidth:0}},
-          /*#__PURE__*/React.createElement("div",{style:{fontSize:13,fontWeight:600,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},p.envio.destinatario||p.envio.cliente||'—'),
+          /*#__PURE__*/React.createElement("div",{style:{fontSize:13,fontWeight:600,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textDecoration:terminada?'line-through':'none'}},p.envio.destinatario||p.envio.cliente||'—'),
           /*#__PURE__*/React.createElement("div",{style:{fontSize:11,color:'rgba(255,255,255,0.5)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},p.envio.direccion,", ",p.envio.comuna),
           /*#__PURE__*/React.createElement("div",{style:{fontSize:10,color:'rgba(200,168,75,0.6)',fontFamily:'JetBrains Mono',marginTop:2}},"ID ",p.envio.codigo)
         ),
         /*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:4,flexShrink:0}},
-          /*#__PURE__*/React.createElement("button",{onClick:()=>window.open('https://waze.com/ul?ll='+p.lat+','+p.lng+'&navigate=yes','_blank'),title:"Abrir en Waze",style:{width:32,height:30,border:'1px solid rgba(100,181,246,0.3)',borderRadius:6,background:'rgba(100,181,246,0.1)',color:'#64b5f6',cursor:'pointer',fontSize:13}},"🧭"),
-          /*#__PURE__*/React.createElement("button",{onClick:()=>window.open('https://www.google.com/maps/dir/?api=1&destination='+p.lat+','+p.lng+'&travelmode=driving','_blank'),title:"Abrir en Google Maps",style:{width:32,height:30,border:'1px solid rgba(200,168,75,0.3)',borderRadius:6,background:'rgba(200,168,75,0.1)',color:'var(--gold)',cursor:'pointer',fontSize:13}},"📍")
+          /*#__PURE__*/React.createElement("button",{onClick:()=>{if(!terminada)window.open('https://waze.com/ul?ll='+p.lat+','+p.lng+'&navigate=yes','_blank');},disabled:terminada,title:terminada?"Ya no aplica navegar (parada terminada)":"Abrir en Waze",style:{width:32,height:30,border:'1px solid rgba(100,181,246,0.3)',borderRadius:6,background:'rgba(100,181,246,0.1)',color:terminada?'rgba(100,181,246,0.35)':'#64b5f6',cursor:terminada?'default':'pointer',fontSize:13}},"🧭"),
+          /*#__PURE__*/React.createElement("button",{onClick:()=>{if(!terminada)window.open('https://www.google.com/maps/dir/?api=1&destination='+p.lat+','+p.lng+'&travelmode=driving','_blank');},disabled:terminada,title:terminada?"Ya no aplica navegar (parada terminada)":"Abrir en Google Maps",style:{width:32,height:30,border:'1px solid rgba(200,168,75,0.3)',borderRadius:6,background:'rgba(200,168,75,0.1)',color:terminada?'rgba(200,168,75,0.35)':'var(--gold)',cursor:terminada?'default':'pointer',fontSize:13}},"📍")
         ),
         /*#__PURE__*/React.createElement("div",{style:{display:'flex',flexDirection:'column',gap:4,flexShrink:0}},
-          /*#__PURE__*/React.createElement("button",{onClick:()=>moverParada(i,-1),disabled:i===0,style:{width:36,height:30,border:'none',borderRadius:6,background:'rgba(255,255,255,0.08)',color:i===0?'rgba(255,255,255,0.2)':'var(--gold)',cursor:i===0?'default':'pointer',fontSize:14}},"▲"),
-          /*#__PURE__*/React.createElement("button",{onClick:()=>moverParada(i,1),disabled:i===stopsOrdenados.length-1,style:{width:36,height:30,border:'none',borderRadius:6,background:'rgba(255,255,255,0.08)',color:i===stopsOrdenados.length-1?'rgba(255,255,255,0.2)':'var(--gold)',cursor:i===stopsOrdenados.length-1?'default':'pointer',fontSize:14}},"▼")
+          /*#__PURE__*/React.createElement("button",{onClick:()=>moverParada(i,-1),disabled:i===0||terminada,title:terminada?"Parada terminada -- no se puede mover":"",style:{width:36,height:30,border:'none',borderRadius:6,background:'rgba(255,255,255,0.08)',color:(i===0||terminada)?'rgba(255,255,255,0.2)':'var(--gold)',cursor:(i===0||terminada)?'default':'pointer',fontSize:14}},"▲"),
+          /*#__PURE__*/React.createElement("button",{onClick:()=>moverParada(i,1),disabled:i===stopsOrdenados.length-1||terminada,title:terminada?"Parada terminada -- no se puede mover":"",style:{width:36,height:30,border:'none',borderRadius:6,background:'rgba(255,255,255,0.08)',color:(i===stopsOrdenados.length-1||terminada)?'rgba(255,255,255,0.2)':'var(--gold)',cursor:(i===stopsOrdenados.length-1||terminada)?'default':'pointer',fontSize:14}},"▼")
         )
       );}))
     ),
