@@ -598,7 +598,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787788000;
+window.__MODULES_VERSION=1787789000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8564,12 +8564,19 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       const{data}=await db.from('ubicaciones_mensajeros').select('lat,lng').eq('mensajero',usuario.nombre).limit(1).maybeSingle();
       if(data)origen={lat:data.lat,lng:data.lng};
     }catch(e){}
+    // Un recálculo desde cero geocodifica TODO lo de hoy de este mensajero -- pendientes Y ya
+    // entregadas/canceladas/siniestro (enviosTodos), no solo "envios" (que el padre ya filtra a
+    // pendientes). Si solo tomara pendientes, cada vez que se recalculara la ruta las paradas ya
+    // resueltas se perderían del mapa para siempre (no tienen forma de volver a aparecer después,
+    // ya que ni el padre las manda en "envios" ni quedan en la cache una vez recalculada). Así el
+    // recálculo sirve además como reparación si la ruta quedó con paradas resueltas faltantes.
+    const enviosParaCalcular=(enviosTodos&&enviosTodos.length?enviosTodos:envios).filter(e=>e.direccion&&e.comuna);
     const puntos=[];
-    for(let i=0;i<envios.length;i++){
-      const e=envios[i];
+    for(let i=0;i<enviosParaCalcular.length;i++){
+      const e=enviosParaCalcular[i];
       const p=await aiGeocode(geocoder,e.direccion||'',e.comuna||'');
       if(p)puntos.push({...p,envio:e});
-      setProgreso(Math.round(((i+1)/envios.length)*40));
+      setProgreso(Math.round(((i+1)/enviosParaCalcular.length)*40));
       await new Promise(r=>setTimeout(r,120));
     }
     if(puntos.length===0){setErrorMsg('No se pudo ubicar ninguna dirección en el mapa.');setEstado('error');return;}
