@@ -598,7 +598,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787784000;
+window.__MODULES_VERSION=1787785000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8428,12 +8428,20 @@ function formatDuracionMin(min){
 function claveRutaCache(usuario){
   return 'ruta_optimizada_'+normalizarNombre(usuario.nombre).replace(/\s+/g,'_')+'_'+fechaHoyCL();
 }
-function guardarCacheRuta(clave,ordenFinal,geometria,distM,durS,origen){
+// "trazos" (los círculos dibujados a mano para priorizar el orden) es un parámetro OPCIONAL --
+// si no se pasa (undefined), se conserva lo que ya estaba guardado, para que llamadas que no
+// saben nada de trazos (mover una parada con ▲▼, agregar un paquete nuevo al final, etc.) no
+// borren por accidente los trazos guardados de una sesión de dibujo anterior. Pasar un array
+// (aunque sea vacío []) SÍ reemplaza lo guardado -- lo usa recalcularPorTrazos (guarda los
+// trazos actuales) y calcularRutaDesdeCero (un recálculo total es un borrón y cuenta nueva).
+function guardarCacheRuta(clave,ordenFinal,geometria,distM,durS,origen,trazos){
   try{
+    const previo=lsLoad(clave,null);
     lsSave(clave,{
       puntos:ordenFinal.map(p=>({codigo:p.envio.codigo,lat:p.lat,lng:p.lng})),
       geometria:(geometria||[]).map(pt=>({lat:typeof pt.lat==='function'?pt.lat():pt.lat,lng:typeof pt.lng==='function'?pt.lng():pt.lng})),
-      distM:distM||0,durS:durS||0,origen
+      distM:distM||0,durS:durS||0,origen,
+      trazos:trazos!==undefined?trazos:((previo&&previo.trazos)||[])
     });
   }catch(e){}
 }
@@ -8500,6 +8508,7 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
   // ── Dibujar orden a mano sobre el mapa (estilo Circuit) ──────────────────────────────────
   const _uDibujando=useState(false),dibujando=_uDibujando[0],setDibujando=_uDibujando[1];
   const _uZonasCount=useState(0),zonasCount=_uZonasCount[0],setZonasCount=_uZonasCount[1];
+  const sesionTocadaRef=React.useRef(false); // true si esta vez sí se dibujó/deshizo/limpió algo -- evita que "entrar y salir sin tocar nada" borre trazos guardados de antes
   const projectorRef=React.useRef(null); // OverlayView solo para convertir pixel<->latlng del contenedor del mapa
   const zonasTrazoRef=React.useRef([]); // [{path:[{lat,lng}],poly,label,color}] en orden de dibujo
   const baseOrdenDibujoRef=React.useRef(null); // foto del orden ANTES de empezar a dibujar (para recalcular sin arrastrar redondeos de trazos previos)
@@ -8612,7 +8621,9 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     setStopsOrdenados(ordenFinal);
     setDistTotal(distanciaAcumM>0?(distanciaAcumM/1000).toFixed(1):null);
     setDurTotal(duracionAcumS>0?Math.round(duracionAcumS/60):null);
-    guardarCacheRuta(claveRutaCache(usuario),ordenFinal,geometriaCompleta,distanciaAcumM,duracionAcumS,origen);
+    // Un recálculo total desde cero es borrón y cuenta nueva -- se pasa trazos:[] a propósito
+    // para no dejar colgados círculos dibujados sobre un orden que ya no existe.
+    guardarCacheRuta(claveRutaCache(usuario),ordenFinal,geometriaCompleta,distanciaAcumM,duracionAcumS,origen,[]);
     setEstado('listo');
   }
   async function calcularRuta(forzar){
@@ -8777,6 +8788,28 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     path.forEach(pt=>bounds.extend(pt));
     map.fitBounds(bounds);
   },[stopsOrdenados,estado,seleccionados,pinFiltroRuta,pinsVisibleRuta]);
+  // Los trazos dibujados a mano viven solo en memoria (son objetos de Google Maps, no se pueden
+  // guardar tal cual) -- lo que SÍ se guarda en la cache de la ruta es su geometría (lat/lng +
+  // color). Esto recrea esos círculos (ocultos, como corresponde) una sola vez al abrir la
+  // pantalla, para que "👁 VER TRAZOS" siga funcionando aunque se haya cerrado y reabierto
+  // Optimizar Ruta. Se ejecuta una sola vez (trazosRestauradosRef) para no duplicar si el efecto
+  // de arriba se vuelve a disparar.
+  const trazosRestauradosRef=React.useRef(false);
+  useEffect(()=>{
+    if(trazosRestauradosRef.current||estado!=='listo'||!mapObjRef.current)return;
+    trazosRestauradosRef.current=true;
+    const cache=lsLoad(claveRutaCache(usuario),null);
+    const trazosGuardados=(cache&&cache.trazos)||[];
+    if(!trazosGuardados.length)return;
+    trazosGuardados.forEach((t,idx)=>{
+      const poly=new google.maps.Polygon({paths:t.path,map:null,fillColor:t.color,fillOpacity:0.22,strokeColor:t.color,strokeWeight:2.5,strokeOpacity:0.9,zIndex:40,clickable:false});
+      const bounds2=new google.maps.LatLngBounds();
+      t.path.forEach(pt=>bounds2.extend(pt));
+      const label=new google.maps.Marker({position:bounds2.getCenter(),map:null,label:{text:String(idx+1),color:'#fff',fontSize:'14px',fontWeight:'800'},icon:{path:google.maps.SymbolPath.CIRCLE,scale:15,fillColor:t.color,fillOpacity:0.95,strokeColor:'#fff',strokeWeight:2},zIndex:41,clickable:false});
+      zonasTrazoRef.current.push({path:t.path,poly,label,color:t.color});
+    });
+    setZonasCount(zonasTrazoRef.current.length);
+  },[estado]);
   // FIX pantalla en blanco/negra del mapa: al tocar "AMPLIAR/REDUCIR MAPA" cambiamos la altura
   // del contenedor por CSS, pero Google Maps no se entera solo de ese cambio de tamaño (no es
   // un resize de la ventana) -- se queda pintado con el tamaño viejo y la parte nueva del mapa
@@ -8836,9 +8869,13 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
   function recalcularPorTrazos(){
     const base=baseOrdenDibujoRef.current;
     if(!base)return;
+    // Guardamos también los trazos (solo lat/lng y color, no los objetos de Google Maps) para
+    // que "👁 VER TRAZOS" siga funcionando aunque se cierre y reabra Optimizar Ruta -- si no se
+    // guardara esto, los círculos se perdían al recargar porque viven solo en memoria.
+    const trazosGuardables=zonasTrazoRef.current.map(z=>({path:z.path,color:z.color}));
     setStopsOrdenados(()=>{
       const nuevo=aplicarOrdenPorZonas(base,zonasTrazoRef.current);
-      guardarCacheRuta(claveRutaCache(usuario),nuevo,geometriaRef.current,(distTotal?parseFloat(distTotal)*1000:0),(durTotal?durTotal*60:0),origenRef.current);
+      guardarCacheRuta(claveRutaCache(usuario),nuevo,geometriaRef.current,(distTotal?parseFloat(distTotal)*1000:0),(durTotal?durTotal*60:0),origenRef.current,trazosGuardables);
       return nuevo;
     });
   }
@@ -8846,7 +8883,9 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
   // que de verdad confirma y ejecuta el reordenamiento -- así el mensajero puede dibujar los
   // trazos que quiera, corregir con Deshacer/Limpiar, y recién cuando toca ese botón se aplica
   // a la lista real. Antes de eso los trazos son solo una vista previa (el cartel de arriba
-  // muestra cuántas paradas caerían en cada uno, pero no toca el orden todavía).
+  // muestra cuántas paradas caerían en cada uno, pero no toca el orden todavía). Siempre se
+  // recalcula al salir (aunque haya 0 trazos) para que "Limpiar" + "Aplicar" también borre lo
+  // que había quedado guardado de una sesión de dibujo anterior.
   function toggleModoDibujo(){
     setDibujando(v=>{
       const activar=!v;
@@ -8854,10 +8893,14 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       if(map)map.setOptions({gestureHandling:activar?'none':'greedy',draggable:!activar});
       if(activar){
         baseOrdenDibujoRef.current=stopsOrdenados.slice();
-      }else if(zonasTrazoRef.current.length){
+        sesionTocadaRef.current=false;
+      }else if(sesionTocadaRef.current){
+        // Solo recalculamos/guardamos si esta vez realmente se dibujó, deshizo o limpió algo --
+        // si el mensajero solo entró a mirar y salió sin tocar nada, no queremos pisar (borrar)
+        // los trazos que ya estaban guardados de una sesión de dibujo anterior.
         const cant=zonasTrazoRef.current.length;
         recalcularPorTrazos();
-        setAplicadoMsg('✓ Orden actualizado con '+cant+' trazo'+(cant>1?'s':''));
+        if(cant>0)setAplicadoMsg('✓ Orden actualizado con '+cant+' trazo'+(cant>1?'s':''));
       }
       return activar;
     });
@@ -8909,6 +8952,7 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     const label=new google.maps.Marker({position:centro,map,label:{text:String(numero),color:'#fff',fontSize:'14px',fontWeight:'800'},icon:{path:google.maps.SymbolPath.CIRCLE,scale:15,fillColor:color,fillOpacity:0.95,strokeColor:'#fff',strokeWeight:2},zIndex:41,clickable:false});
     zonasTrazoRef.current.push({path,poly,label,color});
     setZonasCount(zonasTrazoRef.current.length);
+    sesionTocadaRef.current=true;
     // OJO: acá NO se toca stopsOrdenados todavía -- es solo vista previa (ver cartel de arriba).
     // El reordenamiento real se aplica al tocar "✅ Aplicar orden" (toggleModoDibujo).
   }
@@ -8917,11 +8961,13 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     if(!z)return;
     z.poly.setMap(null);z.label.setMap(null);
     setZonasCount(zonasTrazoRef.current.length);
+    sesionTocadaRef.current=true;
   }
   function limpiarTrazos(){
     zonasTrazoRef.current.forEach(z=>{z.poly.setMap(null);z.label.setMap(null);});
     zonasTrazoRef.current=[];
     setZonasCount(0);
+    sesionTocadaRef.current=true;
   }
   // Cuántas paradas pendientes cayeron en cada trazo (para mostrarlo en pantalla) -- una parada
   // cuenta para el PRIMER trazo que la contiene, igual que en aplicarOrdenPorZonas, así el
