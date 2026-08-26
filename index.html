@@ -598,7 +598,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787787000;
+window.__MODULES_VERSION=1787788000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8644,10 +8644,22 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     // ya iba en camino) se agregan al final, sin tocar el orden ya armado.
     if(cache&&cache.puntos&&cache.puntos.length){
       setEstado('geocodificando');setProgreso(0);
+      // OJO: "envios" (el prop) ya viene FILTRADO por el padre a solo en_ruta/reprogramado --
+      // por eso antes este mapa se armaba con "envios" y en el momento en que una parada se
+      // marcaba entregada, dejaba de existir en ese filtro y "puntosVigentes" la descartaba: el
+      // pin desaparecía del mapa de golpe y, como se borraba del array, TODO lo que venía
+      // después se corría un número (la parada 5 pasaba a ser la 4, etc. -- el "recálculo" que
+      // se veía cada vez que se reabría la pantalla). Se arma con "enviosTodos" (todos los
+      // estados de este mensajero) para que una parada ya entregada/cancelada/siniestro se quede
+      // en su lugar y con su número tal cual, solo que actualizada de estado -- así la puede
+      // pintar atenuada el efecto de más abajo en vez de hacerla desaparecer.
       const envioPorCodigo={};
-      envios.forEach(e=>{envioPorCodigo[e.codigo]=e;});
+      enviosTodos.forEach(e=>{envioPorCodigo[e.codigo]=e;});
       const codigosEnCache=new Set(cache.puntos.map(pt=>pt.codigo));
       const puntosVigentes=cache.puntos.filter(pt=>envioPorCodigo[pt.codigo]);
+      // Los "nuevos" (paquetes recién asignados/escaneados que no estaban en la ruta guardada)
+      // siguen saliendo de "envios" (el filtro de pendientes) -- no tiene sentido agregar al
+      // final de la ruta un paquete que ya está entregado o cancelado.
       const nuevos=envios.filter(e=>!codigosEnCache.has(e.codigo));
       if(puntosVigentes.length>0){
         let ordenFinal=puntosVigentes.map(pt=>({lat:pt.lat,lng:pt.lng,envio:envioPorCodigo[pt.codigo]}));
@@ -8729,8 +8741,11 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
         google.maps.event.trigger(mapObjRef.current,'resize');
       },300);
     }
-    const origenMarker=new google.maps.Marker({position:origen,map,label:{text:'🏍',fontSize:'16px'},title:'Tu ubicación'});
-    markersRef.current.push(origenMarker);
+    // El pin de "dónde estoy" YA NO se dibuja acá fijo en el punto de origen del cálculo --
+    // eso quedaba pegado en la posición de cuando se armó la ruta y nunca se movía. Ahora lo
+    // pone y lo mueve en vivo el efecto de "Mi ubicación en vivo" de más abajo (con GPS del
+    // celular), independiente de este redibujado, para que no parpadee cada vez que se refresca
+    // el mapa por otro motivo (aplicar orden, cambiar filtro, etc).
     const hoy=fechaHoyCL();
     const stopsVisibles=!pinsVisibleRuta?[]:stopsOrdenados.filter(p=>{
       if(pinFiltroRuta==='hoy')return(p.envio.fecha||'').slice(0,10)===hoy;
@@ -8797,6 +8812,36 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     path.forEach(pt=>bounds.extend(pt));
     map.fitBounds(bounds);
   },[stopsOrdenados,estado,seleccionados,pinFiltroRuta,pinsVisibleRuta]);
+  // ── Mi ubicación en vivo ───────────────────────────────────────────────────────────────
+  // Como en Circuit: un pin que se va moviendo con el GPS del celular a medida que el
+  // mensajero avanza, en vez de quedar clavado en el punto donde se calculó la ruta. Usa su
+  // propio watchPosition (no depende de la tabla ubicaciones_mensajeros -- esa tiene ~20-30s de
+  // atraso por el throttle de RiderApp, esto es más inmediato) y actualiza el MISMO marker con
+  // setPosition en vez de recrearlo, para que se vea deslizar en vez de parpadear. Efecto
+  // aparte del redibujado de arriba a propósito: así una actualización de GPS no fuerza a
+  // rehacer todos los pines de la ruta (y viceversa).
+  const miMarkerRef=React.useRef(null);
+  useEffect(()=>{
+    if(estado!=='listo'||!navigator.geolocation)return;
+    const watchId=navigator.geolocation.watchPosition(pos=>{
+      const map=mapObjRef.current;
+      if(!map)return;
+      const p={lat:pos.coords.latitude,lng:pos.coords.longitude};
+      if(miMarkerRef.current){
+        miMarkerRef.current.setPosition(p);
+      }else{
+        miMarkerRef.current=new google.maps.Marker({
+          position:p,map,zIndex:1000,title:'Tu ubicación',
+          icon:{path:google.maps.SymbolPath.CIRCLE,scale:13,fillColor:'#2979FF',fillOpacity:1,strokeColor:'#fff',strokeWeight:3},
+          label:{text:'🏍',fontSize:'13px'}
+        });
+      }
+    },()=>{/* si no hay permiso/señal, simplemente no se ve el pin en vivo -- no es crítico */},{enableHighAccuracy:true,maximumAge:15000,timeout:15000});
+    return()=>{
+      navigator.geolocation.clearWatch(watchId);
+      if(miMarkerRef.current){miMarkerRef.current.setMap(null);miMarkerRef.current=null;}
+    };
+  },[estado]);
   // Los trazos dibujados a mano viven solo en memoria (son objetos de Google Maps, no se pueden
   // guardar tal cual) -- lo que SÍ se guarda en la cache de la ruta es su geometría (lat/lng +
   // color). Esto recrea esos círculos (ocultos, como corresponde) una sola vez al abrir la
