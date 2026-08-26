@@ -598,7 +598,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787786000;
+window.__MODULES_VERSION=1787787000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8499,7 +8499,13 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
   const _uPick=useState(false),mostrarPicker=_uPick[0],setMostrarPicker=_uPick[1];
   const _uColega=useState(''),colegaElegido=_uColega[0],setColegaElegido=_uColega[1];
   const _uDiv=useState(false),dividiendo=_uDiv[0],setDividiendo=_uDiv[1];
-  const _uPinF=useState('pendientes'),pinFiltroRuta=_uPinF[0],setPinFiltroRuta=_uPinF[1];
+  // Antes arrancaba en 'pendientes', que OCULTA del todo los pines ya entregados/cancelados --
+  // eso hacía que el pin atenuado (opacity 0.4) de una parada terminada nunca se llegara a ver,
+  // porque ese filtro ni siquiera la dibuja. Como ahora el atenuado YA resuelve el "no quiero ver
+  // de golpe 30 pines sin distinguir", el default pasa a 'todos': se ve la ruta completa estilo
+  // Circuit (entregadas apagadas, la actual resaltada) sin que el mensajero tenga que tocar nada.
+  // 'pendientes' sigue disponible como botón para quien de verdad quiera esconder lo ya hecho.
+  const _uPinF=useState('todos'),pinFiltroRuta=_uPinF[0],setPinFiltroRuta=_uPinF[1];
   const _uPinV=useState(true),pinsVisibleRuta=_uPinV[0],setPinsVisibleRuta=_uPinV[1];
   const _uExp=useState(false),mapExpandido=_uExp[0],setMapExpandido=_uExp[1];
   const _uTraf=useState(false),trafficOn=_uTraf[0],setTrafficOn=_uTraf[1];
