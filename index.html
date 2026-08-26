@@ -598,7 +598,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787783000;
+window.__MODULES_VERSION=1787784000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8513,6 +8513,19 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     const t=setTimeout(()=>setAplicadoMsg(null),3200);
     return()=>clearTimeout(t);
   },[aplicadoMsg]);
+  // Los trazos quedan OCULTOS en el mapa una vez aplicados (para no ensuciar la vista mientras
+  // se reparte) -- este botón los muestra de nuevo, solo para consultar en qué orden se dibujó
+  // la última vez, sin poder editarlos desde ahí (para eso hay que volver a entrar a "Dibujar
+  // orden"). Mientras se está dibujando, siempre se ven (ver useEffect de abajo).
+  const _uVerTrazos=useState(false),mostrarTrazosGuardados=_uVerTrazos[0],setMostrarTrazosGuardados=_uVerTrazos[1];
+  useEffect(()=>{
+    const map=mapObjRef.current;
+    const visible=dibujando||mostrarTrazosGuardados;
+    zonasTrazoRef.current.forEach(z=>{
+      z.poly.setMap(visible?map:null);
+      z.label.setMap(visible?map:null);
+    });
+  },[dibujando,mostrarTrazosGuardados,zonasCount]);
   // Reflejar en vivo el estado real del envío (entregado/cancelado/etc) sin perder el orden ni volver a geocodificar
   useEffect(()=>{
     if(!enviosTodos.length||estado!=='listo')return;
@@ -8726,11 +8739,21 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       moverParadaAPosicion(idxActual,nuevoNumero);
       if(infoWindowRef.current)infoWindowRef.current.close();
     };
+    // La próxima parada pendiente (la primera que NO está entregada/cancelada/siniestro, en el
+    // orden de la ruta) es "la actual" -- la que el mensajero debería estar yendo a buscar ahora
+    // mismo. Se resalta en el mapa (más grande, aro celeste) para que la vea de un vistazo, como
+    // hace Circuit con la parada activa -- en vez de tener que buscarla entre todos los puntitos.
+    const primeraPendienteIdx=stopsOrdenados.findIndex(s=>s.envio.estado!=='entregado'&&s.envio.estado!=='cancelado'&&s.envio.estado!=='siniestro');
     stopsVisibles.forEach(p=>{
       const i=stopsOrdenados.indexOf(p);
       const colorEstado=RUTA_ESTADO_COLORS[p.envio.estado]||'#3A3D2E';
       const terminadaP=p.envio.estado==='entregado'||p.envio.estado==='cancelado'||p.envio.estado==='siniestro';
-      const marker=new google.maps.Marker({position:{lat:p.lat,lng:p.lng},map,label:{text:String(i+1),color:'#fff',fontSize:'11px',fontWeight:'700'},icon:{path:google.maps.SymbolPath.CIRCLE,scale:14,fillColor:colorEstado,fillOpacity:1,strokeColor:seleccionados.has(p.envio.codigo)?'#fff':'#C8A84B',strokeWeight:seleccionados.has(p.envio.codigo)?3:2}});
+      const fallidaP=p.envio.estado==='cancelado'||p.envio.estado==='siniestro';
+      const esActual=i===primeraPendienteIdx;
+      // Igual que en la lista de abajo: entregada muestra ✓, cancelada/siniestro muestra ✕, y
+      // el resto muestra su número de parada -- así el mapa y la lista se leen igual.
+      const textoLabel=p.envio.estado==='entregado'?'✓':fallidaP?'✕':String(i+1);
+      const marker=new google.maps.Marker({position:{lat:p.lat,lng:p.lng},map,label:{text:textoLabel,color:'#fff',fontSize:esActual?'13px':'11px',fontWeight:'700'},zIndex:esActual?999:undefined,icon:{path:google.maps.SymbolPath.CIRCLE,scale:esActual?19:14,fillColor:colorEstado,fillOpacity:1,strokeColor:esActual?'#2979FF':(seleccionados.has(p.envio.codigo)?'#fff':'#C8A84B'),strokeWeight:esActual?4:(seleccionados.has(p.envio.codigo)?3:2)}});
       marker.addListener('click',()=>{
         const e=p.envio;
         const html=`<div style="font-family:Arial,sans-serif;min-width:180px;color:#2b2e20;">
@@ -9029,6 +9052,7 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
         /*#__PURE__*/React.createElement("div",{style:{width:1,height:16,background:'rgba(255,255,255,0.08)',margin:'0 2px'}}),
         /*#__PURE__*/React.createElement("button",{onClick:()=>setPinsVisibleRuta(v=>!v),style:{padding:'5px 14px',borderRadius:8,border:'1px solid '+(pinsVisibleRuta?'rgba(200,168,75,0.3)':'rgba(255,255,255,0.08)'),background:pinsVisibleRuta?'rgba(200,168,75,0.08)':'rgba(255,255,255,0.03)',color:pinsVisibleRuta?'var(--gold)':'rgba(255,255,255,0.3)',cursor:'pointer',fontSize:11,fontFamily:'Bebas Neue',letterSpacing:1.5,transition:'all 0.2s'}},pinsVisibleRuta?'OCULTAR':'MOSTRAR'),
         /*#__PURE__*/React.createElement("button",{onClick:()=>setTrafficOn(v=>!v),style:{padding:'5px 14px',borderRadius:8,border:'1px solid '+(trafficOn?'rgba(200,168,75,0.3)':'rgba(255,255,255,0.08)'),background:trafficOn?'rgba(200,168,75,0.08)':'rgba(255,255,255,0.03)',color:trafficOn?'var(--gold)':'rgba(255,255,255,0.3)',cursor:'pointer',fontSize:11,fontFamily:'Bebas Neue',letterSpacing:1.5,transition:'all 0.2s'}},'🚦 TRÁFICO'),
+        !dibujando&&zonasCount>0&&/*#__PURE__*/React.createElement("button",{onClick:()=>setMostrarTrazosGuardados(v=>!v),title:"Mostrar/ocultar los círculos con los que se armó el orden de la ruta -- solo para consultar, no reordena nada",style:{padding:'5px 14px',borderRadius:8,border:'1px solid '+(mostrarTrazosGuardados?'rgba(200,168,75,0.3)':'rgba(255,255,255,0.08)'),background:mostrarTrazosGuardados?'rgba(200,168,75,0.08)':'rgba(255,255,255,0.03)',color:mostrarTrazosGuardados?'var(--gold)':'rgba(255,255,255,0.3)',cursor:'pointer',fontSize:11,fontFamily:'Bebas Neue',letterSpacing:1.5,transition:'all 0.2s'}},mostrarTrazosGuardados?'🙈 OCULTAR TRAZOS':'👁 VER TRAZOS'),
         /*#__PURE__*/React.createElement("button",{onClick:()=>setMapExpandido(v=>!v),style:{marginLeft:'auto',padding:'5px 14px',borderRadius:8,border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.03)',color:'rgba(255,255,255,0.6)',cursor:'pointer',fontSize:11,fontFamily:'Bebas Neue',letterSpacing:1.5}},mapExpandido?'⤡ REDUCIR MAPA':'⤢ AMPLIAR MAPA')
       ),
       /*#__PURE__*/React.createElement("div",{style:{padding:'10px 16px',background:'var(--dark)',borderBottom:'1px solid rgba(200,168,75,0.2)',display:'flex',flexWrap:'wrap',gap:8,alignItems:'center',justifyContent:'space-between',flexShrink:0}},
