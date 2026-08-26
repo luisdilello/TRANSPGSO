@@ -598,7 +598,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787693000;
+window.__MODULES_VERSION=1787780000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8438,6 +8438,42 @@ function guardarCacheRuta(clave,ordenFinal,geometria,distM,durS,origen){
   }catch(e){}
 }
 const RUTA_ESTADO_COLORS={en_bodega:'#1a6b8a',en_ruta:'#C8A84B',entregado:'#2e7d4f',reprogramado:'#9c27b0',cancelado:'#b03030',siniestro:'#e65100'};
+// Colores para los "trazos" (zonas dibujadas a mano sobre el mapa) -- uno por orden de prioridad.
+const COLORES_ZONA_TRAZO=['#C8A84B','#64b5f6','#81c784','#e57373','#ba68c8','#ffb74d','#4dd0e1','#f06292'];
+// Ray casting clásico: ¿el punto {lat,lng} cae dentro del polígono (array de {lat,lng})?
+// Para distancias de ciudad, tratar lat/lng como coordenadas planas es suficientemente preciso.
+function puntoEnPoligono(pt,path){
+  let dentro=false;
+  for(let i=0,j=path.length-1;i<path.length;j=i++){
+    const xi=path[i].lng,yi=path[i].lat,xj=path[j].lng,yj=path[j].lat;
+    const cruza=((yi>pt.lat)!==(yj>pt.lat))&&(pt.lng<(xj-xi)*(pt.lat-yi)/(yj-yi)+xi);
+    if(cruza)dentro=!dentro;
+  }
+  return dentro;
+}
+// Reordena "stopsBase" según las zonas dibujadas (en el orden en que se dibujaron): las paradas
+// dentro del primer trazo quedan primero, las del segundo trazo después, etc. Las paradas ya
+// "terminadas" (entregada/cancelada/siniestro) NUNCA se mueven -- conservan su posición exacta,
+// igual que con ▲▼ y el número editable. Las paradas pendientes que no caen en ningún trazo se
+// agregan al final, respetando su orden relativo original.
+function aplicarOrdenPorZonas(stopsBase,zonas){
+  if(!zonas.length)return stopsBase;
+  const idxPendientes=[];
+  stopsBase.forEach((p,i)=>{
+    const terminada=p.envio.estado==='entregado'||p.envio.estado==='cancelado'||p.envio.estado==='siniestro';
+    if(!terminada)idxPendientes.push(i);
+  });
+  const grupos=idxPendientes.map((idx,localIdx)=>{
+    const p=stopsBase[idx];
+    let zonaIdx=zonas.findIndex(z=>puntoEnPoligono({lat:p.lat,lng:p.lng},z.path));
+    if(zonaIdx===-1)zonaIdx=zonas.length; // sin trazo: al final
+    return{p,zonaIdx,localIdx};
+  });
+  grupos.sort((a,b)=>a.zonaIdx-b.zonaIdx||a.localIdx-b.localIdx);
+  const nuevo=stopsBase.slice();
+  idxPendientes.forEach((idx,k)=>{nuevo[idx]=grupos[k].p;});
+  return nuevo;
+}
 function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.mensajeros||[],envios=_ref_or.envios,enviosTodos=_ref_or.enviosTodos||[],onClose=_ref_or.onClose,onDividido=_ref_or.onDividido||function(){};
   const mapRef=React.useRef(null);
   const mapObjRef=React.useRef(null);
@@ -8461,6 +8497,16 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
   const _uTraf=useState(false),trafficOn=_uTraf[0],setTrafficOn=_uTraf[1];
   const trafficLayerRef=React.useRef(null);
   const geometriaRef=React.useRef([]); // path real (siguiendo calles) devuelto por Directions
+  // ── Dibujar orden a mano sobre el mapa (estilo Circuit) ──────────────────────────────────
+  const _uDibujando=useState(false),dibujando=_uDibujando[0],setDibujando=_uDibujando[1];
+  const _uZonasCount=useState(0),zonasCount=_uZonasCount[0],setZonasCount=_uZonasCount[1];
+  const projectorRef=React.useRef(null); // OverlayView solo para convertir pixel<->latlng del contenedor del mapa
+  const zonasTrazoRef=React.useRef([]); // [{path:[{lat,lng}],poly,label,color}] en orden de dibujo
+  const baseOrdenDibujoRef=React.useRef(null); // foto del orden ANTES de empezar a dibujar (para recalcular sin arrastrar redondeos de trazos previos)
+  const trazoActualRef=React.useRef([]); // puntos lat/lng del trazo en curso
+  const trazoPixelRef=React.useRef([]); // mismos puntos en pixeles (para la preview del <svg>)
+  const svgPolylineRef=React.useRef(null);
+  const dibujoActivoRef=React.useRef(false); // hay un dedo/mouse abajo dibujando ahora mismo
   // Reflejar en vivo el estado real del envío (entregado/cancelado/etc) sin perder el orden ni volver a geocodificar
   useEffect(()=>{
     if(!enviosTodos.length||estado!=='listo')return;
@@ -8632,6 +8678,20 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       map=new google.maps.Map(mapRef.current,{zoom:12,center:origen,disableDefaultUI:true,zoomControl:true});
       mapObjRef.current=map;
       infoWindowRef.current=new google.maps.InfoWindow();
+      // OverlayView "fantasma" (nunca dibuja nada) solo para poder convertir pixeles del
+      // contenedor <-> lat/lng, necesario para el dibujo a mano sobre el mapa (más abajo).
+      class ProyectorTrazo extends google.maps.OverlayView{onAdd(){}draw(){}onRemove(){}}
+      const proyector=new ProyectorTrazo();
+      proyector.setMap(map);
+      projectorRef.current=proyector;
+      // Red de seguridad: si el contenedor tenía altura 0 (o distinta a la final) en el
+      // instante exacto en que se creó el mapa -- ej. mientras el layout todavía se estaba
+      // acomodando -- Google Maps puede quedar pintado mal (pantalla negra/gris) hasta que
+      // alguien fuerza un resize. Disparamos uno solo, poco después de crear el mapa, por las dudas.
+      setTimeout(()=>{
+        if(!mapObjRef.current)return;
+        google.maps.event.trigger(mapObjRef.current,'resize');
+      },300);
     }
     const origenMarker=new google.maps.Marker({position:origen,map,label:{text:'🏍',fontSize:'16px'},title:'Tu ubicación'});
     markersRef.current.push(origenMarker);
@@ -8668,6 +8728,22 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     path.forEach(pt=>bounds.extend(pt));
     map.fitBounds(bounds);
   },[stopsOrdenados,estado,seleccionados,pinFiltroRuta,pinsVisibleRuta]);
+  // FIX pantalla en blanco/negra del mapa: al tocar "AMPLIAR/REDUCIR MAPA" cambiamos la altura
+  // del contenedor por CSS, pero Google Maps no se entera solo de ese cambio de tamaño (no es
+  // un resize de la ventana) -- se queda pintado con el tamaño viejo y la parte nueva del mapa
+  // aparece en negro hasta que alguien lo mueve. Hay que avisarle a mano con el evento 'resize'
+  // y volver a centrar, esperando a que termine la transición CSS (0.2s) para no pescarlo a
+  // mitad de camino.
+  useEffect(()=>{
+    if(!mapObjRef.current)return;
+    const map=mapObjRef.current;
+    const centroPrevio=map.getCenter();
+    const t=setTimeout(()=>{
+      google.maps.event.trigger(map,'resize');
+      if(centroPrevio)map.setCenter(centroPrevio);
+    },250);
+    return()=>clearTimeout(t);
+  },[mapExpandido]);
   useEffect(()=>{
     if(!mapObjRef.current)return;
     if(trafficOn){
@@ -8701,6 +8777,94 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       guardarCacheRuta(claveRutaCache(usuario),nuevo,geometriaRef.current,(distTotal?parseFloat(distTotal)*1000:0),(durTotal?durTotal*60:0),origenRef.current);
       return nuevo;
     });
+  }
+  // ── Dibujar orden a mano sobre el mapa (estilo Circuit) ──────────────────────────────────
+  // El mensajero dibuja un círculo/lazo alrededor de un grupo de paradas: ese es el 1er tramo.
+  // Dibuja otro círculo: ese es el 2do tramo. Y así. Las paradas quedan renumeradas en ese
+  // orden. Reaplicamos SIEMPRE desde "baseOrdenDibujoRef" (la foto de cómo estaba la ruta antes
+  // de empezar a dibujar) para que deshacer/agregar trazos sea 100% predecible y no dependa de
+  // los redondeos del cálculo anterior.
+  function recalcularPorTrazos(){
+    const base=baseOrdenDibujoRef.current;
+    if(!base)return;
+    setStopsOrdenados(()=>{
+      const nuevo=aplicarOrdenPorZonas(base,zonasTrazoRef.current);
+      guardarCacheRuta(claveRutaCache(usuario),nuevo,geometriaRef.current,(distTotal?parseFloat(distTotal)*1000:0),(durTotal?durTotal*60:0),origenRef.current);
+      return nuevo;
+    });
+  }
+  function toggleModoDibujo(){
+    setDibujando(v=>{
+      const activar=!v;
+      const map=mapObjRef.current;
+      if(map)map.setOptions({gestureHandling:activar?'none':'greedy',draggable:!activar});
+      if(activar){
+        baseOrdenDibujoRef.current=stopsOrdenados.slice();
+      }
+      return activar;
+    });
+  }
+  function coordsDesdeEvento(e,contenedor){
+    const rect=contenedor.getBoundingClientRect();
+    return{x:e.clientX-rect.left,y:e.clientY-rect.top};
+  }
+  function agregarPuntoTrazo(x,y){
+    trazoPixelRef.current.push(x+','+y);
+    if(svgPolylineRef.current)svgPolylineRef.current.setAttribute('points',trazoPixelRef.current.join(' '));
+    const proyeccion=projectorRef.current&&projectorRef.current.getProjection();
+    if(proyeccion){
+      const latlng=proyeccion.fromContainerPixelToLatLng(new google.maps.Point(x,y));
+      if(latlng)trazoActualRef.current.push({lat:latlng.lat(),lng:latlng.lng()});
+    }
+  }
+  function onDibujoPointerDown(e){
+    if(!dibujando)return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dibujoActivoRef.current=true;
+    trazoActualRef.current=[];
+    trazoPixelRef.current=[];
+    const{x,y}=coordsDesdeEvento(e,e.currentTarget);
+    agregarPuntoTrazo(x,y);
+  }
+  function onDibujoPointerMove(e){
+    if(!dibujando||!dibujoActivoRef.current)return;
+    e.preventDefault();
+    const{x,y}=coordsDesdeEvento(e,e.currentTarget);
+    agregarPuntoTrazo(x,y);
+  }
+  function onDibujoPointerUp(e){
+    if(!dibujando||!dibujoActivoRef.current)return;
+    dibujoActivoRef.current=false;
+    try{e.currentTarget.releasePointerCapture(e.pointerId);}catch(err){}
+    const path=trazoActualRef.current;
+    trazoActualRef.current=[];trazoPixelRef.current=[];
+    if(svgPolylineRef.current)svgPolylineRef.current.setAttribute('points','');
+    if(path.length<3)return; // trazo muy corto, lo ignoramos en vez de crear una zona inútil
+    const map=mapObjRef.current;
+    const color=COLORES_ZONA_TRAZO[zonasTrazoRef.current.length%COLORES_ZONA_TRAZO.length];
+    const numero=zonasTrazoRef.current.length+1;
+    const poly=new google.maps.Polygon({paths:path,map,fillColor:color,fillOpacity:0.22,strokeColor:color,strokeWeight:2.5,strokeOpacity:0.9,zIndex:40,clickable:false});
+    const bounds=new google.maps.LatLngBounds();
+    path.forEach(pt=>bounds.extend(pt));
+    const centro=bounds.getCenter();
+    const label=new google.maps.Marker({position:centro,map,label:{text:String(numero),color:'#fff',fontSize:'14px',fontWeight:'800'},icon:{path:google.maps.SymbolPath.CIRCLE,scale:15,fillColor:color,fillOpacity:0.95,strokeColor:'#fff',strokeWeight:2},zIndex:41,clickable:false});
+    zonasTrazoRef.current.push({path,poly,label,color});
+    setZonasCount(zonasTrazoRef.current.length);
+    recalcularPorTrazos();
+  }
+  function deshacerUltimoTrazo(){
+    const z=zonasTrazoRef.current.pop();
+    if(!z)return;
+    z.poly.setMap(null);z.label.setMap(null);
+    setZonasCount(zonasTrazoRef.current.length);
+    recalcularPorTrazos();
+  }
+  function limpiarTrazos(){
+    zonasTrazoRef.current.forEach(z=>{z.poly.setMap(null);z.label.setMap(null);});
+    zonasTrazoRef.current=[];
+    setZonasCount(0);
+    recalcularPorTrazos();
   }
   function toggleSeleccion(codigo){
     setSeleccionados(prev=>{
@@ -8785,7 +8949,20 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       /*#__PURE__*/React.createElement("button",{onClick:onClose,style:{padding:'10px 24px',borderRadius:10,border:'1px solid var(--gold)',background:'none',color:'var(--gold)',cursor:'pointer'}},"Volver")
     ),
     estado==='listo'&&/*#__PURE__*/React.createElement(React.Fragment,null,
-      /*#__PURE__*/React.createElement("div",{ref:mapRef,style:{height:mapExpandido?'62vh':'30vh',flexShrink:0,width:'100%',background:'#222',transition:'height 0.2s'}}),
+      /*#__PURE__*/React.createElement("div",{style:{position:'relative',flexShrink:0}},
+        /*#__PURE__*/React.createElement("div",{ref:mapRef,style:{height:mapExpandido?'62vh':'30vh',width:'100%',background:'#222',transition:'height 0.2s'}}),
+        /*#__PURE__*/React.createElement("div",{onPointerDown:onDibujoPointerDown,onPointerMove:onDibujoPointerMove,onPointerUp:onDibujoPointerUp,onPointerCancel:onDibujoPointerUp,style:{position:'absolute',inset:0,touchAction:'none',cursor:dibujando?'crosshair':'default',pointerEvents:dibujando?'auto':'none'}},
+          /*#__PURE__*/React.createElement("svg",{style:{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none'}},
+            /*#__PURE__*/React.createElement("polyline",{ref:svgPolylineRef,points:"",fill:"rgba(200,168,75,0.15)",stroke:"#C8A84B",strokeWidth:3,strokeLinecap:"round",strokeLinejoin:"round"})
+          )
+        ),
+        dibujando&&/*#__PURE__*/React.createElement("div",{style:{position:'absolute',top:8,left:8,right:8,padding:'6px 10px',borderRadius:8,background:'rgba(20,20,15,0.82)',color:'var(--gold)',fontSize:11,textAlign:'center',pointerEvents:'none',backdropFilter:'blur(4px)'}},zonasCount>0?zonasCount+" trazo"+(zonasCount>1?'s':'')+" · dibujá el próximo tramo, o tocá Listo":"Dibujá un círculo alrededor de las primeras paradas a visitar, soltá, y seguí con el próximo tramo"),
+        /*#__PURE__*/React.createElement("div",{style:{position:'absolute',bottom:8,left:8,right:8,display:'flex',gap:6,flexWrap:'wrap'}},
+          /*#__PURE__*/React.createElement("button",{onClick:toggleModoDibujo,style:{padding:'7px 12px',borderRadius:8,border:'1px solid '+(dibujando?'var(--gold)':'rgba(255,255,255,0.25)'),background:dibujando?'var(--gold)':'rgba(20,20,15,0.78)',color:dibujando?'var(--dark-deep)':'#fff',fontWeight:700,fontSize:11,cursor:'pointer',backdropFilter:'blur(4px)'}},dibujando?'✅ Listo':'✏️ Dibujar orden'),
+          dibujando&&zonasCount>0&&/*#__PURE__*/React.createElement("button",{onClick:deshacerUltimoTrazo,style:{padding:'7px 12px',borderRadius:8,border:'1px solid rgba(255,255,255,0.25)',background:'rgba(20,20,15,0.78)',color:'#fff',fontSize:11,cursor:'pointer',backdropFilter:'blur(4px)'}},"↩ Deshacer trazo"),
+          dibujando&&zonasCount>0&&/*#__PURE__*/React.createElement("button",{onClick:limpiarTrazos,style:{padding:'7px 12px',borderRadius:8,border:'1px solid rgba(204,53,53,0.45)',background:'rgba(20,20,15,0.78)',color:'#ff8a8a',fontSize:11,cursor:'pointer',backdropFilter:'blur(4px)'}},"🗑 Limpiar")
+        )
+      ),
       /*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:8,padding:'8px 14px',background:'linear-gradient(135deg,#2b2e20,#222518)',borderBottom:'1px solid rgba(200,168,75,0.2)',flexShrink:0,flexWrap:'wrap',boxShadow:'0 2px 8px rgba(0,0,0,0.2)'}},
         /*#__PURE__*/React.createElement("span",{style:{fontSize:13,color:'var(--gold)',letterSpacing:3,fontFamily:'Bebas Neue',textShadow:'0 0 8px rgba(200,168,75,0.4)'}},"PINS"),
         ['hoy','pendientes','todos'].map(f=>{
@@ -8800,7 +8977,7 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       /*#__PURE__*/React.createElement("div",{style:{padding:'10px 16px',background:'var(--dark)',borderBottom:'1px solid rgba(200,168,75,0.2)',display:'flex',flexWrap:'wrap',gap:8,alignItems:'center',justifyContent:'space-between',flexShrink:0}},
         /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'rgba(255,255,255,0.6)'}},stopsOrdenados.length," paradas",distTotal?` · ~${distTotal} km`:'',durTotal?` · ~${formatDuracionMin(durTotal)}`:''),
         /*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:6}},
-          /*#__PURE__*/React.createElement("button",{onClick:()=>{if(window.confirm('Esto va a recalcular TODA la ruta desde tu ubicación actual y puede cambiar el orden y el número de cada parada pendiente (incluidas las que ya marcaste en los paquetes). Los paquetes nuevos que lleguen de aquí en más ya se agregan solos al final sin tocar el resto -- no hace falta recalcular para eso. ¿Igual querés recalcular todo?'))calcularRuta(true);},title:"Recalcular desde tu ubicación actual (por defecto la ruta se mantiene igual al reabrir, y los paquetes nuevos se agregan solos al final)",style:{padding:'8px 12px',borderRadius:8,border:'1px solid rgba(255,255,255,0.15)',background:'none',color:'rgba(255,255,255,0.5)',fontWeight:700,fontSize:12,cursor:'pointer'}},"🔄"),
+          /*#__PURE__*/React.createElement("button",{onClick:()=>{if(window.confirm('Esto va a recalcular TODA la ruta desde tu ubicación actual y puede cambiar el orden y el número de cada parada pendiente (incluidas las que ya marcaste en los paquetes). Los paquetes nuevos que lleguen de aquí en más ya se agregan solos al final sin tocar el resto -- no hace falta recalcular para eso. ¿Igual querés recalcular todo?')){limpiarTrazos();calcularRuta(true);}},title:"Recalcular desde tu ubicación actual (por defecto la ruta se mantiene igual al reabrir, y los paquetes nuevos se agregan solos al final)",style:{padding:'8px 12px',borderRadius:8,border:'1px solid rgba(255,255,255,0.15)',background:'none',color:'rgba(255,255,255,0.5)',fontWeight:700,fontSize:12,cursor:'pointer'}},"🔄"),
           /*#__PURE__*/React.createElement("button",{onClick:compartirRuta,style:{padding:'8px 14px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',background:'none',color:'var(--gold)',fontWeight:700,fontSize:12,cursor:'pointer'}},"Compartir"),
           /*#__PURE__*/React.createElement("button",{onClick:abrirEnGoogleMaps,style:{padding:'8px 14px',borderRadius:8,border:'none',background:'var(--gold)',color:'var(--dark-deep)',fontWeight:700,fontSize:12,cursor:'pointer'}},"Abrir en Maps")
         )
