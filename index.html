@@ -598,7 +598,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787790000;
+window.__MODULES_VERSION=1787791000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8640,10 +8640,17 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     setEstado('listo');
   }
   async function calcularRuta(forzar){
-    if(!envios.length){setErrorMsg('No tienes envíos pendientes para optimizar.');setEstado('error');return;}
-    if(!window.google||!window.google.maps){setErrorMsg('El mapa no está disponible en este momento.');setEstado('error');return;}
+    // OJO: "envios" son solo los PENDIENTES (en_ruta/reprogramado). Si el mensajero ya entregó
+    // TODO lo de hoy, envios.length puede ser 0 aunque todavía tenga sentido abrir la pantalla
+    // para ver el resumen del día (todo atenuado, sin nada por hacer) -- por eso el error de
+    // "no tenés nada" solo se muestra si además no hay NADA de historial (ni cache guardada, ni
+    // ningún envío de hoy, sea cual sea su estado). Antes se cortaba acá mismo con envios.length
+    // en 0 y ni se llegaba a mirar la cache/enviosTodos.
     const clave=claveRutaCache(usuario);
     const cache=forzar?null:lsLoad(clave,null);
+    const hayAlgoQueMostrar=envios.length>0||(cache&&cache.puntos&&cache.puntos.length>0)||(enviosTodos&&enviosTodos.some(e=>e.direccion&&e.comuna));
+    if(!hayAlgoQueMostrar){setErrorMsg('No tienes envíos pendientes para optimizar.');setEstado('error');return;}
+    if(!window.google||!window.google.maps){setErrorMsg('El mapa no está disponible en este momento.');setEstado('error');return;}
     // ── Ya existe una ruta calculada hoy para este mensajero: la restauramos tal cual en
     // vez de recalcular desde su posición GPS actual (eso era lo que hacía que el orden
     // cambiara cada vez que se volvía a abrir "Optimizar Ruta" a mitad de la ruta). Los
@@ -8756,7 +8763,7 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     const hoy=fechaHoyCL();
     const stopsVisibles=!pinsVisibleRuta?[]:stopsOrdenados.filter(p=>{
       if(pinFiltroRuta==='hoy')return(p.envio.fecha||'').slice(0,10)===hoy;
-      if(pinFiltroRuta==='pendientes')return p.envio.estado!=='entregado'&&p.envio.estado!=='cancelado';
+      if(pinFiltroRuta==='pendientes')return p.envio.estado!=='entregado'&&p.envio.estado!=='cancelado'&&p.envio.estado!=='siniestro';
       return true; // todos
     });
     // Si tenemos la geometría real devuelta por Directions (sigue las calles), la usamos para
@@ -8874,7 +8881,13 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       }
       if(!nuevosPuntos.length)return;
       setStopsOrdenados(prev=>{
-        const nuevo=[...nuevosPuntos,...prev];
+        // OJO: se agregan al FINAL, nunca al principio -- el número de cada parada pendiente es
+        // literalmente su posición en este array (i+1), así que insertarlas adelante correría
+        // para atrás el número de TODAS las pendientes que el mensajero ya conoce (justo el
+        // "recálculo silencioso" que se estaba arreglando). Al ir al final no le cambia el
+        // número a ninguna pendiente existente -- las recuperadas ya no muestran número de
+        // todos modos (muestran ✓/✕), así que da lo mismo en qué posición absoluta queden.
+        const nuevo=[...prev,...nuevosPuntos];
         guardarCacheRuta(claveRutaCache(usuario),nuevo,geometriaRef.current,(distTotal?parseFloat(distTotal)*1000:0),(durTotal?durTotal*60:0),origenRef.current);
         return nuevo;
       });
@@ -8929,11 +8942,22 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       trafficLayerRef.current.setMap(null);
     }
   },[trafficOn,estado]);
+  function esTerminadaEstado(estado){return estado==='entregado'||estado==='cancelado'||estado==='siniestro';}
+  // Mueve la parada "idx" un lugar hacia arriba/abajo ENTRE LAS PENDIENTES -- las terminadas
+  // (entregadas/canceladas/siniestro) que estén en el medio nunca se tocan ni cambian de lugar.
+  // Antes esto hacía un swap directo con el vecino de al lado (idx+dir) sin fijarse si ese
+  // vecino era una parada ya terminada -- si lo era, la corría de lugar igual, violando la regla
+  // de "una terminada nunca se mueve" (contradice el comentario de la lista de abajo).
   function moverParada(idx,dir){
     setStopsOrdenados(prev=>{
+      const pendingIdx=[];
+      prev.forEach((p,i)=>{if(!esTerminadaEstado(p.envio.estado))pendingIdx.push(i);});
+      const pos=pendingIdx.indexOf(idx);
+      if(pos===-1)return prev; // no debería pasar: los botones ▲▼ están disabled para terminadas
+      const nuevaPos=pos+dir;
+      if(nuevaPos<0||nuevaPos>=pendingIdx.length)return prev;
+      const j=pendingIdx[nuevaPos]; // el próximo/anterior PENDIENTE real, saltando terminadas
       const nuevo=[...prev];
-      const j=idx+dir;
-      if(j<0||j>=nuevo.length)return prev;
       [nuevo[idx],nuevo[j]]=[nuevo[j],nuevo[idx]];
       // Guardamos el nuevo orden manual en la cache para que se respete si se reabre la ruta.
       guardarCacheRuta(claveRutaCache(usuario),nuevo,geometriaRef.current,(distTotal?parseFloat(distTotal)*1000:0),(durTotal?durTotal*60:0),origenRef.current);
@@ -8941,15 +8965,30 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     });
   }
   // Escribir directamente el número de parada deseado (en vez de tocar ▲▼ muchas veces cuando
-  // hay que moverla lejos, ej. pasar la parada 6 a ser la 2).
+  // hay que moverla lejos, ej. pasar la parada 6 a ser la 2). Igual que moverParada: las
+  // terminadas nunca cambian de posición -- antes esto hacía un splice/insert "en crudo" sobre
+  // el array completo, así que cualquier terminada que cayera EN EL MEDIO del recorrido (entre
+  // la posición de origen y la de destino) se corría de lugar igual, aunque nadie la haya tocado.
+  // Ahora se reordena solo la sublista de pendientes (por posición relativa entre ellas) y las
+  // terminadas se vuelven a insertar tal cual, en sus mismos casilleros absolutos de siempre.
   function moverParadaAPosicion(idx,nuevoNumero){
     setStopsOrdenados(prev=>{
       if(!nuevoNumero||nuevoNumero<1)return prev;
-      const destino=Math.min(nuevoNumero-1,prev.length-1);
-      if(destino===idx)return prev;
+      const pendingIdx=[];
+      prev.forEach((p,i)=>{if(!esTerminadaEstado(p.envio.estado))pendingIdx.push(i);});
+      const pos=pendingIdx.indexOf(idx);
+      if(pos===-1)return prev;
+      const destinoAbsoluto=Math.min(Math.max(nuevoNumero-1,0),prev.length-1);
+      // Traducimos la posición absoluta escrita a una posición dentro de la sublista de
+      // pendientes nada más (cuántas pendientes hay hasta ese punto).
+      let destinoPos=0;
+      for(let k=0;k<pendingIdx.length;k++){if(pendingIdx[k]<=destinoAbsoluto)destinoPos=k;else break;}
+      if(destinoPos===pos)return prev;
+      const pendientesReordenadas=pendingIdx.map(i=>prev[i]);
+      const item=pendientesReordenadas.splice(pos,1)[0];
+      pendientesReordenadas.splice(destinoPos,0,item);
       const nuevo=prev.slice();
-      const item=nuevo.splice(idx,1)[0];
-      nuevo.splice(destino,0,item);
+      pendingIdx.forEach((absIdx,k)=>{nuevo[absIdx]=pendientesReordenadas[k];});
       guardarCacheRuta(claveRutaCache(usuario),nuevo,geometriaRef.current,(distTotal?parseFloat(distTotal)*1000:0),(durTotal?durTotal*60:0),origenRef.current);
       return nuevo;
     });
@@ -8967,8 +9006,21 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     // que "👁 VER TRAZOS" siga funcionando aunque se cierre y reabra Optimizar Ruta -- si no se
     // guardara esto, los círculos se perdían al recargar porque viven solo en memoria.
     const trazosGuardables=zonasTrazoRef.current.map(z=>({path:z.path,color:z.color}));
-    setStopsOrdenados(()=>{
-      const nuevo=aplicarOrdenPorZonas(base,zonasTrazoRef.current);
+    setStopsOrdenados(prev=>{
+      // "base" es la foto de cómo estaba la ruta al ENTRAR a modo dibujo -- si mientras se
+      // dibujaba, alguna parada cambió de estado en vivo (ej. el admin la marcó entregada desde
+      // otro lado, o llegó la confirmación de una entrega hecha unos segundos antes de entrar a
+      // dibujar), "base" se quedó con el estado viejo. Sin este refresco, "Aplicar orden"
+      // pisaba ese cambio y la parada volvía a verse pendiente hasta el próximo sync. Se refresca
+      // el estado de cada parada de "base" contra el "prev" más actual (mismo código = mismo
+      // envío) antes de reordenar -- solo el estado, nunca la posición ni el resto de los datos.
+      const estadoActualPorCodigo={};
+      prev.forEach(p=>{estadoActualPorCodigo[p.envio.codigo]=p.envio.estado;});
+      const baseActualizada=base.map(p=>{
+        const estadoActual=estadoActualPorCodigo[p.envio.codigo];
+        return estadoActual&&estadoActual!==p.envio.estado?{...p,envio:{...p.envio,estado:estadoActual}}:p;
+      });
+      const nuevo=aplicarOrdenPorZonas(baseActualizada,zonasTrazoRef.current);
       guardarCacheRuta(claveRutaCache(usuario),nuevo,geometriaRef.current,(distTotal?parseFloat(distTotal)*1000:0),(durTotal?durTotal*60:0),origenRef.current,trazosGuardables);
       return nuevo;
     });
@@ -9096,7 +9148,17 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       await procesarConcurrencia(codigos,async function(codigo){
         try{await db.from('envios').update({mensajero:colegaElegido}).eq('codigo',codigo);}catch(e){}
       },8);
-      setStopsOrdenados(prev=>prev.filter(p=>!seleccionados.has(p.envio.codigo)));
+      setStopsOrdenados(prev=>{
+        const nuevo=prev.filter(p=>!seleccionados.has(p.envio.codigo));
+        // Guardamos ya mismo el guardado local con la lista reducida -- si no se hacía esto, la
+        // ruta seguía mostrando (y usando para el mapa/distancia) las paradas ya cedidas al
+        // compañero hasta que alguna otra acción no relacionada (mover una parada, aplicar un
+        // trazo) volviera a guardar la cache por su cuenta. La distancia/duración quedan como
+        // estimación aproximada (no se vuelve a pedir la ruta real a Directions acá) -- si se
+        // quiere el número exacto después de dividir, está "🔄 Recalcular".
+        guardarCacheRuta(claveRutaCache(usuario),nuevo,geometriaRef.current,(distTotal?parseFloat(distTotal)*1000:0),(durTotal?durTotal*60:0),origenRef.current);
+        return nuevo;
+      });
       onDividido(codigos);
       setSeleccionados(new Set());
       setMostrarPicker(false);
@@ -9198,7 +9260,7 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       /*#__PURE__*/React.createElement("div",{style:{padding:'10px 16px',background:'var(--dark)',borderBottom:'1px solid rgba(200,168,75,0.2)',display:'flex',flexWrap:'wrap',gap:8,alignItems:'center',justifyContent:'space-between',flexShrink:0}},
         /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'rgba(255,255,255,0.6)'}},stopsOrdenados.length," paradas",distTotal?` · ~${distTotal} km`:'',durTotal?` · ~${formatDuracionMin(durTotal)}`:''),
         /*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:6}},
-          /*#__PURE__*/React.createElement("button",{onClick:()=>{if(window.confirm('Esto va a recalcular TODA la ruta desde tu ubicación actual y puede cambiar el orden y el número de cada parada pendiente (incluidas las que ya marcaste en los paquetes). Los paquetes nuevos que lleguen de aquí en más ya se agregan solos al final sin tocar el resto -- no hace falta recalcular para eso. ¿Igual querés recalcular todo?')){limpiarTrazos();calcularRuta(true);}},title:"Recalcular desde tu ubicación actual (por defecto la ruta se mantiene igual al reabrir, y los paquetes nuevos se agregan solos al final)",style:{padding:'8px 12px',borderRadius:8,border:'1px solid rgba(255,255,255,0.15)',background:'none',color:'rgba(255,255,255,0.5)',fontWeight:700,fontSize:12,cursor:'pointer'}},"🔄"),
+          /*#__PURE__*/React.createElement("button",{onClick:()=>{if(window.confirm('Esto va a recalcular TODA la ruta desde tu ubicación actual: puede cambiar el orden y el número de cada parada (incluidas las ya entregadas/canceladas), y BORRA el orden que hayas dibujado a mano (los círculos de "✏️ Dibujar orden"). Los paquetes nuevos que lleguen de aquí en más ya se agregan solos al final sin tocar el resto, y si algún paquete ya entregado faltara en el mapa se repara solo -- no hace falta recalcular para ninguna de esas dos cosas. ¿Igual querés recalcular todo?')){limpiarTrazos();calcularRuta(true);}},title:"Recalcular desde tu ubicación actual (por defecto la ruta se mantiene igual al reabrir, y los paquetes nuevos se agregan solos al final) -- OJO: borra el orden dibujado a mano",style:{padding:'8px 12px',borderRadius:8,border:'1px solid rgba(255,255,255,0.15)',background:'none',color:'rgba(255,255,255,0.5)',fontWeight:700,fontSize:12,cursor:'pointer'}},"🔄"),
           /*#__PURE__*/React.createElement("button",{onClick:compartirRuta,style:{padding:'8px 14px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',background:'none',color:'var(--gold)',fontWeight:700,fontSize:12,cursor:'pointer'}},"Compartir"),
           /*#__PURE__*/React.createElement("button",{onClick:abrirEnGoogleMaps,style:{padding:'8px 14px',borderRadius:8,border:'none',background:'var(--gold)',color:'var(--dark-deep)',fontWeight:700,fontSize:12,cursor:'pointer'}},"Abrir en Maps")
         )
