@@ -598,7 +598,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787782000;
+window.__MODULES_VERSION=1787783000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8507,6 +8507,12 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
   const trazoPixelRef=React.useRef([]); // mismos puntos en pixeles (para la preview del <svg>)
   const svgPolylineRef=React.useRef(null);
   const dibujoActivoRef=React.useRef(false); // hay un dedo/mouse abajo dibujando ahora mismo
+  const _uAplicado=useState(null),aplicadoMsg=_uAplicado[0],setAplicadoMsg=_uAplicado[1]; // confirmación temporal "orden aplicado"
+  useEffect(()=>{
+    if(!aplicadoMsg)return;
+    const t=setTimeout(()=>setAplicadoMsg(null),3200);
+    return()=>clearTimeout(t);
+  },[aplicadoMsg]);
   // Reflejar en vivo el estado real del envío (entregado/cancelado/etc) sin perder el orden ni volver a geocodificar
   useEffect(()=>{
     if(!enviosTodos.length||estado!=='listo')return;
@@ -8813,6 +8819,11 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       return nuevo;
     });
   }
+  // Entrar a modo dibujo solo prepara todo para dibujar. SALIR (botón "✅ Aplicar orden") es el
+  // que de verdad confirma y ejecuta el reordenamiento -- así el mensajero puede dibujar los
+  // trazos que quiera, corregir con Deshacer/Limpiar, y recién cuando toca ese botón se aplica
+  // a la lista real. Antes de eso los trazos son solo una vista previa (el cartel de arriba
+  // muestra cuántas paradas caerían en cada uno, pero no toca el orden todavía).
   function toggleModoDibujo(){
     setDibujando(v=>{
       const activar=!v;
@@ -8820,6 +8831,10 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       if(map)map.setOptions({gestureHandling:activar?'none':'greedy',draggable:!activar});
       if(activar){
         baseOrdenDibujoRef.current=stopsOrdenados.slice();
+      }else if(zonasTrazoRef.current.length){
+        const cant=zonasTrazoRef.current.length;
+        recalcularPorTrazos();
+        setAplicadoMsg('✓ Orden actualizado con '+cant+' trazo'+(cant>1?'s':''));
       }
       return activar;
     });
@@ -8871,20 +8886,19 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     const label=new google.maps.Marker({position:centro,map,label:{text:String(numero),color:'#fff',fontSize:'14px',fontWeight:'800'},icon:{path:google.maps.SymbolPath.CIRCLE,scale:15,fillColor:color,fillOpacity:0.95,strokeColor:'#fff',strokeWeight:2},zIndex:41,clickable:false});
     zonasTrazoRef.current.push({path,poly,label,color});
     setZonasCount(zonasTrazoRef.current.length);
-    recalcularPorTrazos();
+    // OJO: acá NO se toca stopsOrdenados todavía -- es solo vista previa (ver cartel de arriba).
+    // El reordenamiento real se aplica al tocar "✅ Aplicar orden" (toggleModoDibujo).
   }
   function deshacerUltimoTrazo(){
     const z=zonasTrazoRef.current.pop();
     if(!z)return;
     z.poly.setMap(null);z.label.setMap(null);
     setZonasCount(zonasTrazoRef.current.length);
-    recalcularPorTrazos();
   }
   function limpiarTrazos(){
     zonasTrazoRef.current.forEach(z=>{z.poly.setMap(null);z.label.setMap(null);});
     zonasTrazoRef.current=[];
     setZonasCount(0);
-    recalcularPorTrazos();
   }
   // Cuántas paradas pendientes cayeron en cada trazo (para mostrarlo en pantalla) -- una parada
   // cuenta para el PRIMER trazo que la contiene, igual que en aplicarOrdenPorZonas, así el
@@ -8996,11 +9010,12 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
         dibujando&&(()=>{
           const resumen=resumenPorZona();
           const texto=!resumen?"Dibujá un círculo alrededor de las primeras paradas a visitar, soltá, y seguí con el próximo tramo":
-            "Trazo "+resumen.counts.map((c,idx)=>(idx+1)+"→"+c+" parada"+(c===1?'':'s')).join(' · ')+(resumen.sinTrazo>0?' · sin trazo→'+resumen.sinTrazo:'')+" · la lista de abajo ya se reordenó";
+            "Trazo "+resumen.counts.map((c,idx)=>(idx+1)+"→"+c+" parada"+(c===1?'':'s')).join(' · ')+(resumen.sinTrazo>0?' · sin trazo→'+resumen.sinTrazo:'')+" · tocá ✅ Aplicar orden cuando termines";
           return/*#__PURE__*/React.createElement("div",{style:{position:'absolute',top:8,left:8,right:8,padding:'6px 10px',borderRadius:8,background:'rgba(20,20,15,0.88)',color:'var(--gold)',fontSize:11,textAlign:'center',pointerEvents:'none',backdropFilter:'blur(4px)'}},texto);
         })(),
+        !dibujando&&aplicadoMsg&&/*#__PURE__*/React.createElement("div",{style:{position:'absolute',top:8,left:8,right:8,padding:'6px 10px',borderRadius:8,background:'rgba(46,125,79,0.92)',color:'#fff',fontSize:11,fontWeight:700,textAlign:'center',pointerEvents:'none',backdropFilter:'blur(4px)'}},aplicadoMsg),
         /*#__PURE__*/React.createElement("div",{style:{position:'absolute',bottom:8,left:8,right:8,display:'flex',gap:6,flexWrap:'wrap'}},
-          /*#__PURE__*/React.createElement("button",{onClick:toggleModoDibujo,style:{padding:'7px 12px',borderRadius:8,border:'1px solid '+(dibujando?'var(--gold)':'rgba(255,255,255,0.25)'),background:dibujando?'var(--gold)':'rgba(20,20,15,0.78)',color:dibujando?'var(--dark-deep)':'#fff',fontWeight:700,fontSize:11,cursor:'pointer',backdropFilter:'blur(4px)'}},dibujando?'✅ Listo':'✏️ Dibujar orden'),
+          /*#__PURE__*/React.createElement("button",{onClick:toggleModoDibujo,style:{padding:'7px 12px',borderRadius:8,border:'1px solid '+(dibujando?'var(--gold)':'rgba(255,255,255,0.25)'),background:dibujando?'var(--gold)':'rgba(20,20,15,0.78)',color:dibujando?'var(--dark-deep)':'#fff',fontWeight:700,fontSize:11,cursor:'pointer',backdropFilter:'blur(4px)'}},dibujando?(zonasCount>0?'✅ Aplicar orden':'✕ Salir sin aplicar'):'✏️ Dibujar orden'),
           dibujando&&zonasCount>0&&/*#__PURE__*/React.createElement("button",{onClick:deshacerUltimoTrazo,style:{padding:'7px 12px',borderRadius:8,border:'1px solid rgba(255,255,255,0.25)',background:'rgba(20,20,15,0.78)',color:'#fff',fontSize:11,cursor:'pointer',backdropFilter:'blur(4px)'}},"↩ Deshacer trazo"),
           dibujando&&zonasCount>0&&/*#__PURE__*/React.createElement("button",{onClick:limpiarTrazos,style:{padding:'7px 12px',borderRadius:8,border:'1px solid rgba(204,53,53,0.45)',background:'rgba(20,20,15,0.78)',color:'#ff8a8a',fontSize:11,cursor:'pointer',backdropFilter:'blur(4px)'}},"🗑 Limpiar")
         )
