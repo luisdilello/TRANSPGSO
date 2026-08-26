@@ -598,7 +598,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787781000;
+window.__MODULES_VERSION=1787782000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8886,6 +8886,23 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     setZonasCount(0);
     recalcularPorTrazos();
   }
+  // Cuántas paradas pendientes cayeron en cada trazo (para mostrarlo en pantalla) -- una parada
+  // cuenta para el PRIMER trazo que la contiene, igual que en aplicarOrdenPorZonas, así el
+  // número que se ve acá coincide siempre con lo que realmente se aplicó a la lista.
+  function resumenPorZona(){
+    const base=baseOrdenDibujoRef.current;
+    const zonas=zonasTrazoRef.current;
+    if(!base||!zonas.length)return null;
+    const counts=zonas.map(()=>0);
+    let sinTrazo=0;
+    base.forEach(p=>{
+      const terminada=p.envio.estado==='entregado'||p.envio.estado==='cancelado'||p.envio.estado==='siniestro';
+      if(terminada)return;
+      const zi=zonas.findIndex(z=>puntoEnPoligono({lat:p.lat,lng:p.lng},z.path));
+      if(zi===-1)sinTrazo++;else counts[zi]++;
+    });
+    return{counts,sinTrazo};
+  }
   function toggleSeleccion(codigo){
     setSeleccionados(prev=>{
       const nuevo=new Set(prev);
@@ -8976,7 +8993,12 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
             /*#__PURE__*/React.createElement("polyline",{ref:svgPolylineRef,points:"",fill:"rgba(200,168,75,0.15)",stroke:"#C8A84B",strokeWidth:3,strokeLinecap:"round",strokeLinejoin:"round"})
           )
         ),
-        dibujando&&/*#__PURE__*/React.createElement("div",{style:{position:'absolute',top:8,left:8,right:8,padding:'6px 10px',borderRadius:8,background:'rgba(20,20,15,0.82)',color:'var(--gold)',fontSize:11,textAlign:'center',pointerEvents:'none',backdropFilter:'blur(4px)'}},zonasCount>0?zonasCount+" trazo"+(zonasCount>1?'s':'')+" · dibujá el próximo tramo, o tocá Listo":"Dibujá un círculo alrededor de las primeras paradas a visitar, soltá, y seguí con el próximo tramo"),
+        dibujando&&(()=>{
+          const resumen=resumenPorZona();
+          const texto=!resumen?"Dibujá un círculo alrededor de las primeras paradas a visitar, soltá, y seguí con el próximo tramo":
+            "Trazo "+resumen.counts.map((c,idx)=>(idx+1)+"→"+c+" parada"+(c===1?'':'s')).join(' · ')+(resumen.sinTrazo>0?' · sin trazo→'+resumen.sinTrazo:'')+" · la lista de abajo ya se reordenó";
+          return/*#__PURE__*/React.createElement("div",{style:{position:'absolute',top:8,left:8,right:8,padding:'6px 10px',borderRadius:8,background:'rgba(20,20,15,0.88)',color:'var(--gold)',fontSize:11,textAlign:'center',pointerEvents:'none',backdropFilter:'blur(4px)'}},texto);
+        })(),
         /*#__PURE__*/React.createElement("div",{style:{position:'absolute',bottom:8,left:8,right:8,display:'flex',gap:6,flexWrap:'wrap'}},
           /*#__PURE__*/React.createElement("button",{onClick:toggleModoDibujo,style:{padding:'7px 12px',borderRadius:8,border:'1px solid '+(dibujando?'var(--gold)':'rgba(255,255,255,0.25)'),background:dibujando?'var(--gold)':'rgba(20,20,15,0.78)',color:dibujando?'var(--dark-deep)':'#fff',fontWeight:700,fontSize:11,cursor:'pointer',backdropFilter:'blur(4px)'}},dibujando?'✅ Listo':'✏️ Dibujar orden'),
           dibujando&&zonasCount>0&&/*#__PURE__*/React.createElement("button",{onClick:deshacerUltimoTrazo,style:{padding:'7px 12px',borderRadius:8,border:'1px solid rgba(255,255,255,0.25)',background:'rgba(20,20,15,0.78)',color:'#fff',fontSize:11,cursor:'pointer',backdropFilter:'blur(4px)'}},"↩ Deshacer trazo"),
