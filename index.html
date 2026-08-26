@@ -56,9 +56,24 @@ if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',function(){
     _swActualizacionPendiente = true;
     if(document.visibilityState === 'hidden'){ _swAplicarActualizacion(); return; }
+    _swEsperarYMostrarAviso();
+  });
+  // No alcanza con que el reload SOLO se frene durante el guardado final -- el mensajero puede
+  // pasar minutos sacando fotos de una entrega antes de tocar "Guardar", y el aviso de
+  // "hay una versión nueva" aparecía igual encima de la pantalla en ese rato, tapando los
+  // botones y sin dejarlo terminar la gestión. Ahora, mientras haya una gestión crítica en
+  // curso (tomando fotos de una entrega, Retiro Masivo, Colecta, etc.), el aviso directamente
+  // NO se muestra -- se reintenta cada 2s hasta que esa gestión termine. La actualización ya
+  // está descargada y esperando; no se pierde nada por avisar un poco más tarde.
+  function _swEsperarYMostrarAviso(){
+    if(window.__TRANSPGSO_GUARDANDO_CRITICO > 0 || window.__TRANSPGSO_ESCANEO_ACTIVO > 0){
+      setTimeout(_swEsperarYMostrarAviso, 2000);
+      return;
+    }
+    if(document.visibilityState === 'hidden'){ _swAplicarActualizacion(); return; }
     if(document.body){ _swMostrarAvisoActualizacion(); }
     else{ document.addEventListener('DOMContentLoaded',_swMostrarAvisoActualizacion); }
-  });
+  }
   document.addEventListener('visibilitychange', function(){
     if(document.visibilityState === 'hidden') _swAplicarActualizacion();
   });
@@ -74,6 +89,13 @@ if('serviceWorker' in navigator){
       window.location.reload();
     };
   };
+  // Expuestos para el caso en que una gestión crítica (EnvioAccion, tomar fotos de una entrega)
+  // arranca DESPUÉS de que el aviso ya se mostró -- ahí lo saca de encima al toque, y cuando esa
+  // gestión termine, se vuelve a llamar esto para mostrarlo de nuevo (si la actualización sigue
+  // pendiente). Sin esto, el aviso podía quedar tapando la pantalla igual si ya estaba puesto
+  // antes de empezar a sacar fotos.
+  window._swEsperarYMostrarAviso = _swEsperarYMostrarAviso;
+  window._swHayActualizacionPendiente = function(){ return _swActualizacionPendiente; };
 }
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
@@ -598,7 +620,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787791000;
+window.__MODULES_VERSION=1787792000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -9770,6 +9792,28 @@ function quitarVideo(){
 }
 
 const _useState92=useState(false),comunaModal=_useState92[0],setComunaModal=_useState92[1];const _useState93=useState(envio.comuna||''),comunaSel=_useState93[0],setComunaSel=_useState93[1];const _useStateDirM=useState(false),direccionModal=_useStateDirM[0],setDireccionModal=_useStateDirM[1];const _useStateDirS=useState(envio.direccion||''),direccionSel=_useStateDirS[0],setDireccionSel=_useStateDirS[1];const _useStateDirI=useState(envio.direccion||''),direccionInput=_useStateDirI[0],setDireccionInput=_useStateDirI[1];const fileRef=useRef();const MAX_FOTOS=5;function agregarFotos(files){const arr=Array.from(files).slice(0,MAX_FOTOS-fotos.length);if(arr.length>0)setAvisoFotos('');arr.forEach(file=>{const reader=new FileReader();reader.onload=e=>setFotos(prev=>[...prev,{data:e.target.result,file}].slice(0,MAX_FOTOS));reader.readAsDataURL(file);});}function quitarFoto(i){setFotos(prev=>prev.filter((_,idx)=>idx!==i));}const mountedRef=useRef(true);useEffect(()=>{return()=>{mountedRef.current=false;};},[]);
+// Mientras esta pantalla está abierta (tomando fotos, escribiendo la nota, etc. -- no solo en
+// el instante del guardado final) se marca como "gestión crítica en curso": eso ya hacía que la
+// actualización automática de la app no se aplicara sola a mitad de un guardado, pero antes NO
+// evitaba que el AVISO de "hay una versión nueva" apareciera y tapara la pantalla mientras el
+// mensajero seguía sacando fotos, impidiéndole llegar al botón de guardar. Ahora también frena
+// ese aviso (ver el bloque de arriba, cerca de <head>) hasta que se cierra esta pantalla.
+useEffect(()=>{
+  window.__TRANSPGSO_GUARDANDO_CRITICO=(window.__TRANSPGSO_GUARDANDO_CRITICO||0)+1;
+  // Si el aviso de "hay una versión nueva" ya estaba puesto en pantalla ANTES de que el
+  // mensajero abriera esta pantalla a sacar fotos, lo sacamos de encima al toque -- no alcanza
+  // con frenar avisos futuros, el que ya estaba mostrado también tapa los botones.
+  const bannerPrevio=document.getElementById('sw-update-banner');
+  if(bannerPrevio)bannerPrevio.remove();
+  return()=>{
+    window.__TRANSPGSO_GUARDANDO_CRITICO=Math.max(0,(window.__TRANSPGSO_GUARDANDO_CRITICO||0)-1);
+    // Al cerrar esta pantalla, si la actualización seguía pendiente de mostrarse, recién ahora
+    // se vuelve a intentar (respeta si hay OTRA gestión crítica en curso, ej. Colecta abierta).
+    if(window.__TRANSPGSO_GUARDANDO_CRITICO===0&&window._swHayActualizacionPendiente&&window._swHayActualizacionPendiente()&&window._swEsperarYMostrarAviso){
+      window._swEsperarYMostrarAviso();
+    }
+  };
+},[]);
 // Respaldo local de fotos en curso — si la app se reinicia (recarga, se la mata en segundo
 // plano, etc.) antes de guardar, las fotos ya tomadas para ESTE envío se recuperan solas en
 // vez de perderse y tener que tomarlas de nuevo.
