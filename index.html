@@ -598,7 +598,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787780000;
+window.__MODULES_VERSION=1787781000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8706,9 +8706,24 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     // recta anterior en vez de no mostrar nada.
     const path=(geometriaRef.current&&geometriaRef.current.length)?geometriaRef.current:[origen,...stopsVisibles.map(p=>({lat:p.lat,lng:p.lng}))];
     if(pinsVisibleRuta)polylineRef.current=new google.maps.Polyline({path,map,strokeColor:'#C8A84B',strokeWeight:4,strokeOpacity:0.85});
+    // Handler global para el botón "Mover" del globo de info del mapa -- el contenido del
+    // InfoWindow es HTML plano (no React), así que el click se resuelve por afuera del árbol
+    // de React contra la función que quedó colgada de window (se redefine cada vez que se
+    // redibujan los marcadores, así siempre apunta al stopsOrdenados más actual).
+    window.__trpMoverParadaDesdeMapa=function(codigo){
+      const input=document.getElementById('trp-mover-input-'+codigo);
+      if(!input)return;
+      const nuevoNumero=parseInt(input.value,10);
+      if(!nuevoNumero||nuevoNumero<1)return;
+      const idxActual=stopsOrdenados.findIndex(p2=>p2.envio.codigo===codigo);
+      if(idxActual===-1)return;
+      moverParadaAPosicion(idxActual,nuevoNumero);
+      if(infoWindowRef.current)infoWindowRef.current.close();
+    };
     stopsVisibles.forEach(p=>{
       const i=stopsOrdenados.indexOf(p);
       const colorEstado=RUTA_ESTADO_COLORS[p.envio.estado]||'#3A3D2E';
+      const terminadaP=p.envio.estado==='entregado'||p.envio.estado==='cancelado'||p.envio.estado==='siniestro';
       const marker=new google.maps.Marker({position:{lat:p.lat,lng:p.lng},map,label:{text:String(i+1),color:'#fff',fontSize:'11px',fontWeight:'700'},icon:{path:google.maps.SymbolPath.CIRCLE,scale:14,fillColor:colorEstado,fillOpacity:1,strokeColor:seleccionados.has(p.envio.codigo)?'#fff':'#C8A84B',strokeWeight:seleccionados.has(p.envio.codigo)?3:2}});
       marker.addListener('click',()=>{
         const e=p.envio;
@@ -8718,6 +8733,11 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
           <div style="font-size:11px;color:#666;margin-bottom:2px;">Código: <b>${e.codigo}</b></div>
           <div style="font-size:11px;margin-bottom:2px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${colorEstado};margin-right:5px;"></span><b style="color:${colorEstado}">${(e.estado||'').replace('_',' ').toUpperCase()}</b></div>
           ${e.monto?`<div style="font-size:11px;color:#666;">Monto: $${(+e.monto).toLocaleString('es-CL')}</div>`:''}
+          ${!terminadaP?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid #ddd;display:flex;align-items:center;gap:6px;">
+            <label style="font-size:11px;color:#666;">Parada N°</label>
+            <input id="trp-mover-input-${e.codigo}" type="number" min="1" value="${i+1}" onkeydown="if(event.key==='Enter')window.__trpMoverParadaDesdeMapa('${e.codigo}')" style="width:52px;padding:4px 6px;border:1px solid #ccc;border-radius:5px;font-size:12px;">
+            <button onclick="window.__trpMoverParadaDesdeMapa('${e.codigo}')" style="padding:5px 12px;border:none;border-radius:6px;background:#C8A84B;color:#1a1d13;font-weight:700;font-size:11px;cursor:pointer;">Mover</button>
+          </div>`:''}
         </div>`;
         infoWindowRef.current.setContent(html);
         infoWindowRef.current.open(map,marker);
