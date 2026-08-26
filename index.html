@@ -598,7 +598,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787789000;
+window.__MODULES_VERSION=1787790000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8849,6 +8849,39 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       if(miMarkerRef.current){miMarkerRef.current.setMap(null);miMarkerRef.current=null;}
     };
   },[estado]);
+  // ── Reparación automática de paradas ya resueltas que quedaron fuera del mapa ──────────────
+  // El bug que había antes (ver el comentario grande en calcularRuta) podía borrar del guardado
+  // local paradas ya entregadas/canceladas/siniestro -- una vez borradas de ahí, la restauración
+  // normal ya no las puede traer de vuelta (perdió su posición). Esto corre en silencio al abrir
+  // la pantalla, compara contra enviosTodos, y si falta alguna la geocodifica y la vuelve a poner
+  // -- A PROPÓSITO sin tocar el orden de las pendientes ni los trazos dibujados a mano (a
+  // diferencia de "🔄 Recalcular", que sí resetea todo eso). Se guarda con guardarCacheRuta sin
+  // pasar "trazos" para que conserve los que ya estaban.
+  const reparacionEjecutadaRef=React.useRef(false);
+  useEffect(()=>{
+    if(reparacionEjecutadaRef.current||estado!=='listo'||!stopsOrdenados.length||!enviosTodos.length)return;
+    reparacionEjecutadaRef.current=true;
+    const codigosEnRuta=new Set(stopsOrdenados.map(p=>p.envio.codigo));
+    const faltantes=enviosTodos.filter(e=>(e.estado==='entregado'||e.estado==='cancelado'||e.estado==='siniestro')&&e.direccion&&e.comuna&&!codigosEnRuta.has(e.codigo));
+    if(!faltantes.length)return;
+    (async()=>{
+      const geocoder=new google.maps.Geocoder();
+      const nuevosPuntos=[];
+      for(const e of faltantes){
+        const p=await aiGeocode(geocoder,e.direccion||'',e.comuna||'');
+        if(p)nuevosPuntos.push({...p,envio:e});
+        await new Promise(r=>setTimeout(r,120));
+      }
+      if(!nuevosPuntos.length)return;
+      setStopsOrdenados(prev=>{
+        const nuevo=[...nuevosPuntos,...prev];
+        guardarCacheRuta(claveRutaCache(usuario),nuevo,geometriaRef.current,(distTotal?parseFloat(distTotal)*1000:0),(durTotal?durTotal*60:0),origenRef.current);
+        return nuevo;
+      });
+      const n=nuevosPuntos.length;
+      setAplicadoMsg('✓ Se recuperaron '+n+' parada'+(n>1?'s':'')+' ya resuelta'+(n>1?'s':'')+' que faltaban en el mapa');
+    })();
+  },[estado,stopsOrdenados,enviosTodos]);
   // Los trazos dibujados a mano viven solo en memoria (son objetos de Google Maps, no se pueden
   // guardar tal cual) -- lo que SÍ se guarda en la cache de la ruta es su geometría (lat/lng +
   // color). Esto recrea esos círculos (ocultos, como corresponde) una sola vez al abrir la
