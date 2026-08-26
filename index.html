@@ -598,7 +598,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787785000;
+window.__MODULES_VERSION=1787786000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8764,7 +8764,10 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
       // Igual que en la lista de abajo: entregada muestra ✓, cancelada/siniestro muestra ✕, y
       // el resto muestra su número de parada -- así el mapa y la lista se leen igual.
       const textoLabel=p.envio.estado==='entregado'?'✓':fallidaP?'✕':String(i+1);
-      const marker=new google.maps.Marker({position:{lat:p.lat,lng:p.lng},map,label:{text:textoLabel,color:'#fff',fontSize:esActual?'13px':'11px',fontWeight:'700'},zIndex:esActual?999:undefined,icon:{path:google.maps.SymbolPath.CIRCLE,scale:esActual?19:14,fillColor:colorEstado,fillOpacity:1,strokeColor:esActual?'#2979FF':(seleccionados.has(p.envio.codigo)?'#fff':'#C8A84B'),strokeWeight:esActual?4:(seleccionados.has(p.envio.codigo)?3:2)}});
+      // Igual que en la lista (opacity:0.45 en la fila): una parada terminada se ve "apagada" en
+      // el mapa -- así de un vistazo se distingue lo que ya se hizo de lo que falta, sin tener
+      // que abrir cada globo. La opacity del Marker atenúa el pin entero (ícono + numerito).
+      const marker=new google.maps.Marker({position:{lat:p.lat,lng:p.lng},map,opacity:terminadaP?0.4:1,label:{text:textoLabel,color:'#fff',fontSize:esActual?'13px':'11px',fontWeight:'700'},zIndex:esActual?999:undefined,icon:{path:google.maps.SymbolPath.CIRCLE,scale:esActual?19:14,fillColor:colorEstado,fillOpacity:1,strokeColor:esActual?'#2979FF':(seleccionados.has(p.envio.codigo)?'#fff':'#C8A84B'),strokeWeight:esActual?4:(seleccionados.has(p.envio.codigo)?3:2)}});
       marker.addListener('click',()=>{
         const e=p.envio;
         const html=`<div style="font-family:Arial,sans-serif;min-width:180px;color:#2b2e20;">
