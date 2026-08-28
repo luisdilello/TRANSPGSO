@@ -620,7 +620,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787792000;
+window.__MODULES_VERSION=1787793000;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -10579,6 +10579,51 @@ function PortalCliente({usuario,onLogout}){
   var _s=useState(''),search=_s[0],setSearch=_s[1];
   var _fe=useState(false),fetchError=_fe[0],setFetchError=_fe[1];
   var _fec=useState('todos'),filtroEstadoCliente=_fec[0],setFiltroEstadoCliente=_fec[1];
+  // ── Conexión con Mercado Libre ──
+  // conexionML: null mientras carga, false si no está conectado, o el objeto de conexión
+  // (solo campos no sensibles: nickname, activo, ultima_sincronizacion — el token NUNCA
+  // sale del servidor, ver ml-estado) si el cliente ya conectó su cuenta.
+  var _mlCon=useState(null),conexionML=_mlCon[0],setConexionML=_mlCon[1];
+  var _mlLoad=useState(false),conectandoML=_mlLoad[0],setConectandoML=_mlLoad[1];
+  var _mlAviso=useState(null),avisoML=_mlAviso[0],setAvisoML=_mlAviso[1];
+  function cargarEstadoML(){
+    db.functions.invoke('ml-estado').then(function(res){
+      if(res.error){setConexionML(false);return;}
+      setConexionML((res.data&&res.data.conexion)||false);
+    }).catch(function(){setConexionML(false);});
+  }
+  useEffect(function(){cargarEstadoML();},[]);
+  // Si volvemos de autorizar en Mercado Libre, el callback nos redirige acá con
+  // ?ml_estado=ok|error|cancelado — se muestra un aviso una sola vez y se limpia la URL
+  // para que recargar la página no vuelva a mostrarlo.
+  useEffect(function(){
+    var params=new URLSearchParams(window.location.search);
+    var estado=params.get('ml_estado');
+    if(!estado)return;
+    if(estado==='ok'){
+      setAvisoML({tipo:'ok',msg:t('✓ Cuenta de Mercado Libre conectada')+(params.get('ml_nickname')?' ('+params.get('ml_nickname')+')':'')});
+      cargarEstadoML();
+    }else if(estado==='cancelado'){
+      setAvisoML({tipo:'info',msg:t('Conexión con Mercado Libre cancelada.')});
+    }else{
+      setAvisoML({tipo:'error',msg:t('⚠ No se pudo conectar con Mercado Libre: ')+(params.get('ml_msg')||'')});
+    }
+    window.history.replaceState({},'',window.location.pathname);
+  },[]);
+  function conectarMercadoLibre(){
+    setConectandoML(true);
+    db.functions.invoke('ml-oauth-iniciar',{body:{cliente_nombre:nombreCliente}}).then(function(res){
+      if(res.error||!res.data||!res.data.url){
+        setAvisoML({tipo:'error',msg:t('⚠ No se pudo iniciar la conexión con Mercado Libre.')});
+        setConectandoML(false);
+        return;
+      }
+      window.location.href=res.data.url;
+    }).catch(function(){
+      setAvisoML({tipo:'error',msg:t('⚠ No se pudo iniciar la conexión con Mercado Libre.')});
+      setConectandoML(false);
+    });
+  }
   // Idioma SOLO de esta sesión (nunca se guarda) - el portal siempre abre en español;
   // el cliente puede cambiar a inglés o chino y vuelve a español si recarga o vuelve a entrar.
   var _idi=useState('es'),idiomaCliente=_idi[0],setIdiomaCliente=_idi[1];
@@ -10764,6 +10809,19 @@ function PortalCliente({usuario,onLogout}){
               React.createElement('input',{type:'date',value:fechaHasta,onChange:function(e){setFechaHasta(e.target.value);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}})
             )
           )
+        ),
+        avisoML&&React.createElement('div',{className:'info-banner',style:{marginBottom:14,background:avisoML.tipo==='ok'?'rgba(76,175,80,0.12)':avisoML.tipo==='error'?'rgba(220,53,69,0.1)':undefined,display:'flex',justifyContent:'space-between',alignItems:'center',gap:12}},
+          React.createElement('span',null,avisoML.msg),
+          React.createElement('button',{className:'btn-secondary',onClick:function(){setAvisoML(null);}},'✕')
+        ),
+        React.createElement('div',{className:'panel',style:{marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}},
+          React.createElement('div',null,
+            React.createElement('div',{className:'panel-title'},t('Mercado Libre')),
+            conexionML===null?React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)'}},t('Cargando estado...')):
+            conexionML?React.createElement('div',{style:{fontSize:12,color:'var(--text-mid)'}},t('Conectado como '),React.createElement('strong',null,conexionML.ml_nickname||''),!conexionML.activo&&React.createElement('span',{style:{color:'var(--danger)',marginLeft:8}},t('(pausado)'))):
+            React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)'}},t('Conecta tu cuenta de Mercado Libre para que tus pedidos entren solos a TransPgso.'))
+          ),
+          !conexionML&&React.createElement('button',{className:'btn-primary',disabled:conectandoML,onClick:conectarMercadoLibre},conectandoML?t('Conectando...'):t('Conectar con Mercado Libre'))
         ),
         loading?React.createElement('div',{className:'empty-state'},t('Cargando...')):
         React.createElement('div',null,
