@@ -620,7 +620,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1787951089;
+window.__MODULES_VERSION=1787952101;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -12046,6 +12046,11 @@ function StatMiniComuna(props){
 // cubren cada una. Usa la MISMA tabla/funciones que ya existian para esto en el Mapa de Rutas
 // (asignaciones_mapa / cargarAsignaciones / guardarAsignacion / quitarAsignacion), asi que
 // asignar aqui o en el mapa es exactamente lo mismo dato.
+// Colores/labels propios de esta pantalla para los badges de estado en el detalle de una
+// comuna -- son los mismos codigos que ESTADO_COLORS/ESTADO_LABELS de Analitica, pero ese mapa
+// vive dentro del closure de otra funcion, asi que se duplica aqui (son solo 8 líneas).
+var ESTADO_COLORS_COMUNAS={en_bodega:'#1a6b8a',en_ruta:'#C8A84B',entregado:'#2e7d4f',reprogramado:'#9c27b0',cancelado:'#b03030',siniestro:'#e65100',retorno:'#7a5c1a',en_bodega_cancelado:'#a15c1a'};
+var ESTADO_LABELS_COMUNAS={en_bodega:'En Bodega',en_ruta:'En Ruta',entregado:'Entregado',reprogramado:'Reprogramado',cancelado:'Cancelado',siniestro:'Siniestro',retorno:'Retorno',en_bodega_cancelado:'En Bodega Cancelado'};
 function ComunasControl(props){
   var mensajeros=props.mensajeros||[];
   var toastFn=props.toast;
@@ -12056,11 +12061,15 @@ function ComunasControl(props){
   var _asig=React.useState({});var asignaciones=_asig[0];var setAsignaciones=_asig[1];
   var _carg=React.useState(true);var cargando=_carg[0];var setCargando=_carg[1];
   var _abierta=React.useState(null);var comunaAbierta=_abierta[0];var setComunaAbierta=_abierta[1];
+  // Filtro activado por las tarjetas de resumen (mismo estilo que las tarjetas de Analitica):
+  // 'todos' o 'periferia'. Y qué comuna(s) tienen su detalle (lista de envios) desplegado.
+  var _filtroP=React.useState('todos');var filtroPeriferia=_filtroP[0];var setFiltroPeriferia=_filtroP[1];
+  var _exp=React.useState({});var expandidas=_exp[0];var setExpandidas=_exp[1];
 
   function cargarDatos(){
     setCargando(true);
     Promise.all([
-      db.from('envios').select('codigo,comuna,estado').eq('fecha',fechaSel),
+      db.from('envios').select('codigo,comuna,estado,destinatario,direccion,mensajero').eq('fecha',fechaSel),
       cargarAsignaciones()
     ]).then(function(res){
       setEnvios((res[0]&&res[0].data)||[]);
@@ -12085,10 +12094,21 @@ function ComunasControl(props){
   var totalGeneral=envios.length;
   var totalPeriferia=grupos.filter(function(g){return esComunaPeriferia(g.comuna);}).reduce(function(a,g){return a+g.total;},0);
   var pctPeriferia=totalGeneral>0?Math.round(totalPeriferia/totalGeneral*100):0;
+  // Las 4 tarjetas de resumen tambien funcionan como filtro sobre la lista de abajo: las dos
+  // primeras (todo lo del dia) vuelven a mostrar todas las comunas, las otras dos dejan solo periferia.
+  var gruposMostrados=filtroPeriferia==='periferia'?grupos.filter(function(g){return esComunaPeriferia(g.comuna);}):grupos;
 
   function mensajeroNombre(id){
     var m=mensajeros.find(function(mm){return String(mm.id)===String(id);});
     return m?m.nombre:('#'+id);
+  }
+
+  function toggleDetalle(comuna){
+    setExpandidas(function(prev){
+      var next=Object.assign({},prev);
+      next[comuna]=!next[comuna];
+      return next;
+    });
   }
 
   function asignar(comuna,mensajeroId){
@@ -12118,28 +12138,45 @@ function ComunasControl(props){
     });
   }
 
+  // ── Tarjetas de resumen, mismo look que los KPI de Analitica (.stat-card/.stat-value/.stat-sub) ──
+  function TarjetaResumen(p){
+    var activa=p.filtro===filtroPeriferia;
+    return React.createElement('div',{
+      className:'stat-card',
+      onClick:function(){setFiltroPeriferia(p.filtro);},
+      style:{'--card-accent':p.accent,borderTop:'4px solid '+p.accent,cursor:'pointer',padding:'16px 16px 14px',
+        boxShadow:activa?'0 0 0 2px '+p.accent+', 8px 8px 16px rgba(43,46,32,0.12)':undefined}
+    },
+      React.createElement('div',{className:'stat-label'},p.label),
+      React.createElement('div',{className:'stat-value '+p.clase,style:{fontSize:38}},p.valor),
+      React.createElement('div',{className:'stat-sub'},p.sub)
+    );
+  }
+
   return React.createElement('div',{style:{padding:16,maxWidth:760,margin:'0 auto'}},
     React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:10,alignItems:'center',marginBottom:16}},
       React.createElement('div',{className:'panel-title',style:{marginRight:'auto'}},'División por Comunas'),
       React.createElement('input',{type:'date',value:fechaSel,onChange:function(e){setFechaSel(e.target.value);},style:{padding:'8px 10px',borderRadius:8,border:'1px solid var(--border)',fontFamily:'JetBrains Mono',fontSize:13}}),
       React.createElement('button',{className:'btn-secondary',onClick:cargarDatos},'↺ Actualizar')
     ),
-    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:10,marginBottom:18}},
-      React.createElement(StatMiniComuna,{label:'Envíos del día',valor:totalGeneral}),
-      React.createElement(StatMiniComuna,{label:'Comunas distintas',valor:grupos.length}),
-      React.createElement(StatMiniComuna,{label:'En periferia',valor:totalPeriferia,alerta:totalPeriferia>0}),
-      React.createElement(StatMiniComuna,{label:'% periferia',valor:pctPeriferia+'%',alerta:pctPeriferia>=20})
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12,marginBottom:20}},
+      React.createElement(TarjetaResumen,{label:'ENVÍOS DEL DÍA',valor:totalGeneral.toLocaleString('es-CL'),sub:'Toca para ver todas',accent:'#C8A84B',clase:'gold',filtro:'todos'}),
+      React.createElement(TarjetaResumen,{label:'COMUNAS DISTINTAS',valor:grupos.length,sub:'Toca para ver todas',accent:'#1a6b8a',clase:'teal',filtro:'todos'}),
+      React.createElement(TarjetaResumen,{label:'EN PERIFERIA',valor:totalPeriferia.toLocaleString('es-CL'),sub:'Toca para filtrar',accent:'#a15c1a',clase:'rust',filtro:'periferia'}),
+      React.createElement(TarjetaResumen,{label:'% PERIFERIA',valor:pctPeriferia+'%',sub:'Toca para filtrar',accent:'#9c27b0',clase:'purple',filtro:'periferia'})
     ),
     cargando?React.createElement('div',{style:{textAlign:'center',padding:'40px 0',color:'var(--text-soft)'}},'Cargando...'):
-    grupos.length===0?React.createElement('div',{style:{textAlign:'center',padding:'40px 0',color:'var(--text-soft)'}},'No hay envíos registrados para esta fecha.'):
+    gruposMostrados.length===0?React.createElement('div',{style:{textAlign:'center',padding:'40px 0',color:'var(--text-soft)'}},'No hay envíos para este filtro.'):
     React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8}},
-      grupos.map(function(g){
+      gruposMostrados.map(function(g){
         var periferia=esComunaPeriferia(g.comuna);
         var asignados=asignaciones[g.comuna]||[];
-        return React.createElement('div',{key:g.comuna,style:{border:'1px solid var(--border)',borderLeft:'4px solid '+(periferia?'#c98a1f':'var(--gold)'),borderRadius:10,padding:'12px 14px'}},
-          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}},
+        var abierta=!!expandidas[g.comuna];
+        var enviosComuna=abierta?envios.filter(function(e){return(e.comuna||'SIN COMUNA').trim().toUpperCase()===g.comuna;}):[];
+        return React.createElement('div',{key:g.comuna,style:{border:'1px solid var(--border)',borderLeft:'4px solid '+(periferia?'#c98a1f':'var(--gold)'),borderRadius:10,padding:'12px 14px',background:'linear-gradient(145deg,#ffffff,#faf7ef)'}},
+          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,cursor:'pointer'},onClick:function(){toggleDetalle(g.comuna);},title:'Ver detalle de envíos'},
             React.createElement('div',null,
-              React.createElement('span',{style:{fontWeight:700,fontSize:14}},comunaBase(g.comuna)),
+              React.createElement('span',{style:{fontWeight:700,fontSize:14}},(abierta?'▾ ':'▸ '),comunaBase(g.comuna)),
               periferia&&React.createElement('span',{style:{marginLeft:8,fontSize:10,fontWeight:700,letterSpacing:0.5,padding:'2px 7px',borderRadius:10,background:'rgba(201,138,31,0.15)',color:'#c98a1f',border:'1px solid rgba(201,138,31,0.4)'}},'PERIFERIA')
             ),
             React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:13,color:'var(--text-soft)'}},g.total,' envío',g.total!==1?'s':'',' · ',g.pendientes,' pendiente',g.pendientes!==1?'s':'')
@@ -12149,18 +12186,31 @@ function ComunasControl(props){
             asignados.map(function(mid){
               return React.createElement('span',{key:mid,style:{display:'inline-flex',alignItems:'center',gap:6,fontSize:12,padding:'4px 8px',borderRadius:8,background:'rgba(200,168,75,0.12)',border:'1px solid rgba(200,168,75,0.3)'}},
                 mensajeroNombre(mid),
-                esAdmin&&React.createElement('button',{onClick:function(){quitar(g.comuna,mid);},style:{border:'none',background:'none',cursor:'pointer',color:'var(--danger)',fontWeight:700,padding:0,lineHeight:1}},'✕')
+                esAdmin&&React.createElement('button',{onClick:function(ev){ev.stopPropagation();quitar(g.comuna,mid);},style:{border:'none',background:'none',cursor:'pointer',color:'var(--danger)',fontWeight:700,padding:0,lineHeight:1}},'✕')
               );
             }),
             esAdmin&&(comunaAbierta===g.comuna?
-              React.createElement('select',{autoFocus:true,defaultValue:'',onChange:function(e){asignar(g.comuna,e.target.value);},onBlur:function(){setComunaAbierta(null);},style:{fontSize:12,padding:'4px 6px',borderRadius:6,border:'1px solid var(--border)'}},
+              React.createElement('select',{autoFocus:true,defaultValue:'',onClick:function(ev){ev.stopPropagation();},onChange:function(e){asignar(g.comuna,e.target.value);},onBlur:function(){setComunaAbierta(null);},style:{fontSize:12,padding:'4px 6px',borderRadius:6,border:'1px solid var(--border)'}},
                 React.createElement('option',{value:''},'Elegir mensajero...'),
                 mensajeros.filter(function(m){return m.activo!==false&&!asignados.some(function(a){return String(a)===String(m.id);});}).map(function(m){
                   return React.createElement('option',{key:m.id,value:m.id},m.nombre);
                 })
               ):
-              React.createElement('button',{onClick:function(){setComunaAbierta(g.comuna);},style:{fontSize:12,padding:'4px 10px',borderRadius:8,border:'1px dashed var(--border)',background:'none',cursor:'pointer',color:'var(--gold)'}},'+ asignar')
+              React.createElement('button',{onClick:function(ev){ev.stopPropagation();setComunaAbierta(g.comuna);},style:{fontSize:12,padding:'4px 10px',borderRadius:8,border:'1px dashed var(--border)',background:'none',cursor:'pointer',color:'var(--gold)'}},'+ asignar')
             )
+          ),
+          abierta&&React.createElement('div',{style:{marginTop:12,paddingTop:10,borderTop:'1px dashed var(--border)',display:'flex',flexDirection:'column',gap:6,maxHeight:320,overflowY:'auto'}},
+            enviosComuna.length===0?React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',fontStyle:'italic'}},'Sin envíos para mostrar.'):
+            enviosComuna.map(function(e){
+              var colorEst=ESTADO_COLORS_COMUNAS[e.estado]||'#888';
+              return React.createElement('div',{key:e.codigo,style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:10,fontSize:12,padding:'6px 8px',borderRadius:8,background:'rgba(0,0,0,0.02)'}},
+                React.createElement('div',{style:{minWidth:0,flex:1}},
+                  React.createElement('div',{style:{fontWeight:700,fontFamily:'JetBrains Mono'}},e.codigo,' ',React.createElement('span',{style:{fontWeight:400,color:'var(--text-soft)'}},'· ',e.destinatario||'—')),
+                  React.createElement('div',{style:{color:'var(--text-soft)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},e.direccion||'—',e.mensajero?(' · '+e.mensajero):'')
+                ),
+                React.createElement('span',{style:{flexShrink:0,fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:10,color:'#fff',background:colorEst}},ESTADO_LABELS_COMUNAS[e.estado]||e.estado)
+              );
+            })
           )
         );
       })
