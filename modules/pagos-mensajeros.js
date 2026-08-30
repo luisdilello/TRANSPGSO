@@ -106,6 +106,105 @@ function ConsumoModal(props){
   );
 }
 
+// Pantalla de carga rápida de consumo, día a día, para TODOS los mensajeros a la vez -- pensada
+// para que quien anota los consumos (colaciones, bebidas, etc.) no tenga que entrar mensajero por
+// mensajero desde la tabla de Pagos: acá aparecen todos en una lista (como la Planilla de
+// Retiros), cada uno con su propio selector de producto y cantidad. Cada "+ Agregar" hace el
+// mismo insert inmediato a consumos_mensajeros que el modal individual (ConsumoModal) -- no es un
+// borrador local: queda guardado con la fecha real apenas se aprieta el botón. El total de la
+// columna derecha se lee directo de `pagos` (que a su vez se mantiene sincronizado en tiempo real
+// contra consumos_mensajeros por sincronizarConsumoDesdeDB en PagosMensajeros), así que apenas se
+// agrega algo acá, ese mismo total ya se ve actualizado en la tabla de Pagos sin recargar nada.
+function ConsumoDiario(props){
+  var mensajeros=props.mensajeros||[],pagos=props.pagos||[],productosLocal=props.productosLocal,semana=props.semana,toast=props.toast,onAbrirDetalle=props.onAbrirDetalle;
+  var productosActivos=(productosLocal||[]).filter(function(x){return x.activo!==false;});
+  var _sel=useState({}),seleccion=_sel[0],setSeleccion=_sel[1];
+  var _guardandoMap=useState({}),guardandoMap=_guardandoMap[0],setGuardandoMap=_guardandoMap[1];
+  var _busqueda=useState(''),busqueda=_busqueda[0],setBusqueda=_busqueda[1];
+
+  function normNombreConsumo(n){return(n||'').toUpperCase().replace(/,\s*/g,' ').replace(/\s+/g,' ').trim();}
+
+  var activos=mensajeros.filter(function(m){return m.activo!==false&&m.activo!=='paused'&&m.nombre&&m.nombre.trim();});
+  var filtrados=(busqueda.trim()?activos.filter(function(m){return m.nombre.toUpperCase().includes(busqueda.trim().toUpperCase());}):activos.slice());
+  filtrados.sort(function(a,b){return a.nombre.localeCompare(b.nombre,'es');});
+
+  function getSel(nombre){
+    var s=seleccion[nombre];
+    if(s)return s;
+    return{prodId:productosActivos.length>0?productosActivos[0].id:null,cantidad:1};
+  }
+  function setSel(nombre,patch){
+    setSeleccion(function(prev){var n=Object.assign({},prev);n[nombre]=Object.assign({},getSel(nombre),patch);return n;});
+  }
+
+  function agregar(mNombre){
+    var sel=getSel(mNombre);
+    var prod=productosActivos.find(function(x){return x.id===sel.prodId;});
+    if(!prod){toast&&toast('⚠ Selecciona un producto');return;}
+    var cantidad=+sel.cantidad||1;
+    var monto=cantidad*(prod.precio||0);
+    var nombreNorm=normNombreConsumo(mNombre);
+    setGuardandoMap(function(prev){var n=Object.assign({},prev);n[mNombre]=true;return n;});
+    db.from('consumos_mensajeros').insert({
+      semana:semana,fecha:fechaHoyCL(),mensajero_nombre:nombreNorm,
+      producto:prod.nombre,cantidad:cantidad,precio_unitario:prod.precio||0,monto:monto
+    }).then(function(r){
+      setGuardandoMap(function(prev){var n=Object.assign({},prev);delete n[mNombre];return n;});
+      if(r&&r.error){toast&&toast('⚠ Error: '+r.error.message);return;}
+      setSel(mNombre,{cantidad:1});
+      toast&&toast('✓ '+prod.nombre+' agregado a '+mNombre.split(',')[0].split(' ')[0]);
+    });
+  }
+
+  function consumoDe(nombre){
+    var nombreNorm=normNombreConsumo(nombre);
+    var pago=pagos.find(function(p){return normNombreConsumo(p.nombre)===nombreNorm;});
+    return pago?(pago.consumo||0):0;
+  }
+
+  return React.createElement('div',null,
+    React.createElement('div',{className:'section-head'},
+      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)'}},'Consumo Diario — Semana: ',semana),
+      React.createElement('input',{type:'text',placeholder:'🔍 Buscar mensajero...',value:busqueda,onChange:function(e){setBusqueda(e.target.value);},style:{padding:'8px 12px',borderRadius:8,border:'1px solid var(--border)',fontSize:12,outline:'none',minWidth:220}})
+    ),
+    productosActivos.length===0
+      ?React.createElement('div',{className:'info-banner'},'⚠ No hay productos activos en la pestaña "Productos". Agrega uno primero para poder registrar consumo.')
+      :React.createElement('div',{className:'table-wrap'},
+        React.createElement('table',null,
+          React.createElement('thead',null,React.createElement('tr',null,
+            React.createElement('th',null,'Mensajero'),
+            React.createElement('th',{style:{width:240}},'Producto'),
+            React.createElement('th',{style:{width:70,textAlign:'center'}},'Cant.'),
+            React.createElement('th',{style:{width:100}},''),
+            React.createElement('th',{style:{width:130,textAlign:'right'}},'Consumo Semana')
+          )),
+          React.createElement('tbody',null,
+            filtrados.map(function(m){
+              var sel=getSel(m.nombre);
+              var guardando=!!guardandoMap[m.nombre];
+              return React.createElement('tr',{key:m.nombre},
+                React.createElement('td',{style:{fontWeight:700,whiteSpace:'nowrap'}},m.nombre.replace(/,\s*/g,' ')),
+                React.createElement('td',null,
+                  React.createElement('select',{value:sel.prodId||'',onChange:function(e){setSel(m.nombre,{prodId:+e.target.value});},style:{width:'100%',padding:'6px 8px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,outline:'none'}},
+                    productosActivos.map(function(pr){return React.createElement('option',{key:pr.id,value:pr.id},pr.nombre+' — $'+Math.round(pr.precio).toLocaleString('es-CL'));})
+                  )
+                ),
+                React.createElement('td',null,
+                  React.createElement('input',{type:'number',min:1,value:sel.cantidad,onChange:function(e){setSel(m.nombre,{cantidad:e.target.value});},onFocus:function(e){e.target.select();},style:{width:'100%',padding:'6px 8px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,textAlign:'center',outline:'none'}})
+                ),
+                React.createElement('td',null,
+                  React.createElement('button',{onClick:function(){agregar(m.nombre);},disabled:guardando,style:{width:'100%',padding:'6px 8px',borderRadius:6,border:'none',background:'var(--gold)',color:'#2b2e20',fontWeight:700,fontSize:11,cursor:guardando?'default':'pointer',opacity:guardando?0.6:1}},guardando?'...':'+ Agregar')
+                ),
+                React.createElement('td',{className:'mono',style:{textAlign:'right',color:'var(--danger)',fontWeight:700,cursor:'pointer'},onClick:function(){onAbrirDetalle&&onAbrirDetalle(m);},title:'Clic para ver el detalle de la semana o eliminar un ítem'},'$',Math.round(consumoDe(m.nombre)).toLocaleString('es-CL'))
+              );
+            }),
+            filtrados.length===0&&React.createElement('tr',null,React.createElement('td',{colSpan:5,className:'empty-state'},'Sin mensajeros'))
+          )
+        )
+      )
+  );
+}
+
 function PagosMensajeros(_ref18){let mensajeros=_ref18.mensajeros,mensajerosDia=_ref18.mensajerosDia,esAdmin=_ref18.esAdmin,toast=_ref18.toast,clientes=_ref18.clientes||[];
 // Permisos GRANULARES dentro de "Pagos y Cobros": antes era un único interruptor (todo o nada),
 // asi que para que un rol viera la Planilla de Retiros (que usan a diario) tambien quedaba
@@ -114,8 +213,8 @@ function PagosMensajeros(_ref18){let mensajeros=_ref18.mensajeros,mensajerosDia=
 // pestaña interna (Pagos/Retiros/Productos/Ayudas/Historial) tiene su propio permiso; si no
 // llega la prop (por compatibilidad con algún llamado viejo) se asume acceso total, igual que
 // el comportamiento de siempre.
-var pp=_ref18.permisosPago||{pagos:true,retiros:true,productos:true,ayudas:true,historial:true};
-var TABS_PAGOS=[{val:'pagos',label:'Pagos'},{val:'retiros',label:'Planilla Retiros'},{val:'productos',label:'Productos'},{val:'ayudas',label:'Ayudas'},{val:'historial',label:'Historial'}];
+var pp=_ref18.permisosPago||{pagos:true,retiros:true,productos:true,consumo:true,ayudas:true,historial:true};
+var TABS_PAGOS=[{val:'pagos',label:'Pagos'},{val:'retiros',label:'Planilla Retiros'},{val:'productos',label:'Productos'},{val:'consumo',label:'Consumo Diario'},{val:'ayudas',label:'Ayudas'},{val:'historial',label:'Historial'}];
 var tabsVisibles=TABS_PAGOS.filter(function(t){return pp[t.val]!==false;});
 const semanaActual=()=>{const hoy=new Date();const lunes=new Date(hoy);lunes.setDate(hoy.getDate()-((hoy.getDay()+6)%7));const sabado=new Date(lunes);sabado.setDate(lunes.getDate()+5);const fmt=d=>d.toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric'});return`${fmt(lunes)} al ${fmt(sabado)}`;};const _useState34=useState(semanaActual()),semana=_useState34[0],setSemana=_useState34[1];
 
@@ -220,7 +319,7 @@ React.useEffect(()=>{window._pagosTab=pagosTab;},[pagosTab]);
 React.useEffect(()=>{
   if(tabsVisibles.length===0)return;
   if(!tabsVisibles.some(function(t){return t.val===pagosTab;}))setPagosTab(tabsVisibles[0].val);
-},[pp.pagos,pp.retiros,pp.productos,pp.ayudas,pp.historial]);
+},[pp.pagos,pp.retiros,pp.productos,pp.consumo,pp.ayudas,pp.historial]);
 
 const _useRetiros=useState([]),retirosDB=_useRetiros[0],setRetirosDB=_useRetiros[1];
 
@@ -266,7 +365,7 @@ const _useExpandido=useState({}),expandido=_useExpandido[0],setExpandido=_useExp
 
    guardaba solo en el dispositivo y nunca se leia en ninguna pantalla. Se elimino: no aportaba
 
-   datos reales y competia por pisar retirosDB con una copia local vieja. */const _useState35=useState(fechaHoyCL()),fechaPago=_useState35[0],setFechaPago=_useState35[1];const _useState36=useState(null),verComprobante=_useState36[0],setVerComprobante=_useState36[1];const _useState37=useState(false),importando=_useState37[0],setImportando=_useState37[1];const _useState38=useState(null),pagosFiltro=_useState38[0],setPagosFiltro=_useState38[1];const _useState39=useState(false),dragOver=_useState39[0],setDragOver=_useState39[1];const pagoFileRef=useRef();function importarExcelPagos(file){const reader=new FileReader();reader.onload=e=>{try{let wb;try{wb=XLSX.read(e.target.result,{type:'array',cellDates:true});}catch(e1){wb=XLSX.read(e.target.result,{type:'array'});}const sheetName=wb.SheetNames.find(n=>n.toUpperCase().includes('DETALLE'))||wb.SheetNames[0];const ws=wb.Sheets[sheetName];const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});let semanaExcel='';for(let i=0;i<5;i++){const row=raw[i]||[];for(let j=0;j<row.length;j++){const cell=String(row[j]||'').trim();const prev=String(row[j-1]||'').trim().toLowerCase();if(prev.includes('semana')&&cell&&cell!=='nan'){semanaExcel=cell;break;}}if(semanaExcel)break;}let headerRow=2;for(let i=0;i<Math.min(5,raw.length);i++){const row=raw[i]||[];for(let j=0;j<row.length;j++){if(String(row[j]||'').trim().toUpperCase()==='MENSAJEROS'){headerRow=i;break;}}}const toNum=v=>{const n=parseFloat(String(v||0).replace(/[^0-9.-]/g,''));return isNaN(n)?0:n;};const consumoMap={};for(let ci=0;ci<raw.length;ci++){const cr=raw[ci]||[];if(String(cr[14]||'').trim()==='NOMBRE'){for(let di=ci+1;di<Math.min(ci+30,raw.length);di++){const dr=raw[di]||[];const cn=String(dr[14]||'').trim().toUpperCase();if(!cn||cn==='nan')continue;const cm=parseFloat(String(dr[16]||'0').replace(/[^0-9.-]/g,''))||0;if(cm>0)consumoMap[cn]=cm;}break;}}function matchConsumo(nombre){const n=nombre.toUpperCase().replace(/,\s*/g,' ').replace(/\s+/g,' ');if(consumoMap[n])return consumoMap[n];for(const k of Object.keys(consumoMap)){const kn=k.replace(/,\s*/g,' ').replace(/\s+/g,' ');if(n.includes(kn)||kn.includes(n))return consumoMap[k];}return 0;}const datosImportados=[];let filasVaciasOmitidas=0;let filasSinMontoOmitidas=0;for(let i=headerRow+1;i<raw.length;i++){const row=raw[i]||[];const nombre=String(row[17]||'').trim();if(nombre.toUpperCase()==='MENSAJEROS'||nombre.toLowerCase().includes('total')||nombre.startsWith('Etiqueta'))break;if(!nombre||nombre==='nan'){filasVaciasOmitidas++;continue;}const brutoCheck=parseFloat(String(row[18]||'0').replace(/[^0-9.-]/g,''));if(!brutoCheck||brutoCheck<=0){filasSinMontoOmitidas++;continue;}const totalPagar=toNum(row[23]);const estado='PENDIENTE';const ivaVal=toNum(row[6]);const brutoVal=toNum(row[4]);let tipoIVADetected='ninguno';if(ivaVal>0&&brutoVal>0){const rate=ivaVal/brutoVal;if(Math.abs(rate-0.1525/1.1525)<0.01)tipoIVADetected='honorarios';else if(Math.abs(rate-0.19/1.19)<0.01)tipoIVADetected='factura';else tipoIVADetected='manual';}const enviosNum=toNum(row[15]);const brutoNum=toNum(row[18]);const tarifaCalc=enviosNum>0?Math.round(brutoNum/enviosNum):0;datosImportados.push({id:Date.now()+i,nombre:nombre.toUpperCase().replace(/,\s*/g,' '),envios:enviosNum,tarifa:tarifaCalc,bruto:brutoNum,ajuste:0,iva:ivaVal,tipoIVA:tipoIVADetected,totalBruto:brutoNum,adelanto:toNum(row[19]),extra:toNum(row[22]),prestamo:toNum(row[20]),consumo:matchConsumo(nombre),totalPagar:toNum(row[23]),estado:'PENDIENTE',obs:''});}if(datosImportados.length===0){toast('⚠ No se encontró la hoja "DETALLE DE PAGO"');return;}setPagos(datosImportados);if(semanaExcel)setSemana(semanaExcel);lsSave('pagos_semana',datosImportados);setImportando(false);if(filasVaciasOmitidas>0||filasSinMontoOmitidas>0){toast(`✓ Importados ${datosImportados.length} mensajeros. ⚠ Se omitieron ${filasVaciasOmitidas} filas vacías y ${filasSinMontoOmitidas} filas sin monto — revisa el Excel si esperabas más.`);}else{toast(`✓ Importados ${datosImportados.length} mensajeros desde Excel de pagos`);}}catch(err){toast('⚠ Error al leer el archivo: '+err.message);setImportando(false);}};reader.readAsArrayBuffer(file);}const buildPagos=()=>{
+   datos reales y competia por pisar retirosDB con una copia local vieja. */const _useState35=useState(fechaHoyCL()),fechaPago=_useState35[0],setFechaPago=_useState35[1];const _useState36=useState(null),verComprobante=_useState36[0],setVerComprobante=_useState36[1];const _useState37=useState(false),importando=_useState37[0],setImportando=_useState37[1];const _useState38=useState(null),pagosFiltro=_useState38[0],setPagosFiltro=_useState38[1];const _useState39=useState(false),dragOver=_useState39[0],setDragOver=_useState39[1];const pagoFileRef=useRef();function importarExcelPagos(file){const reader=new FileReader();reader.onload=e=>{try{let wb;try{wb=XLSX.read(e.target.result,{type:'array',cellDates:true});}catch(e1){wb=XLSX.read(e.target.result,{type:'array'});}const sheetName=wb.SheetNames.find(n=>n.toUpperCase().includes('DETALLE'))||wb.SheetNames[0];const ws=wb.Sheets[sheetName];const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});let semanaExcel='';for(let i=0;i<5;i++){const row=raw[i]||[];for(let j=0;j<row.length;j++){const cell=String(row[j]||'').trim();const prev=String(row[j-1]||'').trim().toLowerCase();if(prev.includes('semana')&&cell&&cell!=='nan'){semanaExcel=cell;break;}}if(semanaExcel)break;}let headerRow=2;for(let i=0;i<Math.min(5,raw.length);i++){const row=raw[i]||[];for(let j=0;j<row.length;j++){if(String(row[j]||'').trim().toUpperCase()==='MENSAJEROS'){headerRow=i;break;}}}const toNum=v=>{const n=parseFloat(String(v||0).replace(/[^0-9.-]/g,''));return isNaN(n)?0:n;};const consumoMap={};for(let ci=0;ci<raw.length;ci++){const cr=raw[ci]||[];if(String(cr[14]||'').trim()==='NOMBRE'){for(let di=ci+1;di<Math.min(ci+30,raw.length);di++){const dr=raw[di]||[];const cn=String(dr[14]||'').trim().toUpperCase();if(!cn||cn==='nan')continue;const cm=parseFloat(String(dr[16]||'0').replace(/[^0-9.-]/g,''))||0;if(cm>0)consumoMap[cn]=cm;}break;}}function matchConsumo(nombre){const n=nombre.toUpperCase().replace(/,\s*/g,' ').replace(/\s+/g,' ');if(consumoMap[n])return consumoMap[n];for(const k of Object.keys(consumoMap)){const kn=k.replace(/,\s*/g,' ').replace(/\s+/g,' ');if(n.includes(kn)||kn.includes(n))return consumoMap[k];}return 0;}const datosImportados=[];let filasVaciasOmitidas=0;let filasSinMontoOmitidas=0;for(let i=headerRow+1;i<raw.length;i++){const row=raw[i]||[];const nombre=String(row[17]||'').trim();if(nombre.toUpperCase()==='MENSAJEROS'||nombre.toLowerCase().includes('total')||nombre.startsWith('Etiqueta'))break;if(!nombre||nombre==='nan'){filasVaciasOmitidas++;continue;}const brutoCheck=parseFloat(String(row[18]||'0').replace(/[^0-9.-]/g,''));if(!brutoCheck||brutoCheck<=0){filasSinMontoOmitidas++;continue;}const totalPagar=toNum(row[23]);const estado='PENDIENTE';const ivaVal=toNum(row[6]);const brutoVal=toNum(row[4]);let tipoIVADetected='ninguno';if(ivaVal>0&&brutoVal>0){const rate=ivaVal/brutoVal;if(Math.abs(rate-0.1525/1.1525)<0.01)tipoIVADetected='honorarios';else if(Math.abs(rate-0.19/1.19)<0.01)tipoIVADetected='factura';else tipoIVADetected='manual';}const enviosNum=toNum(row[15]);const brutoNum=toNum(row[18]);const tarifaCalc=enviosNum>0?Math.round(brutoNum/enviosNum):0;datosImportados.push({id:Date.now()+i,nombre:nombre.toUpperCase().replace(/,\s*/g,' '),envios:enviosNum,tarifa:tarifaCalc,bruto:brutoNum,ajuste:0,iva:ivaVal,tipoIVA:tipoIVADetected,totalBruto:brutoNum,adelanto:toNum(row[19]),extra:toNum(row[22]),prestamo:toNum(row[20]),consumo:matchConsumo(nombre),totalPagar:toNum(row[23]),estado:'PENDIENTE',obs:''});}if(datosImportados.length===0){toast('⚠ No se encontró la hoja "DETALLE DE PAGO"');return;}setPagos(datosImportados);if(semanaExcel)setSemana(semanaExcel);sincronizarConsumoDesdeDB(semanaExcel||semana);lsSave('pagos_semana',datosImportados);setImportando(false);if(filasVaciasOmitidas>0||filasSinMontoOmitidas>0){toast(`✓ Importados ${datosImportados.length} mensajeros. ⚠ Se omitieron ${filasVaciasOmitidas} filas vacías y ${filasSinMontoOmitidas} filas sin monto — revisa el Excel si esperabas más.`);}else{toast(`✓ Importados ${datosImportados.length} mensajeros desde Excel de pagos`);}}catch(err){toast('⚠ Error al leer el archivo: '+err.message);setImportando(false);}};reader.readAsArrayBuffer(file);}const buildPagos=()=>{
 
   // Calcular desde envíos reales del sistema (lunes a sábado de la semana actual)
 
@@ -443,6 +542,45 @@ const pagosMostrados=React.useMemo(()=>{
   else if(pagosOrden==='desc')arr=[...arr].sort((a,b)=>b.nombre.localeCompare(a.nombre,'es'));
   return arr;
 },[pagos,pagosBusqueda,pagosOrden]);
+
+// Consumo: consumos_mensajeros es la única fuente de verdad (cada ítem que se agrega, desde
+// donde sea -- el modal de un mensajero puntual en la tabla de Pagos, o la pantalla nueva
+// "Consumo Diario" que lista a todos-- queda ahí con su fecha real). Antes la columna Consumo
+// de la tabla de Pagos solo se refrescaba para UN mensajero cuando el admin abría SU modal
+// puntual; si el consumo se cargaba desde otro lado sin pasar por ese modal, la tabla se veía
+// desactualizada hasta que alguien lo abriera. Con esto se recalculan los totales de TODOS
+// los mensajeros apenas cambia algo en consumos_mensajeros (alta o baja, desde cualquier
+// pantalla), en tiempo real vía Supabase Realtime -- así "Consumo Diario" y la columna
+// Consumo de Pagos siempre muestran el mismo número, sin que quede nada "en el aire".
+function sincronizarConsumoDesdeDB(sem){
+  if(!sem)return;
+  db.from('consumos_mensajeros').select('mensajero_nombre,monto').eq('semana',sem).then(function(r){
+    if(!r||!r.data)return;
+    var totales={};
+    r.data.forEach(function(row){
+      var k=(row.mensajero_nombre||'').toUpperCase().replace(/,\s*/g,' ').replace(/\s+/g,' ').trim();
+      totales[k]=(totales[k]||0)+(parseFloat(row.monto)||0);
+    });
+    setPagos(function(prev){
+      var cambio=false;
+      var next=prev.map(function(p){
+        var k=p.nombre.toUpperCase().replace(/,\s*/g,' ').replace(/\s+/g,' ').trim();
+        var nuevoConsumo=totales[k]||0;
+        if(Math.abs(nuevoConsumo-(p.consumo||0))<0.5)return p;
+        cambio=true;
+        var totalPagar=p.totalBruto+(p.extra||0)-(p.adelanto||0)-(p.prestamo||0)-nuevoConsumo-(p.descSiniestro||0);
+        return Object.assign({},p,{consumo:nuevoConsumo,totalPagar:totalPagar});
+      });
+      return cambio?next:prev;
+    });
+  });
+}
+React.useEffect(function(){
+  sincronizarConsumoDesdeDB(semana);
+  var canalKey='consumo-mensajeros-'+semana.replace(/[^a-zA-Z0-9]/g,'');
+  var canal=db.channel(canalKey).on('postgres_changes',{event:'*',schema:'public',table:'consumos_mensajeros',filter:'semana=eq.'+semana},function(){sincronizarConsumoDesdeDB(semana);}).subscribe();
+  return function(){db.removeChannel(canal);};
+},[semana]);
 
 // ── Respaldo en Supabase de Pago Mensajeros (mismo patrón que Cierre de Mes) ──
 
@@ -1706,7 +1844,11 @@ function recalcAll(){
 
 ),
 
-  pp.productos&&/*#__PURE__*/React.createElement("div",{className:"pm-tab-productos"},/*#__PURE__*/React.createElement("div",{className:"section-head"},/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)'}},"Productos en Venta"),/*#__PURE__*/React.createElement("button",{className:"btn-add",onClick:function(){var nid=Math.max.apply(null,[0].concat(productosLocal.map(function(p){return p.id;}))).valueOf()+1;setProductosLocal(function(prev){return prev.concat([{id:nid,nombre:'',precio:0,activo:true}]);});}},"+ Agregar")),/*#__PURE__*/React.createElement("div",{className:"table-wrap"},/*#__PURE__*/React.createElement("table",null,/*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("th",null,"Producto"),/*#__PURE__*/React.createElement("th",{style:{width:160}},"Precio ($)"),/*#__PURE__*/React.createElement("th",{style:{width:80,textAlign:"center"}},"Activo"),/*#__PURE__*/React.createElement("th",{style:{width:50}}))),/*#__PURE__*/React.createElement("tbody",null,productosLocal.map(function(p,i){return/*#__PURE__*/React.createElement("tr",{key:p.id,style:{background:i%2===0?"#fff":"var(--cream)"}},/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{className:"form-input",value:p.nombre,placeholder:"Ej: Almuerzo",onChange:function(e){var v=e.target.value;setProductosLocal(function(prev){return prev.map(function(x){return x.id===p.id?Object.assign({},x,{nombre:v}):x;});});},style:{margin:0}})),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{className:"form-input",type:"number",value:p.precio,onChange:function(e){var v=parseInt(e.target.value)||0;setProductosLocal(function(prev){return prev.map(function(x){return x.id===p.id?Object.assign({},x,{precio:v}):x;});});},style:{margin:0}})),/*#__PURE__*/React.createElement("td",{style:{textAlign:"center"}},/*#__PURE__*/React.createElement("span",{style:{color:p.activo!==false?"var(--success)":"var(--text-soft)",fontWeight:700}},p.activo!==false?"✓":"○")),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("button",{onClick:function(){var pid=p.id;setProductosLocal(function(prev){return prev.filter(function(x){return x.id!==pid;});});},style:{padding:"4px 8px",borderRadius:6,border:"none",background:"rgba(176,48,48,0.1)",color:"#b03030",cursor:"pointer",fontSize:12}},"x")));}))))),consumoModal&&React.createElement(ConsumoModal,{p:consumoModal,semana:semana,productosLocal:productosLocal,toast:toast,onClose:()=>setConsumoModal(null),onTotalChange:function(total){updatePago(consumoModal.id,'consumo',total);}})));}
+  pp.productos&&/*#__PURE__*/React.createElement("div",{className:"pm-tab-productos"},/*#__PURE__*/React.createElement("div",{className:"section-head"},/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)'}},"Productos en Venta"),/*#__PURE__*/React.createElement("button",{className:"btn-add",onClick:function(){var nid=Math.max.apply(null,[0].concat(productosLocal.map(function(p){return p.id;}))).valueOf()+1;setProductosLocal(function(prev){return prev.concat([{id:nid,nombre:'',precio:0,activo:true}]);});}},"+ Agregar")),/*#__PURE__*/React.createElement("div",{className:"table-wrap"},/*#__PURE__*/React.createElement("table",null,/*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("th",null,"Producto"),/*#__PURE__*/React.createElement("th",{style:{width:160}},"Precio ($)"),/*#__PURE__*/React.createElement("th",{style:{width:80,textAlign:"center"}},"Activo"),/*#__PURE__*/React.createElement("th",{style:{width:50}}))),/*#__PURE__*/React.createElement("tbody",null,productosLocal.map(function(p,i){return/*#__PURE__*/React.createElement("tr",{key:p.id,style:{background:i%2===0?"#fff":"var(--cream)"}},/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{className:"form-input",value:p.nombre,placeholder:"Ej: Almuerzo",onChange:function(e){var v=e.target.value;setProductosLocal(function(prev){return prev.map(function(x){return x.id===p.id?Object.assign({},x,{nombre:v}):x;});});},style:{margin:0}})),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{className:"form-input",type:"number",value:p.precio,onChange:function(e){var v=parseInt(e.target.value)||0;setProductosLocal(function(prev){return prev.map(function(x){return x.id===p.id?Object.assign({},x,{precio:v}):x;});});},style:{margin:0}})),/*#__PURE__*/React.createElement("td",{style:{textAlign:"center"}},/*#__PURE__*/React.createElement("span",{style:{color:p.activo!==false?"var(--success)":"var(--text-soft)",fontWeight:700}},p.activo!==false?"✓":"○")),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("button",{onClick:function(){var pid=p.id;setProductosLocal(function(prev){return prev.filter(function(x){return x.id!==pid;});});},style:{padding:"4px 8px",borderRadius:6,border:"none",background:"rgba(176,48,48,0.1)",color:"#b03030",cursor:"pointer",fontSize:12}},"x")));}))))),pp.consumo&&/*#__PURE__*/React.createElement("div",{className:"pm-tab-consumo",style:{padding:'0 20px 20px'}},/*#__PURE__*/React.createElement(ConsumoDiario,{mensajeros:mensajeros,pagos:pagos,productosLocal:productosLocal,semana:semana,toast:toast,onAbrirDetalle:function(m){
+  var nombreNorm=(m.nombre||'').toUpperCase().replace(/,\s*/g,' ').replace(/\s+/g,' ').trim();
+  var pago=pagos.find(function(p){return p.nombre.toUpperCase().replace(/,\s*/g,' ').replace(/\s+/g,' ').trim()===nombreNorm;});
+  if(pago)setConsumoModal(pago);else toast&&toast('⚠ Aún no aparece en la tabla de Pagos de esta semana.');
+}})),consumoModal&&React.createElement(ConsumoModal,{p:consumoModal,semana:semana,productosLocal:productosLocal,toast:toast,onClose:()=>setConsumoModal(null),onTotalChange:function(total){updatePago(consumoModal.id,'consumo',total);}})));}
 
 window.PagosMensajeros = PagosMensajeros;
 
