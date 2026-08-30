@@ -620,7 +620,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788119413;
+window.__MODULES_VERSION=1788122002;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1359,7 +1359,7 @@ const primeraClave=Object.keys(normalizeRows[0]||{});if(!normalizeRows[0]['Despa
       cliente:r['Cliente']||'',
       destinatario:r['Destinatario']||'',
       direccion:r['Direccion']||'',
-      comuna:(r['Comuna']||'').toUpperCase().trim(),
+      comuna:matchComuna(r['Comuna'])||(r['Comuna']||'').toUpperCase().trim(),
       fecha:fechaStr.slice(0,10),
       updated_at:new Date().toISOString()
     });
@@ -3765,7 +3765,19 @@ function EnvioDetalleCard(_ref_edc){
   );
 }
 /* ConsultaExpress se carga en modules/consulta-express.js (lazy-load) */
-const COMUNAS_CHILE=['CERRILLOS','CERRO NAVIA','CONCHALÍ','EL BOSQUE','ESTACIÓN CENTRAL','HUECHURABA','INDEPENDENCIA','LA CISTERNA','LA FLORIDA','LA GRANJA','LA PINTANA','LA REINA','LAS CONDES','LO BARNECHEA','LO ESPEJO','LO PRADO','MACUL','MAIPÚ','ÑUÑOA','PEDRO AGUIRRE CERDA','PEÑALOLÉN','PROVIDENCIA','PUDAHUEL','QUILICURA','QUINTA NORMAL','RECOLETA','RENCA','SAN JOAQUÍN','SAN MIGUEL','SAN RAMÓN','SANTIAGO','VITACURA','PUENTE ALTO','PIRQUE','SAN JOSÉ DE MAIPO','COLINA','LAMPA','TIL TIL','SAN BERNARDO','BUIN','CALERA DE TANGO','PAINE','MELIPILLA','ALHUÉ','CURACAVÍ','MARÍA PINTO','SAN PEDRO','TALAGANTE','EL MONTE','ISLA DE MAIPO','PADRE HURTADO','PEÑAFLOR','PUENTE ALTO - PERIFERIA','LA FLORIDA - PERIFERIA','PUDAHUEL - PERIFERIA','PADRE HURTADO - PERIFERIA','COLINA - PERIFERIA','SAN BERNARDO - PERIFERIA','LO BARNECHEA - PERIFERIA'].sort();function normComuna(s){return(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();}function matchComuna(raw){if(!raw)return'';const n=normComuna(raw);const found=COMUNAS_CHILE.find(function(c){return normComuna(c)===n;});return found||raw;}
+const COMUNAS_CHILE=['CERRILLOS','CERRO NAVIA','CONCHALÍ','EL BOSQUE','ESTACIÓN CENTRAL','HUECHURABA','INDEPENDENCIA','LA CISTERNA','LA FLORIDA','LA GRANJA','LA PINTANA','LA REINA','LAS CONDES','LO BARNECHEA','LO ESPEJO','LO PRADO','MACUL','MAIPÚ','ÑUÑOA','PEDRO AGUIRRE CERDA','PEÑALOLÉN','PROVIDENCIA','PUDAHUEL','QUILICURA','QUINTA NORMAL','RECOLETA','RENCA','SAN JOAQUÍN','SAN MIGUEL','SAN RAMÓN','SANTIAGO','VITACURA','PUENTE ALTO','PIRQUE','SAN JOSÉ DE MAIPO','COLINA','LAMPA','TIL TIL','SAN BERNARDO','BUIN','CALERA DE TANGO','PAINE','MELIPILLA','ALHUÉ','CURACAVÍ','MARÍA PINTO','SAN PEDRO','TALAGANTE','EL MONTE','ISLA DE MAIPO','PADRE HURTADO','PEÑAFLOR','PUENTE ALTO - PERIFERIA','LA FLORIDA - PERIFERIA','PUDAHUEL - PERIFERIA','PADRE HURTADO - PERIFERIA','COLINA - PERIFERIA','SAN BERNARDO - PERIFERIA','LO BARNECHEA - PERIFERIA'].sort();function normComuna(s){return(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().replace(/[,.\s;]+$/,'').toUpperCase();}
+// matchComuna: ANTES devolv\u00eda el texto crudo tal cual cuando no encontraba una coincidencia exacta
+// en COMUNAS_CHILE -- eso hac\u00eda que "SOLERA", "COMERCIAL", "ANILLO ESTE" o cualquier lectura de IA
+// quedaran guardadas como si fueran una comuna real de la Regi\u00f3n Metropolitana, sin ninguna se\u00f1al
+// de que en realidad NUNCA se validaron contra la lista real. Ahora, si no hay una coincidencia
+// exacta (con acentos/may\u00fasculas/coma final ya normalizados), devuelve '' -- una cosa es que la IA
+// lea algo, y otra muy distinta es que ese algo sea una comuna real. Cada punto donde se escribe
+// comuna decide qu\u00e9 hacer con ese '' (guardar el texto crudo para revisi\u00f3n manual, o dejarlo vac\u00edo).
+function matchComuna(raw){if(!raw)return'';const n=normComuna(raw);const found=COMUNAS_CHILE.find(function(c){return normComuna(c)===n;});return found||'';}
+// esComunaValida: true solo si 'raw' matchea EXACTO (tras normalizar) contra la lista real de
+// comunas de la Regi\u00f3n Metropolitana. La usa el panel de Administraci\u00f3n \u00b7 Comunas para encontrar
+// todos los env\u00edos con comuna "sin validar" y ofrecerlos para correcci\u00f3n manual.
+function esComunaValida(raw){return!!matchComuna(raw);}
 // Las comunas de periferia se guardan como entradas propias en COMUNAS_CHILE (ej. "PUENTE ALTO - PERIFERIA"),
 // asi que separar centro de periferia es solo mirar el sufijo -- no hace falta una columna nueva en envios.
 function esComunaPeriferia(c){return/PERIFERIA/i.test(c||'');}
@@ -4244,7 +4256,14 @@ function ImportarPDFColecta(_ref_ipdf){
             var mRef=l.match(/^Referencia[:\s]+(.+)/i);if(mRef){var rv=mRef[1].replace(/^Referencia[:\s]*/i,'').trim();if(rv&&referencia.indexOf(rv)===-1)referencia=referencia?referencia+' '+rv:rv;}
             var mDest=l.match(/^Destinatario[:\s]+(.+)/i);if(mDest&&!destinatario)destinatario=mDest[1].replace(/\([^)]*\)/g,'').trim();
           });
-          if(flexIdx>=0&&!comuna){for(var ci=flexIdx+1;ci<bloqueLineas.length&&ci<flexIdx+8;ci++){var c=bloqueLineas[ci]?bloqueLineas[ci].trim():'';if(!c)continue;var esMayus=c===c.toUpperCase()&&/[A-ZÁÉÍÓÚÑ]/.test(c);var esZona=/\s+(ESTE|NORTE|SUR|ORIENTE|PONIENTE|CENTRO|ANILLO)$/.test(c);if(esMayus&&c.length>3&&!NO_COMUNA.test(c)&&!esZona&&!/^\d/.test(c)){comuna=matchComuna(c);break;}}}
+          if(flexIdx>=0&&!comuna){for(var ci=flexIdx+1;ci<bloqueLineas.length&&ci<flexIdx+8;ci++){var c=bloqueLineas[ci]?bloqueLineas[ci].trim():'';if(!c)continue;var esMayus=c===c.toUpperCase()&&/[A-ZÁÉÍÓÚÑ]/.test(c);var esZona=/\s+(ESTE|NORTE|SUR|ORIENTE|PONIENTE|CENTRO|ANILLO)$/.test(c);if(esMayus&&c.length>3&&!NO_COMUNA.test(c)&&!esZona&&!/^\d/.test(c)){
+            // ANTES: se tomaba la primera línea con "pinta" de comuna (mayúsculas, sin dígitos) y se
+            // usaba tal cual apenas matchComuna no encontraba coincidencia -- así, si esa primera
+            // línea era basura (ej. "COMERCIAL"), nunca se llegaba a probar las líneas siguientes
+            // del bloque, aunque más abajo sí viniera la comuna real. Ahora sigue probando líneas
+            // hasta encontrar una que matchee EXACTO contra la lista real de comunas RM.
+            var mFlex=matchComuna(c);if(mFlex){comuna=mFlex;break;}
+          }}}
           if(codigo&&codigo.length>=8){
             var envioObj={codigo,cliente:clientePDF,destinatario,direccion,referencia,comuna,fecha:fechaHoyCL(),estado:'en_bodega',mensajero:'',monto:0,nota:referencia||'',fuente:'flex',telefono:'',foto_etiqueta:null,historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:'Importado desde PDF Flex'}]};
             envios.push(envioObj);
@@ -5277,7 +5296,7 @@ function RetiroMasivoRider(_ref_rm){
         if(datos.destinatario) upd.destinatario=datos.destinatario;
         if(datos.direccion) upd.direccion=datos.direccion;
         if(datos.telefono) upd.telefono=datos.telefono;
-        if(datos.comuna) upd.comuna=datos.comuna;
+        if(datos.comuna) upd.comuna=matchComuna(datos.comuna)||String(datos.comuna).trim().toUpperCase();
         if(datos.referencia) upd.referencia=datos.referencia;
         if(Object.keys(upd).length>0){
           db.from('envios').update(upd).eq('codigo',codigo).then(function(){}).catch(function(){});
@@ -5362,7 +5381,7 @@ function RetiroMasivoRider(_ref_rm){
           if(datos.destinatario) upd.destinatario=datos.destinatario;
           if(datos.direccion) upd.direccion=datos.direccion;
           if(datos.telefono) upd.telefono=datos.telefono;
-          if(datos.comuna) upd.comuna=datos.comuna;
+          if(datos.comuna) upd.comuna=matchComuna(datos.comuna)||String(datos.comuna).trim().toUpperCase();
           if(datos.referencia) upd.referencia=datos.referencia;
           if(Object.keys(upd).length>0){
             db.from('envios').update(upd).eq('codigo',codigo).then(function(r2){
@@ -6139,7 +6158,7 @@ function ColectaRider(_ref_cr){
           // El registro base ya se guardó al escanear — completar con los datos de dirección
           // que detectó la IA (si no está protegido por PDF, en cuyo caso no se tocan).
           if(!esPDFRefCol.current.has(codigoFinalIA)){
-            db.from('envios').update({destinatario:datos.destinatario||'',direccion:datos.direccion||'',telefono:datos.telefono||'',comuna:datos.comuna||''}).eq('codigo',codigoFinalIA).then(function(r2){
+            db.from('envios').update({destinatario:datos.destinatario||'',direccion:datos.direccion||'',telefono:datos.telefono||'',comuna:datos.comuna?(matchComuna(datos.comuna)||String(datos.comuna).trim().toUpperCase()):''}).eq('codigo',codigoFinalIA).then(function(r2){
               if(!r2.error) setPaquetes(prev=>prev.map(p=>p.codigo===codigoFinalIA?{...p,syncEstado:'guardado'}:p));
             }).catch(function(){});
           }
@@ -6283,7 +6302,7 @@ function ColectaRider(_ref_cr){
       if(esPDF){
         r=await db.from('envios').update({estado:'en_ruta',mensajero:normNombre(usuario.nombre)}).eq('codigo',codigo);
       }else{
-        r=await db.from('envios').upsert({codigo:codigo,cliente:clienteNombre,estado:'en_ruta',fuente:'colecta_galeria_'+turno,mensajero:normNombre(usuario.nombre),destinatario:datos.destinatario||'',direccion:datos.direccion||'',telefono:datos.telefono||'',comuna:datos.comuna||'',referencia:datos.referencia||'',fecha:fechaHoyCL(),monto:0,en_un_cambio:false,nota:'Colecta Galería '+turno+' - '+usuario.nombre},{onConflict:'codigo',ignoreDuplicates:false});
+        r=await db.from('envios').upsert({codigo:codigo,cliente:clienteNombre,estado:'en_ruta',fuente:'colecta_galeria_'+turno,mensajero:normNombre(usuario.nombre),destinatario:datos.destinatario||'',direccion:datos.direccion||'',telefono:datos.telefono||'',comuna:datos.comuna?(matchComuna(datos.comuna)||String(datos.comuna).trim().toUpperCase()):'',referencia:datos.referencia||'',fecha:fechaHoyCL(),monto:0,en_un_cambio:false,nota:'Colecta Galería '+turno+' - '+usuario.nombre},{onConflict:'codigo',ignoreDuplicates:false});
       }
       var ok=!(r&&r.error);
       setFotosGaleria(prev=>prev.map(f=>f.datos&&f.datos.codigo===codigo?{...f,syncEstado:ok?'guardado':'error',esPDF:esPDF}:f));
@@ -11231,7 +11250,7 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
           destinatario:(r['Destinatario']||r['destinatario']||'').toString().trim(),
           telefono:(r['Teléfono']||r['Telefono']||r['telefono']||'').toString().trim(),
           direccion:(r['Dirección']||r['Direccion']||r['direccion']||'').toString().trim(),
-          comuna:(r['Comuna']||r['comuna']||'').toString().trim(),
+          comuna:matchComuna(r['Comuna']||r['comuna'])||(r['Comuna']||r['comuna']||'').toString().trim().toUpperCase(),
           referencia:(r['Referencia']||r['referencia']||'').toString().trim(),
           monto:parseFloat(String(r['Monto']||r['monto']||'0').replace(/[^0-9.]/g,''))||0
         };}).filter(function(r){return r.destinatario&&r.direccion;});
@@ -11558,7 +11577,10 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
         ),
         React.createElement('div',{className:'form-group'},
           React.createElement('label',{className:'form-label'},'Comuna'),
-          React.createElement('input',{className:'form-input',value:form.comuna,placeholder:'Providencia',onChange:function(e){setForm(function(p){return Object.assign({},p,{comuna:e.target.value});});}})
+          React.createElement('select',{className:'form-input',value:form.comuna,onChange:function(e){setForm(function(p){return Object.assign({},p,{comuna:e.target.value});});}},
+            React.createElement('option',{value:''},'Selecciona una comuna'),
+            COMUNAS_CHILE.map(function(c){return React.createElement('option',{key:c,value:c},c);})
+          )
         ),
         React.createElement('div',{className:'form-group'},
           React.createElement('label',{className:'form-label'},'Monto cobro (si aplica)'),
@@ -11794,7 +11816,7 @@ function NavDropdown(_ref_nd){
 // Dependencias compartidas para los modulos con carga diferida (lazy-load). Ver /modules/*.js
 window.__app = {
   db, lsLoad, lsSave, exportToExcel, ExportBtn, ImportarPDFColecta, fechaHoyCL,
-  AdminEditarEnvio, COMUNAS_CHILE, ESTADOS_ENVIO, FotosEntregaConRecarga, Modal, matchComuna,
+  AdminEditarEnvio, COMUNAS_CHILE, ESTADOS_ENVIO, FotosEntregaConRecarga, Modal, matchComuna, esComunaValida,
   confirmarCodigo, crearEntradaHistorial, diasDesdeFecha, esEnvioAtrasado, estadoBadge,
   estadoInfo, imprimirFotoEtiqueta, abrirVentanaEtiquetas, normalizarNombre, playSound, subirFotoStorage,
   Badge, COMUNAS_RM_LIST, DocumentosMensajero, KpiBar, PestanasMensajero,
@@ -12191,11 +12213,145 @@ function StatMiniComuna(props){
 // vive dentro del closure de otra funcion, asi que se duplica aqui (son solo 8 líneas).
 var ESTADO_COLORS_COMUNAS={en_bodega:'#1a6b8a',en_ruta:'#C8A84B',entregado:'#2e7d4f',reprogramado:'#9c27b0',cancelado:'#b03030',siniestro:'#e65100',retorno:'#7a5c1a',en_bodega_cancelado:'#a15c1a'};
 var ESTADO_LABELS_COMUNAS={en_bodega:'En Bodega',en_ruta:'En Ruta',entregado:'Entregado',reprogramado:'Reprogramado',cancelado:'Cancelado',siniestro:'Siniestro',retorno:'Retorno',en_bodega_cancelado:'En Bodega Cancelado'};
+// ── Levenshtein acotado (distancia máxima 2) -- solo para SUGERIR una posible corrección en el
+// panel de "Comunas sin validar", nunca para aplicar nada automáticamente. Ver nota en matchComuna
+// más arriba: una cosa es que el sistema proponga "¿será Ñuñoa?" y otra muy distinta es que lo
+// escriba solo -- la decisión final siempre la toma un admin desde el dropdown.
+function levenshteinAcotado(a,b){
+  var la=a.length,lb=b.length;
+  if(Math.abs(la-lb)>2)return 99;
+  var prev=[];for(var j=0;j<=lb;j++)prev.push(j);
+  for(var i=1;i<=la;i++){
+    var cur=[i];
+    for(var j2=1;j2<=lb;j2++){
+      var costo=a[i-1]===b[j2-1]?0:1;
+      cur.push(Math.min(prev[j2]+1,cur[j2-1]+1,prev[j2-1]+costo));
+    }
+    prev=cur;
+  }
+  return prev[lb];
+}
+function sugerirComuna(raw){
+  var n=normComuna(raw);
+  if(n.length<5)return null;
+  var mejor=null,mejorD=3;
+  COMUNAS_CHILE.forEach(function(c){
+    var cn=normComuna(c);
+    if(Math.abs(cn.length-n.length)>2)return;
+    var d=levenshteinAcotado(n,cn);
+    if(d<mejorD){mejorD=d;mejor=c;}
+  });
+  return mejor;
+}
+// ── Panel de "Comunas sin validar" (Administración · Comunas) ──────────────────────────────
+// Antes el sistema aceptaba cualquier texto que la IA leyera en una etiqueta (o que viniera en un
+// Excel importado) y lo guardaba como si fuera una comuna real -- así aparecían cosas como
+// "SOLERA", "COMERCIAL" o "ANILLO ESTE" mezcladas con comunas de verdad en los reportes y en los
+// comprobantes de pago. Este panel recorre TODO el histórico de 'envios' (no solo el día de hoy)
+// y muestra, agrupado, cada valor de comuna que NO matchea contra la lista real de comunas de la
+// Región Metropolitana (ver esComunaValida/matchComuna) -- para que un admin lo corrija una vez y
+// se actualicen de golpe todos los envíos que tenían ese mismo valor mal ingresado.
+function PanelComunasSinValidar(props){
+  var db=props.db;
+  var toastFn=props.toast;
+  var _carg=React.useState(true);var cargando=_carg[0];var setCargando=_carg[1];
+  var _filas=React.useState([]);var filas=_filas[0];var setFilas=_filas[1];
+  var _corrigiendo=React.useState({});var corrigiendo=_corrigiendo[0];var setCorrigiendo=_corrigiendo[1];
+  var _totalReg=React.useState(0);var totalRegistros=_totalReg[0];var setTotalRegistros=_totalReg[1];
+  var _sinDato=React.useState(0);var sinDato=_sinDato[0];var setSinDato=_sinDato[1];
+
+  function cargar(){
+    setCargando(true);
+    fetchPaginadoParalelo(function(cursor,limite){
+      return db.from('envios').select('id,comuna').gt('id',cursor).order('id',{ascending:true}).limit(limite);
+    }).then(function(rows){
+      var conteo={};
+      rows.forEach(function(r){
+        var raw=(r.comuna||'').toString();
+        if(!conteo[raw])conteo[raw]={comuna:raw,n:0};
+        conteo[raw].n++;
+      });
+      var todos=Object.keys(conteo).map(function(k){return conteo[k];});
+      var vacios=todos.filter(function(f){return f.comuna.trim()==='';}).reduce(function(a,f){return a+f.n;},0);
+      var lista=todos
+        .filter(function(f){return f.comuna.trim()!=='';})
+        .filter(function(f){return !esComunaValida(f.comuna);})
+        .map(function(f){return Object.assign({},f,{sugerido:sugerirComuna(f.comuna)});})
+        .sort(function(a,b){return b.n-a.n;});
+      setFilas(lista);
+      setSinDato(vacios);
+      setTotalRegistros(rows.length);
+      setCargando(false);
+    }).catch(function(err){setCargando(false);if(toastFn)toastFn('⚠ Error cargando comunas: '+err.message);});
+  }
+  React.useEffect(function(){cargar();},[]);
+
+  function aplicarCorreccion(raw,nuevo){
+    if(!nuevo)return;
+    setCorrigiendo(function(p){var n=Object.assign({},p);n[raw]=true;return n;});
+    db.from('envios').update({comuna:nuevo}).eq('comuna',raw).then(function(r){
+      if(r.error){
+        if(toastFn)toastFn('⚠ Error: '+r.error.message);
+        setCorrigiendo(function(p){var n=Object.assign({},p);delete n[raw];return n;});
+        return;
+      }
+      setFilas(function(prev){return prev.filter(function(f){return f.comuna!==raw;});});
+      if(toastFn)toastFn('✓ Corregido "'+raw+'" → '+nuevo+' en todos los envíos');
+    });
+  }
+
+  var totalMalos=filas.reduce(function(a,f){return a+f.n;},0);
+
+  return React.createElement('div',null,
+    React.createElement('div',{style:{fontSize:13,color:'var(--text-soft)',marginBottom:16,lineHeight:1.5}},
+      'Todo el histórico de envíos (no solo hoy) cuya comuna NO coincide con ninguna comuna real de la Región Metropolitana. Elige la comuna correcta en cada fila — se corrigen de una vez todos los envíos que tenían ese mismo valor.'
+    ),
+    React.createElement('div',{style:{display:'flex',gap:10,marginBottom:16}},
+      React.createElement('button',{className:'btn-secondary',onClick:cargar},'↺ Actualizar')
+    ),
+    cargando?React.createElement('div',{style:{textAlign:'center',padding:'40px 0',color:'var(--text-soft)'}},'Revisando envíos...'):
+    React.createElement('div',null,
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:12,marginBottom:20}},
+        React.createElement('div',{className:'stat-card',style:{borderTop:'4px solid #b03030',padding:'16px'}},
+          React.createElement('div',{className:'stat-label'},'ENVÍOS CON COMUNA INVÁLIDA'),
+          React.createElement('div',{className:'stat-value',style:{fontSize:32,color:'#b03030'}},totalMalos.toLocaleString('es-CL')),
+          React.createElement('div',{className:'stat-sub'},'de '+totalRegistros.toLocaleString('es-CL')+' envíos revisados')
+        ),
+        React.createElement('div',{className:'stat-card',style:{borderTop:'4px solid #C8A84B',padding:'16px'}},
+          React.createElement('div',{className:'stat-label'},'VALORES DISTINTOS A CORREGIR'),
+          React.createElement('div',{className:'stat-value',style:{fontSize:32}},filas.length)
+        ),
+        React.createElement('div',{className:'stat-card',style:{borderTop:'4px solid var(--border)',padding:'16px'}},
+          React.createElement('div',{className:'stat-label'},'SIN COMUNA (VACÍO)'),
+          React.createElement('div',{className:'stat-value',style:{fontSize:32,color:'var(--text-soft)'}},sinDato.toLocaleString('es-CL')),
+          React.createElement('div',{className:'stat-sub'},'No es un error — falta el dato')
+        )
+      ),
+      filas.length===0?React.createElement('div',{style:{textAlign:'center',padding:'40px 0',color:'var(--success)',fontWeight:700}},'✓ No quedan comunas sin validar en la base.'):
+      React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8}},
+        filas.map(function(f){
+          var ocupado=!!corrigiendo[f.comuna];
+          return React.createElement('div',{key:f.comuna,style:{border:'1px solid var(--border)',borderLeft:'4px solid #b03030',borderRadius:10,padding:'12px 14px',display:'flex',flexWrap:'wrap',gap:10,alignItems:'center',background:'#fff',opacity:ocupado?0.6:1}},
+            React.createElement('div',{style:{flex:'1 1 220px',minWidth:0}},
+              React.createElement('div',{style:{fontWeight:700,fontSize:14,fontFamily:'JetBrains Mono',wordBreak:'break-word'}},'"'+f.comuna+'"'),
+              React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginTop:2}},f.n+' envío'+(f.n!==1?'s':'')+(f.sugerido?' · ¿será '+f.sugerido+'?':''))
+            ),
+            React.createElement('select',{disabled:ocupado,defaultValue:'',onChange:function(e){aplicarCorreccion(f.comuna,e.target.value);},style:{fontSize:12,padding:'6px 8px',borderRadius:6,border:'1px solid var(--border)',minWidth:190}},
+              React.createElement('option',{value:''},f.sugerido?'¿'+f.sugerido+'? — elegir...':'Elegir comuna correcta...'),
+              COMUNAS_CHILE.map(function(c){return React.createElement('option',{key:c,value:c},c);})
+            )
+          );
+        })
+      )
+    )
+  );
+}
 function ComunasControl(props){
   var mensajeros=props.mensajeros||[];
   var toastFn=props.toast;
   var db=props.db;
   var esAdmin=props.esAdmin;
+  var _modoCC=React.useState('dia');var modoVistaComunas=_modoCC[0];var setModoVistaComunas=_modoCC[1];
   var _fecha=React.useState(fechaHoyCL());var fechaSel=_fecha[0];var setFechaSel=_fecha[1];
   var _env=React.useState([]);var envios=_env[0];var setEnvios=_env[1];
   var _asig=React.useState({});var asignaciones=_asig[0];var setAsignaciones=_asig[1];
@@ -12222,7 +12378,11 @@ function ComunasControl(props){
   var grupos=React.useMemo(function(){
     var mapa={};
     envios.forEach(function(e){
-      var c=(e.comuna||'SIN COMUNA').trim().toUpperCase();
+      // matchComuna agrupa variantes de acento/mayúscula/coma final bajo la misma comuna real (ej.
+      // "MAIPU" y "Maipú," ya no aparecen como dos filas separadas en el reparto del día). Si el
+      // valor no matchea ninguna comuna real, se agrupa igual con el texto tal cual llegó -- este
+      // panel es solo de reparto operativo; la limpieza de esos valores se hace en "Comunas sin validar".
+      var c=matchComuna(e.comuna)||(e.comuna||'SIN COMUNA').trim().toUpperCase();
       if(!mapa[c])mapa[c]={comuna:c,total:0,entregados:0,pendientes:0};
       mapa[c].total++;
       if(e.estado==='entregado')mapa[c].entregados++;
@@ -12294,6 +12454,11 @@ function ComunasControl(props){
   }
 
   return React.createElement('div',{style:{padding:16,maxWidth:760,margin:'0 auto'}},
+    React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}},
+      React.createElement('button',{className:'btn-secondary',onClick:function(){setModoVistaComunas('dia');},style:{fontWeight:700,opacity:modoVistaComunas==='dia'?1:0.55,borderColor:modoVistaComunas==='dia'?'var(--gold)':undefined}},'📅 Reparto del Día'),
+      React.createElement('button',{className:'btn-secondary',onClick:function(){setModoVistaComunas('validar');},style:{fontWeight:700,opacity:modoVistaComunas==='validar'?1:0.55,borderColor:modoVistaComunas==='validar'?'var(--gold)':undefined}},'🛡 Comunas sin validar')
+    ),
+    modoVistaComunas==='validar'?React.createElement(PanelComunasSinValidar,{db:db,toast:toastFn}):React.createElement('div',null,
     React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:10,alignItems:'center',marginBottom:16}},
       React.createElement('div',{className:'panel-title',style:{marginRight:'auto'}},'División por Comunas'),
       React.createElement('input',{type:'date',value:fechaSel,onChange:function(e){setFechaSel(e.target.value);},style:{padding:'8px 10px',borderRadius:8,border:'1px solid var(--border)',fontFamily:'JetBrains Mono',fontSize:13}}),
@@ -12312,7 +12477,7 @@ function ComunasControl(props){
         var periferia=esComunaPeriferia(g.comuna);
         var asignados=asignaciones[g.comuna]||[];
         var abierta=!!expandidas[g.comuna];
-        var enviosComuna=abierta?envios.filter(function(e){return(e.comuna||'SIN COMUNA').trim().toUpperCase()===g.comuna;}):[];
+        var enviosComuna=abierta?envios.filter(function(e){return(matchComuna(e.comuna)||(e.comuna||'SIN COMUNA').trim().toUpperCase())===g.comuna;}):[];
         return React.createElement('div',{key:g.comuna,style:{border:'1px solid var(--border)',borderLeft:'4px solid '+(periferia?'#c98a1f':'var(--gold)'),borderRadius:10,padding:'12px 14px',background:'linear-gradient(145deg,#ffffff,#faf7ef)'}},
           React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,cursor:'pointer'},onClick:function(){toggleDetalle(g.comuna);},title:'Ver detalle de envíos'},
             React.createElement('div',null,
@@ -12354,6 +12519,7 @@ function ComunasControl(props){
           )
         );
       })
+    )
     )
   );
 }
