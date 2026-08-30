@@ -58,7 +58,12 @@ function fmtHora(iso){try{return new Date(iso).toLocaleTimeString('es-CL',{hour:
 // queda guardada como 00:30 UTC del dia SIGUIENTE -- si se usara el string UTC tal cual (slice(0,10))
 // para agrupar "por dia" o comparar contra la fecha de recepcion, cualquier entrega de tarde/noche
 // (la mayoria) caeria en el dia equivocado. Esta funcion convierte a la fecha LOCAL real.
-function diaLocalDe(iso){try{var d=new Date(iso);if(isNaN(d.getTime()))return '';return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}catch(e){return '';}}
+// Antes calculaba año/mes/día con getFullYear()/getMonth()/getDate(), que dependen de la zona
+// horaria del dispositivo que mira la pantalla, no de Chile -- mismo problema que tenía
+// fechaHoyCL en index.html (ver su comentario ahí): un evento ocurrido despues de las 20:00
+// hora de Chile podia contarse en el dia SIGUIENTE si el dispositivo tenia el reloj en UTC.
+// Ahora delega en fechaHoyCL, que ya fuerza America/Santiago sin importar el dispositivo.
+function diaLocalDe(iso){try{if(!iso)return '';var d=new Date(iso);if(isNaN(d.getTime()))return '';return fechaHoyCL(d);}catch(e){return '';}}
 // Formatea la fecha 'YYYY-MM-DD' de una ruta/turno a texto corto legible (dd/mm).
 function fmtDiaCorto(dia){try{var p=(dia||'').split('-');if(p.length!==3)return dia||'—';return p[2]+'/'+p[1];}catch(e){return dia||'—';}}
 function fmtHoras(h){if(h==null||!isFinite(h))return '—';if(h<1)return Math.round(h*60)+' min';return h.toFixed(1)+' h';}
@@ -614,10 +619,10 @@ function Analitica(){
   // Corte de las 8:00 PM (solo aplica viendo "Hoy"): mensajeros que a esta hora todavia no tienen
   // resuelto (entregado) al menos el 80% de lo que se les asigno hoy -- alerta de RITMO durante el
   // dia, distinta de "Necesitan atencion" (que mira el resultado final del periodo completo, sin
-  // importar la hora). Se usa la hora local del dispositivo, igual que el resto del sistema
-  // (fechaHoyCL en index.html tampoco fuerza zona horaria -- se asume que los equipos ya estan en
-  // hora de Chile).
-  var horaActualCL=new Date().getHours();
+  // importar la hora). ANTES se usaba la hora local del dispositivo (new Date().getHours()),
+  // asumiendo que el equipo ya estaba en hora de Chile -- mismo supuesto que resultó falso para
+  // fechaHoyCL (ver su comentario en index.html). Ahora se fuerza America/Santiago explícitamente.
+  var horaActualCL=+new Intl.DateTimeFormat('en-US',{timeZone:'America/Santiago',hour:'2-digit',hourCycle:'h23'}).format(new Date());
   var corte8pmActivo=kpiFiltro==='hoy'&&horaActualCL>=20;
   var bajo80a8pm=corte8pmActivo?rankeables.filter(function(m){return m.efectividad<80;}):[];
   // Estado general de la flota para el indicador del panel (verde/amarillo/rojo).
