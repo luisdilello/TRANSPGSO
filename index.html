@@ -620,7 +620,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788122002;
+window.__MODULES_VERSION=1788123148;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -12263,20 +12263,26 @@ function PanelComunasSinValidar(props){
   function cargar(){
     setCargando(true);
     fetchPaginadoParalelo(function(cursor,limite){
-      return db.from('envios').select('id,comuna').gt('id',cursor).order('id',{ascending:true}).limit(limite);
+      return db.from('envios').select('id,comuna,direccion,codigo').gt('id',cursor).order('id',{ascending:true}).limit(limite);
     }).then(function(rows){
       var conteo={};
       rows.forEach(function(r){
         var raw=(r.comuna||'').toString();
-        if(!conteo[raw])conteo[raw]={comuna:raw,n:0};
+        if(!conteo[raw])conteo[raw]={comuna:raw,n:0,ejemploDireccion:null,ejemploCodigo:null,sinNadaCount:0};
         conteo[raw].n++;
+        // Guarda UN ejemplo de dirección/código real (no vacío) para que el admin no tenga que
+        // ir a buscarlo a Gestión de Envíos -- así corrige directo desde acá con contexto.
+        var dir=(r.direccion||'').toString();
+        var esNulo=dir.trim()===''||dir.trim().toUpperCase()==='NULL,'||dir.trim().toUpperCase()==='NULL';
+        if(esNulo)conteo[raw].sinNadaCount++;
+        if(!conteo[raw].ejemploDireccion&&!esNulo){conteo[raw].ejemploDireccion=dir;conteo[raw].ejemploCodigo=r.codigo;}
       });
       var todos=Object.keys(conteo).map(function(k){return conteo[k];});
       var vacios=todos.filter(function(f){return f.comuna.trim()==='';}).reduce(function(a,f){return a+f.n;},0);
       var lista=todos
         .filter(function(f){return f.comuna.trim()!=='';})
         .filter(function(f){return !esComunaValida(f.comuna);})
-        .map(function(f){return Object.assign({},f,{sugerido:sugerirComuna(f.comuna)});})
+        .map(function(f){return Object.assign({},f,{sugerido:sugerirComuna(f.comuna),sinDireccionAlguna:f.sinNadaCount===f.n});})
         .sort(function(a,b){return b.n-a.n;});
       setFilas(lista);
       setSinDato(vacios);
@@ -12334,7 +12340,10 @@ function PanelComunasSinValidar(props){
           return React.createElement('div',{key:f.comuna,style:{border:'1px solid var(--border)',borderLeft:'4px solid #b03030',borderRadius:10,padding:'12px 14px',display:'flex',flexWrap:'wrap',gap:10,alignItems:'center',background:'#fff',opacity:ocupado?0.6:1}},
             React.createElement('div',{style:{flex:'1 1 220px',minWidth:0}},
               React.createElement('div',{style:{fontWeight:700,fontSize:14,fontFamily:'JetBrains Mono',wordBreak:'break-word'}},'"'+f.comuna+'"'),
-              React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginTop:2}},f.n+' envío'+(f.n!==1?'s':'')+(f.sugerido?' · ¿será '+f.sugerido+'?':''))
+              React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginTop:2}},f.n+' envío'+(f.n!==1?'s':'')+(f.sugerido?' · ¿será '+f.sugerido+'?':'')),
+              f.sinDireccionAlguna?
+                React.createElement('div',{style:{fontSize:11,color:'#b03030',marginTop:3,fontStyle:'italic'}},'⚠ Estos envíos no tienen dirección guardada tampoco — la etiqueta nunca se leyó bien. La foto original sigue guardada; hay que revisarla a mano (código ej. '+(f.ejemploCodigo||'—')+').'):
+                f.ejemploDireccion?React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginTop:3}},'Ej. dirección: "'+f.ejemploDireccion+'" ('+f.ejemploCodigo+')'):null
             ),
             React.createElement('select',{disabled:ocupado,defaultValue:'',onChange:function(e){aplicarCorreccion(f.comuna,e.target.value);},style:{fontSize:12,padding:'6px 8px',borderRadius:6,border:'1px solid var(--border)',minWidth:190}},
               React.createElement('option',{value:''},f.sugerido?'¿'+f.sugerido+'? — elegir...':'Elegir comuna correcta...'),
