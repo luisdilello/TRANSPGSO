@@ -7,6 +7,7 @@ var UMBRAL_ATRASO_DIAS=window.__app.UMBRAL_ATRASO_DIAS, KpiBar=window.__app.KpiB
 var exportToExcel=window.__app.exportToExcel;
 var Modal=window.__app.Modal, FotosEntregaConRecarga=window.__app.FotosEntregaConRecarga, estadoBadge=window.__app.estadoBadge;
 var fechaHoyCL=window.__app.fechaHoyCL;
+var fetchEntregadosPorFechaReal=window.__app.fetchEntregadosPorFechaReal;
 
 // Igual que canalInfo() en gestion-envios.js -- identifica el canal que registró cada
 // entrada del historial (app del mensajero, panel admin, portal cliente o sistema).
@@ -351,16 +352,54 @@ function Analitica(){
   var _fh=useState(''),fechaHasta=_fh[0],setFechaHasta=_fh[1];
   var filtrados=filtrarPorRango(envios,filtro,fechaDesde,fechaHasta);
   var total=filtrados.length;
-  var entregados=filtrados.filter(function(e){return e.estado==='entregado';}).length;
+  // 'Entregados' (aca y en Top Mensajeros) se calcula con la fecha REAL de entrega
+  // (historial_envios), no con la fecha de despacho de 'filtrados' -- mismo criterio que ya usan
+  // Pagos Mensajeros y la app del mensajero para calcular lo que se paga. Antes esta pantalla
+  // mostraba "entregados" segun cuando se DESPACHO el paquete, lo que podia no calzar con el
+  // numero real de entregas de la semana (un paquete despachado el sabado pero entregado el lunes
+  // contaba en la semana de despacho, no en la de entrega real).
+  var _uEntPerRealA=useState(null),entregadosPeriodoReal=_uEntPerRealA[0],setEntregadosPeriodoReal=_uEntPerRealA[1];
+  var _uCargEntRealA=useState(false),cargandoEntregadosReal=_uCargEntRealA[0],setCargandoEntregadosReal=_uCargEntRealA[1];
+  function limitesResumenReal(){
+    var hoy=fechaHoyCL();
+    if(filtro==='hoy')return{desde:hoy,hasta:hoy};
+    if(filtro==='ayer'){var d=new Date(hoy+'T12:00:00');d.setDate(d.getDate()-1);var ay=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');return{desde:ay,hasta:ay};}
+    if(filtro==='semana'){var dd=new Date();dd.setDate(dd.getDate()-((dd.getDay()+6)%7));var lunes=dd.getFullYear()+'-'+String(dd.getMonth()+1).padStart(2,'0')+'-'+String(dd.getDate()).padStart(2,'0');return{desde:lunes,hasta:hoy};}
+    if(filtro==='mes')return{desde:hoy.slice(0,7)+'-01',hasta:hoy};
+    if(filtro==='personalizado')return{desde:fechaDesde||null,hasta:fechaHasta||null};
+    return{desde:null,hasta:null}; // 'todo' -- sin acotar, se deja el criterio anterior (ver abajo)
+  }
+  useEffect(function(){
+    if(subTab!=='resumen')return;
+    var lim=limitesResumenReal();
+    if(!lim.desde||!lim.hasta){setEntregadosPeriodoReal(null);return;} // null = 'todo', usa el criterio anterior
+    var cancelado=false;
+    (async function(){
+      setCargandoEntregadosReal(true);
+      try{
+        var COLS_ENT='id,codigo,cliente,comuna,fecha,estado,mensajero,monto,nota,fotos_entrega,created_at,updated_at';
+        var rows=await fetchEntregadosPorFechaReal(lim.desde,lim.hasta,COLS_ENT);
+        if(!cancelado)setEntregadosPeriodoReal(rows);
+      }catch(eReal){console.warn('Error cargando entregados por fecha real (Analitica):',eReal.message);}
+      if(!cancelado)setCargandoEntregadosReal(false);
+    })();
+    return function(){cancelado=true;};
+  },[subTab,filtro,fechaDesde,fechaHasta]);
+  // Si aun no cargo (o el periodo es 'todo', sin acotar), se cae al criterio anterior por fecha
+  // de despacho -- para no mostrar 0 mientras carga ni romper la opcion 'todo'.
+  var entregadosReales=entregadosPeriodoReal===null?filtrados.filter(function(e){return e.estado==='entregado';}):entregadosPeriodoReal;
+  var entregados=entregadosReales.length;
   var enRuta=filtrados.filter(function(e){return e.estado==='en_ruta';}).length;
   var reprog=filtrados.filter(function(e){return e.estado==='reprogramado';}).length;
   var cancelados=filtrados.filter(function(e){return e.estado==='cancelado';}).length;
   var efectividad=total>0?Math.round(entregados/total*100):0;
   var porCliente={};
-  filtrados.forEach(function(e){var c=e.cliente||'Sin cliente';if(!porCliente[c])porCliente[c]={total:0,entregados:0};porCliente[c].total++;if(e.estado==='entregado')porCliente[c].entregados++;});
+  filtrados.forEach(function(e){var c=e.cliente||'Sin cliente';if(!porCliente[c])porCliente[c]={total:0,entregados:0};porCliente[c].total++;});
+  entregadosReales.forEach(function(e){var c=e.cliente||'Sin cliente';if(!porCliente[c])porCliente[c]={total:0,entregados:0};porCliente[c].entregados++;});
   var clientesArr=Object.entries(porCliente).sort(function(a,b){return b[1].total-a[1].total;}).slice(0,10);
   var porMen={};
-  filtrados.forEach(function(e){var m=e.mensajero||'Sin asignar';if(!porMen[m])porMen[m]={total:0,entregados:0};porMen[m].total++;if(e.estado==='entregado')porMen[m].entregados++;});
+  filtrados.forEach(function(e){var m=e.mensajero||'Sin asignar';if(!porMen[m])porMen[m]={total:0,entregados:0};porMen[m].total++;});
+  entregadosReales.forEach(function(e){var m=e.mensajero||'Sin asignar';if(!porMen[m])porMen[m]={total:0,entregados:0};porMen[m].entregados++;});
   var mensArr=Object.entries(porMen).filter(function(x){return x[0]!=='Sin asignar';}).sort(function(a,b){return b[1].entregados-a[1].entregados;}).slice(0,10);
 
   // ---- Filtros y datos del panel "KPI Mensajeros" ----
@@ -859,7 +898,7 @@ function Analitica(){
         )
       ),
       React.createElement('div',{className:'stats-grid',style:{marginBottom:20}},
-        [{label:'Total',val:total,cls:''},{label:'Entregados',val:entregados,cls:'green'},{label:'En Ruta',val:enRuta,cls:'gold'},{label:'Reprogramados',val:reprog,cls:'red'},{label:'Cancelados',val:cancelados,cls:'red'},{label:'Efectividad',val:efectividad+'%',cls:efectividad>=95?'green':'red'}].map(function(s){
+        [{label:'Total',val:total,cls:''},{label:'Entregados (fecha real)',val:entregados,cls:'green'},{label:'En Ruta',val:enRuta,cls:'gold'},{label:'Reprogramados',val:reprog,cls:'red'},{label:'Cancelados',val:cancelados,cls:'red'},{label:'Efectividad',val:efectividad+'%',cls:efectividad>=95?'green':'red'}].map(function(s){
           return statTile(s.label,s.val,s.cls);
         })
       ),
@@ -890,7 +929,7 @@ function Analitica(){
       React.createElement('div',{className:'panel'},
         React.createElement('div',{className:'panel-title'},'Distribución de Estados'),
         React.createElement('div',{style:{display:'flex',gap:12,flexWrap:'wrap',padding:'8px 0'}},
-          [{label:'Entregados',val:entregados,color:'var(--success)'},{label:'En Ruta',val:enRuta,color:'var(--gold)'},{label:'Reprogramados',val:reprog,color:'var(--warning)'},{label:'Cancelados',val:cancelados,color:'var(--danger)'}].map(function(s){
+          [{label:'Entregados (fecha real)',val:entregados,color:'var(--success)'},{label:'En Ruta',val:enRuta,color:'var(--gold)'},{label:'Reprogramados',val:reprog,color:'var(--warning)'},{label:'Cancelados',val:cancelados,color:'var(--danger)'}].map(function(s){
             var pct=total>0?Math.round(s.val/total*100):0;
             return React.createElement('div',{key:s.label,style:{flex:'1 1 130px',background:'var(--cream)',borderRadius:10,padding:'12px 16px',border:'1px solid var(--border)'}},
               React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginBottom:4,textTransform:'uppercase',letterSpacing:1}},s.label),

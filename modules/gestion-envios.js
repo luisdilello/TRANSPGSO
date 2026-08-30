@@ -1,6 +1,6 @@
 (function(){
 var useEffect=React.useEffect, useMemo=React.useMemo, useRef=React.useRef, useState=React.useState;
-var AdminEditarEnvio=window.__app.AdminEditarEnvio, abrirVentanaEtiquetas=window.__app.abrirVentanaEtiquetas, COMUNAS_CHILE=window.__app.COMUNAS_CHILE, ESTADOS_ENVIO=window.__app.ESTADOS_ENVIO, EtiquetaPreview=window.__app.EtiquetaPreview, ExportBtn=window.__app.ExportBtn, FotosEntregaConRecarga=window.__app.FotosEntregaConRecarga, Modal=window.__app.Modal, matchComuna=window.__app.matchComuna, confirmarCodigo=window.__app.confirmarCodigo, crearEntradaHistorial=window.__app.crearEntradaHistorial, db=window.__app.db, diasDesdeFecha=window.__app.diasDesdeFecha, esEnvioAtrasado=window.__app.esEnvioAtrasado, UMBRAL_ATRASO_DIAS=window.__app.UMBRAL_ATRASO_DIAS, calcularBaseTardio=window.__app.calcularBaseTardio, esEnvioTardio=window.__app.esEnvioTardio, horasTardanza=window.__app.horasTardanza, UMBRAL_TARDIO_HORAS=window.__app.UMBRAL_TARDIO_HORAS, estadoBadge=window.__app.estadoBadge, estadoInfo=window.__app.estadoInfo, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, imprimirFotoEtiqueta=window.__app.imprimirFotoEtiqueta, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, normalizarNombre=window.__app.normalizarNombre, perfil=window.__app.perfil, playSound=window.__app.playSound, subirFotoStorage=window.__app.subirFotoStorage, sbRegistrarHistorial=window.__app.sbRegistrarHistorial, sbRegistrarHistorialLote=window.__app.sbRegistrarHistorialLote, fetchPaginadoParalelo=window.__app.fetchPaginadoParalelo, fetchPorDiasParalelo=window.__app.fetchPorDiasParalelo;
+var AdminEditarEnvio=window.__app.AdminEditarEnvio, abrirVentanaEtiquetas=window.__app.abrirVentanaEtiquetas, COMUNAS_CHILE=window.__app.COMUNAS_CHILE, ESTADOS_ENVIO=window.__app.ESTADOS_ENVIO, EtiquetaPreview=window.__app.EtiquetaPreview, ExportBtn=window.__app.ExportBtn, FotosEntregaConRecarga=window.__app.FotosEntregaConRecarga, Modal=window.__app.Modal, matchComuna=window.__app.matchComuna, confirmarCodigo=window.__app.confirmarCodigo, crearEntradaHistorial=window.__app.crearEntradaHistorial, db=window.__app.db, diasDesdeFecha=window.__app.diasDesdeFecha, esEnvioAtrasado=window.__app.esEnvioAtrasado, UMBRAL_ATRASO_DIAS=window.__app.UMBRAL_ATRASO_DIAS, calcularBaseTardio=window.__app.calcularBaseTardio, esEnvioTardio=window.__app.esEnvioTardio, horasTardanza=window.__app.horasTardanza, UMBRAL_TARDIO_HORAS=window.__app.UMBRAL_TARDIO_HORAS, estadoBadge=window.__app.estadoBadge, estadoInfo=window.__app.estadoInfo, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, imprimirFotoEtiqueta=window.__app.imprimirFotoEtiqueta, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, normalizarNombre=window.__app.normalizarNombre, perfil=window.__app.perfil, playSound=window.__app.playSound, subirFotoStorage=window.__app.subirFotoStorage, sbRegistrarHistorial=window.__app.sbRegistrarHistorial, sbRegistrarHistorialLote=window.__app.sbRegistrarHistorialLote, fetchPaginadoParalelo=window.__app.fetchPaginadoParalelo, fetchPorDiasParalelo=window.__app.fetchPorDiasParalelo, fetchEntregadosPorFechaReal=window.__app.fetchEntregadosPorFechaReal;
 function GestionEnvios(_ref26){var _detalleEnvio$mensaje;let mensajeros=_ref26.mensajeros,clientes=_ref26.clientes,toast=_ref26.toast,esSuperAdmin=_ref26.esSuperAdmin,esAdmin=_ref26.esAdmin,usuario=_ref26.usuario;const _useState60=useState(()=>lsLoad('gestion_envios',[])),envios=_useState60[0],setEnvios=_useState60[1];const _useState61=useState('lista'),subTab=_useState61[0],setSubTab=_useState61[1];const _useState62=useState(''),search=_useState62[0],setSearch=_useState62[1];const _useState63=useState('todos'),filtroEst=_useState63[0],setFiltroEst=_useState63[1];const _useState64=useState('todos'),filtroCli=_useState64[0],setFiltroCli=_useState64[1];const _useState65=useState('todos'),filtroMen=_useState65[0],setFiltroMen=_useState65[1];const _useState65b=useState('todos'),filtroFuente=_useState65b[0],setFiltroFuente=_useState65b[1];const _useSoloAtrasados=useState(false),soloAtrasados=_useSoloAtrasados[0],setSoloAtrasados=_useSoloAtrasados[1];const _useSortCol=useState(null),sortCol=_useSortCol[0],setSortCol=_useSortCol[1];const _useSortDir=useState('asc'),sortDir=_useSortDir[0],setSortDir=_useSortDir[1];const _useState66=useState(new Set()),selected=_useState66[0],setSelected=_useState66[1];const _useState67=useState(false),asignarModal=_useState67[0],setAsignarModal=_useState67[1];const _useState68=useState(''),mensajeroAsignar=_useState68[0],setMensajeroAsignar=_useState68[1];const _useState69=useState(null),detalleEnvio=_useState69[0],setDetalleEnvio=_useState69[1];const _useHistReal=useState([]),historialReal=_useHistReal[0],setHistorialReal=_useHistReal[1];const _useFotosReloadKey=useState(0),fotosReloadKey=_useFotosReloadKey[0],setFotosReloadKey=_useFotosReloadKey[1];const _useHistCarg=useState(false),cargandoHistorial=_useHistCarg[0],setCargandoHistorial=_useHistCarg[1];const _useEntregasReal=useState({}),entregasReal=_useEntregasReal[0],setEntregasReal=_useEntregasReal[1];const _useState70=useState(1),page=_useState70[0],setPage=_useState70[1];const _useState71=useState(false),sincronizando=_useState71[0],setSincronizando=_useState71[1];const _useState71b=useState(false),showListaNegra=_useState71b[0],setShowListaNegra=_useState71b[1];const _useState71cc=useState(false),cambiarClienteModal=_useState71cc[0],setCambiarClienteModal=_useState71cc[1];const _useState71tt=useState(false),showTardiosModal=_useState71tt[0],setShowTardiosModal=_useState71tt[1];const _useState71dd=useState(''),clienteCambio=_useState71dd[0],setClienteCambio=_useState71dd[1];
 const _useState71c=useState(false),showPDFModal=_useState71c[0],setShowPDFModal=_useState71c[1];
 const _useState71d=useState(''),clientePDF=_useState71d[0],setClientePDF=_useState71d[1];
@@ -32,6 +32,42 @@ function limitesPeriodoGE(){
   if(periodo==='rango')return{desde:desde||null,hasta:hasta||null};
   return{desde:null,hasta:null};
 }
+// El bucket 'Entregado' (tarjeta, lista y export) usa la fecha REAL de entrega
+// (historial_envios), no la fecha de despacho como el resto de los buckets (En Bodega, En Ruta,
+// Reprogramado, etc.) -- este es el mismo criterio que ya usan Pagos Mensajeros y la app del
+// mensajero para calcular lo que se paga. Por eso puede haber paquetes despachados ANTES del
+// periodo elegido pero entregados DENTRO de el (o viceversa): 'Entregado' deja de ser un
+// subconjunto de 'Todos' (que sigue siendo por fecha de despacho) -- es la naturaleza de la
+// pregunta ("¿que se entrego esta semana?" es distinto de "¿que se despacho esta semana?").
+const _uEntPerReal=useState([]),entregadosPeriodoReal=_uEntPerReal[0],setEntregadosPeriodoReal=_uEntPerReal[1];
+const _uCargEntReal=useState(false),cargandoEntregadosReal=_uCargEntReal[0],setCargandoEntregadosReal=_uCargEntReal[1];
+async function cargarEntregadosPeriodoReal(){
+  const{desde:desdeQ,hasta:hastaQ}=limitesPeriodoGE();
+  if(!desdeQ||!hastaQ){setEntregadosPeriodoReal([]);return;}
+  setCargandoEntregadosReal(true);
+  try{
+    const COLS_ENT='id,codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,nota_admin,fuente,peso,valor_siniestro,tuvo_siniestro,updated_at,created_at,aviso_tardio';
+    const rows=await fetchEntregadosPorFechaReal(desdeQ,hastaQ,COLS_ENT);
+    const normalizados=rows.map(function(sb){
+      return{id:sb.id,codigo:sb.codigo,cliente:sb.cliente||'',destinatario:sb.destinatario||'',telefono:sb.telefono||'',
+        direccion:sb.direccion||'',comuna:sb.comuna||'',referencia:sb.referencia||'',fecha:sb.fecha||'',
+        estado:sb.estado||'entregado',mensajero:sb.mensajero||'',monto:sb.monto||0,enUnCambio:sb.en_un_cambio||false,
+        nota:sb.nota||'',nota_admin:sb.nota_admin||'',fuente:sb.fuente||'propio',peso:sb.peso||null,
+        valor_siniestro:sb.valor_siniestro||null,tuvo_siniestro:sb.tuvo_siniestro||false,created_at:sb.created_at||null,
+        updated_at:sb.updated_at||null,aviso_tardio:sb.aviso_tardio||false,
+        historial:[{fecha:sb.created_at,estado:sb.estado,nota:'Desde Supabase'}],_synced:true,
+        _fechaRealEntrega:sb._fechaRealEntrega};
+    });
+    setEntregadosPeriodoReal(normalizados);
+    // Estos códigos pueden no estar en 'entregasReal' (ese mapa solo se llena para los códigos
+    // que trajo el fetch acotado por fecha de DESPACHO -- ver sincronizarDesdeSupabase) -- sin
+    // esto, 'fechaEntregaDe()' mostraría la fecha de creación del registro en vez de la fecha
+    // real de entrega para los paquetes despachados fuera del período pero entregados dentro.
+    setEntregasReal(prev=>{const merged={...prev};normalizados.forEach(function(e){if(e._fechaRealEntregaISO)merged[e.codigo]=e._fechaRealEntregaISO;});return merged;});
+  }catch(eReal){console.warn('Error cargando entregados por fecha real:',eReal.message);}
+  setCargandoEntregadosReal(false);
+}
+useEffect(()=>{cargarEntregadosPeriodoReal();const _ivEntReal=setInterval(cargarEntregadosPeriodoReal,60000);return()=>clearInterval(_ivEntReal);},[periodo,mesFiltro,desde,hasta]);
 async function sincronizarDesdeSupabase(){setSincronizando(true);try{
   // Solo trae el periodo activo (Hoy por defecto), no la tabla completa. Se pagina en bloques
   // de 1000 igual que antes por si un periodo amplio (Mes/Rango grande) supera esa cantidad,
@@ -410,11 +446,16 @@ async function marcarAvisoTardio(id,codigo,valor){
     else toast(valor?`✓ ${codigo} marcado como avisado al cliente`:`${codigo} vuelve a quedar pendiente de avisar`);
   }catch(e){toast('⚠ '+e.message);}
 }
-const clientesUnicos=[...new Set(envios.map(e=>e.cliente).filter(Boolean))].sort();const mensajerosUnicos=[...new Set(envios.map(e=>e.mensajero).filter(Boolean))].sort();const fuentesUnicas=[...new Set(envios.map(e=>e.fuente).filter(Boolean))].sort();function fuenteLabel(f){const m={etiqueta:'Manual (Etiqueta)',flex:'PDF Flex',externo:'Excel',propio:'Excel (propio)',sistema:'Excel (sistema)',colecta_AM:'Colecta AM',colecta_PM:'Colecta PM',cliente:'Portal Cliente',retiro_masivo:'Retiro Masivo'};return m[f]||f;}const filtrados=useMemo(()=>{const q=search.trim().toLowerCase();return enviosPeriodo.filter(e=>{const qTerms=q.split(/[\n,;\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
+const clientesUnicos=[...new Set(envios.map(e=>e.cliente).filter(Boolean))].sort();const mensajerosUnicos=[...new Set(envios.map(e=>e.mensajero).filter(Boolean))].sort();const fuentesUnicas=[...new Set(envios.map(e=>e.fuente).filter(Boolean))].sort();function fuenteLabel(f){const m={etiqueta:'Manual (Etiqueta)',flex:'PDF Flex',externo:'Excel',propio:'Excel (propio)',sistema:'Excel (sistema)',colecta_AM:'Colecta AM',colecta_PM:'Colecta PM',cliente:'Portal Cliente',retiro_masivo:'Retiro Masivo'};return m[f]||f;}const filtrados=useMemo(()=>{const q=search.trim().toLowerCase();
+  // El bucket 'Entregado' se arma con la fecha REAL de entrega (ver entregadosPeriodoReal mas
+  // arriba), no filtrando enviosPeriodo (que esta acotado por fecha de despacho) -- por eso usa
+  // su propia lista en vez de 'enviosPeriodo.filter(estado==="entregado")'.
+  const baseLista=filtroEst==='entregado'?entregadosPeriodoReal:enviosPeriodo;
+  return baseLista.filter(e=>{const qTerms=q.split(/[\n,;\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
       const esMultiple=qTerms.length>1;
       const matchQ=!q||(esMultiple
         ?qTerms.some(t=>e.codigo.toLowerCase()===t||e.codigo.toLowerCase().includes(t))
-        :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));const matchEst=filtroEst==='todos'||e.estado===filtroEst;const matchCli=filtroCli==='todos'||e.cliente===filtroCli;const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;const matchAtraso=!soloAtrasados||esEnvioAtrasado(e);return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente&&matchAtraso;});},[envios,search,filtroEst,filtroCli,filtroMen,filtroFuente,soloAtrasados]);
+        :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));const matchEst=filtroEst==='todos'||filtroEst==='entregado'||e.estado===filtroEst;const matchCli=filtroCli==='todos'||e.cliente===filtroCli;const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;const matchAtraso=!soloAtrasados||esEnvioAtrasado(e);return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente&&matchAtraso;});},[envios,entregadosPeriodoReal,search,filtroEst,filtroCli,filtroMen,filtroFuente,soloAtrasados]);
 // Cantidad de envíos atrasados en el período actual (antes del filtro de "solo atrasados"),
 // para mostrar el contador en el botón de filtro sin que el usuario tenga que activarlo primero.
 const atrasadosCount=useMemo(()=>enviosPeriodo.filter(esEnvioAtrasado).length,[enviosPeriodo]);
@@ -424,7 +465,7 @@ function valorOrden(e,col){switch(col){case'codigo':return(e.codigo||'').toLower
 const filtradosOrdenados=useMemo(()=>{if(!sortCol)return filtrados;const copia=filtrados.slice();copia.sort((a,b)=>{const va=valorOrden(a,sortCol),vb=valorOrden(b,sortCol);let cmp;if(typeof va==='number'&&typeof vb==='number')cmp=va-vb;else cmp=String(va).localeCompare(String(vb),'es');return sortDir==='asc'?cmp:-cmp;});return copia;},[filtrados,sortCol,sortDir]);
 function toggleSort(col){if(sortCol===col)setSortDir(d=>d==='asc'?'desc':'asc');else{setSortCol(col);setSortDir('asc');}setPage(1);}
 function iconoSort(col){if(sortCol!==col)return'';return sortDir==='asc'?' ▲':' ▼';}
-const totalPags=Math.max(1,Math.ceil(filtradosOrdenados.length/PAGE_SIZE));const paginado=filtradosOrdenados.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);const stats=useMemo(()=>{const s={};ESTADOS_ENVIO.forEach(est=>{s[est.val]=enviosPeriodo.filter(e=>e.estado===est.val).length;});return s;},[enviosPeriodo]);function toggleSelect(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function toggleAll(){const todosIds=new Set(filtrados.map(e=>e.id));if(selected.size===filtrados.length&&filtrados.every(e=>selected.has(e.id)))setSelected(new Set());else setSelected(todosIds);}async function imprimirEtiquetasSeleccionadas(){
+const totalPags=Math.max(1,Math.ceil(filtradosOrdenados.length/PAGE_SIZE));const paginado=filtradosOrdenados.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);const stats=useMemo(()=>{const s={};ESTADOS_ENVIO.forEach(est=>{s[est.val]=est.val==='entregado'?entregadosPeriodoReal.length:enviosPeriodo.filter(e=>e.estado===est.val).length;});return s;},[enviosPeriodo,entregadosPeriodoReal]);function toggleSelect(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function toggleAll(){const todosIds=new Set(filtrados.map(e=>e.id));if(selected.size===filtrados.length&&filtrados.every(e=>selected.has(e.id)))setSelected(new Set());else setSelected(todosIds);}async function imprimirEtiquetasSeleccionadas(){
   const seleccionados=envios.filter(e=>selected.has(e.id));
   if(seleccionados.length===0)return;
   toast('Buscando etiquetas...');
@@ -583,7 +624,11 @@ sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',
     textShadow:active?'0 0 12px '+accentColor+'88':'none',
     filter:active?'drop-shadow(0 2px 2px rgba(43,46,32,0.2))':'none',
     transition:'all 0.25s'}},count),
-  /*#__PURE__*/React.createElement("div",{style:{fontSize:9,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:active?accentColor:'#b0b3a0',marginTop:8,transition:'all 0.25s'}},est.label));})),selected.size>0&&/*#__PURE__*/React.createElement("div",{style:{background:'linear-gradient(145deg,#ffffff,#f5eedc)',border:'1px solid rgba(200,168,75,0.3)',borderTop:'3px solid var(--gold)',borderRadius:14,padding:'16px 20px',marginBottom:16,boxShadow:'6px 6px 16px rgba(43,46,32,0.12),-2px -2px 8px rgba(255,255,255,0.9)'}},
+  /*#__PURE__*/React.createElement("div",{style:{fontSize:9,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:active?accentColor:'#b0b3a0',marginTop:8,transition:'all 0.25s'}},est.label,
+    // 'Entregado' se calcula con la fecha REAL de entrega (igual que Pagos Mensajeros), no con
+    // la fecha de despacho como el resto de las tarjetas -- por eso puede no calzar exactamente
+    // con 'Todos' menos la suma del resto. Se avisa aca mismo para no repetir la confusion.
+    est.val==='entregado'&&/*#__PURE__*/React.createElement("div",{style:{fontSize:7,fontWeight:600,letterSpacing:0.5,textTransform:'none',color:active?accentColor:'#b0b3a0',opacity:0.75,marginTop:2}},cargandoEntregadosReal?'actualizando…':'fecha real de entrega')));})),selected.size>0&&/*#__PURE__*/React.createElement("div",{style:{background:'linear-gradient(145deg,#ffffff,#f5eedc)',border:'1px solid rgba(200,168,75,0.3)',borderTop:'3px solid var(--gold)',borderRadius:14,padding:'16px 20px',marginBottom:16,boxShadow:'6px 6px 16px rgba(43,46,32,0.12),-2px -2px 8px rgba(255,255,255,0.9)'}},
   // Encabezado
   React.createElement("div",{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}},
     React.createElement("div",{style:{display:'flex',alignItems:'center',gap:8}},
