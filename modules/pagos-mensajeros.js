@@ -118,43 +118,21 @@ function ConsumoModal(props){
 function ConsumoDiario(props){
   var mensajeros=props.mensajeros||[],pagos=props.pagos||[],productosLocal=props.productosLocal,semana=props.semana,toast=props.toast,onAbrirDetalle=props.onAbrirDetalle;
   var productosActivos=(productosLocal||[]).filter(function(x){return x.activo!==false;});
-  var _sel=useState({}),seleccion=_sel[0],setSeleccion=_sel[1];
-  var _guardandoMap=useState({}),guardandoMap=_guardandoMap[0],setGuardandoMap=_guardandoMap[1];
+  // Antes esto listaba TODOS los mensajeros activos como filas fijas -- con equipos grandes la
+  // lista queda eterna para encontrar a uno solo. Ahora la carga es al revés: arriba hay un
+  // único selector (mensajero + producto + cantidad) para agregar rápido, y abajo solo aparecen
+  // los que YA tienen algún consumo cargado esta semana -- la lista larga desaparece y solo
+  // "los que consuman" quedan visibles, creciendo de a uno a medida que se van agregando.
+  var _selMensajero=useState(''),selMensajero=_selMensajero[0],setSelMensajero=_selMensajero[1];
+  var _selProd=useState(productosActivos.length>0?productosActivos[0].id:null),selProd=_selProd[0],setSelProd=_selProd[1];
+  var _cant=useState(1),cant=_cant[0],setCant=_cant[1];
+  var _guardando=useState(false),guardando=_guardando[0],setGuardando=_guardando[1];
   var _busqueda=useState(''),busqueda=_busqueda[0],setBusqueda=_busqueda[1];
 
   function normNombreConsumo(n){return(n||'').toUpperCase().replace(/,\s*/g,' ').replace(/\s+/g,' ').trim();}
 
   var activos=mensajeros.filter(function(m){return m.activo!==false&&m.activo!=='paused'&&m.nombre&&m.nombre.trim();});
-  var filtrados=(busqueda.trim()?activos.filter(function(m){return m.nombre.toUpperCase().includes(busqueda.trim().toUpperCase());}):activos.slice());
-  filtrados.sort(function(a,b){return a.nombre.localeCompare(b.nombre,'es');});
-
-  function getSel(nombre){
-    var s=seleccion[nombre];
-    if(s)return s;
-    return{prodId:productosActivos.length>0?productosActivos[0].id:null,cantidad:1};
-  }
-  function setSel(nombre,patch){
-    setSeleccion(function(prev){var n=Object.assign({},prev);n[nombre]=Object.assign({},getSel(nombre),patch);return n;});
-  }
-
-  function agregar(mNombre){
-    var sel=getSel(mNombre);
-    var prod=productosActivos.find(function(x){return x.id===sel.prodId;});
-    if(!prod){toast&&toast('⚠ Selecciona un producto');return;}
-    var cantidad=+sel.cantidad||1;
-    var monto=cantidad*(prod.precio||0);
-    var nombreNorm=normNombreConsumo(mNombre);
-    setGuardandoMap(function(prev){var n=Object.assign({},prev);n[mNombre]=true;return n;});
-    db.from('consumos_mensajeros').insert({
-      semana:semana,fecha:fechaHoyCL(),mensajero_nombre:nombreNorm,
-      producto:prod.nombre,cantidad:cantidad,precio_unitario:prod.precio||0,monto:monto
-    }).then(function(r){
-      setGuardandoMap(function(prev){var n=Object.assign({},prev);delete n[mNombre];return n;});
-      if(r&&r.error){toast&&toast('⚠ Error: '+r.error.message);return;}
-      setSel(mNombre,{cantidad:1});
-      toast&&toast('✓ '+prod.nombre+' agregado a '+mNombre.split(',')[0].split(' ')[0]);
-    });
-  }
+  var activosOrdenados=activos.slice().sort(function(a,b){return a.nombre.localeCompare(b.nombre,'es');});
 
   function consumoDe(nombre){
     var nombreNorm=normNombreConsumo(nombre);
@@ -162,45 +140,85 @@ function ConsumoDiario(props){
     return pago?(pago.consumo||0):0;
   }
 
+  function agregar(){
+    if(!selMensajero){toast&&toast('⚠ Selecciona un mensajero');return;}
+    var prod=productosActivos.find(function(x){return x.id===selProd;});
+    if(!prod){toast&&toast('⚠ Selecciona un producto');return;}
+    var cantidad=+cant||1;
+    var monto=cantidad*(prod.precio||0);
+    var nombreNorm=normNombreConsumo(selMensajero);
+    setGuardando(true);
+    db.from('consumos_mensajeros').insert({
+      semana:semana,fecha:fechaHoyCL(),mensajero_nombre:nombreNorm,
+      producto:prod.nombre,cantidad:cantidad,precio_unitario:prod.precio||0,monto:monto
+    }).then(function(r){
+      setGuardando(false);
+      if(r&&r.error){toast&&toast('⚠ Error: '+r.error.message);return;}
+      setCant(1);
+      toast&&toast('✓ '+prod.nombre+' agregado a '+selMensajero.split(',')[0].split(' ')[0]);
+      // El mensajero elegido se mantiene seleccionado a propósito -- así, si compró varias
+      // cosas distintas, se pueden ir agregando una tras otra sin tener que volver a buscarlo.
+    });
+  }
+
+  // Solo los que YA tienen consumo cargado esta semana -- la lista corta que pidió Luis.
+  var conConsumo=activosOrdenados.filter(function(m){return consumoDe(m.nombre)>0;});
+  if(busqueda.trim()){
+    var q=busqueda.trim().toUpperCase();
+    conConsumo=conConsumo.filter(function(m){return m.nombre.toUpperCase().includes(q);});
+  }
+
   return React.createElement('div',null,
     React.createElement('div',{className:'section-head'},
-      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)'}},'Consumo Diario — Semana: ',semana),
-      React.createElement('input',{type:'text',placeholder:'🔍 Buscar mensajero...',value:busqueda,onChange:function(e){setBusqueda(e.target.value);},style:{padding:'8px 12px',borderRadius:8,border:'1px solid var(--border)',fontSize:12,outline:'none',minWidth:220}})
+      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)'}},'Consumo Diario — Semana: ',semana)
     ),
     productosActivos.length===0
       ?React.createElement('div',{className:'info-banner'},'⚠ No hay productos activos en la pestaña "Productos". Agrega uno primero para poder registrar consumo.')
-      :React.createElement('div',{className:'table-wrap'},
-        React.createElement('table',null,
-          React.createElement('thead',null,React.createElement('tr',null,
-            React.createElement('th',null,'Mensajero'),
-            React.createElement('th',{style:{width:240}},'Producto'),
-            React.createElement('th',{style:{width:70,textAlign:'center'}},'Cant.'),
-            React.createElement('th',{style:{width:100}},''),
-            React.createElement('th',{style:{width:130,textAlign:'right'}},'Consumo Semana')
-          )),
-          React.createElement('tbody',null,
-            filtrados.map(function(m){
-              var sel=getSel(m.nombre);
-              var guardando=!!guardandoMap[m.nombre];
-              return React.createElement('tr',{key:m.nombre},
-                React.createElement('td',{style:{fontWeight:700,whiteSpace:'nowrap'}},m.nombre.replace(/,\s*/g,' ')),
-                React.createElement('td',null,
-                  React.createElement('select',{value:sel.prodId||'',onChange:function(e){setSel(m.nombre,{prodId:+e.target.value});},style:{width:'100%',padding:'6px 8px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,outline:'none'}},
-                    productosActivos.map(function(pr){return React.createElement('option',{key:pr.id,value:pr.id},pr.nombre+' — $'+Math.round(pr.precio).toLocaleString('es-CL'));})
-                  )
-                ),
-                React.createElement('td',null,
-                  React.createElement('input',{type:'number',min:1,value:sel.cantidad,onChange:function(e){setSel(m.nombre,{cantidad:e.target.value});},onFocus:function(e){e.target.select();},style:{width:'100%',padding:'6px 8px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,textAlign:'center',outline:'none'}})
-                ),
-                React.createElement('td',null,
-                  React.createElement('button',{onClick:function(){agregar(m.nombre);},disabled:guardando,style:{width:'100%',padding:'6px 8px',borderRadius:6,border:'none',background:'var(--gold)',color:'#2b2e20',fontWeight:700,fontSize:11,cursor:guardando?'default':'pointer',opacity:guardando?0.6:1}},guardando?'...':'+ Agregar')
-                ),
-                React.createElement('td',{className:'mono',style:{textAlign:'right',color:'var(--danger)',fontWeight:700,cursor:'pointer'},onClick:function(){onAbrirDetalle&&onAbrirDetalle(m);},title:'Clic para ver el detalle de la semana o eliminar un ítem'},'$',Math.round(consumoDe(m.nombre)).toLocaleString('es-CL'))
-              );
-            }),
-            filtrados.length===0&&React.createElement('tr',null,React.createElement('td',{colSpan:5,className:'empty-state'},'Sin mensajeros'))
+      :React.createElement(React.Fragment,null,
+        // ── Selector para agregar ──────────────────────────────────────────
+        React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'flex-end',background:'#fff',border:'1px solid var(--border)',borderTop:'3px solid var(--gold)',borderRadius:10,padding:16,marginBottom:20}},
+          React.createElement('div',{style:{flex:'2 1 240px',minWidth:200}},
+            React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',display:'block',marginBottom:3,letterSpacing:1}},'MENSAJERO'),
+            React.createElement('select',{value:selMensajero,onChange:function(e){setSelMensajero(e.target.value);},style:{width:'100%',padding:'9px 10px',borderRadius:7,border:'1px solid var(--border)',fontSize:13,outline:'none',fontWeight:600}},
+              React.createElement('option',{value:''},'Selecciona un mensajero...'),
+              activosOrdenados.map(function(m){return React.createElement('option',{key:m.nombre,value:m.nombre},m.nombre.replace(/,\s*/g,' '));})
+            )
+          ),
+          React.createElement('div',{style:{flex:'2 1 220px',minWidth:180}},
+            React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',display:'block',marginBottom:3,letterSpacing:1}},'PRODUCTO'),
+            React.createElement('select',{value:selProd||'',onChange:function(e){setSelProd(+e.target.value);},style:{width:'100%',padding:'9px 10px',borderRadius:7,border:'1px solid var(--border)',fontSize:13,outline:'none'}},
+              productosActivos.map(function(pr){return React.createElement('option',{key:pr.id,value:pr.id},pr.nombre+' — $'+Math.round(pr.precio).toLocaleString('es-CL'));})
+            )
+          ),
+          React.createElement('div',{style:{width:70}},
+            React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',display:'block',marginBottom:3,letterSpacing:1}},'CANT.'),
+            React.createElement('input',{type:'number',min:1,value:cant,onChange:function(e){setCant(e.target.value);},onFocus:function(e){e.target.select();},style:{width:'100%',padding:'9px 10px',borderRadius:7,border:'1px solid var(--border)',fontSize:13,textAlign:'center',outline:'none'}})
+          ),
+          React.createElement('button',{onClick:agregar,disabled:guardando,style:{padding:'10px 20px',borderRadius:7,border:'none',background:'var(--gold)',color:'#2b2e20',fontWeight:700,fontSize:13,cursor:guardando?'default':'pointer',opacity:guardando?0.6:1}},guardando?'Guardando...':'+ Agregar')
+        ),
+        // ── Lista corta: solo quienes ya consumieron esta semana ────────────
+        React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:8}},
+          React.createElement('div',{style:{fontSize:12,fontWeight:700,color:'var(--text)',letterSpacing:0.5}},'Consumo registrado esta semana'),
+          React.createElement('input',{type:'text',placeholder:'🔍 Buscar...',value:busqueda,onChange:function(e){setBusqueda(e.target.value);},style:{padding:'7px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12,outline:'none',minWidth:180}})
+        ),
+        conConsumo.length===0
+          ?React.createElement('div',{className:'info-banner'},'Aún no hay consumo registrado esta semana. Usa el selector de arriba para agregar el primero.')
+          :React.createElement('div',{className:'table-wrap'},
+            React.createElement('table',null,
+              React.createElement('thead',null,React.createElement('tr',null,
+                React.createElement('th',null,'Mensajero'),
+                React.createElement('th',{style:{width:150,textAlign:'right'}},'Consumo Semana')
+              )),
+              React.createElement('tbody',null,
+                conConsumo.map(function(m){
+                  return React.createElement('tr',{key:m.nombre},
+                    React.createElement('td',{style:{fontWeight:700,whiteSpace:'nowrap'}},m.nombre.replace(/,\s*/g,' ')),
+                    React.createElement('td',{className:'mono',style:{textAlign:'right',color:'var(--danger)',fontWeight:700,cursor:'pointer'},onClick:function(){onAbrirDetalle&&onAbrirDetalle(m);},title:'Clic para ver el detalle de la semana o eliminar un ítem'},'$',Math.round(consumoDe(m.nombre)).toLocaleString('es-CL'))
+                  );
+                })
+              )
+            )
           )
-        )
       )
   );
 }
