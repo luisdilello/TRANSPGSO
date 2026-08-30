@@ -970,164 +970,142 @@ function recalcAll(){
 
   toast&&toast('✓ Recalculado con datos actualizados');
 
-}const totales=pagos.reduce((a,p)=>({envios:a.envios+p.envios,bruto:a.bruto+p.bruto,adelanto:a.adelanto+p.adelanto,extra:a.extra+p.extra,prestamo:a.prestamo+p.prestamo,iva:a.iva+p.iva,consumo:a.consumo+(p.consumo||0),descSiniestro:a.descSiniestro+(p.descSiniestro||0),total:a.total+p.totalPagar,pendientes:a.pendientes+(p.estado==='PENDIENTE'?1:0),pagados:a.pagados+(p.estado==='PAGADO'?1:0)}),{envios:0,bruto:0,adelanto:0,extra:0,prestamo:0,iva:0,consumo:0,descSiniestro:0,total:0,pendientes:0,pagados:0});const fmtCLP=n=>`$${Math.round(n).toLocaleString('es-CL')}`;function exportarComprobante(p){var _document$querySelect5;const win=window.open('','_blank','width=600,height=800');const logoSrc=((_document$querySelect5=document.querySelector('.logo-img'))==null?void 0:_document$querySelect5.src)||'';win.document.write(`<!DOCTYPE html><html><head>
-
+}const totales=pagos.reduce((a,p)=>({envios:a.envios+p.envios,bruto:a.bruto+p.bruto,adelanto:a.adelanto+p.adelanto,extra:a.extra+p.extra,prestamo:a.prestamo+p.prestamo,iva:a.iva+p.iva,consumo:a.consumo+(p.consumo||0),descSiniestro:a.descSiniestro+(p.descSiniestro||0),total:a.total+p.totalPagar,pendientes:a.pendientes+(p.estado==='PENDIENTE'?1:0),pagados:a.pagados+(p.estado==='PAGADO'?1:0)}),{envios:0,bruto:0,adelanto:0,extra:0,prestamo:0,iva:0,consumo:0,descSiniestro:0,total:0,pendientes:0,pagados:0});const fmtCLP=n=>`$${Math.round(n).toLocaleString('es-CL')}`;function exportarComprobante(p){var _document$querySelect5;const win=window.open('','_blank','width=650,height=860');const logoSrc=((_document$querySelect5=document.querySelector('.logo-img'))==null?void 0:_document$querySelect5.src)||'';
+    // Detalle por comuna: se arma con lo que ya calculó 'Calcular Envíos Semana' (p.enviosPorComuna +
+    // p.tarsCom, ver calcularEnviosSemana más arriba) -- así el comprobante muestra exactamente lo
+    // que se usó para calcular el pago, comuna por comuna, sin recalcular nada acá. Si el mensajero
+    // se importó por Excel (sin ese detalle), se cae a una sola fila "General" con la tarifa plana.
+    const filasComuna=(p.enviosPorComuna&&Object.keys(p.enviosPorComuna).length>0)
+      ?Object.keys(p.enviosPorComuna).sort().map(function(com){
+          const cant=p.enviosPorComuna[com];
+          const tar=(p.tarsCom&&p.tarsCom[com]!==undefined)?p.tarsCom[com]:(p.tarifa||0);
+          return{comuna:com||'SIN COMUNA',cant:cant,tarifa:tar,subtotal:cant*tar};
+        })
+      :[{comuna:'General',cant:p.envios,tarifa:p.tarifa,subtotal:p.bruto}];
+    const filasDescuento=[
+      p.ajuste!==0?{label:'Ajuste',val:p.ajuste,positivo:p.ajuste>0}:null,
+      p.iva>0?{label:'IVA / Descuento',val:-p.iva,positivo:false}:null,
+      p.extra>0?{label:'Extra / Bono',val:p.extra,positivo:true}:null,
+      p.consumo>0?{label:'Consumo Local',val:-p.consumo,positivo:false}:null,
+      (p.descSiniestro||0)>0?{label:'Descuento por Siniestro',val:-p.descSiniestro,positivo:false}:null,
+      p.adelanto>0?{label:'Adelanto Recibido',val:-p.adelanto,positivo:false}:null,
+      p.prestamo>0?{label:'Préstamo Descontado',val:-p.prestamo,positivo:false}:null
+    ].filter(Boolean);
+    const filasComunaHtml=filasComuna.map(function(f){
+      return`<tr><td>${f.comuna}</td><td class="c">${f.cant}</td><td class="r">${fmtCLP(f.tarifa)}</td><td class="r sub">${fmtCLP(f.subtotal)}</td></tr>`;
+    }).join('');
+    const filasDescuentoHtml=filasDescuento.length?filasDescuento.map(function(f){
+      return`<tr><td>${f.label}</td><td class="r" style="color:${f.positivo?'#1a6b3a':'#b03030'};font-weight:700">${f.positivo?'+':''}${fmtCLP(f.val)}</td></tr>`;
+    }).join(''):'';
+    win.document.write(`<!DOCTYPE html><html><head>
     <meta charset="UTF-8"/>
-
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet"/>
-
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
     <title>Comprobante - ${p.nombre.replace(/,\s*/g,' ')}</title>
-
     <style>
-
       *{box-sizing:border-box;margin:0;padding:0;}
-
-      body{font-family:Arial,sans-serif;padding:32px;background:#FEF8EA;color:#2b2e20;}
-
-      .header{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #C8A84B;padding-bottom:16px;margin-bottom:24px;}
-
-      .logo{display:flex;align-items:center;gap:12px;}
-
-      .logo img{width:60px;height:60px;object-fit:contain;border-radius:8px;}
-
-      .brand{font-size:20px;font-family:'Bebas Neue',sans-serif;font-weight:900;letter-spacing:2px;color:#2b2e20;}
-
-      .brand-sub{font-size:9px;color:#7a7d6a;letter-spacing:2px;text-transform:uppercase;}
-
-      .titulo{font-size:18px;font-weight:900;color:#C8A84B;letter-spacing:1px;}
-
-      .info-box{background:#fff;border:1px solid #e0d8c0;border-radius:8px;padding:16px;margin-bottom:16px;}
-
-      .info-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0e8d0;font-size:13px;}
-
-      .info-row:last-child{border-bottom:none;}
-
-      .info-label{color:#7a7d6a;font-weight:600;}
-
-      .info-val{font-weight:700;color:#2b2e20;}
-
-      .section-title{font-size:11px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:#C8A84B;background:#2b2e20;padding:8px 14px;border-radius:6px;margin:16px 0 8px;}
-
-      .total-box{background:#2b2e20;color:#C8A84B;border-radius:10px;padding:20px;text-align:center;margin:20px 0;}
-
-      .total-label{font-size:11px;letter-spacing:2px;text-transform:uppercase;opacity:0.7;}
-
-      .total-val{font-size:36px;font-weight:900;margin-top:4px;}
-
-      .firma-box{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:32px;}
-
-      .firma-area{border-top:2px solid #C8A84B;padding-top:10px;text-align:center;font-size:11px;color:#7a7d6a;font-weight:600;letter-spacing:1px;}
-
-      .badge-pagado{background:#1a6b3a;color:#fff;padding:4px 16px;border-radius:20px;font-size:11px;font-weight:700;}
-
-      .badge-pendiente{background:#b03030;color:#fff;padding:4px 16px;border-radius:20px;font-size:11px;font-weight:700;}
-
-      @media print{body{padding:20px;background:#fff;}}
-
+      @page{size:A4;margin:14mm 16mm;}
+      body{font-family:'DM Sans',Arial,sans-serif;padding:26px;background:#FEF8EA;color:#2b2e20;font-size:13px;}
+      .sheet{max-width:680px;margin:0 auto;background:#fff;border-radius:14px;box-shadow:0 1px 3px rgba(43,46,32,0.08);border:1px solid #ecdfb8;overflow:hidden;}
+      .topbar{height:6px;background:linear-gradient(90deg,#C8A84B,#e4c976,#C8A84B);}
+      .pad{padding:22px 28px;}
+      .header{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #f0e6c8;padding-bottom:14px;margin-bottom:16px;}
+      .logo{display:flex;align-items:center;gap:10px;}
+      .logo img{width:46px;height:46px;object-fit:contain;border-radius:8px;}
+      .brand{font-size:19px;font-family:'Bebas Neue',sans-serif;letter-spacing:2px;color:#2b2e20;line-height:1;}
+      .brand-sub{font-size:8px;color:#9a9d8a;letter-spacing:2px;text-transform:uppercase;margin-top:2px;}
+      .titulo{font-size:15px;font-weight:800;color:#C8A84B;letter-spacing:0.5px;}
+      .meta{font-size:11px;color:#7a7d6a;margin-top:3px;}
+      .meta b{color:#2b2e20;}
+      .mens-row{display:flex;align-items:center;justify-content:space-between;background:#FBF6E6;border:1px solid #f0e6c8;border-radius:10px;padding:11px 16px;margin-bottom:16px;}
+      .mens-nombre{font-size:15px;font-weight:800;color:#2b2e20;}
+      .mens-sub{font-size:10px;color:#9a9d8a;letter-spacing:1px;text-transform:uppercase;margin-top:1px;}
+      .badge{padding:4px 14px;border-radius:20px;font-size:10px;font-weight:800;letter-spacing:0.5px;}
+      .badge-pagado{background:#e3f3e8;color:#1a6b3a;}
+      .badge-pendiente{background:#fbe6e6;color:#b03030;}
+      .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;}
+      .tile{background:#FBF6E6;border:1px solid #f0e6c8;border-radius:10px;padding:10px 12px;text-align:center;}
+      .tile-label{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#9a9d8a;}
+      .tile-val{font-size:17px;font-weight:800;color:#2b2e20;margin-top:3px;font-family:'DM Sans',sans-serif;}
+      .section-title{font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#7a5500;margin:0 0 8px;padding-bottom:5px;border-bottom:2px solid #C8A84B;display:flex;align-items:center;gap:6px;}
+      table{width:100%;border-collapse:collapse;margin-bottom:16px;}
+      table th{font-size:9px;font-weight:800;letter-spacing:0.8px;text-transform:uppercase;color:#9a9d8a;text-align:left;padding:6px 8px;border-bottom:2px solid #f0e6c8;}
+      table td{font-size:12px;padding:6px 8px;border-bottom:1px solid #f5efdc;}
+      table tr:last-child td{border-bottom:none;}
+      table tr:nth-child(even) td{background:#FCF9EF;}
+      .c{text-align:center;}
+      .r{text-align:right;font-variant-numeric:tabular-nums;}
+      .sub{font-weight:700;color:#2b2e20;}
+      .tfoot td{border-top:2px solid #C8A84B;border-bottom:none;font-weight:800;background:#fff!important;padding-top:8px;}
+      .total-box{background:linear-gradient(135deg,#2b2e20,#1c1e14);color:#fff;border-radius:12px;padding:16px 22px;display:flex;align-items:center;justify-content:space-between;margin:18px 0;}
+      .total-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#C8A84B;font-weight:700;}
+      .total-val{font-size:26px;font-weight:800;font-family:'DM Sans',sans-serif;}
+      .obs-box{background:#FFFBEF;border:1px solid #e4d494;border-radius:8px;padding:10px 14px;font-size:11px;color:#7a5500;margin-bottom:16px;}
+      .firma-box{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:26px;}
+      .firma-area{border-top:2px solid #C8A84B;padding-top:8px;text-align:center;font-size:9px;color:#9a9d8a;font-weight:700;letter-spacing:1px;text-transform:uppercase;}
+      .firma-nombre{font-size:12px;color:#2b2e20;font-weight:700;text-transform:none;letter-spacing:0;margin-top:2px;}
+      .footer-note{text-align:center;font-size:9px;color:#c4c7b4;margin-top:20px;letter-spacing:0.5px;}
+      @media print{
+        body{padding:0;background:#fff;}
+        .sheet{max-width:100%;border-radius:0;border:none;box-shadow:none;}
+      }
     </style>
-
     </head><body>
+    <div class="sheet">
+      <div class="topbar"></div>
+      <div class="pad">
+        <div class="header">
+          <div class="logo">
+            <img src="${logoSrc}" onerror="this.style.display='none'"/>
+            <div><div class="brand">TRANSPGSO</div><div class="brand-sub">Last Mile Delivery</div></div>
+          </div>
+          <div style="text-align:right">
+            <div class="titulo">Comprobante de Pago</div>
+            <div class="meta">Semana <b>${semana}</b></div>
+            <div class="meta">Pago: <b>${new Date(fechaPago+'T12:00:00').toLocaleDateString('es-CL')}</b></div>
+          </div>
+        </div>
 
-    <div class="header">
+        <div class="mens-row">
+          <div>
+            <div class="mens-nombre">${p.nombre.replace(/,\s*/g,' ')}</div>
+            <div class="mens-sub">Mensajero</div>
+          </div>
+          <span class="badge ${p.estado==='PAGADO'?'badge-pagado':'badge-pendiente'}">${p.estado}</span>
+        </div>
 
-      <div class="logo">
+        <div class="tiles">
+          <div class="tile"><div class="tile-label">Paquetes Entregados</div><div class="tile-val">${p.envios}</div></div>
+          <div class="tile"><div class="tile-label">Comunas</div><div class="tile-val">${filasComuna.length}</div></div>
+          <div class="tile"><div class="tile-label">Pago Bruto</div><div class="tile-val">${fmtCLP(p.bruto)}</div></div>
+        </div>
 
-        <img src="${logoSrc}" onerror="this.style.display='none'"/>
+        <div class="section-title">📦 Detalle por Comuna</div>
+        <table>
+          <thead><tr><th>Comuna</th><th class="c">Paquetes</th><th class="r">Valor / Paquete</th><th class="r">Subtotal</th></tr></thead>
+          <tbody>${filasComunaHtml}</tbody>
+          <tfoot><tr class="tfoot"><td>Total</td><td class="c">${p.envios}</td><td></td><td class="r">${fmtCLP(p.bruto)}</td></tr></tfoot>
+        </table>
 
-        <div><div class="brand">TRANSPGSO</div><div class="brand-sub">Last Mile Delivery</div></div>
+        ${filasDescuentoHtml?`
+        <div class="section-title">⚖ Ajustes y Descuentos</div>
+        <table><tbody>${filasDescuentoHtml}</tbody></table>`:''}
 
+        ${p.obs?`<div class="obs-box"><strong>Observaciones:</strong> ${p.obs}</div>`:''}
+
+        <div class="total-box">
+          <div class="total-label">Total Neto a Pagar</div>
+          <div class="total-val">${fmtCLP(p.totalPagar)}</div>
+        </div>
+
+        <div class="firma-box">
+          <div class="firma-area">Recibí Conforme<div class="firma-nombre">${p.nombre.replace(/,\s*/g,' ')}</div></div>
+          <div class="firma-area">Firma Responsable<div class="firma-nombre">TransPgso SpA</div></div>
+        </div>
+
+        <div class="footer-note">Comprobante generado automáticamente por TransPgso · ${new Date().toLocaleString('es-CL')}</div>
       </div>
-
-      <div style="text-align:right">
-
-        <div class="titulo">Comprobante de Pago</div>
-
-        <div style="font-size:12px;color:#7a7d6a;margin-top:4px;">Semana: ${semana}</div>
-
-        <div style="font-size:12px;color:#7a7d6a;">Fecha de pago: ${new Date(fechaPago+'T12:00:00').toLocaleDateString('es-CL')}</div>
-
-      </div>
-
     </div>
-
-    <div class="info-box">
-
-      <div class="info-row"><span class="info-label">👤 Mensajero</span><span class="info-val">${p.nombre.replace(/,\s*/g,' ')}</span></div>
-
-      <div class="info-row"><span class="info-label">Estado</span><span class="info-val"><span class="${p.estado==='PAGADO'?'badge-pagado':'badge-pendiente'}">${p.estado}</span></span></div>
-
-    </div>
-
-    <div class="section-title">Detalle de Entregas</div>
-
-    <div class="info-box">
-
-      <div class="info-row"><span class="info-label">Paquetes entregados</span><span class="info-val">${p.envios}</span></div>
-
-      <div class="info-row"><span class="info-label">Tarifa por paquete</span><span class="info-val">${fmtCLP(p.tarifa)}</span></div>
-
-      <div class="info-row"><span class="info-label">Pago calculado</span><span class="info-val">${fmtCLP(p.bruto)}</span></div>
-
-      ${p.ajuste!==0?`<div class="info-row"><span class="info-label">Ajuste</span><span class="info-val" style="color:${p.ajuste>0?'#1a6b3a':'#b03030'}">${fmtCLP(p.ajuste)}</span></div>`:''}
-
-      ${p.iva>0?`<div class="info-row"><span class="info-label">IVA / Descuento</span><span class="info-val" style="color:#b03030">-${fmtCLP(p.iva)}</span></div>`:''}
-
-      ${p.extra>0?`<div class="info-row"><span class="info-label">Extra / Bono</span><span class="info-val" style="color:#1a6b3a">+${fmtCLP(p.extra)}</span></div>`:''}
-
-    </div>
-
-    ${p.consumo>0?`
-
-    <div class="section-title">🍽 Consumo Local</div>
-
-    <div class="info-box">
-
-      <div class="info-row"><span class="info-label">Consumo en local</span><span class="info-val" style="color:#b03030">-${fmtCLP(p.consumo)}</span></div>
-
-    </div>`:''}
-
-    ${(p.descSiniestro||0)>0?`
-
-    <div class="section-title">⚠ Siniestro</div>
-
-    <div class="info-box">
-
-      <div class="info-row"><span class="info-label">Descuento por siniestro</span><span class="info-val" style="color:#b03030">-${fmtCLP(p.descSiniestro)}</span></div>
-
-    </div>`:''}
-
-    ${p.adelanto>0||p.prestamo>0?`
-
-    <div class="section-title">Descuentos</div>
-
-    <div class="info-box">
-
-      ${p.adelanto>0?`<div class="info-row"><span class="info-label">Adelanto recibido</span><span class="info-val" style="color:#b03030">-${fmtCLP(p.adelanto)}</span></div>`:''}
-
-      ${p.prestamo>0?`<div class="info-row"><span class="info-label">Préstamo pendiente</span><span class="info-val" style="color:#b03030">-${fmtCLP(p.prestamo)}</span></div>`:''}
-
-    </div>`:''}
-
-    ${p.obs?`<div class="info-box" style="background:#fff8e8;border-color:#e0c060"><div style="font-size:12px;color:#7a5500"><strong>Observaciones:</strong> ${p.obs}</div></div>`:''}
-
-    <div class="total-box">
-
-      <div class="total-label">Total Neto a Pagar</div>
-
-      <div class="total-val">${fmtCLP(p.totalPagar)}</div>
-
-    </div>
-
-    <div class="firma-box">
-
-      <div class="firma-area">👤 RECIBÍ CONFORME<br/><br/><br/>${p.nombre.replace(/,\s*/g,' ')}</div>
-
-      <div class="firma-area">✍🏻 FIRMA RESPONSABLE<br/><br/><br/>TransPgso SpA</div>
-
-    </div>
-
     <script>window.onload=()=>{window.print()}<\/script>
-
     </body></html>`);win.document.close();}function exportarResumen(){var _document$querySelect6;const win=window.open('','_blank','width=1000,height=700');const logoSrc=((_document$querySelect6=document.querySelector('.logo-img'))==null?void 0:_document$querySelect6.src)||'';const filas=pagos.map((p,i)=>`
 
       <tr style="background:${i%2===0?'#fff':'#fdf9f2'}">
