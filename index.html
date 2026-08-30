@@ -620,7 +620,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788123148;
+window.__MODULES_VERSION=1788124792;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -4877,6 +4877,11 @@ async function analizarEtiqueta(base64img,mediaType,_retry=0){
           if(k.indexOf('direccion')>=0){if(!parcial.direccion)parcial.direccion=v;}
           if(k==='comuna'){if(!parcial.comuna)parcial.comuna=v;}
         }});
+      // Misma defensa que abajo para el parseo JSON completo: si el modelo devolvió algo que
+      // no es una comuna real de la Región Metropolitana (ej: "ANILLO ESTE", "RESIDENCIAL",
+      // "COMERCIAL"), no se guarda como si fuera la comuna — mejor dejarla vacía (advertencia
+      // suave, no bloqueante) que guardar un dato que después nadie corrige porque parece válido.
+      if(parcial.comuna&&!esComunaValida(parcial.comuna))delete parcial.comuna;
       if(Object.keys(parcial).length>1) return parcial;
       return{_error:'No se pudo leer la etiqueta',_raw:clean.slice(0,120)};
     }
@@ -4893,6 +4898,14 @@ async function analizarEtiqueta(base64img,mediaType,_retry=0){
     ['comuna','direccion','referencia','destinatario','telefono'].forEach(function(k){
       if(parsed[k]!=null&&/^null$/i.test(String(parsed[k]).trim())) parsed[k]=null;
     });
+    // Defensa extra #2: aunque el modelo SÍ haya devuelto texto (no la palabra "null"), ese
+    // texto puede no ser una comuna real (ej: "ANILLO ESTE", "RESIDENCIAL", "COMERCIAL",
+    // "SOLERA" — el prompt de arriba pide explícitamente que no pase esto, pero el modelo a
+    // veces igual lo hace). En vez de confiar en cualquier texto que venga en el campo comuna,
+    // se valida contra la lista real de comunas de la Región Metropolitana (esComunaValida) y,
+    // si no matchea, se descarta — queda como advertencia suave para completar a mano en vez de
+    // guardarse como si fuera un dato real y correcto.
+    if(parsed.comuna&&!esComunaValida(parsed.comuna)) parsed.comuna=null;
     if(!parsed.destinatario&&!parsed.direccion&&!parsed.codigo){
       return{_error:'Sin datos extraídos — verifica que la foto sea legible'};
     }
@@ -5010,6 +5023,9 @@ Usa null (el valor JSON null, no el texto "N/A" ni string vacío) para cualquier
       if(parsed[k]!=null&&/^null$/i.test(String(parsed[k]).trim())) parsed[k]=null;
       if(typeof parsed[k]==='string') parsed[k]=parsed[k].trim();
     });
+    // Misma validación que analizarEtiqueta: aunque el prompt ya le pide a la IA que solo use
+    // un valor de COMUNAS_CHILE, igual puede fallar — se revalida acá antes de confiar en el dato.
+    if(parsed.comuna&&!esComunaValida(parsed.comuna)) parsed.comuna=null;
     if(!parsed.destinatario&&!parsed.direccion&&!parsed.telefono){
       return{_error:'No se pudo leer ningún dato útil de la imagen — verifica que sea legible.'};
     }
@@ -5795,7 +5811,10 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
                 !p.analizandoIA&&editando&&React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:4,marginTop:4}},
                   React.createElement('input',{value:p.editDest!=null?p.editDest:(d.destinatario||''),onChange:function(e){var v=e.target.value;setPaquetes(function(prev){return prev.map(function(x,j){return j===i?Object.assign({},x,{editDest:v}):x;});});},placeholder:'Destinatario',style:{fontSize:12,padding:'4px 8px',background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.15)',borderRadius:6,color:'#fff',outline:'none',width:'100%',boxSizing:'border-box'}}),
                   React.createElement('input',{value:p.editDir!=null?p.editDir:(d.direccion||''),onChange:function(e){var v=e.target.value;setPaquetes(function(prev){return prev.map(function(x,j){return j===i?Object.assign({},x,{editDir:v}):x;});});},placeholder:'Dirección',style:{fontSize:12,padding:'4px 8px',background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.15)',borderRadius:6,color:'#fff',outline:'none',width:'100%',boxSizing:'border-box'}}),
-                  React.createElement('input',{value:p.editComuna!=null?p.editComuna:(d.comuna||''),onChange:function(e){var v=e.target.value;setPaquetes(function(prev){return prev.map(function(x,j){return j===i?Object.assign({},x,{editComuna:v}):x;});});},placeholder:'Comuna',style:{fontSize:12,padding:'4px 8px',background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.15)',borderRadius:6,color:'#fff',outline:'none',width:'100%',boxSizing:'border-box'}}),
+                  React.createElement('select',{value:matchComuna(p.editComuna!=null?p.editComuna:(d.comuna||''))||'',onChange:function(e){var v=e.target.value;setPaquetes(function(prev){return prev.map(function(x,j){return j===i?Object.assign({},x,{editComuna:v}):x;});});},style:{fontSize:12,padding:'4px 8px',background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.15)',borderRadius:6,color:'#fff',outline:'none',width:'100%',boxSizing:'border-box'}},
+                    React.createElement('option',{value:''},'Selecciona una comuna'),
+                    COMUNAS_CHILE.map(function(c){return React.createElement('option',{key:c,value:c},c);})
+                  ),
                   React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6}},
                     React.createElement('input',{type:'number',value:p.peso||'',onChange:function(e){var v=e.target.value;setPaquetes(function(prev){return prev.map(function(x,j){return j===i?Object.assign({},x,{peso:v}):x;});});},placeholder:'Peso (kg)',min:'0',step:'0.1',style:{fontSize:12,padding:'4px 8px',background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.15)',borderRadius:6,color:'#fff',outline:'none',width:'100%',boxSizing:'border-box'}}),
                     React.createElement('span',{style:{fontSize:11,color:'rgba(255,255,255,0.3)',flexShrink:0}},'kg')
