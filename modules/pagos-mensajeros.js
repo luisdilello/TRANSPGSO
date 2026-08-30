@@ -106,6 +106,22 @@ function ConsumoModal(props){
   );
 }
 
+// Antes semanaActual() (adentro de PagosMensajeros) solo calculaba la semana de HOY -- si un
+// consumo se registraba con una fecha de una semana distinta (backfill/corrección), había que
+// etiquetarlo igual con la semana que estuviera activa en pantalla, lo que lo dejaba mezclado con
+// la semana equivocada. Esta versión hace lo mismo pero para CUALQUIER fecha, así cada consumo
+// backfillado queda agrupado en SU propia semana real (lunes a sábado), sin importar qué semana
+// esté abierta en la pestaña de Pagos en ese momento.
+function calcularSemanaDeFecha(fechaStr){
+  var d=new Date(fechaStr+'T12:00:00');
+  var lunes=new Date(d);
+  lunes.setDate(d.getDate()-((d.getDay()+6)%7));
+  var sabado=new Date(lunes);
+  sabado.setDate(lunes.getDate()+5);
+  var fmt=function(x){return x.toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric'});};
+  return fmt(lunes)+' al '+fmt(sabado);
+}
+
 // Pantalla de carga rápida de consumo, día a día, para TODOS los mensajeros a la vez -- pensada
 // para que quien anota los consumos (colaciones, bebidas, etc.) no tenga que entrar mensajero por
 // mensajero desde la tabla de Pagos: acá aparecen todos en una lista (como la Planilla de
@@ -115,6 +131,16 @@ function ConsumoModal(props){
 // columna derecha se lee directo de `pagos` (que a su vez se mantiene sincronizado en tiempo real
 // contra consumos_mensajeros por sincronizarConsumoDesdeDB en PagosMensajeros), así que apenas se
 // agrega algo acá, ese mismo total ya se ve actualizado en la tabla de Pagos sin recargar nada.
+//
+// Luis pidió dos cosas más: (1) poder ingresar un consumo en CUALQUIER fecha (no solo hoy), para
+// poder corregir si se les olvidó anotar algo un día anterior; y (2) poder VER el consumo filtrado
+// por un día puntual o un rango de fechas, no solo el acumulado de "esta semana". Por eso ahora
+// hay un selector FECHA en el formulario de carga (antes se guardaba siempre con fechaHoyCL()), y
+// un selector "Ver por" con tres modos: Esta semana (el comportamiento de siempre, en vivo desde
+// `pagos`), Un día, y Rango de fechas -- estos dos últimos hacen su PROPIA consulta directa a
+// consumos_mensajeros filtrando por `fecha` (independiente de `semana` y de sincronizarConsumoDesdeDB,
+// que solo sigue la semana activa de la pestaña Pagos), agrupan por mensajero, y permiten ver el
+// detalle día por día de cada ítem con opción de eliminarlo.
 function ConsumoDiario(props){
   var mensajeros=props.mensajeros||[],pagos=props.pagos||[],productosLocal=props.productosLocal,semana=props.semana,toast=props.toast,onAbrirDetalle=props.onAbrirDetalle;
   var productosActivos=(productosLocal||[]).filter(function(x){return x.activo!==false;});
@@ -126,8 +152,18 @@ function ConsumoDiario(props){
   var _selMensajero=useState(''),selMensajero=_selMensajero[0],setSelMensajero=_selMensajero[1];
   var _selProd=useState(productosActivos.length>0?productosActivos[0].id:null),selProd=_selProd[0],setSelProd=_selProd[1];
   var _cant=useState(1),cant=_cant[0],setCant=_cant[1];
+  var _fechaSel=useState(fechaHoyCL()),fechaSel=_fechaSel[0],setFechaSel=_fechaSel[1];
   var _guardando=useState(false),guardando=_guardando[0],setGuardando=_guardando[1];
   var _busqueda=useState(''),busqueda=_busqueda[0],setBusqueda=_busqueda[1];
+
+  // ── "Ver por": Esta semana (en vivo, comportamiento de siempre) / Un día / Rango de fechas ──
+  var _modoVer=useState('semana'),modoVer=_modoVer[0],setModoVer=_modoVer[1];
+  var _verFecha=useState(fechaHoyCL()),verFecha=_verFecha[0],setVerFecha=_verFecha[1];
+  var _verDesde=useState(fechaHoyCL()),verDesde=_verDesde[0],setVerDesde=_verDesde[1];
+  var _verHasta=useState(fechaHoyCL()),verHasta=_verHasta[0],setVerHasta=_verHasta[1];
+  var _consumoRango=useState([]),consumoRango=_consumoRango[0],setConsumoRango=_consumoRango[1];
+  var _cargandoRango=useState(false),cargandoRango=_cargandoRango[0],setCargandoRango=_cargandoRango[1];
+  var _detalleNombre=useState(null),detalleNombre=_detalleNombre[0],setDetalleNombre=_detalleNombre[1];
 
   function normNombreConsumo(n){return(n||'').toUpperCase().replace(/,\s*/g,' ').replace(/\s+/g,' ').trim();}
 
@@ -140,6 +176,20 @@ function ConsumoDiario(props){
     return pago?(pago.consumo||0):0;
   }
 
+  function cargarConsumoRango(desde,hasta){
+    setCargandoRango(true);
+    db.from('consumos_mensajeros').select('*').gte('fecha',desde).lte('fecha',hasta).order('fecha',{ascending:true}).then(function(r){
+      setCargandoRango(false);
+      if(r&&r.error){toast&&toast('⚠ Error: '+r.error.message);setConsumoRango([]);return;}
+      setConsumoRango((r&&r.data)||[]);
+    });
+  }
+
+  useEffect(function(){
+    if(modoVer==='dia')cargarConsumoRango(verFecha,verFecha);
+    else if(modoVer==='rango')cargarConsumoRango(verDesde,verHasta);
+  },[modoVer,verFecha,verDesde,verHasta]);
+
   function agregar(){
     if(!selMensajero){toast&&toast('⚠ Selecciona un mensajero');return;}
     var prod=productosActivos.find(function(x){return x.id===selProd;});
@@ -147,17 +197,31 @@ function ConsumoDiario(props){
     var cantidad=+cant||1;
     var monto=cantidad*(prod.precio||0);
     var nombreNorm=normNombreConsumo(selMensajero);
+    var fechaFinal=fechaSel||fechaHoyCL();
+    var semanaFinal=calcularSemanaDeFecha(fechaFinal);
     setGuardando(true);
     db.from('consumos_mensajeros').insert({
-      semana:semana,fecha:fechaHoyCL(),mensajero_nombre:nombreNorm,
+      semana:semanaFinal,fecha:fechaFinal,mensajero_nombre:nombreNorm,
       producto:prod.nombre,cantidad:cantidad,precio_unitario:prod.precio||0,monto:monto
     }).then(function(r){
       setGuardando(false);
       if(r&&r.error){toast&&toast('⚠ Error: '+r.error.message);return;}
       setCant(1);
-      toast&&toast('✓ '+prod.nombre+' agregado a '+selMensajero.split(',')[0].split(' ')[0]);
+      toast&&toast('✓ '+prod.nombre+' agregado a '+selMensajero.split(',')[0].split(' ')[0]+(fechaFinal!==fechaHoyCL()?' ('+fechaFinal+')':''));
       // El mensajero elegido se mantiene seleccionado a propósito -- así, si compró varias
       // cosas distintas, se pueden ir agregando una tras otra sin tener que volver a buscarlo.
+      // Si la fecha cargada cae dentro del día/rango que se está viendo ahora mismo, refresca
+      // esa vista para que el ítem recién agregado aparezca al toque, sin recargar la página.
+      if(modoVer==='dia'&&fechaFinal===verFecha)cargarConsumoRango(verFecha,verFecha);
+      else if(modoVer==='rango'&&fechaFinal>=verDesde&&fechaFinal<=verHasta)cargarConsumoRango(verDesde,verHasta);
+    });
+  }
+
+  function eliminarItemRango(id){
+    db.from('consumos_mensajeros').delete().eq('id',id).then(function(r){
+      if(r&&r.error){toast&&toast('⚠ Error: '+r.error.message);return;}
+      if(modoVer==='dia')cargarConsumoRango(verFecha,verFecha);
+      else if(modoVer==='rango')cargarConsumoRango(verDesde,verHasta);
     });
   }
 
@@ -168,14 +232,32 @@ function ConsumoDiario(props){
     conConsumo=conConsumo.filter(function(m){return m.nombre.toUpperCase().includes(q);});
   }
 
+  // ── Totales por mensajero para los modos Un día / Rango (independiente de `pagos`) ──
+  var totalesRangoPorNombre={};
+  consumoRango.forEach(function(it){
+    var k=normNombreConsumo(it.mensajero_nombre);
+    totalesRangoPorNombre[k]=(totalesRangoPorNombre[k]||0)+(+it.monto||0);
+  });
+  var nombresRango=Object.keys(totalesRangoPorNombre).sort(function(a,b){return a.localeCompare(b,'es');});
+  if(busqueda.trim()){
+    var q2=busqueda.trim().toUpperCase();
+    nombresRango=nombresRango.filter(function(n){return n.includes(q2);});
+  }
+
+  var detalleItems=detalleNombre?consumoRango.filter(function(it){return normNombreConsumo(it.mensajero_nombre)===detalleNombre;}).sort(function(a,b){return (a.fecha||'').localeCompare(b.fecha||'');}):[];
+  var detalleTotal=detalleItems.reduce(function(a,it){return a+(+it.monto||0);},0);
+
+  var etiquetaPeriodo=modoVer==='semana'?('Semana: '+semana):modoVer==='dia'?('Día: '+verFecha):('Rango: '+verDesde+' al '+verHasta);
+  var etiquetaLista=modoVer==='semana'?'esta semana':modoVer==='dia'?'este día':'este rango';
+
   return React.createElement('div',null,
     React.createElement('div',{className:'section-head'},
-      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)'}},'Consumo Diario — Semana: ',semana)
+      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)'}},'Consumo Diario — ',etiquetaPeriodo)
     ),
     productosActivos.length===0
       ?React.createElement('div',{className:'info-banner'},'⚠ No hay productos activos en la pestaña "Productos". Agrega uno primero para poder registrar consumo.')
       :React.createElement(React.Fragment,null,
-        // ── Selector para agregar ──────────────────────────────────────────
+        // ── Selector para agregar (con fecha elegible, para poder corregir días anteriores) ──
         React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'flex-end',background:'#fff',border:'1px solid var(--border)',borderTop:'3px solid var(--gold)',borderRadius:10,padding:16,marginBottom:20}},
           React.createElement('div',{style:{flex:'2 1 240px',minWidth:200}},
             React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',display:'block',marginBottom:3,letterSpacing:1}},'MENSAJERO'),
@@ -194,31 +276,108 @@ function ConsumoDiario(props){
             React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',display:'block',marginBottom:3,letterSpacing:1}},'CANT.'),
             React.createElement('input',{type:'number',min:1,value:cant,onChange:function(e){setCant(e.target.value);},onFocus:function(e){e.target.select();},style:{width:'100%',padding:'9px 10px',borderRadius:7,border:'1px solid var(--border)',fontSize:13,textAlign:'center',outline:'none'}})
           ),
+          React.createElement('div',{style:{width:150}},
+            React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',display:'block',marginBottom:3,letterSpacing:1}},'FECHA'),
+            React.createElement('input',{type:'date',value:fechaSel,max:fechaHoyCL(),onChange:function(e){setFechaSel(e.target.value);},style:{width:'100%',padding:'9px 10px',borderRadius:7,border:'1px solid var(--border)',fontSize:13,outline:'none'}})
+          ),
           React.createElement('button',{onClick:agregar,disabled:guardando,style:{padding:'10px 20px',borderRadius:7,border:'none',background:'var(--gold)',color:'#2b2e20',fontWeight:700,fontSize:13,cursor:guardando?'default':'pointer',opacity:guardando?0.6:1}},guardando?'Guardando...':'+ Agregar')
         ),
-        // ── Lista corta: solo quienes ya consumieron esta semana ────────────
+        fechaSel!==fechaHoyCL()?React.createElement('div',{style:{fontSize:11,color:'var(--gold)',background:'rgba(199,168,88,0.12)',padding:'6px 10px',borderRadius:7,marginTop:-12,marginBottom:16,fontWeight:600}},'📅 Vas a registrar este consumo con fecha ',fechaSel,' (no hoy) — quedará en la semana que le corresponda a esa fecha.'):null,
+        // ── Selector "Ver por": Esta semana / Un día / Rango de fechas ──────
+        React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'flex-end',marginBottom:14}},
+          React.createElement('div',{style:{display:'flex',gap:4}},
+            [['semana','Esta semana'],['dia','Un día'],['rango','Rango de fechas']].map(function(opt){
+              return React.createElement('button',{key:opt[0],onClick:function(){setModoVer(opt[0]);},style:{padding:'7px 12px',borderRadius:20,border:'1px solid '+(modoVer===opt[0]?'var(--gold)':'var(--border)'),background:modoVer===opt[0]?'var(--gold)':'#fff',color:modoVer===opt[0]?'#2b2e20':'var(--text-soft)',fontWeight:700,fontSize:11,cursor:'pointer'}},opt[1]);
+            })
+          ),
+          modoVer==='dia'?React.createElement('div',null,
+            React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',display:'block',marginBottom:3,letterSpacing:1}},'DÍA'),
+            React.createElement('input',{type:'date',value:verFecha,max:fechaHoyCL(),onChange:function(e){setVerFecha(e.target.value);},style:{padding:'7px 10px',borderRadius:7,border:'1px solid var(--border)',fontSize:12,outline:'none'}})
+          ):null,
+          modoVer==='rango'?React.createElement(React.Fragment,null,
+            React.createElement('div',null,
+              React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',display:'block',marginBottom:3,letterSpacing:1}},'DESDE'),
+              React.createElement('input',{type:'date',value:verDesde,max:verHasta,onChange:function(e){setVerDesde(e.target.value);},style:{padding:'7px 10px',borderRadius:7,border:'1px solid var(--border)',fontSize:12,outline:'none'}})
+            ),
+            React.createElement('div',null,
+              React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',display:'block',marginBottom:3,letterSpacing:1}},'HASTA'),
+              React.createElement('input',{type:'date',value:verHasta,min:verDesde,max:fechaHoyCL(),onChange:function(e){setVerHasta(e.target.value);},style:{padding:'7px 10px',borderRadius:7,border:'1px solid var(--border)',fontSize:12,outline:'none'}})
+            )
+          ):null
+        ),
+        // ── Lista: quienes tienen consumo en el período elegido ─────────────
         React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:8}},
-          React.createElement('div',{style:{fontSize:12,fontWeight:700,color:'var(--text)',letterSpacing:0.5}},'Consumo registrado esta semana'),
+          React.createElement('div',{style:{fontSize:12,fontWeight:700,color:'var(--text)',letterSpacing:0.5}},'Consumo registrado ',etiquetaLista),
           React.createElement('input',{type:'text',placeholder:'🔍 Buscar...',value:busqueda,onChange:function(e){setBusqueda(e.target.value);},style:{padding:'7px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12,outline:'none',minWidth:180}})
         ),
-        conConsumo.length===0
-          ?React.createElement('div',{className:'info-banner'},'Aún no hay consumo registrado esta semana. Usa el selector de arriba para agregar el primero.')
-          :React.createElement('div',{className:'table-wrap'},
-            React.createElement('table',null,
-              React.createElement('thead',null,React.createElement('tr',null,
-                React.createElement('th',null,'Mensajero'),
-                React.createElement('th',{style:{width:150,textAlign:'right'}},'Consumo Semana')
-              )),
-              React.createElement('tbody',null,
-                conConsumo.map(function(m){
-                  return React.createElement('tr',{key:m.nombre},
-                    React.createElement('td',{style:{fontWeight:700,whiteSpace:'nowrap'}},m.nombre.replace(/,\s*/g,' ')),
-                    React.createElement('td',{className:'mono',style:{textAlign:'right',color:'var(--danger)',fontWeight:700,cursor:'pointer'},onClick:function(){onAbrirDetalle&&onAbrirDetalle(m);},title:'Clic para ver el detalle de la semana o eliminar un ítem'},'$',Math.round(consumoDe(m.nombre)).toLocaleString('es-CL'))
-                  );
-                })
+        modoVer==='semana'?(
+          conConsumo.length===0
+            ?React.createElement('div',{className:'info-banner'},'Aún no hay consumo registrado esta semana. Usa el selector de arriba para agregar el primero.')
+            :React.createElement('div',{className:'table-wrap'},
+              React.createElement('table',null,
+                React.createElement('thead',null,React.createElement('tr',null,
+                  React.createElement('th',null,'Mensajero'),
+                  React.createElement('th',{style:{width:150,textAlign:'right'}},'Consumo Semana')
+                )),
+                React.createElement('tbody',null,
+                  conConsumo.map(function(m){
+                    return React.createElement('tr',{key:m.nombre},
+                      React.createElement('td',{style:{fontWeight:700,whiteSpace:'nowrap'}},m.nombre.replace(/,\s*/g,' ')),
+                      React.createElement('td',{className:'mono',style:{textAlign:'right',color:'var(--danger)',fontWeight:700,cursor:'pointer'},onClick:function(){onAbrirDetalle&&onAbrirDetalle(m);},title:'Clic para ver el detalle de la semana o eliminar un ítem'},'$',Math.round(consumoDe(m.nombre)).toLocaleString('es-CL'))
+                    );
+                  })
+                )
               )
             )
+        ):(
+          cargandoRango
+            ?React.createElement('div',{className:'info-banner'},'Cargando...')
+            :nombresRango.length===0
+              ?React.createElement('div',{className:'info-banner'},'No hay consumo registrado en '+etiquetaLista+'.')
+              :React.createElement('div',{className:'table-wrap'},
+                React.createElement('table',null,
+                  React.createElement('thead',null,React.createElement('tr',null,
+                    React.createElement('th',null,'Mensajero'),
+                    React.createElement('th',{style:{width:150,textAlign:'right'}},'Consumo del período')
+                  )),
+                  React.createElement('tbody',null,
+                    nombresRango.map(function(n){
+                      return React.createElement('tr',{key:n},
+                        React.createElement('td',{style:{fontWeight:700,whiteSpace:'nowrap'}},n.replace(/,\s*/g,' ')),
+                        React.createElement('td',{className:'mono',style:{textAlign:'right',color:'var(--danger)',fontWeight:700,cursor:'pointer'},onClick:function(){setDetalleNombre(n);},title:'Clic para ver el detalle día por día o eliminar un ítem'},'$',Math.round(totalesRangoPorNombre[n]).toLocaleString('es-CL'))
+                      );
+                    })
+                  )
+                )
+              )
+        ),
+        // ── Detalle día por día del período elegido, con opción de eliminar ítems ──
+        detalleNombre?React.createElement('div',{style:{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999},onClick:function(){setDetalleNombre(null);}},
+          React.createElement('div',{style:{background:'#fff',borderRadius:14,padding:20,width:420,maxWidth:'92vw',maxHeight:'85vh',overflowY:'auto'},onClick:function(e){e.stopPropagation();}},
+            React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}},
+              React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1,color:'var(--dark)'}},'🍽 Detalle de Consumo'),
+              React.createElement('button',{onClick:function(){setDetalleNombre(null);},style:{border:'none',background:'none',fontSize:18,cursor:'pointer',color:'var(--text-soft)'}},'✕')
+            ),
+            React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginBottom:14}},detalleNombre.replace(/,\s*/g,' ')+' — '+etiquetaPeriodo),
+            React.createElement('div',{style:{maxHeight:280,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8}},
+              detalleItems.length===0?React.createElement('div',{style:{padding:14,fontSize:12,color:'var(--text-soft)',textAlign:'center'}},'Sin ítems en este período.'):
+              detalleItems.map(function(it){return React.createElement('div',{key:it.id,style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 12px',borderBottom:'1px solid var(--border)',fontSize:12}},
+                React.createElement('div',null,
+                  React.createElement('div',{style:{fontWeight:600}},it.producto+' × '+it.cantidad),
+                  React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)'}},it.fecha)
+                ),
+                React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8}},
+                  React.createElement('span',{style:{fontFamily:'JetBrains Mono',color:'var(--danger)',fontWeight:600}},'$'+Math.round(it.monto).toLocaleString('es-CL')),
+                  React.createElement('button',{onClick:function(){eliminarItemRango(it.id);},style:{border:'none',background:'rgba(176,48,48,0.1)',color:'#b03030',borderRadius:5,width:20,height:20,cursor:'pointer',fontSize:11}},'×')
+                )
+              );})
+            ),
+            React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:14,paddingTop:12,borderTop:'2px solid var(--border)'}},
+              React.createElement('span',{style:{fontSize:12,fontWeight:700,color:'var(--text)'}},'TOTAL'),
+              React.createElement('span',{style:{fontFamily:'JetBrains Mono',fontSize:16,fontWeight:900,color:'var(--danger)'}},'$'+Math.round(detalleTotal).toLocaleString('es-CL'))
+            )
           )
+        ):null
       )
   );
 }
