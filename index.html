@@ -622,7 +622,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788129507;
+window.__MODULES_VERSION=1788130513;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1191,10 +1191,34 @@ async function fetchPaginadoParalelo(build,cursorInicial){
 //
 // 'cols' deja que cada pantalla pida solo las columnas de 'envios' que necesita; por defecto trae
 // un set amplio que cubre tanto Gestion de Envios como Analitica.
+// Convierte una fecha calendario de Chile ('YYYY-MM-DD') al instante UTC exacto en que
+// empieza (00:00:00.000) o termina (23:59:59.999) ese día en Chile. Hace falta porque
+// fetchEntregadosPorFechaReal le pasa estos límites a Supabase para filtrar la columna
+// 'created_at' (timestamptz) -- y la sesión de Postgres de este proyecto usa UTC (`show
+// timezone` devuelve 'UTC'), así que un string sin zona horaria como '2026-08-30T00:00:00.000'
+// se interpretaba como medianoche UTC, no medianoche de Chile. Eso corría la ventana pedida
+// ~4 horas hacia atrás (3 en horario de verano): "Hoy" en Chile en realidad le pedía a
+// Supabase desde las 20:00 del día ANTERIOR (hora de Chile) hasta las 19:59 de hoy -- por eso
+// un paquete entregado ayer a las 20:07 hora de Chile seguía cayendo dentro de "Hoy" aunque
+// fechaHoyCL ya calculara bien el día calendario (ese cálculo nunca se usaba para filtrar la
+// consulta en sí, solo para etiquetar el resultado ya traído). Caso real detectado por Luis:
+// código 47874856074, entregado 29-08 20:07 hora Chile, seguía apareciendo en "Entregado Hoy"
+// (30-08) después de corregir fechaHoyCL, porque ese fix no alcanzaba esta consulta.
+function limiteDiaChileUTC(fechaStr,finDelDia){
+  var horaLocal=finDelDia?'23:59:59.999':'00:00:00.000';
+  var guess=new Date(fechaStr+'T'+horaLocal+'Z');
+  var partes=new Intl.DateTimeFormat('en-US',{timeZone:'America/Santiago',timeZoneName:'shortOffset'}).formatToParts(guess);
+  var offsetTxt=(partes.find(function(p){return p.type==='timeZoneName';})||{}).value||'GMT+0';
+  var m=offsetTxt.match(/GMT([+-]\d+)(?::(\d+))?/);
+  var offsetHoras=m?parseInt(m[1],10):0;
+  var offsetMin=m&&m[2]?parseInt(m[2],10)*(offsetHoras<0?-1:1):0;
+  var offsetMs=(offsetHoras*60+offsetMin)*60000;
+  return new Date(guess.getTime()-offsetMs).toISOString();
+}
 async function fetchEntregadosPorFechaReal(desde,hasta,cols){
   const COLS=cols||'id,codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,nota_admin,fuente,peso,valor_siniestro,tuvo_siniestro,updated_at,created_at,aviso_tardio';
-  const desdeTs=desde+'T00:00:00.000';
-  const hastaTs=hasta+'T23:59:59.999';
+  const desdeTs=limiteDiaChileUTC(desde,false);
+  const hastaTs=limiteDiaChileUTC(hasta,true);
   // 1) Eventos 'entregado' de historial_envios cuya fecha real cae en el rango pedido -- acotado
   //    por created_at (indexado), no una consulta sin limite como calcularEnviosSemana.
   let histEnRango=[];
