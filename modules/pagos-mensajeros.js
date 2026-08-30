@@ -804,11 +804,15 @@ useEffect(()=>{
 
       if(!tarifasComunaMap[key])tarifasComunaMap[key]={};
 
-      tarifasComunaMap[key][t.comuna.toUpperCase().trim()]=t.tarifa;
+      // matchComuna normaliza acentos/mayúsculas/coma final -- así una tarifa cargada como
+      // "Maipú" sí se encuentra aunque el envío haya quedado guardado como "MAIPU" sin acento.
+      var comunaTar=matchComuna(t.comuna)||t.comuna.toUpperCase().trim();
+
+      tarifasComunaMap[key][comunaTar]=t.tarifa;
 
       if(!tarifasComunaMapPrimerNombre[primerN])tarifasComunaMapPrimerNombre[primerN]={};
 
-      tarifasComunaMapPrimerNombre[primerN][t.comuna.toUpperCase().trim()]=t.tarifa;
+      tarifasComunaMapPrimerNombre[primerN][comunaTar]=t.tarifa;
 
     });
 
@@ -820,7 +824,13 @@ useEffect(()=>{
 
       var n=normNombre(e.mensajero||'');
 
-      var c=(e.comuna||'').toUpperCase().trim();
+      // Igual que con tarifasComunaMap: se agrupa por matchComuna para que variantes de acento
+      ///mayúscula de una misma comuna real (MAIPU vs Maipú) caigan en el mismo casillero y no
+      // partan en dos el conteo ni la tarifa aplicada. Si no matchea ninguna comuna real, se
+      // agrupa igual (con el texto tal cual) para no perder el envío del conteo/pago -- pero el
+      // comprobante y el panel de Administración · Comunas van a mostrar ese valor como está,
+      // sin disfrazarlo de comuna válida.
+      var c=matchComuna(e.comuna)||(e.comuna||'').toUpperCase().trim();
 
       if(!n||n==='SIN ASIGNAR'||n==='')return;
 
