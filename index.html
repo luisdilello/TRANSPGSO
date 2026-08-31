@@ -622,7 +622,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788204225;
+window.__MODULES_VERSION=1788204669;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7654,7 +7654,10 @@ function CalendarioEntregasRider(_ref_cal){
         if(conteoPorDia[k].total>0)dias++;
       }
     });
-    return{total,entregado,dias,efectividad:total>0?entregado/total:0};
+    // Tope en 100% -- ver comentario junto a "efSemana" más abajo: un mes con varios cruces de
+    // fecha (entregado > asignado en algún día suelto) podía terminar mostrando "104.3%" de
+    // efectividad, lo cual no tiene sentido como métrica.
+    return{total,entregado,dias,efectividad:total>0?Math.min(entregado/total,1):0};
   },[conteoPorDia,mesVisible]);
 
   function colorEfectividad(total,entregado){
@@ -7700,7 +7703,13 @@ function CalendarioEntregasRider(_ref_cal){
       semanas.map((semana,wi)=>{
         const totalSemana=semana.reduce((a,d)=>a+d.total,0);
         const entregadoSemana=semana.reduce((a,d)=>a+d.entregado,0);
-        const efSemana=totalSemana>0?entregadoSemana/totalSemana:0;
+        // Tope en 100% -- un envío entregado un día pero ASIGNADO otro (ej. cargado sábado,
+        // entregado lunes -- ver 'tieneCruce'/el puntito dorado) suma al "entregado" de un día
+        // sin haber sumado al "asignado" de ese mismo día, así que la razón entregado/asignado
+        // de un día o semana puntual puede pasarse de 100% aunque en total nunca se entregue
+        // más de lo que realmente se asignó en todo el período. Se capa visualmente para que
+        // la efectividad nunca se vea como "117%", que no tiene sentido como métrica.
+        const efSemana=totalSemana>0?Math.min(entregadoSemana/totalSemana,1):0;
         return React.createElement('div',{key:wi,style:{display:'grid',gridTemplateColumns:'repeat(7,1fr) 52px',gap:4,marginBottom:4}},
           semana.map((dia,di)=>{
             const col=colorEfectividad(dia.total,dia.entregado);
@@ -7715,7 +7724,7 @@ function CalendarioEntregasRider(_ref_cal){
               // Mismo % que ya se ve al tocar el día (y en la columna SEMANA) pero ahora también
               // aquí afuera, en la celda, para no tener que entrar al detalle solo para ver la
               // efectividad de un día puntual -- pedido por Luis.
-              dia.total>0&&React.createElement('div',{style:{fontSize:8,color:dia.enMes?col.texto:'rgba(255,255,255,0.3)',marginTop:1,fontWeight:700}},pct(dia.entregado/dia.total))
+              dia.total>0&&React.createElement('div',{style:{fontSize:8,color:dia.enMes?col.texto:'rgba(255,255,255,0.3)',marginTop:1,fontWeight:700}},pct(Math.min(dia.entregado/dia.total,1)))
             );
           }),
           React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',borderRadius:8,background:totalSemana>0?barColor(efSemana)+'26':'rgba(255,255,255,0.03)',border:'1px solid '+(totalSemana>0?barColor(efSemana)+'55':'rgba(255,255,255,0.05)')}},
@@ -7751,7 +7760,7 @@ function DiaDetalleModal(_ref_dd){
   // (conteoPorDia, pasado como prop), para que el número calce siempre con el que el mensajero
   // tocó para abrir el modal. Antes el modal solo listaba los envíos uno por uno y había que
   // contarlos a mano para saber cuántos se entregaron ese día.
-  const efectividadDia=totalDia>0?entregadoDia/totalDia:0;
+  const efectividadDia=totalDia>0?Math.min(entregadoDia/totalDia,1):0;
   return React.createElement('div',{onClick:onClose,style:{position:'fixed',inset:0,background:'rgba(10,12,6,0.8)',zIndex:600,display:'flex',alignItems:'flex-end',WebkitBackdropFilter:'blur(4px)',backdropFilter:'blur(4px)'}},
     React.createElement('div',{onClick:e=>e.stopPropagation(),style:{width:'100%',maxHeight:'85vh',overflowY:'auto',background:'linear-gradient(180deg,#232619,#14150e)',borderTop:'1px solid rgba(200,168,75,0.4)',borderRadius:'20px 20px 0 0',padding:'20px 16px calc(20px + env(safe-area-inset-bottom,0px))',boxShadow:'0 -10px 40px rgba(200,168,75,0.15)'}},
       React.createElement('div',{style:{width:40,height:4,background:'rgba(200,168,75,0.3)',borderRadius:2,margin:'0 auto 16px'}}),
