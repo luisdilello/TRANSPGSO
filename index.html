@@ -622,7 +622,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788190996;
+window.__MODULES_VERSION=1788203529;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7474,7 +7474,13 @@ function CalendarioEntregasRider(_ref_cal){
         }
         // Mismo criterio de coincidencia exacta que Ganancias — evita mezclar envíos de
         // otro mensajero que comparte primer nombre (ej. MARCOS GIOVACCHINI / MARCOS FUENTEALBA).
-        const propio=acumulado.filter(e=>normNombre(e.mensajero||'')===normNombre(usuario.nombre));
+        // Se excluye 'en_bodega' -- son paquetes de Colecta/Retiro Masivo o recién ingresados
+        // (por lector/scanner o Excel) que ya quedaron con el mensajero puesto pero AÚN no
+        // salieron a ruta. Antes se contaban igual como "asignado", así que un mensajero podía
+        // ver un número de hoy sin haber llegado siquiera al almacén (caso reportado por Luis
+        // con Gustavo Roman). Mismo criterio que ya usa el Dashboard en "Top Mensajeros"
+        // (filtrados.filter(e=>e.mensajero&&e.estado!=='en_bodega')).
+        const propio=acumulado.filter(e=>normNombre(e.mensajero||'')===normNombre(usuario.nombre)&&e.estado!=='en_bodega');
         if(!cancelado)setEntregas(propio);
         // Traer, para los ya entregados, la fecha REAL en que pasaron a 'entregado' (no la
         // fecha de asignación) — así "Mis Entregas" calza con lo que paga Pagos Mensajeros
