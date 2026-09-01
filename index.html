@@ -622,7 +622,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788289904;
+window.__MODULES_VERSION=1788295695;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1237,11 +1237,36 @@ async function fetchEntregadosPorFechaReal(desde,hasta,cols){
     }
   }
   // Si un envio paso a 'entregado' mas de una vez (se deshizo por error y se re-entrego), vale el
-  // evento mas reciente -- mismo criterio que calcularEnviosSemana.
+  // evento mas reciente -- mismo criterio que calcularEnviosSemana. OJO: ese "mas reciente" tiene
+  // que buscarse en TODA la historia del codigo, no solo entre los eventos que cayeron dentro de
+  // esta ventana -- si el ultimo 'entregado' real quedo FUERA de la ventana (ej. se deshizo por un
+  // reclamo y se re-entrego recien la semana siguiente), la fecha vigente es esa de afuera, no la
+  // de aca, y este codigo no deberia contarse en esta ventana. Antes esto no se validaba y un
+  // mismo paquete podia aparecer "entregado" en dos ventanas distintas (bug real detectado por
+  // Luis: PGSO000000254 se contaba en la semana del 24-08 Y en la del 31-08 al mismo tiempo,
+  // dejando "Entregado" con 1 mas de lo que despues pagaba Pagos Mensajeros para esa semana).
+  const codigosCandidatos=[...new Set(histEnRango.map(function(h){return h.codigo_envio;}))];
+  const ultimaGlobalPorCodigo={};
+  {
+    const LOTE3=200;
+    for(let i=0;i<codigosCandidatos.length;i+=LOTE3){
+      const lote=codigosCandidatos.slice(i,i+LOTE3);
+      if(!lote.length)continue;
+      const r=await db.from('historial_envios').select('codigo_envio,created_at').eq('estado','entregado').in('codigo_envio',lote);
+      if(r.error)throw r.error;
+      (r.data||[]).forEach(function(h){
+        const actual=ultimaGlobalPorCodigo[h.codigo_envio];
+        if(!actual||new Date(h.created_at)>new Date(actual))ultimaGlobalPorCodigo[h.codigo_envio]=h.created_at;
+      });
+    }
+  }
+  const desdeDate=new Date(desdeTs),hastaDate=new Date(hastaTs);
   const ultimaPorCodigo={};
-  histEnRango.forEach(function(h){
-    const actual=ultimaPorCodigo[h.codigo_envio];
-    if(!actual||new Date(h.created_at)>new Date(actual.created_at))ultimaPorCodigo[h.codigo_envio]=h;
+  codigosCandidatos.forEach(function(cod){
+    const ts=ultimaGlobalPorCodigo[cod];
+    if(!ts)return;
+    const d=new Date(ts);
+    if(d>=desdeDate&&d<=hastaDate)ultimaPorCodigo[cod]={codigo_envio:cod,created_at:ts};
   });
   const codigosConfirmados=Object.keys(ultimaPorCodigo);
   // 2) Traer los envios completos de esos codigos (en lotes: un .in() con demasiados codigos de
