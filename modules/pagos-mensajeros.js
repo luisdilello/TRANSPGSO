@@ -112,6 +112,127 @@ function ConsumoModal(props){
 // la semana equivocada. Esta versión hace lo mismo pero para CUALQUIER fecha, así cada consumo
 // backfillado queda agrupado en SU propia semana real (lunes a sábado), sin importar qué semana
 // esté abierta en la pestaña de Pagos en ese momento.
+
+// Catálogo de faltas del Reglamento Operativo (sección 7: Clasificación de Faltas, más los
+// protocolos de bodega/entrega/cierre de jornada). La cantidad de envíos sugerida es un
+// criterio de partida (editable en el momento de aplicar) -- el Reglamento solo fija montos
+// en pesos para dos casos puntuales (protocolo de bodega: $1.000 fijo; entrega no cumplida el
+// mismo día: costo de mensajero de emergencia, $2.500 por encomienda); para el resto, la
+// gravedad Leve/Grave/Crítica que define el propio Reglamento (sección 7) es la que orienta
+// el número de envíos sugerido aquí. Luis puede ajustar cualquier valor antes de aplicar.
+var CATALOGO_FALTAS_REGLAMENTO=[
+  {grupo:'Leve',label:'No enviar respaldos de salida de bodega (pantallazos Flex + Interna)',envios:1},
+  {grupo:'Leve',label:'Respaldos incompletos o enviados fuera de tiempo',envios:1},
+  {grupo:'Leve',label:'Retraso menor sin justificación válida',envios:1},
+  {grupo:'Grave',label:'Entrega sin evidencia obligatoria completa (etiqueta / fachada / entrega / datos receptor)',envios:5},
+  {grupo:'Grave',label:'No entregar encomienda el mismo día sin justificación válida',envios:10},
+  {grupo:'Grave',label:'No registrar correctamente el estado en la aplicación',envios:3},
+  {grupo:'Grave',label:'Finalizar jornada sin autorización',envios:5},
+  {grupo:'Grave',label:'Devolver paquete sin respaldo',envios:5},
+  {grupo:'Grave',label:'Diferencia entre paquetes retirados / entregados / devueltos',envios:10},
+  {grupo:'Crítica',label:'Falsificación de entrega',envios:20},
+  {grupo:'Crítica',label:'Manipulación o alteración de evidencias',envios:20},
+  {grupo:'Crítica',label:'Pérdida de encomienda por negligencia',envios:15},
+  {grupo:'Crítica',label:'Delegar entregas sin autorización',envios:15},
+  {grupo:'Crítica',label:'Abandono de ruta',envios:20},
+  {grupo:'Crítica',label:'Ocultamiento de información relevante',envios:10},
+  {grupo:'Otro',label:'Otro (personalizado)',envios:0}
+];
+
+// Modal de descuentos/multas por falta operativa, por mensajero -- se abre desde el botón
+// "🎯 Descuentos" de la tarjeta (carnet) de Pagos. Cada aplicación queda guardada dentro del
+// propio objeto de pago (p.penalizaciones), que ya se respalda automáticamente en Supabase
+// junto con el resto de "pagos" (mismo mecanismo que tarifa/adelanto/préstamo) -- no requiere
+// tabla ni migración nueva. El monto se calcula una sola vez al aplicar (envíos × tarifa
+// vigente de ese mensajero en ese momento), igual que Consumo Local.
+function PenalizacionModal(props){
+  var p=props.p, onClose=props.onClose, onAplicar=props.onAplicar, onEliminar=props.onEliminar, toast=props.toast;
+  // Lista local -- igual que ConsumoModal: se inicializa una sola vez desde props.p.penalizaciones
+  // y se actualiza al toque en aplicar()/eliminar(), en vez de leer directo de props.p (que queda
+  // congelado en el objeto de pago que había cuando se abrió el modal y no se refresca solo).
+  var _items=useState(function(){return props.p.penalizaciones||[];}),items=_items[0],setItems=_items[1];
+  var _sel=useState(CATALOGO_FALTAS_REGLAMENTO[0].label),faltaSel=_sel[0],setFaltaSel=_sel[1];
+  var _envios=useState(CATALOGO_FALTAS_REGLAMENTO[0].envios),envios=_envios[0],setEnvios=_envios[1];
+  var _nota=useState(''),nota=_nota[0],setNota=_nota[1];
+
+  function onChangeFalta(label){
+    setFaltaSel(label);
+    var item=CATALOGO_FALTAS_REGLAMENTO.find(function(f){return f.label===label;});
+    setEnvios(item?item.envios:0);
+  }
+
+  function aplicar(){
+    var e=+envios||0;
+    if(e<=0){toast&&toast('⚠ Ingresa una cantidad de envíos mayor a 0');return;}
+    var monto=Math.round(e*(+p.tarifa||0));
+    var item={id:Date.now(),motivo:faltaSel,envios:e,monto:monto,nota:nota||'',fecha:fechaHoyCL()};
+    setItems(function(prev){return prev.concat([item]);});
+    onAplicar(item);
+    setNota('');
+    toast&&toast('✓ Descuento aplicado: -'+e+' envíos');
+  }
+
+  function eliminar(itemId){
+    setItems(function(prev){return prev.filter(function(x){return x.id!==itemId;});});
+    onEliminar(itemId);
+  }
+
+  var lista=items;
+  var totalEnvios=lista.reduce(function(a,x){return a+(x.envios||0);},0);
+  var totalMonto=lista.reduce(function(a,x){return a+(x.monto||0);},0);
+  var grupos=['Leve','Grave','Crítica','Otro'];
+
+  return React.createElement('div',{style:{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999},onClick:onClose},
+    React.createElement('div',{style:{background:'#fff',borderRadius:14,padding:20,width:460,maxWidth:'92vw',maxHeight:'85vh',overflowY:'auto'},onClick:function(e){e.stopPropagation();}},
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}},
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1,color:'var(--dark)'}},'🎯 Descuentos por Falta'),
+        React.createElement('button',{onClick:onClose,style:{border:'none',background:'none',fontSize:18,cursor:'pointer',color:'var(--text-soft)'}},'✕')
+      ),
+      React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginBottom:14}},p.nombre.replace(/,\s*/g,' ')+' · Según Reglamento Operativo'),
+      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:10,alignItems:'flex-end',flexWrap:'wrap'}},
+        React.createElement('div',{style:{flex:'2 1 220px'}},
+          React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',display:'block',marginBottom:3}},'Tipo de falta'),
+          React.createElement('select',{value:faltaSel,onChange:function(e){onChangeFalta(e.target.value);},style:{width:'100%',padding:'7px 8px',borderRadius:7,border:'1px solid var(--border)',fontSize:12,outline:'none'}},
+            grupos.map(function(g){
+              return React.createElement('optgroup',{key:g,label:g},
+                CATALOGO_FALTAS_REGLAMENTO.filter(function(f){return f.grupo===g;}).map(function(f){
+                  return React.createElement('option',{key:f.label,value:f.label},f.label+(f.envios>0?' (-'+f.envios+')':''));
+                })
+              );
+            })
+          )
+        ),
+        React.createElement('div',{style:{width:100}},
+          React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',display:'block',marginBottom:3}},'Envíos'),
+          React.createElement('input',{type:'number',min:0,value:envios,onChange:function(e){setEnvios(e.target.value);},style:{width:'100%',padding:'6px 8px',borderRadius:7,border:'1px solid var(--border)',fontSize:12,outline:'none',fontFamily:'JetBrains Mono'}})
+        ),
+        React.createElement('button',{onClick:aplicar,style:{padding:'8px 14px',borderRadius:8,border:'none',background:'var(--danger)',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}},'− Aplicar')
+      ),
+      React.createElement('input',{type:'text',placeholder:'Nota / detalle (opcional)...',value:nota,onChange:function(e){setNota(e.target.value);},
+        style:{width:'100%',padding:'7px 10px',borderRadius:7,border:'1px solid var(--border)',fontSize:12,outline:'none',marginBottom:14,boxSizing:'border-box'}}),
+      lista.length===0?React.createElement('div',{style:{textAlign:'center',padding:'16px 0',color:'var(--text-soft)',fontSize:13}},'Sin descuentos aplicados esta semana.'):
+        React.createElement('div',{style:{border:'1px solid var(--border)',borderRadius:8,marginBottom:12,overflow:'hidden'}},
+          lista.map(function(x,i){
+            return React.createElement('div',{key:x.id,style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 12px',background:i%2===0?'#fff':'var(--cream)',borderBottom:'1px solid var(--border)',gap:8}},
+              React.createElement('div',{style:{flex:1,minWidth:0}},
+                React.createElement('div',{style:{fontSize:12,fontWeight:600}},x.motivo),
+                x.nota?React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)'}},x.nota):null,
+                React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)'}},x.fecha)
+              ),
+              React.createElement('span',{style:{fontFamily:'JetBrains Mono',fontWeight:700,color:'var(--danger)',whiteSpace:'nowrap'}},'-'+x.envios+' ($'+Math.round(x.monto).toLocaleString('es-CL')+')'),
+              React.createElement('button',{onClick:function(){eliminar(x.id);},style:{padding:'2px 7px',borderRadius:4,border:'none',background:'rgba(176,48,48,0.1)',color:'#b03030',cursor:'pointer'}},'x')
+            );
+          })
+        ),
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',padding:'10px 12px',background:'rgba(176,48,48,0.08)',fontWeight:700,borderRadius:8,marginBottom:14}},
+        React.createElement('span',null,'TOTAL PENALIZADO'),
+        React.createElement('span',{style:{fontFamily:'JetBrains Mono',color:'var(--danger)'}},'-'+totalEnvios+' envíos ($'+Math.round(totalMonto).toLocaleString('es-CL')+')')
+      ),
+      React.createElement('div',{style:{display:'flex',justifyContent:'flex-end'}},React.createElement('button',{onClick:onClose,style:{padding:'8px 16px',borderRadius:8,border:'1px solid var(--border)',background:'var(--cream)',color:'var(--text-main)',fontSize:12,cursor:'pointer'}},'Cerrar'))
+    )
+  );
+}
+
 function calcularSemanaDeFecha(fechaStr){
   var d=new Date(fechaStr+'T12:00:00');
   var lunes=new Date(d);
@@ -480,7 +601,8 @@ function CriterioEfectividadModal(props){
 function PagosTarjetas(props){
   var pagos=props.pagos, montoPago=props.montoPago, updatePago=props.updatePago,
       setConsumoModal=props.setConsumoModal, setPrestamosModal=props.setPrestamosModal,
-      exportarComprobante=props.exportarComprobante, prestamosDB=props.prestamosDB;
+      exportarComprobante=props.exportarComprobante, prestamosDB=props.prestamosDB,
+      setPenalizacionModal=props.setPenalizacionModal;
 
   if(pagos.length===0){
     return React.createElement('div',{className:'empty-state'},'Sin resultados');
@@ -530,6 +652,7 @@ function PagosTarjetas(props){
           fila('Extra',inputMini(p.extra,function(e){updatePago(p.id,'extra',e.target.value);}),'#2980b9'),
           (p.bonoEfectividad||0)>0?fila('Bono Efect.','$'+Math.round(p.bonoEfectividad).toLocaleString('es-CL'),'#7a6ba8'):null,
           (p.descuentoEfectividad||0)>0?fila('Desc. Efect.','$'+Math.round(p.descuentoEfectividad).toLocaleString('es-CL'),'var(--danger)'):null,
+          (p.penalizacion||0)>0?fila('Penalización','-'+(p.penalizaciones||[]).reduce(function(a,x){return a+(x.envios||0);},0)+' env. ($'+Math.round(p.penalizacion).toLocaleString('es-CL')+')','var(--danger)'):null,
           fila('Adelanto',inputMini(p.adelanto,function(e){updatePago(p.id,'adelanto',e.target.value);}),'#e67e22'),
           fila('Préstamo',inputMini(p.prestamo,function(e){updatePago(p.id,'prestamo',e.target.value);}),'#c0392b'),
           saldoPrestamo>0?fila('Saldo Pend.',React.createElement('span',{style:{cursor:'pointer'},onClick:function(){setPrestamosModal(p.nombre);},title:'Ver historial de préstamos'},'$'+Math.round(saldoPrestamo).toLocaleString('es-CL')),'#c0392b'):null
@@ -548,10 +671,10 @@ function PagosTarjetas(props){
             style:{flex:1,padding:'8px',borderRadius:8,border:'1px solid var(--border)',background:'var(--cream)',color:'var(--text-main)',fontSize:11,cursor:'pointer',fontWeight:600}
           },'🧾 Comprobante'),
           React.createElement('button',{
-            disabled:true,
-            title:'Se habilitará apenas estén cargadas las reglas de descuento del reglamento operativo',
-            style:{flex:1,padding:'8px',borderRadius:8,border:'1px dashed var(--border)',background:'transparent',color:'var(--text-soft)',fontSize:11,cursor:'not-allowed',fontWeight:600}
-          },'🎯 Descuentos (próx.)')
+            onClick:function(){setPenalizacionModal(p);},
+            title:'Aplicar descuento por falta según el Reglamento Operativo',
+            style:{flex:1,padding:'8px',borderRadius:8,border:'1px solid rgba(176,48,48,0.35)',background:'rgba(176,48,48,0.06)',color:'var(--danger)',fontSize:11,cursor:'pointer',fontWeight:600}
+          },'🎯 Descuentos')
         )
       );
     })
@@ -749,6 +872,7 @@ const _useRetiroFecha=useState(fechaHoyCL()),retiroFecha=_useRetiroFecha[0],setR
 const _useExtrasModal=useState(null),extrasModal=_useExtrasModal[0],setExtrasModal=_useExtrasModal[1];
 
 const _useConsumoModal=useState(null),consumoModal=_useConsumoModal[0],setConsumoModal=_useConsumoModal[1];
+const _usePenalizacionModal=useState(null),penalizacionModal=_usePenalizacionModal[0],setPenalizacionModal=_usePenalizacionModal[1];
 
 const _useExpandido=useState({}),expandido=_useExpandido[0],setExpandido=_useExpandido[1];
 
@@ -898,7 +1022,7 @@ const _useExpandido=useState({}),expandido=_useExpandido[0],setExpandido=_useExp
 
         const totalBruto=bruto+(p.ajuste||0)-(p.iva||0);
 
-        const totalPagar=totalBruto+(p.extra||0)+(p.bonoEfectividad||0)-(p.descuentoEfectividad||0)-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0)-(p.descSiniestro||0);
+        const totalPagar=totalBruto+(p.extra||0)+(p.bonoEfectividad||0)-(p.descuentoEfectividad||0)-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0)-(p.descSiniestro||0)-(p.penalizacion||0);
 
         return{...p,nombre:menActual.nombre,tarifa,bruto,totalBruto,totalPagar};
 
@@ -914,7 +1038,7 @@ const _useExpandido=useState({}),expandido=_useExpandido[0],setExpandido=_useExp
 
     const nuevos=mensajeros.filter(m=>m.activo!==false&&!savedNames.has(m.nombre.replace(/,\s*/g,' ').toUpperCase().trim()))
 
-      .map((m,i)=>({id:Date.now()+i,nombre:m.nombre,envios:0,tarifa:m.tarifa||1200,bruto:0,ajuste:0,iva:0,tipoIVA:'ninguno',totalBruto:0,adelanto:0,extra:0,prestamo:0,consumo:0,descSiniestro:0,totalPagar:0,estado:'PENDIENTE',obs:''}));
+      .map((m,i)=>({id:Date.now()+i,nombre:m.nombre,envios:0,tarifa:m.tarifa||1200,bruto:0,ajuste:0,iva:0,tipoIVA:'ninguno',totalBruto:0,adelanto:0,extra:0,prestamo:0,consumo:0,descSiniestro:0,penalizacion:0,totalPagar:0,estado:'PENDIENTE',obs:''}));
 
     return updated.concat(nuevos);
 
@@ -966,7 +1090,7 @@ function sincronizarConsumoDesdeDB(sem){
         var nuevoConsumo=totales[k]||0;
         if(Math.abs(nuevoConsumo-(p.consumo||0))<0.5)return p;
         cambio=true;
-        var totalPagar=p.totalBruto+(p.extra||0)+(p.bonoEfectividad||0)-(p.descuentoEfectividad||0)-(p.adelanto||0)-(p.prestamo||0)-nuevoConsumo-(p.descSiniestro||0);
+        var totalPagar=p.totalBruto+(p.extra||0)+(p.bonoEfectividad||0)-(p.descuentoEfectividad||0)-(p.adelanto||0)-(p.prestamo||0)-nuevoConsumo-(p.descSiniestro||0)-(p.penalizacion||0);
         return Object.assign({},p,{consumo:nuevoConsumo,totalPagar:totalPagar});
       });
       return cambio?next:prev;
@@ -1086,7 +1210,7 @@ useEffect(()=>{
       const nuevoDesc=sumaPorMensajero[normNomSin(p.nombre)]||0;
       if((p.descSiniestro||0)===nuevoDesc)return p;
       const updated={...p,descSiniestro:nuevoDesc};
-      updated.totalPagar=updated.totalBruto+(updated.extra||0)+(updated.bonoEfectividad||0)-(updated.descuentoEfectividad||0)-(updated.adelanto||0)-(updated.prestamo||0)-(updated.consumo||0)-(updated.descSiniestro||0);
+      updated.totalPagar=updated.totalBruto+(updated.extra||0)+(updated.bonoEfectividad||0)-(updated.descuentoEfectividad||0)-(updated.adelanto||0)-(updated.prestamo||0)-(updated.consumo||0)-(updated.descSiniestro||0)-(updated.penalizacion||0);
       return updated;
     }));
   }).catch(function(e){console.warn('Error cargando descuentos de siniestro:',e.message);});
@@ -1220,7 +1344,31 @@ useEffect(()=>{
 
   }
 
-},[mensajeros,pagos.length]);useEffect(()=>{if(mensajerosDia.length>0){const normNom2=n=>(n||'').replace(/,\s*/g,' ').replace(/\s+/g,' ').trim().toUpperCase();const tarifaMap={};mensajeros.forEach(m=>{tarifaMap[normNom2(m.nombre)]=m.tarifa||1200;});setPagos(prev=>{const prevMap={};prev.forEach(p=>{prevMap[normNom2(p.nombre)]=p;});return mensajerosDia.filter(m=>m.total>0).map((m,i)=>{const tarifa=tarifaMap[normNom2(m.nombre)]||1200;const bruto=m.entregados*tarifa;const existing=prevMap[normNom2(m.nombre)];if(existing)return{...existing,envios:m.entregados};return{id:m.id||i,nombre:m.nombre,envios:m.entregados,tarifa,bruto,ajuste:0,iva:0,totalBruto:bruto,adelanto:0,extra:0,prestamo:0,consumo:0,descSiniestro:0,totalPagar:bruto,estado:'PENDIENTE',obs:''};});});}},[mensajerosDia]);function updatePago(id,field,val){setPagos(prev=>prev.map(p=>{if(p.id!==id)return p;const strFields=['estado','obs','tipoIVA'];const updated={...p,[field]:strFields.includes(field)?val:+val};if(field==='tipoIVA'){if(val==='ninguno'){updated.iva=0;}else if(val==='manual'){}else{const rate=val==='honorarios'?0.1525:val==='factura'?0.19:0;updated.iva=Math.round(updated.bruto*rate/(1+rate));}}if(field==='tarifa'){updated.bruto=updated.envios*+val;const rate=updated.tipoIVA==='honorarios'?0.1525:updated.tipoIVA==='factura'?0.19:0;if(rate>0)updated.iva=Math.round(updated.bruto*rate/(1+rate));}if(!strFields.includes(field)){updated.totalBruto=updated.bruto+updated.ajuste-updated.iva;updated.totalPagar=updated.totalBruto+updated.extra+(updated.bonoEfectividad||0)-(updated.descuentoEfectividad||0)-updated.adelanto-updated.prestamo-updated.consumo-(updated.descSiniestro||0);}if(field==='tipoIVA'){updated.totalBruto=updated.bruto+updated.ajuste-updated.iva;updated.totalPagar=updated.totalBruto+updated.extra+(updated.bonoEfectividad||0)-(updated.descuentoEfectividad||0)-updated.adelanto-updated.prestamo-updated.consumo-(updated.descSiniestro||0);}return updated;}));}async function calcularEnviosSemana(){
+},[mensajeros,pagos.length]);useEffect(()=>{if(mensajerosDia.length>0){const normNom2=n=>(n||'').replace(/,\s*/g,' ').replace(/\s+/g,' ').trim().toUpperCase();const tarifaMap={};mensajeros.forEach(m=>{tarifaMap[normNom2(m.nombre)]=m.tarifa||1200;});setPagos(prev=>{const prevMap={};prev.forEach(p=>{prevMap[normNom2(p.nombre)]=p;});return mensajerosDia.filter(m=>m.total>0).map((m,i)=>{const tarifa=tarifaMap[normNom2(m.nombre)]||1200;const bruto=m.entregados*tarifa;const existing=prevMap[normNom2(m.nombre)];if(existing)return{...existing,envios:m.entregados};return{id:m.id||i,nombre:m.nombre,envios:m.entregados,tarifa,bruto,ajuste:0,iva:0,totalBruto:bruto,adelanto:0,extra:0,prestamo:0,consumo:0,descSiniestro:0,penalizacion:0,totalPagar:bruto,estado:'PENDIENTE',obs:''};});});}},[mensajerosDia]);function updatePago(id,field,val){setPagos(prev=>prev.map(p=>{if(p.id!==id)return p;const strFields=['estado','obs','tipoIVA'];const updated={...p,[field]:strFields.includes(field)?val:+val};if(field==='tipoIVA'){if(val==='ninguno'){updated.iva=0;}else if(val==='manual'){}else{const rate=val==='honorarios'?0.1525:val==='factura'?0.19:0;updated.iva=Math.round(updated.bruto*rate/(1+rate));}}if(field==='tarifa'){updated.bruto=updated.envios*+val;const rate=updated.tipoIVA==='honorarios'?0.1525:updated.tipoIVA==='factura'?0.19:0;if(rate>0)updated.iva=Math.round(updated.bruto*rate/(1+rate));}if(!strFields.includes(field)){updated.totalBruto=updated.bruto+updated.ajuste-updated.iva;updated.totalPagar=updated.totalBruto+updated.extra+(updated.bonoEfectividad||0)-(updated.descuentoEfectividad||0)-updated.adelanto-updated.prestamo-updated.consumo-(updated.descSiniestro||0)-(updated.penalizacion||0);}if(field==='tipoIVA'){updated.totalBruto=updated.bruto+updated.ajuste-updated.iva;updated.totalPagar=updated.totalBruto+updated.extra+(updated.bonoEfectividad||0)-(updated.descuentoEfectividad||0)-updated.adelanto-updated.prestamo-updated.consumo-(updated.descSiniestro||0)-(updated.penalizacion||0);}return updated;}));}function aplicarPenalizacion(pagoId,item){
+  setPagos(function(prev){
+    return prev.map(function(p){
+      if(p.id!==pagoId)return p;
+      var lista=(p.penalizaciones||[]).concat([item]);
+      var totalPenal=lista.reduce(function(a,x){return a+(x.monto||0);},0);
+      var updated=Object.assign({},p,{penalizaciones:lista,penalizacion:totalPenal});
+      updated.totalPagar=updated.totalBruto+(updated.extra||0)+(updated.bonoEfectividad||0)-(updated.descuentoEfectividad||0)-(updated.adelanto||0)-(updated.prestamo||0)-(updated.consumo||0)-(updated.descSiniestro||0)-(updated.penalizacion||0);
+      return updated;
+    });
+  });
+}
+function eliminarPenalizacion(pagoId,itemId){
+  setPagos(function(prev){
+    return prev.map(function(p){
+      if(p.id!==pagoId)return p;
+      var lista=(p.penalizaciones||[]).filter(function(x){return x.id!==itemId;});
+      var totalPenal=lista.reduce(function(a,x){return a+(x.monto||0);},0);
+      var updated=Object.assign({},p,{penalizaciones:lista,penalizacion:totalPenal});
+      updated.totalPagar=updated.totalBruto+(updated.extra||0)+(updated.bonoEfectividad||0)-(updated.descuentoEfectividad||0)-(updated.adelanto||0)-(updated.prestamo||0)-(updated.consumo||0)-(updated.descSiniestro||0)-(updated.penalizacion||0);
+      return updated;
+    });
+  });
+}
+async function calcularEnviosSemana(){
 
   if(!fechaInicio||!fechaFin){toast('Selecciona el rango de fechas');return;}
 
@@ -1464,7 +1612,7 @@ useEffect(()=>{
         // nunca se penaliza a un mensajero sin envíos asignados.
         var descuentoEfectividad=(criterioEf.descuentoActivo&&asignados>0&&efectividad!=null&&(efectividad*100)<(+criterioEf.umbralDescuentoPct||0))?(+criterioEf.descuento||0):0;
 
-        var totalPagar=totalBruto+(p.extra||0)+bonoEfectividad-descuentoEfectividad-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0)-(p.descSiniestro||0);
+        var totalPagar=totalBruto+(p.extra||0)+bonoEfectividad-descuentoEfectividad-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0)-(p.descSiniestro||0)-(p.penalizacion||0);
 
         // Se guarda el detalle por comuna para que "Recalcular" (recalcAll) pueda
 
@@ -1554,7 +1702,7 @@ function recalcAll(){
 
         const totalBruto=bruto+(p.ajuste||0)-(p.iva||0);
 
-        const totalPagar=totalBruto+(p.extra||0)+(p.bonoEfectividad||0)-(p.descuentoEfectividad||0)-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0)-(p.descSiniestro||0);
+        const totalPagar=totalBruto+(p.extra||0)+(p.bonoEfectividad||0)-(p.descuentoEfectividad||0)-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0)-(p.descSiniestro||0)-(p.penalizacion||0);
 
         return{...p,nombre,tarifa,bruto,totalBruto,totalPagar};
 
@@ -1566,7 +1714,7 @@ function recalcAll(){
 
     const nuevos=mensajeros.filter(m=>m.activo!==false&&!updatedNames.has(m.nombre.replace(/,\s*/g,' ').toUpperCase().trim()))
 
-      .map((m,i)=>({id:Date.now()+i,nombre:m.nombre,envios:0,tarifa:m.tarifa||1200,bruto:0,ajuste:0,iva:0,tipoIVA:'ninguno',totalBruto:0,adelanto:0,extra:0,prestamo:0,consumo:0,descSiniestro:0,totalPagar:0,estado:'PENDIENTE',obs:''}));
+      .map((m,i)=>({id:Date.now()+i,nombre:m.nombre,envios:0,tarifa:m.tarifa||1200,bruto:0,ajuste:0,iva:0,tipoIVA:'ninguno',totalBruto:0,adelanto:0,extra:0,prestamo:0,consumo:0,descSiniestro:0,penalizacion:0,totalPagar:0,estado:'PENDIENTE',obs:''}));
 
     return updated.concat(nuevos);
 
@@ -1582,7 +1730,7 @@ function recalcAll(){
 // que exportar a Excel/PDF o guardar sigue usando siempre los valores de verdad.
 function montoPago(p){
   if(!vistaPreviaSinCriterio)return{bono:p.bonoEfectividad||0,desc:p.descuentoEfectividad||0,total:p.totalPagar};
-  return{bono:0,desc:0,total:p.totalBruto+(p.extra||0)-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0)-(p.descSiniestro||0)};
+  return{bono:0,desc:0,total:p.totalBruto+(p.extra||0)-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0)-(p.descSiniestro||0)-(p.penalizacion||0)};
 }
 const totales=pagos.reduce((a,p)=>{const m=montoPago(p);return{envios:a.envios+p.envios,bruto:a.bruto+p.bruto,adelanto:a.adelanto+p.adelanto,extra:a.extra+p.extra,bonoEfectividad:a.bonoEfectividad+m.bono,descuentoEfectividad:a.descuentoEfectividad+m.desc,prestamo:a.prestamo+p.prestamo,iva:a.iva+p.iva,consumo:a.consumo+(p.consumo||0),descSiniestro:a.descSiniestro+(p.descSiniestro||0),total:a.total+m.total,pendientes:a.pendientes+(p.estado==='PENDIENTE'?1:0),pagados:a.pagados+(p.estado==='PAGADO'?1:0)};},{envios:0,bruto:0,adelanto:0,extra:0,bonoEfectividad:0,descuentoEfectividad:0,prestamo:0,iva:0,consumo:0,descSiniestro:0,total:0,pendientes:0,pagados:0});const fmtCLP=n=>`$${Math.round(n).toLocaleString('es-CL')}`;function exportarComprobante(p){var _document$querySelect5;const win=window.open('','_blank','width=650,height=860');const logoSrc=((_document$querySelect5=document.querySelector('.logo-img'))==null?void 0:_document$querySelect5.src)||'';
     // Detalle por comuna: se arma con lo que ya calculó 'Calcular Envíos Semana' (p.enviosPorComuna +
@@ -1604,6 +1752,7 @@ const totales=pagos.reduce((a,p)=>{const m=montoPago(p);return{envios:a.envios+p
       (p.descuentoEfectividad||0)>0?{label:'Descuento Efectividad'+(p.efectividad!=null?' ('+(p.efectividad*100).toFixed(1)+'%)':''),val:-p.descuentoEfectividad,positivo:false}:null,
       p.consumo>0?{label:'Consumo Local',val:-p.consumo,positivo:false}:null,
       (p.descSiniestro||0)>0?{label:'Descuento por Siniestro',val:-p.descSiniestro,positivo:false}:null,
+      (p.penalizacion||0)>0?{label:'Penalización por Falta ('+(p.penalizaciones||[]).reduce(function(a,x){return a+(x.envios||0);},0)+' env.)',val:-p.penalizacion,positivo:false}:null,
       p.adelanto>0?{label:'Adelanto Recibido',val:-p.adelanto,positivo:false}:null,
       p.prestamo>0?{label:'Préstamo Descontado',val:-p.prestamo,positivo:false}:null
     ].filter(Boolean);
@@ -2288,7 +2437,7 @@ const totales=pagos.reduce((a,p)=>{const m=montoPago(p);return{envios:a.envios+p
 
     )
 
-  ))),filtrados.length===0&&/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",{colSpan:13,className:"empty-state"},"Sin resultados"))))));})(),pagos.length===0&&/*#__PURE__*/React.createElement("div",{className:"info-banner"},"\uD83D\uDCE5 Importa el archivo del d\xEDa primero para generar los pagos autom\xE1ticamente."),pagos.length>0&&/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:10}},/*#__PURE__*/React.createElement("input",{type:'text',placeholder:'🔍 Buscar mensajero...',value:pagosBusqueda,onChange:e=>setPagosBusqueda(e.target.value),style:{flex:'1 1 220px',minWidth:180,padding:'8px 12px',borderRadius:8,border:'1px solid var(--border)',fontSize:12,outline:'none'}}),/*#__PURE__*/React.createElement("button",{className:'btn-futurista btn-f-ghost',onClick:()=>setPagosOrden(pagosOrden==='asc'?'desc':pagosOrden==='desc'?null:'asc'),title:'Ordenar alfab\xE9ticamente por mensajero'},pagosOrden==='asc'?'⬇ A-Z':pagosOrden==='desc'?'⬆ Z-A':'↕ Ordenar A-Z'),/*#__PURE__*/React.createElement("div",{style:{display:'flex',border:'1px solid var(--border)',borderRadius:8,overflow:'hidden'}},React.createElement("button",{onClick:()=>setPagosVista('tabla'),style:{padding:'7px 12px',border:'none',cursor:'pointer',fontSize:11,fontWeight:700,background:pagosVista==='tabla'?'rgba(200,168,75,0.15)':'transparent',color:pagosVista==='tabla'?'var(--gold)':'var(--text-soft)'}},'☰ Tabla'),React.createElement("button",{onClick:()=>setPagosVista('tarjetas'),style:{padding:'7px 12px',border:'none',cursor:'pointer',fontSize:11,fontWeight:700,background:pagosVista==='tarjetas'?'rgba(200,168,75,0.15)':'transparent',color:pagosVista==='tarjetas'?'var(--gold)':'var(--text-soft)'}},'🪪 Tarjetas')),pagosBusqueda&&/*#__PURE__*/React.createElement("button",{className:'btn-secondary',onClick:()=>setPagosBusqueda('')},'✕ Limpiar'),(pagosBusqueda||pagosOrden)&&/*#__PURE__*/React.createElement("span",{style:{fontSize:11,color:'var(--text-soft)'}},pagosMostrados.length," de ",pagos.length," mensajeros")),vistaPreviaSinCriterio&&/*#__PURE__*/React.createElement("div",{style:{background:'rgba(176,48,48,0.08)',border:'1px solid var(--danger)',borderRadius:8,padding:'8px 14px',marginBottom:10,fontSize:12,fontWeight:700,color:'var(--danger)',display:'flex',alignItems:'center',gap:8}},"👁️ VISTA PREVIA: se están mostrando los montos SIN el bono/descuento por efectividad -- esto es solo para comparar, no cambia ni guarda nada. Clic en \"Viendo: SIN Efectividad\" para volver a los montos reales."),/*#__PURE__*/pagosVista==='tabla'?React.createElement("div",{className:"table-wrap"},/*#__PURE__*/React.createElement("table",null,/*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,React.createElement("th",{style:{width:36,textAlign:"center"}},"#"),React.createElement("th",null,"Mensajero"),React.createElement("th",{style:{textAlign:"center"}},"Envíos"),React.createElement("th",{style:{textAlign:"center"}},"Tarifa"),React.createElement("th",null,"Pago Calc."),React.createElement("th",{style:{color:"var(--danger)"}},"Consumo"),React.createElement("th",{style:{color:"#C62828"}},"Siniestro"),React.createElement("th",{style:{color:"#2980b9"}},"Extra"),React.createElement("th",{style:{color:"#7a6ba8",textAlign:"center"}},"Efectividad"),React.createElement("th",{style:{color:"#7a6ba8"}},"Bono Efect."),React.createElement("th",{style:{color:"#b03030"}},"Desc. Efect."),React.createElement("th",{style:{color:"#e67e22"}},"Adelanto"),React.createElement("th",{style:{color:"#c0392b"}},"Préstamo"),React.createElement("th",{style:{color:"#c0392b"}},"Saldo Pend."),React.createElement("th",{style:{fontWeight:700}},"Total a Pagar"),React.createElement("th",null,"Estado"),React.createElement("th",null,"Nota"),React.createElement("th",{style:{width:60}},"Acc."))),/*#__PURE__*/React.createElement("tbody",null,pagosMostrados.map((p,i)=>((m)=>/*#__PURE__*/React.createElement("tr",{key:p.id,style:{background:p.estado==='PAGADO'?'rgba(46,125,79,0.04)':''}},/*#__PURE__*/React.createElement("td",{style:{textAlign:'center',fontFamily:'JetBrains Mono',fontSize:11,color:'var(--text-soft)',background:'var(--cream)',fontWeight:700}},i+1),/*#__PURE__*/React.createElement("td",{style:{fontWeight:700,whiteSpace:'nowrap'}},p.nombre.replace(/,\s*/g,' ')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center'}},p.envios),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:72,padding:'4px 6px',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.tarifa,onChange:e=>updatePago(p.id,'tarifa',e.target.value),onFocus:e=>e.target.select()})),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)',fontWeight:600}},"$",Math.round(p.bruto).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--danger)',cursor:'pointer',fontWeight:600},onClick:()=>setConsumoModal(p),title:'Clic para registrar consumo'},"$",Math.round(p.consumo||0).toLocaleString('es-CL'),/*#__PURE__*/React.createElement('span',{style:{fontSize:9,marginLeft:3,color:'var(--gold)',opacity:0.7}},'✎')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'#C62828',fontWeight:600},title:(p.descSiniestro||0)>0?'Descontado desde la sección Siniestros para esta semana':'Sin descuentos por siniestro esta semana'},"$",Math.round(p.descSiniestro||0).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:72,padding:'4px 6px',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:6,color:'var(--success)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.extra,onChange:e=>updatePago(p.id,'extra',e.target.value),onFocus:e=>e.target.select()})),/*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',color:p.efectividad==null?'var(--text-soft)':(p.efectividad>=0.95?'var(--success)':'var(--danger)'),fontWeight:600},title:p.asignados?p.envios+' entregados de '+p.asignados+' asignados':'Sin datos de asignados (requiere "Calcular Envíos Semana" con el bono activo)'},p.efectividad!=null?(p.efectividad*100).toFixed(1)+'%':'—'),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:(m.bono||0)>0?'#7a6ba8':'var(--text-soft)',fontWeight:600},title:'Bono automático por efectividad (ver botón \uD83C\uDFAF Criterio Efectividad)'},"$",Math.round(m.bono||0).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:(m.desc||0)>0?'var(--danger)':'var(--text-soft)',fontWeight:600},title:'Descuento automático por incumplir efectividad (ver botón \uD83C\uDFAF Criterio Efectividad)'},"$",Math.round(m.desc||0).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:72,padding:'4px 6px',background:'var(--cream)',border:'1px solid rgba(176,48,48,0.3)',borderRadius:6,color:'var(--danger)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.adelanto,onChange:e=>updatePago(p.id,'adelanto',e.target.value),onFocus:e=>e.target.select()})),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:72,padding:'4px 6px',background:'var(--cream)',border:'1px solid rgba(176,48,48,0.3)',borderRadius:6,color:'var(--danger)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.prestamo,onChange:e=>updatePago(p.id,'prestamo',e.target.value),onFocus:e=>e.target.select()})),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:"#c0392b",fontWeight:600,cursor:"pointer"},onClick:()=>setPrestamosModal(p.nombre),title:"Ver historial de préstamos"},(()=>{const key=p.nombre.toUpperCase().trim();const s=(prestamosDB[key]&&prestamosDB[key].saldo)||0;return s>0?"$"+Math.round(s).toLocaleString('es-CL'):'—';})()),/*#__PURE__*/React.createElement("td",{style:{fontFamily:'JetBrains Mono',fontWeight:700,fontSize:12,color:m.total>=0?'var(--success)':'var(--danger)',whiteSpace:'nowrap'}},"$",Math.round(m.total).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("select",{value:p.estado,onChange:e=>updatePago(p.id,'estado',e.target.value),style:{padding:'4px 8px',borderRadius:6,border:'1px solid var(--border)',background:p.estado==='PAGADO'?'rgba(46,125,79,0.1)':'rgba(176,48,48,0.06)',color:p.estado==='PAGADO'?'var(--success)':'var(--danger)',fontWeight:700,fontSize:11,cursor:'pointer',outline:'none'}},/*#__PURE__*/React.createElement("option",{value:"PENDIENTE"},"PENDIENTE"),/*#__PURE__*/React.createElement("option",{value:"PAGADO"},"PAGADO"))),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:100,padding:'4px 6px',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontSize:11,outline:'none'},placeholder:"Nota...",value:p.obs,onChange:e=>updatePago(p.id,'obs',e.target.value)})),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("button",{className:"action-btn btn-edit",onClick:()=>exportarComprobante(p),title:"Exportar comprobante"},"\uD83D\uDCC4"))))(montoPago(p))),/*#__PURE__*/React.createElement("tr",{className:"totales-row"},/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:1}},"TOTALES"),/*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',fontWeight:700}},totales.envios.toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)',fontWeight:700}},"$",Math.round(totales.bruto).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--danger)'}},"$",Math.round(totales.consumo).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'#C62828'}},"$",Math.round(totales.descSiniestro||0).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)'}},"$",Math.round(totales.extra).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'#7a6ba8',fontWeight:700}},"$",Math.round(totales.bonoEfectividad||0).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--danger)',fontWeight:700}},"$",Math.round(totales.descuentoEfectividad||0).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--danger)'}},"$",Math.round(totales.adelanto).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--danger)'}},"$",Math.round(totales.prestamo).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)',fontWeight:700,fontSize:13}},"$",Math.round(totales.total).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",{style:{color:'var(--text-soft)',fontSize:12}},totales.pagados," pag. / ",totales.pendientes," pend."))))):React.createElement(PagosTarjetas,{pagos:pagosMostrados,montoPago:montoPago,updatePago:updatePago,setConsumoModal:setConsumoModal,setPrestamosModal:setPrestamosModal,exportarComprobante:exportarComprobante,prestamosDB:prestamosDB})),
+  ))),filtrados.length===0&&/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",{colSpan:13,className:"empty-state"},"Sin resultados"))))));})(),pagos.length===0&&/*#__PURE__*/React.createElement("div",{className:"info-banner"},"\uD83D\uDCE5 Importa el archivo del d\xEDa primero para generar los pagos autom\xE1ticamente."),pagos.length>0&&/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:10}},/*#__PURE__*/React.createElement("input",{type:'text',placeholder:'🔍 Buscar mensajero...',value:pagosBusqueda,onChange:e=>setPagosBusqueda(e.target.value),style:{flex:'1 1 220px',minWidth:180,padding:'8px 12px',borderRadius:8,border:'1px solid var(--border)',fontSize:12,outline:'none'}}),/*#__PURE__*/React.createElement("button",{className:'btn-futurista btn-f-ghost',onClick:()=>setPagosOrden(pagosOrden==='asc'?'desc':pagosOrden==='desc'?null:'asc'),title:'Ordenar alfab\xE9ticamente por mensajero'},pagosOrden==='asc'?'⬇ A-Z':pagosOrden==='desc'?'⬆ Z-A':'↕ Ordenar A-Z'),/*#__PURE__*/React.createElement("div",{style:{display:'flex',border:'1px solid var(--border)',borderRadius:8,overflow:'hidden'}},React.createElement("button",{onClick:()=>setPagosVista('tabla'),style:{padding:'7px 12px',border:'none',cursor:'pointer',fontSize:11,fontWeight:700,background:pagosVista==='tabla'?'rgba(200,168,75,0.15)':'transparent',color:pagosVista==='tabla'?'var(--gold)':'var(--text-soft)'}},'☰ Tabla'),React.createElement("button",{onClick:()=>setPagosVista('tarjetas'),style:{padding:'7px 12px',border:'none',cursor:'pointer',fontSize:11,fontWeight:700,background:pagosVista==='tarjetas'?'rgba(200,168,75,0.15)':'transparent',color:pagosVista==='tarjetas'?'var(--gold)':'var(--text-soft)'}},'🪪 Tarjetas')),pagosBusqueda&&/*#__PURE__*/React.createElement("button",{className:'btn-secondary',onClick:()=>setPagosBusqueda('')},'✕ Limpiar'),(pagosBusqueda||pagosOrden)&&/*#__PURE__*/React.createElement("span",{style:{fontSize:11,color:'var(--text-soft)'}},pagosMostrados.length," de ",pagos.length," mensajeros")),vistaPreviaSinCriterio&&/*#__PURE__*/React.createElement("div",{style:{background:'rgba(176,48,48,0.08)',border:'1px solid var(--danger)',borderRadius:8,padding:'8px 14px',marginBottom:10,fontSize:12,fontWeight:700,color:'var(--danger)',display:'flex',alignItems:'center',gap:8}},"👁️ VISTA PREVIA: se están mostrando los montos SIN el bono/descuento por efectividad -- esto es solo para comparar, no cambia ni guarda nada. Clic en \"Viendo: SIN Efectividad\" para volver a los montos reales."),/*#__PURE__*/pagosVista==='tabla'?React.createElement("div",{className:"table-wrap"},/*#__PURE__*/React.createElement("table",null,/*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,React.createElement("th",{style:{width:36,textAlign:"center"}},"#"),React.createElement("th",null,"Mensajero"),React.createElement("th",{style:{textAlign:"center"}},"Envíos"),React.createElement("th",{style:{textAlign:"center"}},"Tarifa"),React.createElement("th",null,"Pago Calc."),React.createElement("th",{style:{color:"var(--danger)"}},"Consumo"),React.createElement("th",{style:{color:"#C62828"}},"Siniestro"),React.createElement("th",{style:{color:"#2980b9"}},"Extra"),React.createElement("th",{style:{color:"#7a6ba8",textAlign:"center"}},"Efectividad"),React.createElement("th",{style:{color:"#7a6ba8"}},"Bono Efect."),React.createElement("th",{style:{color:"#b03030"}},"Desc. Efect."),React.createElement("th",{style:{color:"#e67e22"}},"Adelanto"),React.createElement("th",{style:{color:"#c0392b"}},"Préstamo"),React.createElement("th",{style:{color:"#c0392b"}},"Saldo Pend."),React.createElement("th",{style:{fontWeight:700}},"Total a Pagar"),React.createElement("th",null,"Estado"),React.createElement("th",null,"Nota"),React.createElement("th",{style:{width:60}},"Acc."))),/*#__PURE__*/React.createElement("tbody",null,pagosMostrados.map((p,i)=>((m)=>/*#__PURE__*/React.createElement("tr",{key:p.id,style:{background:p.estado==='PAGADO'?'rgba(46,125,79,0.04)':''}},/*#__PURE__*/React.createElement("td",{style:{textAlign:'center',fontFamily:'JetBrains Mono',fontSize:11,color:'var(--text-soft)',background:'var(--cream)',fontWeight:700}},i+1),/*#__PURE__*/React.createElement("td",{style:{fontWeight:700,whiteSpace:'nowrap'}},p.nombre.replace(/,\s*/g,' ')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center'}},p.envios),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:72,padding:'4px 6px',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.tarifa,onChange:e=>updatePago(p.id,'tarifa',e.target.value),onFocus:e=>e.target.select()})),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)',fontWeight:600}},"$",Math.round(p.bruto).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--danger)',cursor:'pointer',fontWeight:600},onClick:()=>setConsumoModal(p),title:'Clic para registrar consumo'},"$",Math.round(p.consumo||0).toLocaleString('es-CL'),/*#__PURE__*/React.createElement('span',{style:{fontSize:9,marginLeft:3,color:'var(--gold)',opacity:0.7}},'✎')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'#C62828',fontWeight:600},title:(p.descSiniestro||0)>0?'Descontado desde la sección Siniestros para esta semana':'Sin descuentos por siniestro esta semana'},"$",Math.round(p.descSiniestro||0).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:72,padding:'4px 6px',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:6,color:'var(--success)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.extra,onChange:e=>updatePago(p.id,'extra',e.target.value),onFocus:e=>e.target.select()})),/*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',color:p.efectividad==null?'var(--text-soft)':(p.efectividad>=0.95?'var(--success)':'var(--danger)'),fontWeight:600},title:p.asignados?p.envios+' entregados de '+p.asignados+' asignados':'Sin datos de asignados (requiere "Calcular Envíos Semana" con el bono activo)'},p.efectividad!=null?(p.efectividad*100).toFixed(1)+'%':'—'),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:(m.bono||0)>0?'#7a6ba8':'var(--text-soft)',fontWeight:600},title:'Bono automático por efectividad (ver botón \uD83C\uDFAF Criterio Efectividad)'},"$",Math.round(m.bono||0).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:(m.desc||0)>0?'var(--danger)':'var(--text-soft)',fontWeight:600},title:'Descuento automático por incumplir efectividad (ver botón \uD83C\uDFAF Criterio Efectividad)'},"$",Math.round(m.desc||0).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:72,padding:'4px 6px',background:'var(--cream)',border:'1px solid rgba(176,48,48,0.3)',borderRadius:6,color:'var(--danger)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.adelanto,onChange:e=>updatePago(p.id,'adelanto',e.target.value),onFocus:e=>e.target.select()})),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:72,padding:'4px 6px',background:'var(--cream)',border:'1px solid rgba(176,48,48,0.3)',borderRadius:6,color:'var(--danger)',fontFamily:'JetBrains Mono',fontSize:11,textAlign:'right',outline:'none'},type:"number",value:p.prestamo,onChange:e=>updatePago(p.id,'prestamo',e.target.value),onFocus:e=>e.target.select()})),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:"#c0392b",fontWeight:600,cursor:"pointer"},onClick:()=>setPrestamosModal(p.nombre),title:"Ver historial de préstamos"},(()=>{const key=p.nombre.toUpperCase().trim();const s=(prestamosDB[key]&&prestamosDB[key].saldo)||0;return s>0?"$"+Math.round(s).toLocaleString('es-CL'):'—';})()),/*#__PURE__*/React.createElement("td",{style:{fontFamily:'JetBrains Mono',fontWeight:700,fontSize:12,color:m.total>=0?'var(--success)':'var(--danger)',whiteSpace:'nowrap'}},"$",Math.round(m.total).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("select",{value:p.estado,onChange:e=>updatePago(p.id,'estado',e.target.value),style:{padding:'4px 8px',borderRadius:6,border:'1px solid var(--border)',background:p.estado==='PAGADO'?'rgba(46,125,79,0.1)':'rgba(176,48,48,0.06)',color:p.estado==='PAGADO'?'var(--success)':'var(--danger)',fontWeight:700,fontSize:11,cursor:'pointer',outline:'none'}},/*#__PURE__*/React.createElement("option",{value:"PENDIENTE"},"PENDIENTE"),/*#__PURE__*/React.createElement("option",{value:"PAGADO"},"PAGADO"))),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{style:{width:100,padding:'4px 6px',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontSize:11,outline:'none'},placeholder:"Nota...",value:p.obs,onChange:e=>updatePago(p.id,'obs',e.target.value)})),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("button",{className:"action-btn btn-edit",onClick:()=>exportarComprobante(p),title:"Exportar comprobante"},"\uD83D\uDCC4"))))(montoPago(p))),/*#__PURE__*/React.createElement("tr",{className:"totales-row"},/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:1}},"TOTALES"),/*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',fontWeight:700}},totales.envios.toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)',fontWeight:700}},"$",Math.round(totales.bruto).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--danger)'}},"$",Math.round(totales.consumo).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'#C62828'}},"$",Math.round(totales.descSiniestro||0).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)'}},"$",Math.round(totales.extra).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'#7a6ba8',fontWeight:700}},"$",Math.round(totales.bonoEfectividad||0).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--danger)',fontWeight:700}},"$",Math.round(totales.descuentoEfectividad||0).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--danger)'}},"$",Math.round(totales.adelanto).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--danger)'}},"$",Math.round(totales.prestamo).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",{className:"mono",style:{color:'var(--success)',fontWeight:700,fontSize:13}},"$",Math.round(totales.total).toLocaleString('es-CL')),/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",null),/*#__PURE__*/React.createElement("td",{style:{color:'var(--text-soft)',fontSize:12}},totales.pagados," pag. / ",totales.pendientes," pend."))))):React.createElement(PagosTarjetas,{pagos:pagosMostrados,montoPago:montoPago,updatePago:updatePago,setConsumoModal:setConsumoModal,setPrestamosModal:setPrestamosModal,exportarComprobante:exportarComprobante,prestamosDB:prestamosDB,setPenalizacionModal:setPenalizacionModal})),
 
   pp.historial&&/*#__PURE__*/React.createElement("div",{className:"pm-tab-historial",style:{display:pagosTab==='historial'?'block':'none',padding:'0 20px 20px'}},/*#__PURE__*/React.createElement(HistorialCierres,{db:db})),pp.ayudas&&/*#__PURE__*/React.createElement("div",{className:"pm-tab-ayudas",style:{padding:'0 20px 20px'}},pagosTab==='ayudas'&&/*#__PURE__*/React.createElement(ConteoAyudas,{mensajeros:mensajeros,toast:toast})),pp.retiros&&/*#__PURE__*/React.createElement("div",{className:"pm-tab-retiros"},
 
@@ -2300,7 +2449,7 @@ const totales=pagos.reduce((a,p)=>{const m=montoPago(p);return{envios:a.envios+p
   var nombreNorm=(m.nombre||'').toUpperCase().replace(/,\s*/g,' ').replace(/\s+/g,' ').trim();
   var pago=pagos.find(function(p){return p.nombre.toUpperCase().replace(/,\s*/g,' ').replace(/\s+/g,' ').trim()===nombreNorm;});
   if(pago)setConsumoModal(pago);else toast&&toast('⚠ Aún no aparece en la tabla de Pagos de esta semana.');
-}})),consumoModal&&React.createElement(ConsumoModal,{p:consumoModal,semana:semana,productosLocal:productosLocal,toast:toast,onClose:()=>setConsumoModal(null),onTotalChange:function(total){updatePago(consumoModal.id,'consumo',total);}}),criterioModalAbierto&&React.createElement(CriterioEfectividadModal,{criterio:criterioEf,onGuardar:setCriterioEf,onClose:()=>setCriterioModalAbierto(false)})));}
+}})),consumoModal&&React.createElement(ConsumoModal,{p:consumoModal,semana:semana,productosLocal:productosLocal,toast:toast,onClose:()=>setConsumoModal(null),onTotalChange:function(total){updatePago(consumoModal.id,'consumo',total);}}),penalizacionModal&&React.createElement(PenalizacionModal,{p:penalizacionModal,toast:toast,onClose:()=>setPenalizacionModal(null),onAplicar:function(item){aplicarPenalizacion(penalizacionModal.id,item);},onEliminar:function(itemId){eliminarPenalizacion(penalizacionModal.id,itemId);}}),criterioModalAbierto&&React.createElement(CriterioEfectividadModal,{criterio:criterioEf,onGuardar:setCriterioEf,onClose:()=>setCriterioModalAbierto(false)})));}
 
 window.PagosMensajeros = PagosMensajeros;
 
