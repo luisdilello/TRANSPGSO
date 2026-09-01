@@ -622,7 +622,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788271861;
+window.__MODULES_VERSION=1788273200;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -12851,7 +12851,15 @@ function MapaRutas(props){
           '<div style="font-size:11px;color:#666;margin-bottom:6px">'+e.comuna+'</div>'+
           '<div style="font-size:11px;font-weight:700;color:'+color+'">'+e.estado.replace(/_/g,' ').toUpperCase()+'</div>'+
           '<div style="font-size:10px;color:#999;margin-top:4px">'+e.codigo+'</div>'+
+          '<button id="tp-iw-btn-'+e.codigo+'" style="margin-top:8px;width:100%;padding:7px 10px;border:none;border-radius:6px;background:linear-gradient(135deg,#d4b050,#C8A84B);color:#1a1d13;font-weight:700;font-size:11px;cursor:pointer;letter-spacing:0.3px;">Ver ficha completa →</button>'+
           '</div>'
+      });
+      // Mismo motivo que en buscarYMostrarEnvio: el botón vive en el HTML crudo del InfoWindow,
+      // así que hay que enganchar el click en cada 'domready' (no una sola vez), porque el DOM
+      // del InfoWindow se recrea cada vez que se reabre.
+      google.maps.event.addListener(iw,'domready',function(){
+        var btn=document.getElementById('tp-iw-btn-'+e.codigo);
+        if(btn)btn.onclick=function(){if(onVerEnGestion)onVerEnGestion(e.codigo);};
       });
       marker.addListener('click',function(){iw.open(map,marker);});
       markersEnviosRef.current[e.codigo]=marker;
