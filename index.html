@@ -622,7 +622,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788277701;
+window.__MODULES_VERSION=1788278892;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -10675,7 +10675,17 @@ var TRAD_CLIENTE={
   '➕ Nuevo Envío':{en:'➕ New Shipment',zh:'➕ 新建包裹'},
   'Carga Masiva':{en:'Bulk Upload',zh:'批量上传'},
   '📄 Carga PDF':{en:'📄 PDF Upload',zh:'📄 PDF上传'},
-  'Sel. todos':{en:'Select all',zh:'全选'}
+  'Sel. todos':{en:'Select all',zh:'全选'},
+  // ── Buscador y ficha de envío del Mapa de Entregas (mismo patrón que el Mapa de Rutas admin,
+  // pero sin exponer mensajero ni datos internos — ver FichaEnvioCliente) ──
+  'Buscar código de envío...':{en:'Search shipment code...',zh:'搜索包裹编号...'},
+  'Ver detalle →':{en:'View details →',zh:'查看详情 →'},
+  'No encontramos ese código en el período seleccionado.':{en:'We could not find that code in the selected period.',zh:'在所选时间段内未找到该编号。'},
+  'Ese envío no tiene dirección registrada.':{en:'That shipment has no address on file.',zh:'该包裹没有登记地址。'},
+  'No pudimos ubicar la dirección de ese envío en el mapa.':{en:'We could not locate that shipment’s address on the map.',zh:'无法在地图上定位该包裹的地址。'},
+  'Historial de Estados':{en:'Status History',zh:'状态历史'},
+  'Cargando historial...':{en:'Loading history...',zh:'正在加载历史记录...'},
+  'Sin historial registrado para este envío.':{en:'No history recorded for this shipment.',zh:'该包裹没有历史记录。'}
 };
 function traducirCliente(idioma,es){
   if(!es||idioma==='es')return es;
@@ -10710,6 +10720,12 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
   var _mapaListo=React.useState(false);var mapaListo=_mapaListo[0];var setMapaListo=_mapaListo[1];
   var _fe=React.useState('todos');var filtroEstado=_fe[0];var setFiltroEstado=_fe[1];
   var _cm=React.useState(true);var cargandoMapaCliente=_cm[0];var setCargandoMapaCliente=_cm[1];
+  // Buscador de código + ficha de detalle (fotos + historial, sin mensajero) directo desde el
+  // mapa -- mismo patrón que el Mapa de Rutas del admin: se abre encima del mapa, así el cliente
+  // puede revisar varios envíos seguidos sin perder el lugar donde estaba mirando.
+  var _busqMC=React.useState('');var busquedaCodigo=_busqMC[0];var setBusquedaCodigo=_busqMC[1];
+  var _msgMC=React.useState('');var msgBusqueda=_msgMC[0];var setMsgBusqueda=_msgMC[1];
+  var _fichaMC=React.useState(null);var fichaCodigo=_fichaMC[0];var setFichaCodigo=_fichaMC[1];
   function colorEstado(estado){
     if(estado==='entregado')return'#2e7d4f';
     if(estado==='cancelado'||estado==='siniestro')return'#b03030';
@@ -10810,7 +10826,14 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
       function ponerPin(loc){
         if(cancelado)return;
         var marker=new google.maps.Marker({position:loc,map:map,icon:{path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:colorEstado(e.estado),fillOpacity:1,strokeColor:'#fff',strokeWeight:2}});
-        var info=new google.maps.InfoWindow({content:'<div style="font-family:DM Sans;padding:2px 4px;min-width:180px"><div style="font-weight:700;color:#C8A84B;font-size:11px;letter-spacing:1px;margin-bottom:4px">'+e.codigo+'</div><div style="font-size:13px;margin-bottom:2px">'+(e.destinatario||'')+'</div><div style="font-size:12px;color:#666;margin-bottom:6px">'+(e.direccion||'')+(e.comuna?', '+e.comuna:'')+'</div><div style="font-size:12px;font-weight:700;color:'+colorEstado(e.estado)+'">'+labelEstado(e.estado)+'</div></div>'});
+        var info=new google.maps.InfoWindow({content:'<div style="font-family:DM Sans;padding:2px 4px;min-width:180px"><div style="font-weight:700;color:#C8A84B;font-size:11px;letter-spacing:1px;margin-bottom:4px">'+e.codigo+'</div><div style="font-size:13px;margin-bottom:2px">'+(e.destinatario||'')+'</div><div style="font-size:12px;color:#666;margin-bottom:6px">'+(e.direccion||'')+(e.comuna?', '+e.comuna:'')+'</div><div style="font-size:12px;font-weight:700;color:'+colorEstado(e.estado)+'">'+labelEstado(e.estado)+'</div><button id="tpc-iw-btn-'+e.codigo+'" style="margin-top:8px;width:100%;padding:7px 10px;border:none;border-radius:6px;background:linear-gradient(135deg,#d4b050,#C8A84B);color:#1a1d13;font-weight:700;font-size:11px;cursor:pointer;letter-spacing:0.3px">'+t('Ver detalle →')+'</button></div>'});
+        // El botón vive en el HTML crudo del InfoWindow -- hay que enganchar el click en cada
+        // 'domready' (no una sola vez), porque el DOM del InfoWindow se recrea cada vez que se
+        // reabre (mismo patrón que el Mapa de Rutas del admin).
+        google.maps.event.addListener(info,'domready',function(){
+          var btn=document.getElementById('tpc-iw-btn-'+e.codigo);
+          if(btn)btn.onclick=function(){setFichaCodigo(e.codigo);};
+        });
         marker.addListener('click',function(){info.open(map,marker);});
         markersRef.current[e.codigo]=marker;
       }
@@ -10845,6 +10868,51 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
     });
     return function(){cancelado=true;};
   },[envios,mapaListo,filtroEstado,periodo,fechaDesde,fechaHasta]);
+
+  // Busca un código dentro de los envíos YA CARGADOS para el período seleccionado (el mapa no
+  // trae todo el histórico del cliente de una vez, ver el fetch más arriba) y lo ubica en el
+  // mapa -- si ya tiene un pin puesto lo reabre, si no, lo geocodifica al vuelo (igual que el
+  // Mapa de Rutas del admin).
+  function buscarCodigoMapaCliente(){
+    var q=(busquedaCodigo||'').trim();
+    if(!q)return;
+    var match=envios.find(function(e){return String(e.codigo).toLowerCase()===q.toLowerCase();});
+    if(!match){setMsgBusqueda(t('No encontramos ese código en el período seleccionado.'));return;}
+    setMsgBusqueda('');
+    var existente=markersRef.current[match.codigo];
+    if(existente&&mapObj.current){
+      mapObj.current.panTo(existente.getPosition());
+      mapObj.current.setZoom(16);
+      google.maps.event.trigger(existente,'click');
+      return;
+    }
+    if(!match.direccion){setMsgBusqueda(t('Ese envío no tiene dirección registrada.'));return;}
+    if(!mapObj.current||!geocoderRef.current)return;
+    var dirLimpia=match.direccion.trim().replace(/,?\s*(depto?|apt|of|piso|block|bl|dpto)[.\s]*[0-9a-z-]*/gi,'').trim();
+    geocoderRef.current.geocode({address:dirLimpia+', '+(match.comuna||'')+', Santiago, Chile',region:'CL'},function(results,status){
+      if(status==='OK'&&results&&results[0]){
+        var loc={lat:results[0].geometry.location.lat(),lng:results[0].geometry.location.lng()};
+        coordsCacheRef.current[match.codigo]=loc;
+        mapObj.current.panTo(loc);
+        mapObj.current.setZoom(16);
+        var marker=new google.maps.Marker({position:loc,map:mapObj.current,icon:{path:google.maps.SymbolPath.CIRCLE,scale:10,fillColor:colorEstado(match.estado),fillOpacity:1,strokeColor:'#fff',strokeWeight:2},animation:google.maps.Animation.BOUNCE});
+        setTimeout(function(){marker.setAnimation(null);},2100);
+        var info=new google.maps.InfoWindow({content:'<div style="font-family:DM Sans;padding:2px 4px;min-width:180px"><div style="font-weight:700;color:#C8A84B;font-size:11px;letter-spacing:1px;margin-bottom:4px">'+match.codigo+'</div><div style="font-size:13px;margin-bottom:2px">'+(match.destinatario||'')+'</div><div style="font-size:12px;color:#666;margin-bottom:6px">'+(match.direccion||'')+(match.comuna?', '+match.comuna:'')+'</div><div style="font-size:12px;font-weight:700;color:'+colorEstado(match.estado)+'">'+labelEstado(match.estado)+'</div><button id="tpc-iw-btn-'+match.codigo+'" style="margin-top:8px;width:100%;padding:7px 10px;border:none;border-radius:6px;background:linear-gradient(135deg,#d4b050,#C8A84B);color:#1a1d13;font-weight:700;font-size:11px;cursor:pointer;letter-spacing:0.3px">'+t('Ver detalle →')+'</button></div>'});
+        google.maps.event.addListener(info,'domready',function(){
+          var btn=document.getElementById('tpc-iw-btn-'+match.codigo);
+          if(btn)btn.onclick=function(){setFichaCodigo(match.codigo);};
+        });
+        info.open(mapObj.current,marker);
+        marker.addListener('click',function(){info.open(mapObj.current,marker);});
+        markersRef.current[match.codigo]=marker;
+        db.rpc('guardar_coords_envio',{p_codigo:match.codigo,p_lat:loc.lat,p_lng:loc.lng}).then(function(){},function(){});
+      }else{
+        setMsgBusqueda(t('No pudimos ubicar la dirección de ese envío en el mapa.'));
+      }
+    });
+  }
+  var fichaEnvioCliente=fichaCodigo?envios.find(function(e){return e.codigo===fichaCodigo;}):null;
+
   return React.createElement('div',null,
     React.createElement('div',{className:'section-head'},
       React.createElement('div',{className:'section-title'},t('Mapa de '),React.createElement('span',null,t('Entregas'))),
@@ -10875,8 +10943,69 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
         );
       })
     ),
+    React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8,alignItems:'center'}},
+      React.createElement('input',{value:busquedaCodigo,onChange:function(e){setBusquedaCodigo(e.target.value);},
+        onKeyDown:function(e){if(e.key==='Enter')buscarCodigoMapaCliente();},
+        placeholder:t('Buscar código de envío...'),
+        style:{flex:1,minWidth:200,maxWidth:320,padding:'8px 12px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}
+      }),
+      React.createElement('button',{onClick:buscarCodigoMapaCliente,
+        style:{padding:'8px 16px',borderRadius:8,border:'1px solid var(--gold)',background:'rgba(200,168,75,0.12)',color:'var(--gold)',fontWeight:700,fontSize:12,cursor:'pointer'}
+      },'🔍'),
+      msgBusqueda&&React.createElement('span',{style:{fontSize:11,color:'var(--danger)'}},msgBusqueda)
+    ),
     React.createElement('div',{ref:mapRef,style:{width:'100%',height:'70vh',borderRadius:12,border:'1px solid var(--border)'}}),
-    !mapaListo&&React.createElement('div',{style:{textAlign:'center',padding:20,color:'var(--text-soft)',fontSize:12}},t('Cargando mapa...'))
+    !mapaListo&&React.createElement('div',{style:{textAlign:'center',padding:20,color:'var(--text-soft)',fontSize:12}},t('Cargando mapa...')),
+    fichaEnvioCliente&&React.createElement(Modal,{title:t('Envío ')+fichaEnvioCliente.codigo,wide:true,onClose:function(){setFichaCodigo(null);}},
+      React.createElement(FichaEnvioCliente,{envio:fichaEnvioCliente,t:t}),
+      React.createElement('div',{className:'modal-actions'},React.createElement('button',{className:'btn-secondary',onClick:function(){setFichaCodigo(null);}},t('Cerrar')))
+    )
+  );
+}
+function FichaEnvioCliente(props){
+  // Ficha de solo lectura para el portal de clientes: mismos campos que ya veían en "Mis
+  // Envíos" (código/destinatario/dirección/comuna/teléfono/fecha/estado + fotos), más el
+  // historial de estados -- pero A PROPÓSITO sin mensajero ni el nombre de quién hizo cada
+  // cambio en el historial, que son datos internos de operación, no de cara al cliente.
+  var envio=props.envio;
+  var t=props.t||function(es){return es;};
+  var _hist=useState([]),historialCliente=_hist[0],setHistorialCliente=_hist[1];
+  var _cargHist=useState(true),cargandoHistCliente=_cargHist[0],setCargandoHistCliente=_cargHist[1];
+  useEffect(function(){
+    if(!envio||!envio.codigo)return;
+    setCargandoHistCliente(true);
+    db.from('historial_envios').select('*').eq('codigo_envio',envio.codigo).order('created_at',{ascending:true})
+      .then(function(r){setHistorialCliente(r.data||[]);setCargandoHistCliente(false);})
+      .catch(function(){setHistorialCliente([]);setCargandoHistCliente(false);});
+  },[envio&&envio.codigo]);
+  function fmtFHCliente(iso){if(!iso)return'—';try{return new Date(iso).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return iso;}}
+  if(!envio)return null;
+  return React.createElement(React.Fragment,null,
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}},
+      [['Código',envio.codigo],['Destinatario',envio.destinatario],['Dirección',envio.direccion],['Comuna',envio.comuna],['Teléfono',envio.telefono],['Fecha',envio.fecha],['Estado',t((typeof estadoInfo==='function'?estadoInfo(envio.estado):{label:envio.estado}).label)]].map(function(x){
+        return React.createElement('div',{key:x[0],style:{padding:'8px 12px',background:'linear-gradient(145deg,#fff,#fdf6e8)',borderRadius:8,border:'1px solid rgba(200,168,75,0.1)',boxShadow:'2px 2px 4px rgba(43,46,32,0.06)'}},
+          React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)',letterSpacing:1.5,textTransform:'uppercase',marginBottom:3,fontFamily:'Bebas Neue',fontSize:10}},t(x[0])),
+          React.createElement('div',{style:{fontSize:13,fontWeight:600,color:'var(--dark)'}},x[1]||'—')
+        );
+      })
+    ),
+    envio.nota&&React.createElement('div',{className:'obs-box',style:{marginBottom:16}},'',envio.nota),
+    React.createElement(FotosEntregaConRecarga,{codigo:envio.codigo,fotoEtiquetaInicial:envio.foto_etiqueta}),
+    React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)',margin:'16px 0 10px'}},t('Historial de Estados')),
+    React.createElement('div',{style:{maxHeight:220,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8}},
+      cargandoHistCliente?React.createElement('div',{style:{padding:16,textAlign:'center',color:'var(--text-soft)',fontSize:12}},t('Cargando historial...')):
+      historialCliente.length===0?React.createElement('div',{style:{padding:16,textAlign:'center',color:'var(--text-soft)',fontSize:12}},t('Sin historial registrado para este envío.')):
+      historialCliente.map(function(h,i){
+        var info=typeof estadoInfo==='function'?estadoInfo(h.estado):{label:h.estado,color:'var(--dark)'};
+        return React.createElement('div',{key:h.id||i,style:{padding:'8px 12px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',gap:10,alignItems:'flex-start'}},
+          React.createElement('div',null,
+            React.createElement('div',{style:{fontSize:13,fontWeight:700,color:info.color}},t(info.label)),
+            h.nota&&React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginTop:2,fontStyle:'italic'}},h.nota)
+          ),
+          React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',fontFamily:'JetBrains Mono',whiteSpace:'nowrap'}},fmtFHCliente(h.created_at))
+        );
+      })
+    )
   );
 }
 function PortalCliente({usuario,onLogout}){
@@ -11265,18 +11394,10 @@ function PortalCliente({usuario,onLogout}){
       tab==='etiquetas'&&React.createElement(EtiquetasCliente,{nombreCliente:nombreCliente,envios:envios,setEnvios:setEnvios,idioma:idiomaCliente})
     ),
 
-    // Modal detalle envío
-    detalle&&React.createElement(Modal,{title:t('Envío ')+detalle.codigo,onClose:function(){setDetalle(null);}},
-      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}},
-        [['Código',detalle.codigo],['Destinatario',detalle.destinatario],['Dirección',detalle.direccion],['Comuna',detalle.comuna],['Teléfono',detalle.telefono],['Fecha',detalle.fecha],['Estado',t((estadoInfo?estadoInfo(detalle.estado):{label:detalle.estado}).label)]].map(function(x){
-          return React.createElement('div',{key:x[0],style:{padding:'8px 12px',background:'linear-gradient(145deg,#fff,#fdf6e8)',borderRadius:8,border:'1px solid rgba(200,168,75,0.1)',boxShadow:'2px 2px 4px rgba(43,46,32,0.06)'}},
-            React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)',letterSpacing:1.5,textTransform:'uppercase',marginBottom:3,fontFamily:'Bebas Neue',fontSize:10}},t(x[0])),
-            React.createElement('div',{style:{fontSize:13,fontWeight:600,color:'var(--dark)'}},x[1]||'—')
-          );
-        })
-      ),
-      detalle.nota&&React.createElement('div',{className:'obs-box',style:{marginBottom:16}},'',detalle.nota),
-      React.createElement(FotosEntregaConRecarga,{codigo:detalle.codigo,fotoEtiquetaInicial:detalle.foto_etiqueta}),
+    // Modal detalle envío -- misma ficha (fotos + historial, sin mensajero) que usa el buscador
+    // del Mapa de Entregas, para que ambas entradas muestren siempre lo mismo.
+    detalle&&React.createElement(Modal,{title:t('Envío ')+detalle.codigo,wide:true,onClose:function(){setDetalle(null);}},
+      React.createElement(FichaEnvioCliente,{envio:detalle,t:t}),
       React.createElement('div',{className:'modal-actions'},
         React.createElement('button',{className:'btn-secondary',onClick:function(){setDetalle(null);}},t('Cerrar'))
       )
