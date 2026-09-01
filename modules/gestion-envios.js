@@ -630,7 +630,7 @@ const totalPags=Math.max(1,Math.ceil(filtradosOrdenados.length/PAGE_SIZE));const
     else if(sinFoto.length>0)toast('✓ '+sinFoto.length+' etiqueta'+(sinFoto.length>1?'s':'')+' generada'+(sinFoto.length>1?'s':'')+' por el sistema');
     else toast('✓ '+urls.length+' etiqueta'+(urls.length>1?'s':'')+' con foto escaneada');
   }catch(e){toast('⚠ Error buscando etiquetas: '+e.message);}
-}const fmtFecha=f=>{try{return new Date(f+'T12:00:00').toLocaleDateString('es-CL');}catch(e){return f;}};const fechaEntregaDe=e=>{if(entregasReal&&entregasReal[e.codigo])return entregasReal[e.codigo];if(e.historial&&e.historial.length>0){const ent=[...e.historial].reverse().find(h=>h.estado==='entregado');if(ent&&ent.fecha)return ent.fecha;}if(e.estado==='entregado'&&e.updated_at)return e.updated_at;return'';};
+}const fmtFecha=f=>{try{return new Date(f+'T12:00:00').toLocaleDateString('es-CL');}catch(e){return f;}};const fechaEntregaDe=e=>{if(entregasReal&&entregasReal[e.codigo])return entregasReal[e.codigo];if(e.historial&&e.historial.length>0){const ent=[...e.historial].reverse().find(h=>h.estado==='entregado');if(ent&&ent.fecha)return ent.fecha;}if(e.estado==='entregado'&&e.updated_at)return e.updated_at;return'';};const fmtFechaHora=iso=>{try{return new Date(iso).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return iso||'';}};
 // Guarda un campo de la ficha del envío (usado por la grilla unificada de abajo, que reemplaza
 // tanto las tarjetas de solo lectura como el panel separado "Editar Campos del Envío" que existían
 // antes -- ahora todo es un solo lugar y cada campo se edita ahí mismo con un click).
