@@ -622,7 +622,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788279410;
+window.__MODULES_VERSION=1788280931;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -4584,7 +4584,97 @@ function ConteoAyudas(_ref_ay){let mensajeros=_ref_ay.mensajeros,toast=_ref_ay.t
   );
 }
 
-/* GestionEnvios se carga en modules/gestion-envios.js (lazy-load, solo cuando se abre la pestana Envios) */function InstallHelp(){const _iH=useState(false),open=_iH[0],setOpen=_iH[1];const ua=navigator.userAgent||'';const isIOS=/iPad|iPhone|iPod/.test(ua)&&!window.MSStream;const isAndroid=/Android/.test(ua);function instalarAhora(){if(window._pwaPrompt){window._pwaPrompt.prompt();window._pwaPrompt.userChoice.then(function(){setOpen(false);});}}return React.createElement(React.Fragment,null,React.createElement("button",{onClick:function(){setOpen(true);},style:{background:'none',border:'none',color:'var(--gold)',fontSize:12,cursor:'pointer',textDecoration:'underline',marginTop:16,display:'block',marginLeft:'auto',marginRight:'auto'}},"📲 ¿Cómo instalar la app en tu celular?"),open&&React.createElement("div",{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:10001,display:'flex',alignItems:'center',justifyContent:'center',padding:20},onClick:function(e){if(e.target===e.currentTarget)setOpen(false);}},React.createElement("div",{style:{background:'#1a1d14',border:'1px solid rgba(200,168,75,0.3)',borderRadius:16,padding:24,maxWidth:380,width:'100%',color:'#fff'}},React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:20,color:'var(--gold)',letterSpacing:2,marginBottom:16}},"Instalar TransPgso"),window._pwaPrompt&&React.createElement("button",{onClick:instalarAhora,style:{width:'100%',padding:'12px',borderRadius:10,border:'none',background:'linear-gradient(135deg,var(--gold),#a87d2a)',color:'#1a1d13',fontFamily:'Bebas Neue',fontSize:16,letterSpacing:1,cursor:'pointer',marginBottom:16}},"📲 Instalar ahora"),isIOS?React.createElement("div",{style:{fontSize:13,lineHeight:1.8}},React.createElement("div",{style:{marginBottom:8,fontWeight:700}},"En iPhone/iPad (Safari):"),React.createElement("div",null,"1. Toca el ícono de Compartir ⬆️ (abajo o arriba de la pantalla)."),React.createElement("div",null,"2. Baja y toca ",React.createElement("strong",null,"\"Agregar a pantalla de inicio\".")),React.createElement("div",null,"3. Toca ",React.createElement("strong",null,"\"Agregar\""), " arriba a la derecha.")):isAndroid?React.createElement("div",{style:{fontSize:13,lineHeight:1.8}},React.createElement("div",{style:{marginBottom:8,fontWeight:700}},"En Android (Chrome):"),!window._pwaPrompt&&React.createElement("div",null,"1. Toca los 3 puntitos (⋮) arriba a la derecha."),!window._pwaPrompt&&React.createElement("div",null,"2. Toca \"Instalar app\" o \"Agregar a pantalla de inicio\"."),window._pwaPrompt&&React.createElement("div",null,"Toca el botón de arriba para instalarla directo.")):React.createElement("div",{style:{fontSize:13,lineHeight:1.8}},React.createElement("div",{style:{fontWeight:700,marginBottom:8}},"En computador (Chrome/Edge):"),React.createElement("div",null,"Busca el ícono de instalar ⊕ en la barra de direcciones, o el menú → \"Instalar TransPgso...\".")),React.createElement("button",{onClick:function(){setOpen(false);},style:{width:'100%',padding:'12px',borderRadius:10,border:'1px solid rgba(255,255,255,0.15)',background:'transparent',color:'rgba(255,255,255,0.6)',marginTop:16,cursor:'pointer'}},"Cerrar"))));}
+/* GestionEnvios se carga en modules/gestion-envios.js (lazy-load, solo cuando se abre la pestana Envios) */function InstallHelp(){
+  var _iH=useState(false),open=_iH[0],setOpen=_iH[1];
+  var _diag=useState(null),diag=_diag[0],setDiag=_diag[1];
+  var _cop=useState(false),copiado=_cop[0],setCopiado=_cop[1];
+  var _man=useState(false),verManual=_man[0],setVerManual=_man[1];
+  var ua=navigator.userAgent||'';
+  var isIOS=/iPad|iPhone|iPod/.test(ua)&&!window.MSStream;
+  var isAndroid=/Android/.test(ua);
+  var yaInstalada=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true;
+  function instalarAhora(){if(window._pwaPrompt){window._pwaPrompt.prompt();window._pwaPrompt.userChoice.then(function(){setOpen(false);});}}
+  function copiarLink(){try{navigator.clipboard.writeText(window.location.origin+'/');setCopiado(true);setTimeout(function(){setCopiado(false);},2500);}catch(e){}}
+  // Diagnóstico automático -- antes esto mostraba el mismo texto genérico ("toca los 3
+  // puntitos...") a todo el mundo, y cuando a alguien no le aparecía esa opción (pasa en
+  // varios modelos Android, sobre todo gama baja / MIUI) no había forma de saber por qué
+  // sin ponerse a revisar celular por celular. Ahora, cuando el navegador no ofrece el
+  // instalado directo (no hay window._pwaPrompt), se revisan un par de causas típicas
+  // (poco espacio libre, Chrome desactualizado, Service Worker que no cargó) y se explica
+  // el motivo real -- así el mensajero entiende qué pasa sin tener que escribirle a nadie,
+  // y si no aplica ninguna, se le avisa que de todos modos puede seguir trabajando desde
+  // el navegador normal sin instalar nada.
+  useEffect(function(){
+    if(!open||diag)return;
+    var d={};
+    var m=ua.match(/Chrome\/([0-9]+)/);
+    d.chromeVersion=m?parseInt(m[1],10):null;
+    d.chromeViejo=!!(isAndroid&&d.chromeVersion&&d.chromeVersion<100);
+    Promise.resolve().then(async function(){
+      try{
+        if(navigator.storage&&navigator.storage.estimate){
+          var est=await navigator.storage.estimate();
+          if(est&&est.quota!=null&&est.usage!=null){d.espacioLibreMB=Math.round((est.quota-est.usage)/1048576);}
+        }
+      }catch(e){}
+      try{
+        if('serviceWorker' in navigator){
+          var reg=await navigator.serviceWorker.getRegistration();
+          d.swActivo=!!(reg&&reg.active);
+        }else{d.swActivo=false;}
+      }catch(e){d.swActivo=false;}
+      setDiag(d);
+    });
+  },[open]);
+  function motivosDiagnostico(){
+    if(!diag)return[];
+    var motivos=[];
+    if(diag.espacioLibreMB!=null&&diag.espacioLibreMB<300){
+      motivos.push('Tu celular tiene poco espacio libre (~'+diag.espacioLibreMB+' MB). Libera espacio en Ajustes → Almacenamiento e inténtalo de nuevo.');
+    }
+    if(diag.chromeViejo){
+      motivos.push('Tu Chrome parece desactualizado (versión '+diag.chromeVersion+'). Prueba actualizándolo desde Play Store.');
+    }
+    if(diag.swActivo===false){
+      motivos.push('La app no terminó de cargar en segundo plano. Cierra Chrome del todo (no solo la pestaña) y vuelve a abrir el link.');
+    }
+    if(motivos.length===0){
+      motivos.push('Tu celular está restringiendo la instalación de apps nuevas por ahora (pasa seguido en equipos de gama baja, sobre todo Xiaomi/MIUI). No es necesario instalarla para trabajar -- puedes seguir entrando siempre desde este mismo link.');
+    }
+    return motivos;
+  }
+  return React.createElement(React.Fragment,null,
+    React.createElement("button",{onClick:function(){setOpen(true);},style:{background:'none',border:'none',color:'var(--gold)',fontSize:12,cursor:'pointer',textDecoration:'underline',marginTop:16,display:'block',marginLeft:'auto',marginRight:'auto'}},"📲 ¿Cómo instalar la app en tu celular?"),
+    open&&React.createElement("div",{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:10001,display:'flex',alignItems:'center',justifyContent:'center',padding:20},onClick:function(e){if(e.target===e.currentTarget)setOpen(false);}},
+      React.createElement("div",{style:{background:'#1a1d14',border:'1px solid rgba(200,168,75,0.3)',borderRadius:16,padding:24,maxWidth:380,width:'100%',color:'#fff',maxHeight:'85vh',overflowY:'auto'}},
+        React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:20,color:'var(--gold)',letterSpacing:2,marginBottom:16}},"Instalar TransPgso"),
+        yaInstalada&&React.createElement("div",{style:{fontSize:13,lineHeight:1.7,marginBottom:16}},"✅ Ya la tienes instalada. Búscala en la pantalla de inicio de tu celular."),
+        !yaInstalada&&window._pwaPrompt&&React.createElement("button",{onClick:instalarAhora,style:{width:'100%',padding:'12px',borderRadius:10,border:'none',background:'linear-gradient(135deg,var(--gold),#a87d2a)',color:'#1a1d13',fontFamily:'Bebas Neue',fontSize:16,letterSpacing:1,cursor:'pointer',marginBottom:16}},"📲 Instalar ahora"),
+        !yaInstalada&&!window._pwaPrompt&&isAndroid&&React.createElement("div",{style:{fontSize:13,lineHeight:1.8,marginBottom:16}},
+          diag?motivosDiagnostico().map(function(mo,i){return React.createElement("div",{key:i,style:{marginBottom:8}},mo);}):React.createElement("div",{style:{opacity:0.6}},"Revisando tu celular...")
+        ),
+        !yaInstalada&&React.createElement("div",{style:{fontSize:12,lineHeight:1.6,marginBottom:16,padding:'10px 12px',background:'rgba(200,168,75,0.08)',borderRadius:8,color:'rgba(255,255,255,0.75)'}},"💡 Instalarla es opcional -- la app funciona igual desde el navegador. Solo agrega un ícono directo en tu pantalla de inicio."),
+        !yaInstalada&&React.createElement("button",{onClick:copiarLink,style:{width:'100%',padding:'10px',borderRadius:10,border:'1px solid rgba(200,168,75,0.3)',background:'transparent',color:'var(--gold)',fontSize:12,cursor:'pointer',marginBottom:12}},copiado?"✓ Link copiado":"🔗 Copiar link de la app"),
+        !yaInstalada&&React.createElement("button",{onClick:function(){setVerManual(function(v){return!v;});},style:{background:'none',border:'none',color:'rgba(255,255,255,0.5)',fontSize:11,cursor:'pointer',textDecoration:'underline',display:'block',marginBottom:verManual?12:0}},verManual?"Ocultar pasos manuales":"Ver pasos manuales"),
+        !yaInstalada&&verManual&&(isIOS?React.createElement("div",{style:{fontSize:13,lineHeight:1.8}},
+            React.createElement("div",{style:{marginBottom:8,fontWeight:700}},"En iPhone/iPad (Safari):"),
+            React.createElement("div",null,"1. Toca el ícono de Compartir ⬆️ (abajo o arriba de la pantalla)."),
+            React.createElement("div",null,"2. Baja y toca ",React.createElement("strong",null,"\"Agregar a pantalla de inicio\".")),
+            React.createElement("div",null,"3. Toca ",React.createElement("strong",null,"\"Agregar\""), " arriba a la derecha.")
+          ):isAndroid?React.createElement("div",{style:{fontSize:13,lineHeight:1.8}},
+            React.createElement("div",{style:{marginBottom:8,fontWeight:700}},"En Android (Chrome):"),
+            React.createElement("div",null,"1. Toca los 3 puntitos (⋮) arriba a la derecha."),
+            React.createElement("div",null,"2. Toca \"Instalar app\" o \"Agregar a pantalla de inicio\".")
+          ):React.createElement("div",{style:{fontSize:13,lineHeight:1.8}},
+            React.createElement("div",{style:{fontWeight:700,marginBottom:8}},"En computador (Chrome/Edge):"),
+            React.createElement("div",null,"Busca el ícono de instalar ⊕ en la barra de direcciones, o el menú → \"Instalar TransPgso...\".")
+          )
+        ),
+        React.createElement("button",{onClick:function(){setOpen(false);},style:{width:'100%',padding:'12px',borderRadius:10,border:'1px solid rgba(255,255,255,0.15)',background:'transparent',color:'rgba(255,255,255,0.6)',marginTop:16,cursor:'pointer'}},"Cerrar")
+      )
+    )
+  );
+}
 // ── Íconos minimalistas 3D (línea + gradiente dorado) para el fondo del login ──
 function tpGradDefs(){return React.createElement('svg',{width:0,height:0,style:{position:'absolute'}},React.createElement('defs',null,React.createElement('linearGradient',{id:'tpGoldGrad',x1:'0%',y1:'0%',x2:'100%',y2:'100%'},React.createElement('stop',{offset:'0%',stopColor:'#f0d878'}),React.createElement('stop',{offset:'50%',stopColor:'#C8A84B'}),React.createElement('stop',{offset:'100%',stopColor:'#8a6a24'}))));}
 function tpIcon(parts){return React.createElement('svg',{viewBox:'0 0 24 24',width:26,height:26,style:{filter:'drop-shadow(0 1.5px 0 rgba(0,0,0,0.65)) drop-shadow(0 -1px 0 rgba(255,230,160,0.3))'}},parts.map(function(p,i){
