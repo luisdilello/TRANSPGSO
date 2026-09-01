@@ -692,10 +692,6 @@ const atrasadosCount=useMemo(()=>enviosPeriodo.filter(esEnvioAtrasado).length,[e
 // para el modo "Todos" nunca duplica un mismo envío.
 const reprogramadosRepetidosCount=useMemo(()=>enviosPeriodo.filter(esReprogramadoRepetido).length,[enviosPeriodo,reprogCount]);
 const combinadoAtrasoCount=atrasadosCount+reprogramadosRepetidosCount;
-// Conteos "amplios" (reprogramado desde la 1ra vez) que usa SOLO el modal de Detalle completo --
-// Luis pidió ver ahí todas las piezas no entregadas sin importar si llevan 1 o más reagendas.
-const reprogramadosCount=useMemo(()=>enviosPeriodo.filter(esReprogramadoAlMenos1Vez).length,[enviosPeriodo,reprogCount]);
-const combinadoAtrasoCountAmplio=atrasadosCount+reprogramadosCount;
 // Orden alfabético/numérico al hacer clic en el encabezado de una columna — clic de nuevo
 // invierte el orden (asc/desc). null=sin ordenar (orden de llegada/sincronización).
 function valorOrden(e,col){switch(col){case'codigo':return(e.codigo||'').toLowerCase();case'cliente':return(e.cliente||'').toLowerCase();case'destinatario':return(e.destinatario||'').toLowerCase();case'direccion':return(e.direccion||'').toLowerCase();case'comuna':return(e.comuna||'').toLowerCase();case'mensajero':return(e.mensajero||'').toLowerCase();case'estado':return estadoInfo(e.estado).label.toLowerCase();case'fecha':return e.fecha||'';case'monto':return e.monto||0;default:return'';}}
@@ -725,6 +721,14 @@ const atrasadosDetalleFiltrados=useMemo(()=>{
   });
 },[enviosPeriodo,entregadosPeriodoReal,filtroEst,search,filtroCli,filtroMen,filtroFuente]);
 const atrasadosDetalleBase=useMemo(()=>atrasadosDetalleFiltrados.filter(e=>filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoAlMenos1Vez(e):(esEnvioAtrasado(e)||esReprogramadoAlMenos1Vez(e))),[atrasadosDetalleFiltrados,filtroAtrasoModo,reprogCount]);
+// Conteos de las pestañas del modal (Todos/Atrasados en ruta/Reprogramados) -- a diferencia de
+// atrasadosCount/reprogramadosRepetidosCount (que solo miran el período, para el botón/dropdown
+// de la tabla principal), estos SÍ respetan los filtros de cliente/mensajero/tipo/búsqueda que
+// ahora se pueden cambiar dentro del propio modal, para que la pestaña muestre el número real de
+// lo que se está viendo.
+const atrasadosCountModal=useMemo(()=>atrasadosDetalleFiltrados.filter(esEnvioAtrasado).length,[atrasadosDetalleFiltrados]);
+const reprogramadosCountModal=useMemo(()=>atrasadosDetalleFiltrados.filter(esReprogramadoAlMenos1Vez).length,[atrasadosDetalleFiltrados]);
+const combinadoAtrasoCountModal=atrasadosCountModal+reprogramadosCountModal;
 function toggleSort(col){if(sortCol===col)setSortDir(d=>d==='asc'?'desc':'asc');else{setSortCol(col);setSortDir('asc');}setPage(1);}
 function iconoSort(col){if(sortCol!==col)return'';return sortDir==='asc'?' ▲':' ▼';}
 const totalPags=Math.max(1,Math.ceil(filtradosOrdenados.length/PAGE_SIZE));const paginado=filtradosOrdenados.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);const stats=useMemo(()=>{const s={};ESTADOS_ENVIO.forEach(est=>{s[est.val]=est.val==='entregado'?entregadosPeriodoReal.length:enviosPeriodo.filter(e=>e.estado===est.val).length;});return s;},[enviosPeriodo,entregadosPeriodoReal]);function toggleSelect(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function toggleAll(){const todosIds=new Set(filtrados.map(e=>e.id));if(selected.size===filtrados.length&&filtrados.every(e=>selected.has(e.id)))setSelected(new Set());else setSelected(todosIds);}async function imprimirEtiquetasSeleccionadas(){
@@ -1147,9 +1151,25 @@ asignarModal&&/*#__PURE__*/React.createElement(Modal,{title:'Asignar '+selected.
       /*#__PURE__*/React.createElement('input',{type:'date',value:hasta,onChange:function(e){setHasta(e.target.value);setPage(1);},style:{padding:'4px 8px',borderRadius:8,border:'1px solid var(--border)',fontSize:11,outline:'none'}})
     )
   ),
+  /*#__PURE__*/React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',marginBottom:18,flexWrap:'wrap'}},
+    /*#__PURE__*/React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:12,letterSpacing:2,color:'var(--text-soft)',marginRight:2}},'FILTRAR POR:'),
+    /*#__PURE__*/React.createElement('select',{value:filtroCli,onChange:function(e){setFiltroCli(e.target.value);setPage(1);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:11,background:'#fff',color:'var(--text)',cursor:'pointer'}},
+      /*#__PURE__*/React.createElement('option',{value:'todos'},'Todos los clientes'),
+      clientesUnicos.map(function(c){return/*#__PURE__*/React.createElement('option',{key:c,value:c},c);})
+    ),
+    /*#__PURE__*/React.createElement('select',{value:filtroMen,onChange:function(e){setFiltroMen(e.target.value);setPage(1);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:11,background:'#fff',color:'var(--text)',cursor:'pointer'}},
+      /*#__PURE__*/React.createElement('option',{value:'todos'},'Todos los mensajeros'),
+      mensajerosUnicos.map(function(m){return/*#__PURE__*/React.createElement('option',{key:m,value:m},m.replace(/,\s*/g,' '));})
+    ),
+    /*#__PURE__*/React.createElement('select',{value:filtroFuente,onChange:function(e){setFiltroFuente(e.target.value);setPage(1);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:11,background:'#fff',color:'var(--text)',cursor:'pointer'}},
+      /*#__PURE__*/React.createElement('option',{value:'todos'},'Todos los tipos'),
+      fuentesUnicas.map(function(f){return/*#__PURE__*/React.createElement('option',{key:f,value:f},fuenteLabel(f));})
+    ),
+    (filtroCli!=='todos'||filtroMen!=='todos'||filtroFuente!=='todos')&&/*#__PURE__*/React.createElement('button',{type:'button',onClick:function(){setFiltroCli('todos');setFiltroMen('todos');setFiltroFuente('todos');setPage(1);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',background:'transparent',color:'var(--text-soft)',fontSize:11,cursor:'pointer'}},'✕ Quitar filtros')
+  ),
   /*#__PURE__*/React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12,marginBottom:18}},
     /*#__PURE__*/React.createElement('div',{style:{display:'flex',gap:2,background:'var(--dark)',borderRadius:10,padding:4}},
-      [{modo:'combinado',label:'Todos ('+combinadoAtrasoCountAmplio+')'},{modo:'atrasados',label:'Atrasados en ruta ('+atrasadosCount+')'},{modo:'reprogramados',label:'Reprogramados ('+reprogramadosCount+')'}].map(function(op){
+      [{modo:'combinado',label:'Todos ('+combinadoAtrasoCountModal+')'},{modo:'atrasados',label:'Atrasados en ruta ('+atrasadosCountModal+')'},{modo:'reprogramados',label:'Reprogramados ('+reprogramadosCountModal+')'}].map(function(op){
         const activo=(filtroAtrasoModo==='off'?'combinado':filtroAtrasoModo)===op.modo;
         return/*#__PURE__*/React.createElement('button',{key:op.modo,type:'button',onClick:()=>setFiltroAtrasoModo(op.modo),style:{padding:'7px 14px',borderRadius:8,border:'none',cursor:'pointer',fontSize:11,fontWeight:700,letterSpacing:0.3,background:activo?'var(--gold)':'transparent',color:activo?'var(--dark-deep)':'rgba(255,255,255,0.6)',whiteSpace:'nowrap'}},op.label);
       })
