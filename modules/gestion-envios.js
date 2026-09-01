@@ -187,6 +187,12 @@ async function sincronizarDesdeSupabase(){setSincronizando(true);try{
 }
 useEffect(()=>{cargarHistorialReal(detalleEnvio&&detalleEnvio.codigo);},[detalleEnvio&&detalleEnvio.codigo]);
 const _useSiniDet=useState([]),siniestroDetalle=_useSiniDet[0],setSiniestroDetalle=_useSiniDet[1];
+// Ficha del envío en Gestión de Envíos: antes mostraba los campos en tarjetas de solo lectura
+// arriba y, más abajo, un panel aparte 'Editar Campos del Envío' que repetía Código/Dirección/Comuna
+// -- Luis pidió que sea una sola vista, sin duplicar información, con todos los campos editables ahí
+// mismo. 'edicionesCampo' guarda, por cada campo que se está editando en este momento, su valor en
+// borrador (la sola presencia de la clave en el objeto indica que ese campo está en modo edición).
+const _useEdicionesCampo=useState({}),edicionesCampo=_useEdicionesCampo[0],setEdicionesCampo=_useEdicionesCampo[1];
 useEffect(()=>{if(!detalleEnvio||!detalleEnvio.tuvo_siniestro){setSiniestroDetalle([]);return;}db.from('siniestros').select('*').eq('codigo',detalleEnvio.codigo).order('created_at',{ascending:false}).then(function(res){setSiniestroDetalle((res&&res.data)||[]);}).catch(function(){setSiniestroDetalle([]);});},[detalleEnvio&&detalleEnvio.codigo,detalleEnvio&&detalleEnvio.tuvo_siniestro]);
 function canalInfo(canal){
   if(canal==='app_mensajero')return{label:'📱 App Mensajero',bg:'rgba(46,125,79,0.12)',color:'#2e7d4f'};
@@ -624,7 +630,94 @@ const totalPags=Math.max(1,Math.ceil(filtradosOrdenados.length/PAGE_SIZE));const
     else if(sinFoto.length>0)toast('✓ '+sinFoto.length+' etiqueta'+(sinFoto.length>1?'s':'')+' generada'+(sinFoto.length>1?'s':'')+' por el sistema');
     else toast('✓ '+urls.length+' etiqueta'+(urls.length>1?'s':'')+' con foto escaneada');
   }catch(e){toast('⚠ Error buscando etiquetas: '+e.message);}
-}const fmtFecha=f=>{try{return new Date(f+'T12:00:00').toLocaleDateString('es-CL');}catch(e){return f;}};const fechaEntregaDe=e=>{if(entregasReal&&entregasReal[e.codigo])return entregasReal[e.codigo];if(e.historial&&e.historial.length>0){const ent=[...e.historial].reverse().find(h=>h.estado==='entregado');if(ent&&ent.fecha)return ent.fecha;}if(e.estado==='entregado'&&e.updated_at)return e.updated_at;return'';};const fmtFechaHora=iso=>{try{return new Date(iso).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return iso||'';}};return/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{className:"section-head",style:{flexWrap:'wrap',gap:10}},/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:12}},/*#__PURE__*/React.createElement("div",{className:"section-title"},"Gesti\xF3n de ",/*#__PURE__*/React.createElement("span",null,"Env\xEDos")),/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:6,background:'rgba(46,125,79,0.1)',border:'1px solid rgba(46,125,79,0.2)',borderRadius:20,padding:'4px 10px'}},/*#__PURE__*/React.createElement("div",{style:{width:8,height:8,borderRadius:'50%',background:'#2e7d4f',animation:'pulse 2s infinite'}}),/*#__PURE__*/React.createElement("span",{style:{fontSize:10,color:'#2e7d4f',fontWeight:700,letterSpacing:1}},"TIEMPO REAL"))),/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:8,flexWrap:'wrap'}},/*#__PURE__*/React.createElement("button",{onClick:sincronizarDesdeSupabase,disabled:sincronizando,className:'btn-futurista btn-f-dark',style:{display:'flex',alignItems:'center',gap:6,opacity:sincronizando?0.7:1}},sincronizando?'↺ Sincronizando...':'↺ Sincronizar Riders'),
+}const fmtFecha=f=>{try{return new Date(f+'T12:00:00').toLocaleDateString('es-CL');}catch(e){return f;}};const fechaEntregaDe=e=>{if(entregasReal&&entregasReal[e.codigo])return entregasReal[e.codigo];if(e.historial&&e.historial.length>0){const ent=[...e.historial].reverse().find(h=>h.estado==='entregado');if(ent&&ent.fecha)return ent.fecha;}if(e.estado==='entregado'&&e.updated_at)return e.updated_at;return'';};
+// Guarda un campo de la ficha del envío (usado por la grilla unificada de abajo, que reemplaza
+// tanto las tarjetas de solo lectura como el panel separado "Editar Campos del Envío" que existían
+// antes -- ahora todo es un solo lugar y cada campo se edita ahí mismo con un click).
+async function guardarCampoDetalle(campo,valor){
+  if(!detalleEnvio)return;
+  const codigoAntes=detalleEnvio.codigo;
+  const entrada=crearEntradaHistorial(detalleEnvio.estado,campo+' cambiado a "'+valor+'"',usuario?.nombre||'Admin');
+  setDetalleEnvio(prev=>prev?Object.assign({},prev,{[campo]:valor,historial:[...(prev.historial||[]),entrada]}):prev);
+  setEnvios(prev=>prev.map(e=>e.id===detalleEnvio.id?Object.assign({},e,{[campo]:valor,historial:[...(e.historial||[]),entrada]}):e));
+  try{
+    await db.from('envios').update({[campo]:valor}).eq('codigo',codigoAntes);
+    toast('✓ '+campo+' actualizado');
+  }catch(err){toast('⚠ Error al guardar: '+err.message);}
+}
+// Catálogo de campos de la ficha: 'tipo' controla qué input se muestra al editar. El de Comuna
+// usa COMUNAS_CHILE (el catálogo real y siempre actualizado) en vez de la lista corta hardcodeada
+// que tenía el panel viejo.
+const CAMPOS_ENVIO_DETALLE=[
+  {key:'codigo',label:'Código',tipo:'text'},
+  {key:'destinatario',label:'Destinatario',tipo:'text'},
+  {key:'telefono',label:'Teléfono',tipo:'text'},
+  {key:'direccion',label:'Dirección',tipo:'text'},
+  {key:'comuna',label:'Comuna',tipo:'select',opciones:COMUNAS_CHILE},
+  {key:'mensajero',label:'Mensajero',tipo:'text'},
+  {key:'fecha',label:'Fecha',tipo:'date'},
+  {key:'monto',label:'Monto',tipo:'number'}
+];
+function valorMostradoCampo(campo,v){
+  if(campo==='monto')return v>0?'$'+Number(v).toLocaleString('es-CL'):'—';
+  if(campo==='fecha')return v?fmtFecha(v):'—';
+  if(campo==='mensajero')return(v&&v.replace(/,\s*/g,' '))||'Sin asignar';
+  return(v!=null&&v!=='')?v:'—';
+}
+function iniciarEdicionCampo(campo,valorActual){
+  setEdicionesCampo(prev=>Object.assign({},prev,{[campo]:valorActual!=null?String(valorActual):''}));
+}
+function cancelarEdicionCampo(campo){
+  setEdicionesCampo(prev=>{const n=Object.assign({},prev);delete n[campo];return n;});
+}
+async function confirmarEdicionCampo(campo,tipo){
+  const bruto=edicionesCampo[campo];
+  const valor=tipo==='number'?(parseFloat(bruto)||0):bruto;
+  await guardarCampoDetalle(campo,valor);
+  cancelarEdicionCampo(campo);
+}
+function renderCampoEditable(campo){
+  const enEdicion=Object.prototype.hasOwnProperty.call(edicionesCampo,campo.key);
+  const valorActual=detalleEnvio[campo.key];
+  return/*#__PURE__*/React.createElement("div",{key:campo.key,style:{padding:'14px 16px',background:'linear-gradient(145deg,#ffffff,#f5eedc)',borderRadius:12,border:'1px solid rgba(200,168,75,0.25)',boxShadow:'5px 5px 10px rgba(43,46,32,0.12),-2px -2px 6px rgba(255,255,255,1),inset 0 1px 0 rgba(255,255,255,0.9)'}},
+    /*#__PURE__*/React.createElement("div",{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,gap:8}},
+      /*#__PURE__*/React.createElement("div",{style:{fontSize:13,color:'#C8A84B',letterSpacing:3,textTransform:'uppercase',fontFamily:'Bebas Neue',fontWeight:700,textShadow:'0 1px 2px rgba(200,168,75,0.3)'}},campo.label),
+      !enEdicion&&/*#__PURE__*/React.createElement("button",{onClick:()=>iniciarEdicionCampo(campo.key,valorActual),title:'Editar '+campo.label,style:{background:'none',border:'none',color:'var(--gold)',cursor:'pointer',fontSize:12,fontWeight:700,padding:0,flexShrink:0}},"✎ Editar")
+    ),
+    enEdicion
+      ?/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:6}},
+          campo.tipo==='select'
+            ?/*#__PURE__*/React.createElement("select",{className:'form-input',value:edicionesCampo[campo.key],onChange:e=>setEdicionesCampo(prev=>Object.assign({},prev,{[campo.key]:e.target.value})),autoFocus:true,style:{margin:0}},
+                campo.opciones.map(o=>/*#__PURE__*/React.createElement("option",{key:o,value:o},o))
+              )
+            :/*#__PURE__*/React.createElement("input",{className:'form-input',type:campo.tipo==='number'?'number':campo.tipo==='date'?'date':'text',value:edicionesCampo[campo.key],onChange:e=>setEdicionesCampo(prev=>Object.assign({},prev,{[campo.key]:e.target.value})),autoFocus:true,style:{margin:0,fontSize:14}}),
+          /*#__PURE__*/React.createElement("button",{className:'btn-primary',style:{padding:'6px 10px'},onClick:()=>confirmarEdicionCampo(campo.key,campo.tipo)},"✓"),
+          /*#__PURE__*/React.createElement("button",{className:'btn-secondary',style:{padding:'6px 10px'},onClick:()=>cancelarEdicionCampo(campo.key)},"✕")
+        )
+      :/*#__PURE__*/React.createElement("div",{style:{fontSize:18,fontWeight:500,color:'#1a1d13',lineHeight:1.3,filter:'drop-shadow(0 1px 1px rgba(43,46,32,0.1))'}},valorMostradoCampo(campo.key,valorActual))
+  );
+}
+// Nota privada (solo admin) y valor del siniestro: antes vivían en el panel separado "Editar
+// Campos del Envío" más abajo del historial -- ahora son parte de la misma ficha unificada, con
+// el mismo mecanismo de edición de un click que el resto de los campos.
+function renderCampoLargo(campo,label,tipo,candado){
+  const enEdicion=Object.prototype.hasOwnProperty.call(edicionesCampo,campo);
+  const valorActual=detalleEnvio[campo];
+  return/*#__PURE__*/React.createElement("div",{key:campo,style:{padding:'12px 16px',background:candado?'rgba(200,168,75,0.06)':'rgba(176,48,48,0.06)',border:'1px solid '+(candado?'var(--gold-border)':'rgba(176,48,48,0.3)'),borderRadius:10,marginBottom:12}},
+    /*#__PURE__*/React.createElement("div",{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,gap:8}},
+      /*#__PURE__*/React.createElement("div",{className:'form-label',style:{margin:0}},(candado?'🔒 ':'⚠️ ')+label),
+      !enEdicion&&/*#__PURE__*/React.createElement("button",{onClick:()=>iniciarEdicionCampo(campo,valorActual),title:'Editar',style:{background:'none',border:'none',color:'var(--gold)',cursor:'pointer',fontSize:12,fontWeight:700,padding:0,flexShrink:0}},"✎ Editar")
+    ),
+    enEdicion
+      ?/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:8}},
+          /*#__PURE__*/React.createElement("input",{className:'form-input',type:tipo,value:edicionesCampo[campo],onChange:e=>setEdicionesCampo(prev=>Object.assign({},prev,{[campo]:e.target.value})),autoFocus:true,style:{margin:0}}),
+          /*#__PURE__*/React.createElement("button",{className:'btn-primary',onClick:()=>confirmarEdicionCampo(campo,tipo)},"✓"),
+          /*#__PURE__*/React.createElement("button",{className:'btn-secondary',onClick:()=>cancelarEdicionCampo(campo)},"✕")
+        )
+      :/*#__PURE__*/React.createElement("div",{style:{fontSize:13,color:'var(--text-mid)'}},tipo==='number'?(valorActual>0?'$'+Number(valorActual).toLocaleString('es-CL'):'—'):(valorActual||'—'))
+  );
+}
+return/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{className:"section-head",style:{flexWrap:'wrap',gap:10}},/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:12}},/*#__PURE__*/React.createElement("div",{className:"section-title"},"Gesti\xF3n de ",/*#__PURE__*/React.createElement("span",null,"Env\xEDos")),/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:6,background:'rgba(46,125,79,0.1)',border:'1px solid rgba(46,125,79,0.2)',borderRadius:20,padding:'4px 10px'}},/*#__PURE__*/React.createElement("div",{style:{width:8,height:8,borderRadius:'50%',background:'#2e7d4f',animation:'pulse 2s infinite'}}),/*#__PURE__*/React.createElement("span",{style:{fontSize:10,color:'#2e7d4f',fontWeight:700,letterSpacing:1}},"TIEMPO REAL"))),/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:8,flexWrap:'wrap'}},/*#__PURE__*/React.createElement("button",{onClick:sincronizarDesdeSupabase,disabled:sincronizando,className:'btn-futurista btn-f-dark',style:{display:'flex',alignItems:'center',gap:6,opacity:sincronizando?0.7:1}},sincronizando?'↺ Sincronizando...':'↺ Sincronizar Riders'),
   (()=>{const listaNegraCount=lsLoad('envios_eliminados',[]).length;return/*#__PURE__*/React.createElement("button",{onClick:()=>setShowListaNegra(v=>!v),style:{padding:'8px 14px',borderRadius:8,border:'1px solid '+(listaNegraCount>0?'rgba(176,48,48,0.8)':'rgba(100,100,100,0.4)'),background:showListaNegra?'rgba(176,48,48,0.25)':(listaNegraCount>0?'rgba(176,48,48,0.15)':'rgba(80,80,80,0.12)'),color:'#ffffff',cursor:'pointer',fontWeight:700,fontSize:12,display:'flex',alignItems:'center',gap:6}},"⊘ Lista negra",(listaNegraCount>0&&/*#__PURE__*/React.createElement("span",{style:{background:'rgba(176,48,48,0.3)',borderRadius:10,padding:'1px 7px',fontSize:11}},listaNegraCount)));})(),/*#__PURE__*/React.createElement("button",{onClick:()=>fileRef.current.click(),className:'btn-futurista btn-f-dark',title:'Sube los envíos de un cliente (o el manifiesto diario si el archivo se llama con \'carga_pgso\')',style:{display:'flex',alignItems:'center',gap:6}},"\uD83D\uDCCA Importar Excel"),
 /*#__PURE__*/React.createElement("button",{onClick:()=>{const headers=['Codigo','Cliente','Destinatario','Telefono','Direccion','Comuna','Monto','Referencia'];const ejemplos=[['','MR SHENG','Juan Pérez','912345678','Av. Providencia 1234, Depto 5','PROVIDENCIA','0','Depto 5B — timbre no funciona'],['','DMT','María González','987654321','Los Leones 567','LAS CONDES','15000','Torre A, piso 8 — cobro contra entrega']];exportToExcel('Plantilla_Envios_Cliente_TransPgso',[{name:'Envios',headers,rows:ejemplos}]);},style:{padding:'8px 14px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',cursor:'pointer',fontWeight:700,fontSize:12,display:'flex',alignItems:'center',gap:6}},"\uD83D\uDCE5 Plantilla"),
 /*#__PURE__*/React.createElement("input",{ref:fileRef,type:"file",accept:".xlsx,.xls,.htm,.html",style:{display:'none'},onChange:e=>{const f=e.target.files[0];if(!f)return;const name=f.name.toLowerCase();if(name.includes('carga_pgso')||name.includes('carga_p'))importarExcelSistema(f);else importarExcelPropio(f);e.target.value='';}}),
@@ -868,22 +961,54 @@ asignarModal&&/*#__PURE__*/React.createElement(Modal,{title:'Asignar '+selected.
     React.createElement('div',{style:{fontSize:11,marginTop:6,opacity:0.85}},'Para aplicar o deshacer un descuento, ve a la sección "⚠ Siniestros".')
   ),
   // ── Datos grid ──
-  /*#__PURE__*/React.createElement("div",{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}},[['Código',detalleEnvio.codigo],['Destinatario',detalleEnvio.destinatario],['Teléfono',detalleEnvio.telefono],['Dirección',detalleEnvio.direccion],['Comuna',detalleEnvio.comuna],['Mensajero',((_detalleEnvio$mensaje=detalleEnvio.mensajero)==null?void 0:_detalleEnvio$mensaje.replace(/,\s*/g,' '))||'Sin asignar'],['Fecha',fmtFecha(detalleEnvio.fecha)],['Monto',detalleEnvio.monto>0?'$'+detalleEnvio.monto.toLocaleString('es-CL'):'—']].map(_ref27=>{let l=_ref27[0],v=_ref27[1];return/*#__PURE__*/React.createElement("div",{key:l,style:{padding:'14px 16px',background:'linear-gradient(145deg,#ffffff,#f5eedc)',borderRadius:12,border:'1px solid rgba(200,168,75,0.25)',boxShadow:'5px 5px 10px rgba(43,46,32,0.12),-2px -2px 6px rgba(255,255,255,1),inset 0 1px 0 rgba(255,255,255,0.9)'}},/*#__PURE__*/React.createElement("div",{style:{fontSize:13,color:'#C8A84B',letterSpacing:3,textTransform:'uppercase',marginBottom:8,fontFamily:'Bebas Neue',fontWeight:700,textShadow:'0 1px 2px rgba(200,168,75,0.3)'}},l),/*#__PURE__*/React.createElement("div",{style:{fontSize:18,fontWeight:500,color:'#1a1d13',lineHeight:1.3,filter:'drop-shadow(0 1px 1px rgba(43,46,32,0.1))'}},v||'—'));})),/*#__PURE__*/React.createElement("div",{style:{marginBottom:16}},estadoBadge(detalleEnvio.estado)),detalleEnvio.nota&&/*#__PURE__*/React.createElement("div",{className:"obs-box",style:{marginBottom:16}},"\uD83D\uDCCC ",detalleEnvio.nota),/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)',marginBottom:10}},"Historial"),/*#__PURE__*/React.createElement("div",{style:{maxHeight:260,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8,marginBottom:16}},
-cargandoHistorial?React.createElement("div",{style:{padding:16,textAlign:'center',color:'var(--text-soft)',fontSize:12}},"Cargando historial..."):
-historialReal.length===0?React.createElement("div",{style:{padding:16,textAlign:'center',color:'var(--text-soft)',fontSize:12}},"Sin registros de historial detallado para este envío (puede ser un paquete anterior a esta función)."):
-historialReal.map((h,i)=>/*#__PURE__*/React.createElement("div",{key:h.id||i,style:{padding:'8px 12px',borderBottom:'1px solid var(--border)',display:'flex',gap:10,alignItems:'flex-start'}},/*#__PURE__*/React.createElement("div",{style:{flex:1}},/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}},/*#__PURE__*/React.createElement("span",{style:{fontSize:13,fontWeight:700,color:estadoInfo(h.estado).color}},estadoInfo(h.estado).label),/*#__PURE__*/React.createElement("span",{style:{fontSize:9,fontWeight:700,padding:'1px 7px',borderRadius:10,background:canalInfo(h.canal).bg,color:canalInfo(h.canal).color}},canalInfo(h.canal).label)),/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-mid)',marginTop:3,fontWeight:600}},h.usuario||'Sistema'),h.nota&&/*#__PURE__*/React.createElement("div",{style:{fontSize:11,color:'var(--text-soft)',marginTop:2,fontStyle:'italic'}},h.nota)),/*#__PURE__*/React.createElement("div",{style:{fontSize:10,color:'var(--text-soft)',fontFamily:'JetBrains Mono',whiteSpace:'nowrap',textAlign:'right'}},new Date(h.created_at).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})),(esAdmin||esSuperAdmin)&&React.createElement("button",{onClick:async()=>{if(!window.confirm('¿Borrar esta entrada del historial? No se puede deshacer.'))return;try{await db.from('historial_envios').delete().eq('id',h.id);setHistorialReal(prev=>prev.filter(x=>x.id!==h.id));toast('✓ Entrada de historial borrada');}catch(e){toast('⚠ No se pudo borrar la entrada del historial: '+e.message);}},title:'Borrar entrada',style:{background:'none',border:'none',color:'var(--danger)',cursor:'pointer',fontSize:14,fontWeight:700,padding:'0 4px',lineHeight:1,flexShrink:0}},'✕')))),(esAdmin||esSuperAdmin)&&(()=>{const _prevH=historialReal.find(h=>h.estado!==detalleEnvio.estado);const _prevEstado=_prevH?_prevH.estado:null;return _prevEstado?/*#__PURE__*/React.createElement("div",{style:{marginBottom:16,padding:'12px 16px',background:'rgba(176,48,48,0.06)',border:'1px solid rgba(176,48,48,0.35)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}},
-  /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'#7a2020'}},"⚠ Estado actual: ",/*#__PURE__*/React.createElement("strong",null,estadoInfo(detalleEnvio.estado).label),". Estado anterior detectado en el historial: ",/*#__PURE__*/React.createElement("strong",null,estadoInfo(_prevEstado).label),"."),
-  /*#__PURE__*/React.createElement("button",{onClick:async()=>{if(!window.confirm('¿Revertir este envío al estado anterior ('+estadoInfo(_prevEstado).label+')? Úsalo cuando un estado se colocó por error.'))return;await cambiarEstado(new Set([detalleEnvio.id]),_prevEstado,'Revertido desde '+estadoInfo(detalleEnvio.estado).label+' (corrección de estado erróneo) por '+(usuario?.nombre||'Admin'));setDetalleEnvio(prev=>({...prev,estado:_prevEstado}));setTimeout(()=>cargarHistorialReal(detalleEnvio.codigo),400);
-    if(window.confirm('¿Borrar también las fotos de este intento (etiqueta y/o entrega)? Úsalo solo si esas fotos también corresponden al estado erróneo que acabas de revertir.')){
-      try{
-        await db.from('envios').update({foto_etiqueta:null,fotos_entrega:null}).eq('codigo',detalleEnvio.codigo);
-        setDetalleEnvio(prev=>({...prev,foto_etiqueta:null}));
-        setFotosReloadKey(k=>k+1);
-        toast('✓ Fotos borradas');
-      }catch(fe){toast('⚠ Error al borrar las fotos: '+fe.message);}
-    }
-  },style:{padding:'8px 16px',borderRadius:8,border:'1px solid #b03030',background:'#b03030',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}},"↩ Revertir al estado anterior")
-):null;})(),
-/*#__PURE__*/React.createElement(FotosEntregaConRecarga,{key:detalleEnvio.codigo+'_'+fotosReloadKey,codigo:detalleEnvio.codigo,fotoEtiquetaInicial:detalleEnvio.foto_etiqueta,esAdmin:(esAdmin||esSuperAdmin)}),/*#__PURE__*/React.createElement("div",{style:{marginTop:16,display:'flex',gap:8,flexWrap:'wrap'}},estadosEditables.map(est=>/*#__PURE__*/React.createElement("button",{key:est.val,onClick:async()=>{await cambiarEstado(new Set([detalleEnvio.id]),est.val);setDetalleEnvio(prev=>({...prev,estado:est.val}));setTimeout(()=>cargarHistorialReal(detalleEnvio.codigo),400);},style:{padding:'6px 12px',borderRadius:7,border:'1px solid '+est.color,background:detalleEnvio.estado===est.val?est.bg:'transparent',color:est.color,fontSize:11,fontWeight:700,cursor:'pointer',opacity:detalleEnvio.estado===est.val?1:0.7}},detalleEnvio.estado===est.val?'✓ ':'',est.label))),/*#__PURE__*/React.createElement(AdminEditarEnvio,{envio:detalleEnvio,onSave:async(campo,valor)=>{const entrada=crearEntradaHistorial(detalleEnvio.estado,`${campo} cambiado a "${valor}"`,usuario?.nombre||'Admin');setDetalleEnvio(prev=>({...prev,[campo]:valor,historial:[...prev.historial,entrada]}));setEnvios(prev=>prev.map(e=>e.id===detalleEnvio.id?{...e,[campo]:valor,historial:[...e.historial,entrada]}:e));try{await db.from('envios').update({[campo]:valor}).eq('codigo',detalleEnvio.codigo);toast('✓ '+campo+' actualizado');}catch(e){toast('⚠ Error al guardar: '+e.message);}}}),/*#__PURE__*/React.createElement("div",{className:"modal-actions"},/*#__PURE__*/React.createElement("button",{className:"btn-secondary",onClick:()=>setDetalleEnvio(null)},"Cerrar"))),motivosModalOpen&&/*#__PURE__*/React.createElement(Modal,{title:'⚙ Motivos de Reagenda',onClose:()=>setMotivosModalOpen(false)},/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginBottom:14,lineHeight:1.5}},"Estos motivos aparecen como lista desplegable en la app del mensajero al marcar un envío como Reprogramado, en vez del cuadro de texto libre. Si no dejas ningún motivo activo, el mensajero sigue viendo el cuadro de texto libre de siempre."),/*#__PURE__*/React.createElement("div",{className:"section-head"},/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)'}},"Catálogo de motivos"),/*#__PURE__*/React.createElement("button",{className:"btn-add",onClick:()=>{const nid=Math.max.apply(null,[0].concat(motivosAdmin.map(m=>m.id)))+1;setMotivosAdmin(prev=>prev.concat([{id:nid,texto:'',activo:true}]));}},"+ Agregar")),/*#__PURE__*/React.createElement("div",{className:"table-wrap"},/*#__PURE__*/React.createElement("table",null,/*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("th",null,"Motivo"),/*#__PURE__*/React.createElement("th",{style:{width:80,textAlign:'center'}},"Activo"),/*#__PURE__*/React.createElement("th",{style:{width:50}}))),/*#__PURE__*/React.createElement("tbody",null,motivosAdmin.length===0?/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",{colSpan:3,style:{textAlign:'center',color:'var(--text-soft)',fontSize:12,padding:'14px 0'}},"Sin motivos cargados todavía — agrega el primero")):motivosAdmin.map((m,i)=>/*#__PURE__*/React.createElement("tr",{key:m.id,style:{background:i%2===0?'#fff':'var(--cream)'}},/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{className:'form-input',value:m.texto,placeholder:'Ej: Cliente no se encontraba en el domicilio',onChange:e=>{const v=e.target.value;setMotivosAdmin(prev=>prev.map(x=>x.id===m.id?Object.assign({},x,{texto:v}):x));},style:{margin:0}})),/*#__PURE__*/React.createElement("td",{style:{textAlign:'center'}},/*#__PURE__*/React.createElement("button",{onClick:()=>{setMotivosAdmin(prev=>prev.map(x=>x.id===m.id?Object.assign({},x,{activo:x.activo===false}):x));},style:{background:'none',border:'none',cursor:'pointer',color:m.activo!==false?'var(--success)':'var(--text-soft)',fontWeight:700,fontSize:14}},m.activo!==false?'✓':'○')),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("button",{onClick:()=>{const mid=m.id;setMotivosAdmin(prev=>prev.filter(x=>x.id!==mid));},style:{padding:'4px 8px',borderRadius:6,border:'none',background:'rgba(176,48,48,0.1)',color:'#b03030',cursor:'pointer',fontSize:12}},"x")))))))));}
+  /*#__PURE__*/React.createElement("div",{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}},
+    CAMPOS_ENVIO_DETALLE.map(campo=>renderCampoEditable(campo))
+  ),
+  renderCampoLargo('nota_admin','Nota privada (solo vista de administración)','text',true),
+  detalleEnvio.estado==='siniestro'&&renderCampoLargo('valor_siniestro','Valor del producto siniestrado ($) — solo administrativos','number',false),
+  /*#__PURE__*/React.createElement("div",{style:{marginBottom:16}},estadoBadge(detalleEnvio.estado)),
+  detalleEnvio.nota&&/*#__PURE__*/React.createElement("div",{className:"obs-box",style:{marginBottom:16}},"📌 ",detalleEnvio.nota),
+  /*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)',marginBottom:10}},"Historial"),
+  /*#__PURE__*/React.createElement("div",{style:{maxHeight:260,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8,marginBottom:16}},
+    cargandoHistorial?React.createElement("div",{style:{padding:16,textAlign:'center',color:'var(--text-soft)',fontSize:12}},"Cargando historial..."):
+    historialReal.length===0?React.createElement("div",{style:{padding:16,textAlign:'center',color:'var(--text-soft)',fontSize:12}},"Sin registros de historial detallado para este envío (puede ser un paquete anterior a esta función)."):
+    historialReal.map((h,i)=>/*#__PURE__*/React.createElement("div",{key:h.id||i,style:{padding:'8px 12px',borderBottom:'1px solid var(--border)',display:'flex',gap:10,alignItems:'flex-start'}},
+      /*#__PURE__*/React.createElement("div",{style:{flex:1}},
+        /*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}},
+          /*#__PURE__*/React.createElement("span",{style:{fontSize:13,fontWeight:700,color:estadoInfo(h.estado).color}},estadoInfo(h.estado).label),
+          /*#__PURE__*/React.createElement("span",{style:{fontSize:9,fontWeight:700,padding:'1px 7px',borderRadius:10,background:canalInfo(h.canal).bg,color:canalInfo(h.canal).color}},canalInfo(h.canal).label)
+        ),
+        /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-mid)',marginTop:3,fontWeight:600}},h.usuario||'Sistema'),
+        h.nota&&/*#__PURE__*/React.createElement("div",{style:{fontSize:11,color:'var(--text-soft)',marginTop:2,fontStyle:'italic'}},h.nota)
+      ),
+      /*#__PURE__*/React.createElement("div",{style:{fontSize:10,color:'var(--text-soft)',fontFamily:'JetBrains Mono',whiteSpace:'nowrap',textAlign:'right'}},new Date(h.created_at).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})),
+      (esAdmin||esSuperAdmin)&&React.createElement("button",{onClick:async()=>{
+        if(!window.confirm('¿Borrar esta entrada del historial? No se puede deshacer.'))return;
+        // Antes, borrar la entrada que representaba el estado ACTUAL dejaba un aviso rojo aparte
+        // ("Revertir al estado anterior") que había que confirmar con un click extra. Luis pidió
+        // que no exista ese botón: si borrás la entrada del estado vigente, el envío cae solo al
+        // estado de la entrada más reciente que quede en el historial -- sin un paso manual más,
+        // y sin dejar un nuevo registro de "cambio de estado" (es una corrección, no un evento nuevo).
+        const eraLaActual=historialReal.length>0&&historialReal[0].id===h.id;
+        try{
+          await db.from('historial_envios').delete().eq('id',h.id);
+          const restante=historialReal.filter(x=>x.id!==h.id);
+          setHistorialReal(restante);
+          if(eraLaActual&&restante.length>0&&restante[0].estado!==detalleEnvio.estado){
+            const nuevoEstado=restante[0].estado;
+            try{await db.from('envios').update({estado:nuevoEstado}).eq('codigo',detalleEnvio.codigo);}catch(errEst){console.warn('No se pudo sincronizar el estado tras borrar historial:',errEst.message);}
+            setDetalleEnvio(prev=>prev?Object.assign({},prev,{estado:nuevoEstado}):prev);
+            setEnvios(prev=>prev.map(e=>e.id===detalleEnvio.id?Object.assign({},e,{estado:nuevoEstado}):e));
+            toast('✓ Entrada borrada — el envío volvió a "'+estadoInfo(nuevoEstado).label+'"');
+          }else{
+            toast('✓ Entrada de historial borrada');
+          }
+        }catch(e){toast('⚠ No se pudo borrar la entrada del historial: '+e.message);}
+      },title:'Borrar entrada',style:{background:'none',border:'none',color:'var(--danger)',cursor:'pointer',fontSize:14,fontWeight:700,padding:'0 4px',lineHeight:1,flexShrink:0}},'✕')
+    ))
+  ),
+  /*#__PURE__*/React.createElement(FotosEntregaConRecarga,{key:detalleEnvio.codigo+'_'+fotosReloadKey,codigo:detalleEnvio.codigo,fotoEtiquetaInicial:detalleEnvio.foto_etiqueta,esAdmin:(esAdmin||esSuperAdmin)}),
+  /*#__PURE__*/React.createElement("div",{style:{marginTop:16,display:'flex',gap:8,flexWrap:'wrap'}},estadosEditables.map(est=>/*#__PURE__*/React.createElement("button",{key:est.val,onClick:async()=>{await cambiarEstado(new Set([detalleEnvio.id]),est.val);setDetalleEnvio(prev=>({...prev,estado:est.val}));setTimeout(()=>cargarHistorialReal(detalleEnvio.codigo),400);},style:{padding:'6px 12px',borderRadius:7,border:'1px solid '+est.color,background:detalleEnvio.estado===est.val?est.bg:'transparent',color:est.color,fontSize:11,fontWeight:700,cursor:'pointer',opacity:detalleEnvio.estado===est.val?1:0.7}},detalleEnvio.estado===est.val?'✓ ':'',est.label))),
+  /*#__PURE__*/React.createElement("div",{className:"modal-actions"},/*#__PURE__*/React.createElement("button",{className:"btn-secondary",onClick:()=>setDetalleEnvio(null)},"Cerrar"))),motivosModalOpen&&/*#__PURE__*/React.createElement(Modal,{title:'⚙ Motivos de Reagenda',onClose:()=>setMotivosModalOpen(false)},/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginBottom:14,lineHeight:1.5}},"Estos motivos aparecen como lista desplegable en la app del mensajero al marcar un envío como Reprogramado, en vez del cuadro de texto libre. Si no dejas ningún motivo activo, el mensajero sigue viendo el cuadro de texto libre de siempre."),/*#__PURE__*/React.createElement("div",{className:"section-head"},/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)'}},"Catálogo de motivos"),/*#__PURE__*/React.createElement("button",{className:"btn-add",onClick:()=>{const nid=Math.max.apply(null,[0].concat(motivosAdmin.map(m=>m.id)))+1;setMotivosAdmin(prev=>prev.concat([{id:nid,texto:'',activo:true}]));}},"+ Agregar")),/*#__PURE__*/React.createElement("div",{className:"table-wrap"},/*#__PURE__*/React.createElement("table",null,/*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("th",null,"Motivo"),/*#__PURE__*/React.createElement("th",{style:{width:80,textAlign:'center'}},"Activo"),/*#__PURE__*/React.createElement("th",{style:{width:50}}))),/*#__PURE__*/React.createElement("tbody",null,motivosAdmin.length===0?/*#__PURE__*/React.createElement("tr",null,/*#__PURE__*/React.createElement("td",{colSpan:3,style:{textAlign:'center',color:'var(--text-soft)',fontSize:12,padding:'14px 0'}},"Sin motivos cargados todavía — agrega el primero")):motivosAdmin.map((m,i)=>/*#__PURE__*/React.createElement("tr",{key:m.id,style:{background:i%2===0?'#fff':'var(--cream)'}},/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("input",{className:'form-input',value:m.texto,placeholder:'Ej: Cliente no se encontraba en el domicilio',onChange:e=>{const v=e.target.value;setMotivosAdmin(prev=>prev.map(x=>x.id===m.id?Object.assign({},x,{texto:v}):x));},style:{margin:0}})),/*#__PURE__*/React.createElement("td",{style:{textAlign:'center'}},/*#__PURE__*/React.createElement("button",{onClick:()=>{setMotivosAdmin(prev=>prev.map(x=>x.id===m.id?Object.assign({},x,{activo:x.activo===false}):x));},style:{background:'none',border:'none',cursor:'pointer',color:m.activo!==false?'var(--success)':'var(--text-soft)',fontWeight:700,fontSize:14}},m.activo!==false?'✓':'○')),/*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("button",{onClick:()=>{const mid=m.id;setMotivosAdmin(prev=>prev.filter(x=>x.id!==mid));},style:{padding:'4px 8px',borderRadius:6,border:'none',background:'rgba(176,48,48,0.1)',color:'#b03030',cursor:'pointer',fontSize:12}},"x")))))))));}
 window.GestionEnvios = GestionEnvios;
 })();
