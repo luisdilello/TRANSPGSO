@@ -622,7 +622,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788295695;
+window.__MODULES_VERSION=1788300446;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1027,13 +1027,39 @@ async function enviarNotificacionPush(mensajero,title,message,url){
     return await res.json();
   }catch(e){return{ok:false,error:e.message};}
 }async function sbUpsert(tabla,data){try{const _await$db$from$upsert=await db.from(tabla).upsert(data),error=_await$db$from$upsert.error;if(error)console.warn('Supabase upsert error:',error.message);return!error;}catch(e){console.warn('Supabase offline:',e.message);return false;}}async function sbSelect(tabla,filtros){if(filtros===void 0){filtros={};}try{let q=db.from(tabla).select('*');Object.entries(filtros).forEach(_ref=>{let k=_ref[0],v=_ref[1];q=q.eq(k,v);});const _await$q=await q,data=_await$q.data,error=_await$q.error;if(error)throw error;return data||[];}catch(e){console.warn('Supabase select error:',e.message);return null;}}async function sbLogin(email,clave){
+  // Antes CUALQUIER falla acá adentro (clave mala, corte de señal a mitad del login, timeout
+  // buscando el perfil) terminaba devolviendo null y la pantalla siempre mostraba "Usuario o
+  // contraseña incorrectos" -- aunque la clave estuviera perfecta. Caso real: varios mensajeros
+  // en terreno con mala señal veían ese mismo error una y otra vez con la clave bien escrita
+  // (se confirmó revisando el servidor: su login SI se procesó bien, solo que la respuesta
+  // nunca les llegó completa por el corte de señal). Ahora se distingue: solo "clave/usuario
+  // invalidos" de verdad devuelve null (pantalla de clave incorrecta); cualquier otra cosa
+  // (fetch fallido, timeout, error que no sea de credenciales) tira SIN_CONEXION para que la
+  // pantalla de login diga que fue un problema de conexión, no que la clave está mala.
+  let r;
   try{
-    const{data:authData,error:authError}=await db.auth.signInWithPassword({email:email,password:clave});
-    if(authError||!authData||!authData.user)return null;
-    const{data:perfilData,error:perfilError}=await db.from('usuarios_publico').select('nombre,email,rol,activo,mensajero_id,cliente_nombre').eq('email',email).eq('activo',true).single();
-    if(perfilError||!perfilData){await db.auth.signOut();return null;}
-    return{...perfilData,mustChangePassword:!!(authData.user.user_metadata&&authData.user.user_metadata.must_change_password)};
-  }catch(e){return null;}
+    r=await db.auth.signInWithPassword({email:email,password:clave});
+  }catch(e){
+    throw new Error('SIN_CONEXION');
+  }
+  const authData=r.data,authError=r.error;
+  if(authError){
+    const codigo=(authError.name||'')+' '+(authError.message||'');
+    if(/invalid.?login.?credentials|invalid_credentials|invalid_grant/i.test(codigo))return null;
+    throw new Error('SIN_CONEXION');
+  }
+  if(!authData||!authData.user)return null;
+  let r2;
+  try{
+    r2=await db.from('usuarios_publico').select('nombre,email,rol,activo,mensajero_id,cliente_nombre').eq('email',email).eq('activo',true).single();
+  }catch(e2){
+    // La clave YA se validó como correcta arriba -- si se corta la señal buscando el perfil,
+    // no hay que cerrarle la sesión ni decirle que su clave está mala.
+    throw new Error('SIN_CONEXION');
+  }
+  const perfilData=r2.data,perfilError=r2.error;
+  if(perfilError||!perfilData){await db.auth.signOut();return null;}
+  return{...perfilData,mustChangePassword:!!(authData.user.user_metadata&&authData.user.user_metadata.must_change_password)};
 }async function sbInsertEnvio(envio){try{const _await$db$from$insert=await db.from('envios').insert({codigo:envio.codigo,cliente:envio.cliente,destinatario:envio.destinatario,telefono:envio.telefono,direccion:envio.direccion,comuna:envio.comuna,referencia:envio.referencia||'',fecha:envio.fecha,estado:envio.estado||'en_bodega',mensajero:envio.mensajero||'',monto:envio.monto||0,en_un_cambio:envio.enUnCambio||false,nota:envio.nota||'',fuente:envio.fuente||'propio'}).select().single(),data=_await$db$from$insert.data,error=_await$db$from$insert.error;if(error)console.warn('Insert envio error:',error.message);return data;}catch(e){return null;}}
 // ── Handler offline-safe para "marcar entrega / reprogramar / cancelar" (EnvioAccion) ──
 // Hace exactamente el mismo trabajo que antes hacian guardarConEstado + sbUpdateEstado por
@@ -4732,7 +4758,12 @@ function LoginScreen(_ref28){var _document$querySelect11;let onLogin=_ref28.onLo
       try{const{data:rpcData}=await db.rpc('resolver_email_login',{p_texto:raw});resuelto=rpcData||null;}catch(rpcErr){resuelto=null;}
       emailCompleto=resuelto||(raw.toLowerCase()+'@transpgso.cl');
     }
-    const usuario=await sbLogin(emailCompleto,clave);if(usuario){playSound('success');if(usuario.mustChangePassword){setPasoNuevaClave(usuario);}else{onLogin(usuario);}}else{setError('Usuario o contraseña incorrectos');}}catch(err){setError('Error de conexión. Verifica tu internet.');}setLoading(false);}
+    const usuario=await sbLogin(emailCompleto,clave);if(usuario){playSound('success');if(usuario.mustChangePassword){setPasoNuevaClave(usuario);}else{onLogin(usuario);}}else{setError('Usuario o contraseña incorrectos');}}catch(err){
+    // SIN_CONEXION = la clave pudo ser correcta, se cortó la señal a mitad del login (ver
+    // sbLogin) -- no confundir al mensajero diciéndole que su clave está mala.
+    if(err&&err.message==='SIN_CONEXION')setError('Se cortó la conexión al intentar entrar. Tu usuario y clave pueden estar bien — prueba de nuevo cuando tengas mejor señal.');
+    else setError('Error de conexión. Verifica tu internet.');
+  }setLoading(false);}
 async function handleNuevaClave(e){e&&e.preventDefault();if(!nuevaClave1||nuevaClave1.length<6){setError('La contraseña debe tener al menos 6 caracteres');return;}if(nuevaClave1!==nuevaClave2){setError('Las contraseñas no coinciden');return;}setLoading(true);setError('');try{const{error:updError}=await db.auth.updateUser({password:nuevaClave1,data:{must_change_password:false}});if(updError){setError('No se pudo actualizar la contraseña: '+updError.message);setLoading(false);return;}playSound('success');onLogin({...pasoNuevaClave,mustChangePassword:false});}catch(err){setError('Error de conexión. Verifica tu internet.');}setLoading(false);}
 if(pasoNuevaClave){return/*#__PURE__*/React.createElement("div",{style:{minHeight:'100vh',background:'var(--dark-deep)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}},/*#__PURE__*/React.createElement("form",{onSubmit:handleNuevaClave,style:{width:'100%',maxWidth:400,background:'rgba(255,255,255,0.04)',border:'1px solid rgba(200,168,75,0.2)',borderRadius:12,padding:32}},/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:22,color:'var(--gold)',letterSpacing:2,marginBottom:8,textAlign:'center'}},"Nueva contraseña requerida"),/*#__PURE__*/React.createElement("div",{style:{color:'rgba(255,255,255,0.6)',fontSize:13,marginBottom:20,textAlign:'center'}},"Por seguridad, elegí una contraseña nueva para continuar."),error&&/*#__PURE__*/React.createElement("div",{style:{background:'rgba(176,48,48,0.15)',border:'1px solid rgba(176,48,48,0.4)',borderRadius:8,padding:'10px 14px',marginBottom:16,color:'#ff8080',fontSize:13}},error),/*#__PURE__*/React.createElement("input",{type:"password",placeholder:"Nueva contraseña (mín. 6 caracteres)",value:nuevaClave1,onChange:e=>setNuevaClave1(e.target.value),style:{width:'100%',padding:'12px 16px',marginBottom:12,background:'rgba(255,255,255,0.06)',border:'1px solid rgba(200,168,75,0.2)',borderRadius:8,color:'#fff',fontFamily:'DM Sans',fontSize:14,boxSizing:'border-box'}}),/*#__PURE__*/React.createElement("input",{type:"password",placeholder:"Repetir contraseña",value:nuevaClave2,onChange:e=>setNuevaClave2(e.target.value),style:{width:'100%',padding:'12px 16px',marginBottom:20,background:'rgba(255,255,255,0.06)',border:'1px solid rgba(200,168,75,0.2)',borderRadius:8,color:'#fff',fontFamily:'DM Sans',fontSize:14,boxSizing:'border-box'}}),/*#__PURE__*/React.createElement("button",{type:"submit",disabled:loading,style:{width:'100%',padding:'12px 16px',background:'var(--gold)',border:'none',borderRadius:8,color:'#1a1c14',fontFamily:'Bebas Neue',fontSize:16,letterSpacing:2,cursor:'pointer'}},loading?'Guardando...':'Guardar y continuar')));}
 return/*#__PURE__*/React.createElement("div",{style:{minHeight:'100vh',background:'var(--dark-deep)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:20}},/*#__PURE__*/React.createElement("div",{style:{position:'fixed',inset:0,background:'radial-gradient(ellipse at 30% 20%, rgba(200,168,75,0.08) 0%, transparent 60%), radial-gradient(ellipse at 70% 80%, rgba(58,61,46,0.6) 0%, transparent 60%)',pointerEvents:'none'}}),/*#__PURE__*/React.createElement('div',{className:'tp-login-stage'},
