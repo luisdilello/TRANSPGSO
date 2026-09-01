@@ -1,7 +1,7 @@
 (function(){
 var useEffect=React.useEffect, useMemo=React.useMemo, useRef=React.useRef, useState=React.useState;
 var AdminEditarEnvio=window.__app.AdminEditarEnvio, abrirVentanaEtiquetas=window.__app.abrirVentanaEtiquetas, COMUNAS_CHILE=window.__app.COMUNAS_CHILE, ESTADOS_ENVIO=window.__app.ESTADOS_ENVIO, EtiquetaPreview=window.__app.EtiquetaPreview, ExportBtn=window.__app.ExportBtn, FotosEntregaConRecarga=window.__app.FotosEntregaConRecarga, Modal=window.__app.Modal, matchComuna=window.__app.matchComuna, esComunaValida=window.__app.esComunaValida, confirmarCodigo=window.__app.confirmarCodigo, crearEntradaHistorial=window.__app.crearEntradaHistorial, db=window.__app.db, diasDesdeFecha=window.__app.diasDesdeFecha, esEnvioAtrasado=window.__app.esEnvioAtrasado, UMBRAL_ATRASO_DIAS=window.__app.UMBRAL_ATRASO_DIAS, calcularBaseTardio=window.__app.calcularBaseTardio, esEnvioTardio=window.__app.esEnvioTardio, horasTardanza=window.__app.horasTardanza, UMBRAL_TARDIO_HORAS=window.__app.UMBRAL_TARDIO_HORAS, estadoBadge=window.__app.estadoBadge, estadoInfo=window.__app.estadoInfo, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, imprimirFotoEtiqueta=window.__app.imprimirFotoEtiqueta, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, normalizarNombre=window.__app.normalizarNombre, perfil=window.__app.perfil, playSound=window.__app.playSound, subirFotoStorage=window.__app.subirFotoStorage, sbRegistrarHistorial=window.__app.sbRegistrarHistorial, sbRegistrarHistorialLote=window.__app.sbRegistrarHistorialLote, fetchPaginadoParalelo=window.__app.fetchPaginadoParalelo, fetchPorDiasParalelo=window.__app.fetchPorDiasParalelo, fetchEntregadosPorFechaReal=window.__app.fetchEntregadosPorFechaReal;
-function GestionEnvios(_ref26){var _detalleEnvio$mensaje;let mensajeros=_ref26.mensajeros,clientes=_ref26.clientes,toast=_ref26.toast,esSuperAdmin=_ref26.esSuperAdmin,esAdmin=_ref26.esAdmin,usuario=_ref26.usuario;const _useState60=useState(()=>lsLoad('gestion_envios',[])),envios=_useState60[0],setEnvios=_useState60[1];const _useState61=useState('lista'),subTab=_useState61[0],setSubTab=_useState61[1];const _useState62=useState(''),search=_useState62[0],setSearch=_useState62[1];const _useState63=useState('todos'),filtroEst=_useState63[0],setFiltroEst=_useState63[1];const _useState64=useState('todos'),filtroCli=_useState64[0],setFiltroCli=_useState64[1];const _useState65=useState('todos'),filtroMen=_useState65[0],setFiltroMen=_useState65[1];const _useState65b=useState('todos'),filtroFuente=_useState65b[0],setFiltroFuente=_useState65b[1];// Antes "⚠ Atrasados" era un simple interruptor on/off que solo miraba envíos 'en_ruta' con
+function GestionEnvios(_ref26){var _detalleEnvio$mensaje;let mensajeros=_ref26.mensajeros,clientes=_ref26.clientes,toast=_ref26.toast,esSuperAdmin=_ref26.esSuperAdmin,esAdmin=_ref26.esAdmin,usuario=_ref26.usuario,codigoInicial=_ref26.codigoInicial,onCodigoInicialConsumido=_ref26.onCodigoInicialConsumido;const _useState60=useState(()=>lsLoad('gestion_envios',[])),envios=_useState60[0],setEnvios=_useState60[1];const _useState61=useState('lista'),subTab=_useState61[0],setSubTab=_useState61[1];const _useState62=useState(''),search=_useState62[0],setSearch=_useState62[1];const _useState63=useState('todos'),filtroEst=_useState63[0],setFiltroEst=_useState63[1];const _useState64=useState('todos'),filtroCli=_useState64[0],setFiltroCli=_useState64[1];const _useState65=useState('todos'),filtroMen=_useState65[0],setFiltroMen=_useState65[1];const _useState65b=useState('todos'),filtroFuente=_useState65b[0],setFiltroFuente=_useState65b[1];// Antes "⚠ Atrasados" era un simple interruptor on/off que solo miraba envíos 'en_ruta' con
 // UMBRAL_ATRASO_DIAS+ días sin entregar. Luis pidió que también se puedan ver ahí los envíos que
 // llevan 2 o más veces en estado Reprogramado (sin importar hace cuántos días fue la última
 // reagenda) -- así que ahora es un desplegable de 3 modos: 'combinado' (junta ambos grupos,
@@ -186,6 +186,19 @@ async function sincronizarDesdeSupabase(){setSincronizando(true);try{
   }).catch(function(){setHistorialReal([]);setCargandoHistorial(false);});
 }
 useEffect(()=>{cargarHistorialReal(detalleEnvio&&detalleEnvio.codigo);},[detalleEnvio&&detalleEnvio.codigo]);
+// Llega desde el buscador del Mapa de Rutas ("Ver ficha completa" en el pin de un envío
+// encontrado): en vez de duplicar el modal de detalle allá, el Mapa solo guarda el código y
+// salta a esta pestaña -- acá se busca ese código en la lista local y se abre la MISMA ficha
+// de siempre. Si el código todavía no llegó al sync local (recién se creó, o el sync está en
+// curso) este efecto reintenta solo porque depende de `envios`: en cuanto aparezca ahí, se abre.
+useEffect(()=>{
+  if(!codigoInicial)return;
+  const match=envios.find(function(e){return e.codigo===codigoInicial;});
+  if(match){
+    setDetalleEnvio(match);
+    if(onCodigoInicialConsumido)onCodigoInicialConsumido();
+  }
+},[codigoInicial,envios]);
 const _useSiniDet=useState([]),siniestroDetalle=_useSiniDet[0],setSiniestroDetalle=_useSiniDet[1];
 // Ficha del envío en Gestión de Envíos: antes mostraba los campos en tarjetas de solo lectura
 // arriba y, más abajo, un panel aparte 'Editar Campos del Envío' que repetía Código/Dirección/Comuna
