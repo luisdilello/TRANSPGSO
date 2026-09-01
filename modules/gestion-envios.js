@@ -67,7 +67,13 @@ useEffect(function(){
   })();
   return function(){cancelado=true;};
 },[codigosReprogramadosActuales.join(',')]);
-function esReprogramadoRepetido(e){return e.estado==='reprogramado'&&(reprogCount[e.codigo]||0)>=2;}const _useSortCol=useState(null),sortCol=_useSortCol[0],setSortCol=_useSortCol[1];const _useSortDir=useState('asc'),sortDir=_useSortDir[0],setSortDir=_useSortDir[1];const _useState66=useState(new Set()),selected=_useState66[0],setSelected=_useState66[1];const _useState67=useState(false),asignarModal=_useState67[0],setAsignarModal=_useState67[1];const _useState68=useState(''),mensajeroAsignar=_useState68[0],setMensajeroAsignar=_useState68[1];const _useState69=useState(null),detalleEnvio=_useState69[0],setDetalleEnvio=_useState69[1];const _useHistReal=useState([]),historialReal=_useHistReal[0],setHistorialReal=_useHistReal[1];const _useFotosReloadKey=useState(0),fotosReloadKey=_useFotosReloadKey[0],setFotosReloadKey=_useFotosReloadKey[1];const _useHistCarg=useState(false),cargandoHistorial=_useHistCarg[0],setCargandoHistorial=_useHistCarg[1];const _useEntregasReal=useState({}),entregasReal=_useEntregasReal[0],setEntregasReal=_useEntregasReal[1];const _useState70=useState(1),page=_useState70[0],setPage=_useState70[1];const _useState71=useState(false),sincronizando=_useState71[0],setSincronizando=_useState71[1];const _useState71b=useState(false),showListaNegra=_useState71b[0],setShowListaNegra=_useState71b[1];const _useState71cc=useState(false),cambiarClienteModal=_useState71cc[0],setCambiarClienteModal=_useState71cc[1];const _useState71tt=useState(false),showTardiosModal=_useState71tt[0],setShowTardiosModal=_useState71tt[1];const _useState71dd=useState(''),clienteCambio=_useState71dd[0],setClienteCambio=_useState71dd[1];
+function esReprogramadoRepetido(e){return e.estado==='reprogramado'&&(reprogCount[e.codigo]||0)>=2;}
+// NUEVO: Luis pidió que el modal de "Detalle completo" de Atrasados muestre TODAS las piezas
+// reprogramadas sin importar cuántas veces (antes solo entraban desde la 2da reprogramación,
+// igual que el filtro rápido de la tabla). Este criterio más amplio se usa SOLO en ese modal --
+// la tabla principal, su dropdown de filtro rápido y exportarHTMLPorCliente siguen exigiendo 2+.
+function esReprogramadoAlMenos1Vez(e){return e.estado==='reprogramado';}
+const _useSortCol=useState(null),sortCol=_useSortCol[0],setSortCol=_useSortCol[1];const _useSortDir=useState('asc'),sortDir=_useSortDir[0],setSortDir=_useSortDir[1];const _useState66=useState(new Set()),selected=_useState66[0],setSelected=_useState66[1];const _useState67=useState(false),asignarModal=_useState67[0],setAsignarModal=_useState67[1];const _useState68=useState(''),mensajeroAsignar=_useState68[0],setMensajeroAsignar=_useState68[1];const _useState69=useState(null),detalleEnvio=_useState69[0],setDetalleEnvio=_useState69[1];const _useHistReal=useState([]),historialReal=_useHistReal[0],setHistorialReal=_useHistReal[1];const _useFotosReloadKey=useState(0),fotosReloadKey=_useFotosReloadKey[0],setFotosReloadKey=_useFotosReloadKey[1];const _useHistCarg=useState(false),cargandoHistorial=_useHistCarg[0],setCargandoHistorial=_useHistCarg[1];const _useEntregasReal=useState({}),entregasReal=_useEntregasReal[0],setEntregasReal=_useEntregasReal[1];const _useState70=useState(1),page=_useState70[0],setPage=_useState70[1];const _useState71=useState(false),sincronizando=_useState71[0],setSincronizando=_useState71[1];const _useState71b=useState(false),showListaNegra=_useState71b[0],setShowListaNegra=_useState71b[1];const _useState71cc=useState(false),cambiarClienteModal=_useState71cc[0],setCambiarClienteModal=_useState71cc[1];const _useState71tt=useState(false),showTardiosModal=_useState71tt[0],setShowTardiosModal=_useState71tt[1];const _useState71dd=useState(''),clienteCambio=_useState71dd[0],setClienteCambio=_useState71dd[1];
 const _useState71c=useState(false),showPDFModal=_useState71c[0],setShowPDFModal=_useState71c[1];
 const _useState71d=useState(''),clientePDF=_useState71d[0],setClientePDF=_useState71d[1];
 const _useState71e=useState(null),pdfPreview=_useState71e[0],setPdfPreview=_useState71e[1];
@@ -576,9 +582,9 @@ ${AVISO_POLITICA_REINTENTOS}
 // dejó el mensajero al reagendar (o el aviso genérico si no dejó nada); para atrasados en ruta no
 // existe una nota de reagenda (nunca se marcó), así que se explica que sigue en camino.
 function situacionMotivoDe(e){
-  if(esReprogramadoRepetido(e)){
+  if(esReprogramadoAlMenos1Vez(e)){
     return{
-      situacion:(reprogCount[e.codigo]||2)+'x Reprogramado',
+      situacion:(reprogCount[e.codigo]||1)+'x Reprogramado',
       motivo:(e.nota&&e.nota.trim())||'Reagenda registrada sin motivo detallado por el mensajero.'
     };
   }
@@ -686,6 +692,10 @@ const atrasadosCount=useMemo(()=>enviosPeriodo.filter(esEnvioAtrasado).length,[e
 // para el modo "Todos" nunca duplica un mismo envío.
 const reprogramadosRepetidosCount=useMemo(()=>enviosPeriodo.filter(esReprogramadoRepetido).length,[enviosPeriodo,reprogCount]);
 const combinadoAtrasoCount=atrasadosCount+reprogramadosRepetidosCount;
+// Conteos "amplios" (reprogramado desde la 1ra vez) que usa SOLO el modal de Detalle completo --
+// Luis pidió ver ahí todas las piezas no entregadas sin importar si llevan 1 o más reagendas.
+const reprogramadosCount=useMemo(()=>enviosPeriodo.filter(esReprogramadoAlMenos1Vez).length,[enviosPeriodo,reprogCount]);
+const combinadoAtrasoCountAmplio=atrasadosCount+reprogramadosCount;
 // Orden alfabético/numérico al hacer clic en el encabezado de una columna — clic de nuevo
 // invierte el orden (asc/desc). null=sin ordenar (orden de llegada/sincronización).
 function valorOrden(e,col){switch(col){case'codigo':return(e.codigo||'').toLowerCase();case'cliente':return(e.cliente||'').toLowerCase();case'destinatario':return(e.destinatario||'').toLowerCase();case'direccion':return(e.direccion||'').toLowerCase();case'comuna':return(e.comuna||'').toLowerCase();case'mensajero':return(e.mensajero||'').toLowerCase();case'estado':return estadoInfo(e.estado).label.toLowerCase();case'fecha':return e.fecha||'';case'monto':return e.monto||0;default:return'';}}
@@ -694,7 +704,27 @@ const filtradosOrdenados=useMemo(()=>{if(!sortCol)return filtrados;const copia=f
 // exportarHTMLPorCliente: respeta los filtros activos en pantalla (cliente/mensajero/tipo/
 // búsqueda) y el modo elegido en el desplegable (atrasados/reprogramados/combinado); si el modo
 // está en 'off' toma igual el combinado para no mostrar la lista completa de envíos por error.
-const atrasadosDetalleBase=useMemo(()=>filtradosOrdenados.filter(e=>filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoRepetido(e):(esEnvioAtrasado(e)||esReprogramadoRepetido(e))),[filtradosOrdenados,filtroAtrasoModo,reprogCount]);
+// Base filtrada SOLO para el modal de Detalle completo: repite el mismo criterio de
+// cliente/mensajero/tipo/estado/búsqueda que 'filtrados' (arriba), pero SIN pasar por su propio
+// filtro de atraso -- ese sigue exigiendo 2+ reprogramaciones para el filtro rápido de la tabla
+// principal, y este modal ahora debe mostrar también los reprogramados de una sola vez.
+const atrasadosDetalleFiltrados=useMemo(()=>{
+  const q=search.trim().toLowerCase();
+  const baseLista=filtroEst==='entregado'?entregadosPeriodoReal:enviosPeriodo;
+  return baseLista.filter(e=>{
+    const qTerms=q.split(/[\n,;\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
+    const esMultiple=qTerms.length>1;
+    const matchQ=!q||(esMultiple
+      ?qTerms.some(t=>e.codigo.toLowerCase()===t||e.codigo.toLowerCase().includes(t))
+      :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));
+    const matchEst=filtroEst==='todos'||filtroEst==='entregado'||e.estado===filtroEst;
+    const matchCli=filtroCli==='todos'||e.cliente===filtroCli;
+    const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;
+    const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;
+    return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente;
+  });
+},[enviosPeriodo,entregadosPeriodoReal,filtroEst,search,filtroCli,filtroMen,filtroFuente]);
+const atrasadosDetalleBase=useMemo(()=>atrasadosDetalleFiltrados.filter(e=>filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoAlMenos1Vez(e):(esEnvioAtrasado(e)||esReprogramadoAlMenos1Vez(e))),[atrasadosDetalleFiltrados,filtroAtrasoModo,reprogCount]);
 function toggleSort(col){if(sortCol===col)setSortDir(d=>d==='asc'?'desc':'asc');else{setSortCol(col);setSortDir('asc');}setPage(1);}
 function iconoSort(col){if(sortCol!==col)return'';return sortDir==='asc'?' ▲':' ▼';}
 const totalPags=Math.max(1,Math.ceil(filtradosOrdenados.length/PAGE_SIZE));const paginado=filtradosOrdenados.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);const stats=useMemo(()=>{const s={};ESTADOS_ENVIO.forEach(est=>{s[est.val]=est.val==='entregado'?entregadosPeriodoReal.length:enviosPeriodo.filter(e=>e.estado===est.val).length;});return s;},[enviosPeriodo,entregadosPeriodoReal]);function toggleSelect(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function toggleAll(){const todosIds=new Set(filtrados.map(e=>e.id));if(selected.size===filtrados.length&&filtrados.every(e=>selected.has(e.id)))setSelected(new Set());else setSelected(todosIds);}async function imprimirEtiquetasSeleccionadas(){
@@ -1106,10 +1136,20 @@ asignarModal&&/*#__PURE__*/React.createElement(Modal,{title:'Asignar '+selected.
   /*#__PURE__*/React.createElement(FotosEntregaConRecarga,{key:detalleEnvio.codigo+'_'+fotosReloadKey,codigo:detalleEnvio.codigo,fotoEtiquetaInicial:detalleEnvio.foto_etiqueta,esAdmin:(esAdmin||esSuperAdmin)}),
   /*#__PURE__*/React.createElement("div",{style:{marginTop:16,display:'flex',gap:8,flexWrap:'wrap'}},estadosEditables.map(est=>/*#__PURE__*/React.createElement("button",{key:est.val,onClick:async()=>{await cambiarEstado(new Set([detalleEnvio.id]),est.val);setDetalleEnvio(prev=>({...prev,estado:est.val}));setTimeout(()=>cargarHistorialReal(detalleEnvio.codigo),400);},style:{padding:'6px 12px',borderRadius:7,border:'1px solid '+est.color,background:detalleEnvio.estado===est.val?est.bg:'transparent',color:est.color,fontSize:11,fontWeight:700,cursor:'pointer',opacity:detalleEnvio.estado===est.val?1:0.7}},detalleEnvio.estado===est.val?'✓ ':'',est.label))),
   /*#__PURE__*/React.createElement("div",{className:"modal-actions"},/*#__PURE__*/React.createElement("button",{className:"btn-secondary",onClick:()=>setDetalleEnvio(null)},"Cerrar"))),atrasadosDetalleOpen&&/*#__PURE__*/React.createElement(Modal,{title:'⚠ Piezas No Entregadas — Detalle Completo',wide:true,onClose:()=>setAtrasadosDetalleOpen(false)},
-  /*#__PURE__*/React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginBottom:14,lineHeight:1.5}},'Todas las piezas actualmente atrasadas en ruta o reprogramadas 2+ veces, con toda su información y el motivo real de cada una. Respeta los filtros de cliente, mensajero, tipo y búsqueda activos en la pantalla.'),
+  /*#__PURE__*/React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginBottom:14,lineHeight:1.5}},'Todas las piezas no entregadas del período elegido abajo: atrasadas en ruta o reprogramadas (sin importar si van en la 1ra reagenda o en varias), con toda su información y el motivo real de cada una. Respeta los filtros de cliente, mensajero, tipo y búsqueda activos en la pantalla.'),
+  /*#__PURE__*/React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',marginBottom:14,flexWrap:'wrap'}},
+    /*#__PURE__*/React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:12,letterSpacing:2,color:'var(--text-soft)',marginRight:2}},'PERÍODO:'),
+    [{val:'hoy',label:'Hoy'},{val:'ayer',label:'Ayer'},{val:'semana',label:'Esta semana'},{val:'mes',label:'Mes'},{val:'rango',label:'Rango'}].map(function(p){return/*#__PURE__*/React.createElement('button',{key:p.val,type:'button',onClick:function(){setPeriodo(p.val);setPage(1);},style:{padding:'5px 14px',borderRadius:20,border:'1px solid '+(periodo===p.val?'var(--gold)':'var(--border)'),background:periodo===p.val?'rgba(200,168,75,0.12)':'#fff',color:periodo===p.val?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:11,cursor:'pointer'}},p.label);}),
+    periodo==='mes'&&/*#__PURE__*/React.createElement('input',{type:'month',value:mesFiltro,onChange:function(e){setMesFiltro(e.target.value);setPage(1);},style:{padding:'4px 8px',borderRadius:8,border:'1px solid var(--gold)',fontSize:11,outline:'none',color:'var(--dark)'}}),
+    periodo==='rango'&&/*#__PURE__*/React.createElement(React.Fragment,null,
+      /*#__PURE__*/React.createElement('input',{type:'date',value:desde,onChange:function(e){setDesde(e.target.value);setPage(1);},style:{padding:'4px 8px',borderRadius:8,border:'1px solid var(--border)',fontSize:11,outline:'none'}}),
+      /*#__PURE__*/React.createElement('span',{style:{color:'var(--text-soft)',fontSize:11}},'al'),
+      /*#__PURE__*/React.createElement('input',{type:'date',value:hasta,onChange:function(e){setHasta(e.target.value);setPage(1);},style:{padding:'4px 8px',borderRadius:8,border:'1px solid var(--border)',fontSize:11,outline:'none'}})
+    )
+  ),
   /*#__PURE__*/React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12,marginBottom:18}},
     /*#__PURE__*/React.createElement('div',{style:{display:'flex',gap:2,background:'var(--dark)',borderRadius:10,padding:4}},
-      [{modo:'combinado',label:'Todos ('+combinadoAtrasoCount+')'},{modo:'atrasados',label:'Atrasados en ruta ('+atrasadosCount+')'},{modo:'reprogramados',label:'Reprogramados ('+reprogramadosRepetidosCount+')'}].map(function(op){
+      [{modo:'combinado',label:'Todos ('+combinadoAtrasoCountAmplio+')'},{modo:'atrasados',label:'Atrasados en ruta ('+atrasadosCount+')'},{modo:'reprogramados',label:'Reprogramados ('+reprogramadosCount+')'}].map(function(op){
         const activo=(filtroAtrasoModo==='off'?'combinado':filtroAtrasoModo)===op.modo;
         return/*#__PURE__*/React.createElement('button',{key:op.modo,type:'button',onClick:()=>setFiltroAtrasoModo(op.modo),style:{padding:'7px 14px',borderRadius:8,border:'none',cursor:'pointer',fontSize:11,fontWeight:700,letterSpacing:0.3,background:activo?'var(--gold)':'transparent',color:activo?'var(--dark-deep)':'rgba(255,255,255,0.6)',whiteSpace:'nowrap'}},op.label);
       })
