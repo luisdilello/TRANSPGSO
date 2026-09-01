@@ -63,6 +63,22 @@ function ConsumoModal(props){
 
   var total=items.reduce(function(a,it){return a+(+it.monto||0);},0);
 
+  // Resumen agrupado por producto (ej. "Almuerzo: $10.500", "Cafe: $2.400") -- Luis pidió ver
+  // cuánto fue en cada tipo de consumo, no solo el detalle ítem por ítem que ya se mostraba abajo
+  // (esa lista se deja igual). Se calcula sobre los mismos 'items' ya cargados, sin tocar nada
+  // en Supabase.
+  var resumenPorProducto=(function(){
+    var mapa={};
+    var orden=[];
+    items.forEach(function(it){
+      var nombreProd=it.producto||'(Sin producto)';
+      if(!mapa[nombreProd]){mapa[nombreProd]={cantidad:0,monto:0};orden.push(nombreProd);}
+      mapa[nombreProd].cantidad+=(+it.cantidad||0);
+      mapa[nombreProd].monto+=(+it.monto||0);
+    });
+    return orden.map(function(nombreProd){return{producto:nombreProd,cantidad:mapa[nombreProd].cantidad,monto:mapa[nombreProd].monto};}).sort(function(a,b){return b.monto-a.monto;});
+  })();
+
   return React.createElement('div',{style:{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999},onClick:onClose},
     React.createElement('div',{style:{background:'#fff',borderRadius:14,padding:20,width:420,maxWidth:'92vw',maxHeight:'85vh',overflowY:'auto'},onClick:function(e){e.stopPropagation();}},
       React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}},
@@ -83,6 +99,13 @@ function ConsumoModal(props){
           React.createElement('input',{type:'number',min:1,value:cant,onChange:function(e){setCant(e.target.value);},onFocus:function(e){e.target.select();},style:{width:'100%',padding:'7px 8px',borderRadius:7,border:'1px solid var(--border)',fontSize:12,outline:'none'}})
         ),
         React.createElement('button',{onClick:agregar,disabled:guardando,style:{padding:'8px 14px',borderRadius:7,border:'none',background:'var(--gold)',color:'#2b2e20',fontWeight:700,fontSize:12,cursor:guardando?'default':'pointer',opacity:guardando?0.6:1}},guardando?'...':'+ Agregar')
+      ),
+      !cargando&&resumenPorProducto.length>0&&React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:6,marginBottom:10}},
+        resumenPorProducto.map(function(r){return React.createElement('div',{key:r.producto,style:{display:'flex',alignItems:'center',gap:6,background:'rgba(176,48,48,0.06)',border:'1px solid rgba(176,48,48,0.18)',borderRadius:20,padding:'4px 10px',fontSize:11}},
+          React.createElement('span',{style:{fontWeight:700,color:'var(--text)'}},r.producto),
+          React.createElement('span',{style:{color:'var(--text-soft)'}},'× '+r.cantidad),
+          React.createElement('span',{style:{fontFamily:'JetBrains Mono',fontWeight:700,color:'var(--danger)'}},'$'+Math.round(r.monto).toLocaleString('es-CL'))
+        );})
       ),
       React.createElement('div',{style:{maxHeight:220,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8}},
         cargando?React.createElement('div',{style:{padding:14,fontSize:12,color:'var(--text-soft)',textAlign:'center'}},'Cargando...'):
@@ -544,7 +567,7 @@ function CriterioEfectividadModal(props){
         React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1,color:'var(--dark)'}},'🎯 Pago por Efectividad'),
         React.createElement('button',{onClick:onClose,style:{border:'none',background:'none',fontSize:18,cursor:'pointer',color:'var(--text-soft)'}},'✕')
       ),
-      React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginBottom:16,lineHeight:1.4}},'La efectividad es entregados / asignados de la semana (sin contar paquetes que aún no salieron a ruta). Ninguno de los dos reemplaza el pago normal por tarifa -- el bono se suma y el descuento se resta del Total a Pagar, igual que "Extra" y "Consumo".'),
+      React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginBottom:16,lineHeight:1.4}},'El bono se evalúa con la efectividad de TODA la semana (entregados / asignados, sin contar paquetes que aún no salieron a ruta). El descuento se evalúa DÍA POR DÍA: cada día que la efectividad de ese día quede bajo el mínimo, se descuenta el monto configurado por CADA paquete que ese día quedó sin entregar. Ninguno de los dos reemplaza el pago normal por tarifa -- el bono se suma y el descuento se resta del Total a Pagar, igual que "Extra" y "Consumo".'),
 
       React.createElement('div',{style:{border:'1px solid var(--gold-border)',borderRadius:10,padding:'12px 14px',marginBottom:14,background:'rgba(200,168,75,0.06)'}},
         React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,marginBottom:12}},
@@ -579,7 +602,7 @@ function CriterioEfectividadModal(props){
             React.createElement('input',{type:'number',min:0,value:descuento,onChange:function(e){setDescuento(e.target.value);},onFocus:function(e){e.target.select();},style:{width:'100%',padding:'8px 10px',borderRadius:7,border:'1px solid var(--border)',fontSize:13,outline:'none'}})
           )
         ),
-        React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginTop:6}},'Se descuenta si la efectividad queda POR DEBAJO de este %.'),
+        React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginTop:6}},'Por cada día que la efectividad de ESE día quede por debajo de este %, se descuenta este monto MULTIPLICADO por los paquetes que ese día quedaron sin entregar (no un monto único por semana).'),
         (+umbralDescuento>=+umbralBono)&&React.createElement('div',{style:{fontSize:10,color:'var(--danger)',marginTop:4,fontWeight:700}},'⚠ El % del descuento debería ser menor que el % del bono, para dejar una zona neutra entre los dos.')
       ),
 
@@ -651,7 +674,7 @@ function PagosTarjetas(props){
           fila('Siniestro','$'+Math.round(p.descSiniestro||0).toLocaleString('es-CL'),'#C62828'),
           fila('Extra',inputMini(p.extra,function(e){updatePago(p.id,'extra',e.target.value);}),'#2980b9'),
           (p.bonoEfectividad||0)>0?fila('Bono Efect.','$'+Math.round(p.bonoEfectividad).toLocaleString('es-CL'),'#7a6ba8'):null,
-          (p.descuentoEfectividad||0)>0?fila('Desc. Efect.','$'+Math.round(p.descuentoEfectividad).toLocaleString('es-CL'),'var(--danger)'):null,
+          (p.descuentoEfectividad||0)>0?fila('Desc. Efect.','$'+Math.round(p.descuentoEfectividad).toLocaleString('es-CL')+' ('+(p.paquetesNoEntregadosEfectividad||0)+' paq. en '+(p.diasBajoEfectividad||0)+' día'+(p.diasBajoEfectividad===1?'':'s')+')','var(--danger)'):null,
           (p.penalizacion||0)>0?fila('Penalización','-'+(p.penalizaciones||[]).reduce(function(a,x){return a+(x.envios||0);},0)+' env. ($'+Math.round(p.penalizacion).toLocaleString('es-CL')+')','var(--danger)'):null,
           fila('Adelanto',inputMini(p.adelanto,function(e){updatePago(p.id,'adelanto',e.target.value);}),'#e67e22'),
           fila('Préstamo',inputMini(p.prestamo,function(e){updatePago(p.id,'prestamo',e.target.value);}),'#c0392b'),
@@ -1456,7 +1479,10 @@ async function calcularEnviosSemana(){
 
       if(!h)sinHistorial++;
 
-      if(fechaRealEntrega>=fechaInicio&&fechaRealEntrega<=fechaFin)data.push(e);
+      // _fechaRealEntrega queda pegada a cada registro (no solo en esta variable local) porque
+      // más abajo se necesita día por día para el descuento por efectividad diaria -- ver
+      // entregadosPorDia.
+      if(fechaRealEntrega>=fechaInicio&&fechaRealEntrega<=fechaFin)data.push(Object.assign({},e,{_fechaRealEntrega:fechaRealEntrega}));
 
     });
 
@@ -1569,6 +1595,31 @@ async function calcularEnviosSemana(){
       conteoAsignados[n]=(conteoAsignados[n]||0)+1;
     });
 
+    // Desglose DÍA POR DÍA (además del total semanal de arriba), solo para el descuento por
+    // efectividad: Luis pidió que el descuento no sea un monto fijo por toda la semana, sino que
+    // se evalúe día por día y se aplique por CADA paquete que ese día quedó sin entregar. Mismo
+    // criterio de fechas que ya usa "Mis Entregas" del mensajero (CalendarioEntregasRider en
+    // index.html): lo asignado se agrupa por la fecha de asignación (columna 'fecha'), lo
+    // entregado se agrupa por la fecha REAL en que pasó a 'entregado' (historial_envios) -- un
+    // mismo paquete puede haberse asignado un día y entregado otro, así que no se puede
+    // simplemente cruzar por índice, hay que agrupar cada lado por su propia fecha.
+    var asignadosPorDia={};
+    todosAsignados.forEach(function(e){
+      var n=normNombre(e.mensajero||'');
+      if(!n||n==='SIN ASIGNAR'||n==='')return;
+      var f=e.fecha;
+      if(!asignadosPorDia[n])asignadosPorDia[n]={};
+      asignadosPorDia[n][f]=(asignadosPorDia[n][f]||0)+1;
+    });
+    var entregadosPorDia={};
+    data.forEach(function(e){
+      var n=normNombre(e.mensajero||'');
+      if(!n||n==='SIN ASIGNAR'||n==='')return;
+      var f=e._fechaRealEntrega||e.fecha;
+      if(!entregadosPorDia[n])entregadosPorDia[n]={};
+      entregadosPorDia[n][f]=(entregadosPorDia[n][f]||0)+1;
+    });
+
 
     // Actualizar pagos con cálculo por tarifa de comuna
 
@@ -1607,10 +1658,31 @@ async function calcularEnviosSemana(){
 
         var bonoEfectividad=(criterioEf.bonoActivo&&asignados>0&&efectividad!=null&&(efectividad*100)>=(+criterioEf.umbralBonoPct||0))?(+criterioEf.bono||0):0;
 
-        // Descuento: solo si hay datos reales de asignados (asignados>0) -- sin eso no hay forma
-        // de saber si de verdad incumplió o simplemente no tenía nada asignado esa semana, así que
-        // nunca se penaliza a un mensajero sin envíos asignados.
-        var descuentoEfectividad=(criterioEf.descuentoActivo&&asignados>0&&efectividad!=null&&(efectividad*100)<(+criterioEf.umbralDescuentoPct||0))?(+criterioEf.descuento||0):0;
+        // Descuento por efectividad: ahora se evalúa DÍA POR DÍA (no la semana completa como el
+        // bono, que sigue igual arriba) -- por cada día donde el mensajero tuvo paquetes
+        // asignados y su efectividad de ESE día (entregados reales ese día / asignados ese día)
+        // quedó por debajo del umbral, se descuenta el monto configurado MULTIPLICADO por la
+        // cantidad de paquetes que ese día quedaron sin entregar. Así un mal día con muchos
+        // paquetes pesa más que un mal día con pocos, en vez de un monto fijo único sin importar
+        // cuántos paquetes fallaron. diasBajoEfectividad/paquetesNoEntregadosEfectividad quedan
+        // guardados aparte solo para poder mostrar el detalle (cuántos días, cuántos paquetes) en
+        // la tarjeta y el comprobante.
+        var diasBajoEfectividad=0,paquetesNoEntregadosEfectividad=0;
+        if(criterioEf.descuentoActivo){
+          var asigDia=asignadosPorDia[key]||{};
+          var entDia=entregadosPorDia[key]||{};
+          Object.keys(asigDia).forEach(function(f){
+            var asigD=asigDia[f]||0;
+            if(asigD<=0)return;
+            var entD=entDia[f]||0;
+            var efecD=Math.min(entD/asigD,1);
+            if((efecD*100)<(+criterioEf.umbralDescuentoPct||0)){
+              diasBajoEfectividad++;
+              paquetesNoEntregadosEfectividad+=Math.max(asigD-entD,0);
+            }
+          });
+        }
+        var descuentoEfectividad=paquetesNoEntregadosEfectividad*(+criterioEf.descuento||0);
 
         var totalPagar=totalBruto+(p.extra||0)+bonoEfectividad-descuentoEfectividad-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0)-(p.descSiniestro||0)-(p.penalizacion||0);
 
@@ -1620,7 +1692,7 @@ async function calcularEnviosSemana(){
 
         // aplicar una tarifa plana.
 
-        return Object.assign({},p,{envios:totalEnvios,bruto:bruto,totalBruto:totalBruto,totalPagar:totalPagar,enviosPorComuna:enviosPorComuna,tarsCom:tarsCom,asignados:asignados,efectividad:efectividad,bonoEfectividad:bonoEfectividad,descuentoEfectividad:descuentoEfectividad});
+        return Object.assign({},p,{envios:totalEnvios,bruto:bruto,totalBruto:totalBruto,totalPagar:totalPagar,enviosPorComuna:enviosPorComuna,tarsCom:tarsCom,asignados:asignados,efectividad:efectividad,bonoEfectividad:bonoEfectividad,descuentoEfectividad:descuentoEfectividad,diasBajoEfectividad:diasBajoEfectividad,paquetesNoEntregadosEfectividad:paquetesNoEntregadosEfectividad});
 
       });
 
@@ -1749,7 +1821,7 @@ const totales=pagos.reduce((a,p)=>{const m=montoPago(p);return{envios:a.envios+p
       p.iva>0?{label:'IVA / Descuento',val:-p.iva,positivo:false}:null,
       p.extra>0?{label:'Extra / Bono',val:p.extra,positivo:true}:null,
       (p.bonoEfectividad||0)>0?{label:'Bono Efectividad'+(p.efectividad!=null?' ('+(p.efectividad*100).toFixed(1)+'%)':''),val:p.bonoEfectividad,positivo:true}:null,
-      (p.descuentoEfectividad||0)>0?{label:'Descuento Efectividad'+(p.efectividad!=null?' ('+(p.efectividad*100).toFixed(1)+'%)':''),val:-p.descuentoEfectividad,positivo:false}:null,
+      (p.descuentoEfectividad||0)>0?{label:'Descuento Efectividad ('+(p.paquetesNoEntregadosEfectividad||0)+' paq. en '+(p.diasBajoEfectividad||0)+' día'+(p.diasBajoEfectividad===1?'':'s')+')',val:-p.descuentoEfectividad,positivo:false}:null,
       p.consumo>0?{label:'Consumo Local',val:-p.consumo,positivo:false}:null,
       (p.descSiniestro||0)>0?{label:'Descuento por Siniestro',val:-p.descSiniestro,positivo:false}:null,
       (p.penalizacion||0)>0?{label:'Penalización por Falta ('+(p.penalizaciones||[]).reduce(function(a,x){return a+(x.envios||0);},0)+' env.)',val:-p.penalizacion,positivo:false}:null,
