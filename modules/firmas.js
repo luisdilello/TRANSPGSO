@@ -225,6 +225,9 @@ function Firmas(props){
   var _cargando=useState(false), cargando=_cargando[0], setCargando=_cargando[1];
   var _envioActivo=useState(null), envioActivo=_envioActivo[0], setEnvioActivo=_envioActivo[1];
   var _motivos=useState([]), motivosReprogramacion=_motivos[0], setMotivosReprogramacion=_motivos[1];
+  var _buscarCodigo=useState(''), buscarCodigoInput=_buscarCodigo[0], setBuscarCodigoInput=_buscarCodigo[1];
+  var _buscandoCodigo=useState(false), buscandoCodigo=_buscandoCodigo[0], setBuscandoCodigo=_buscandoCodigo[1];
+  var _resultadosCodigo=useState([]), resultadosCodigo=_resultadosCodigo[0], setResultadosCodigo=_resultadosCodigo[1];
 
   useEffect(function(){
     db.from('configuracion').select('valor').eq('clave','motivos_reprogramacion').maybeSingle().then(function(r){
@@ -259,6 +262,37 @@ function Firmas(props){
     setEnvioActivo(null);
   },[mensajeroSel]);
 
+  // Buscador directo por código -- no depende del mensajero seleccionado arriba: busca en
+  // TODA la tabla envios (cualquier mensajero, cualquier fecha/estado), igual que el buscador
+  // del Mapa de Rutas. Pedido explícito de Luis para no tener que ir mensajero por mensajero
+  // cuando ya se tiene el código a mano.
+  function buscarPorCodigo(){
+    var q=(buscarCodigoInput||'').trim();
+    if(!q)return;
+    setBuscandoCodigo(true);
+    setResultadosCodigo([]);
+    db.from('envios').select('codigo,destinatario,direccion,comuna,estado,mensajero,telefono,monto,nota,updated_at')
+      .ilike('codigo','%'+q+'%')
+      .order('updated_at',{ascending:false})
+      .limit(10)
+      .then(function(r){
+        setBuscandoCodigo(false);
+        var rows=r&&r.data?r.data:[];
+        if(rows.length===0){toast&&toast('⚠ No se encontró ningún envío con ese código');return;}
+        if(rows.length===1){abrirEnvioDirecto(rows[0]);return;}
+        setResultadosCodigo(rows);
+      }).catch(function(){setBuscandoCodigo(false);toast&&toast('⚠ Error buscando el código');});
+  }
+  // Abre el envío encontrado directamente en el panel de gestión, SIN tocar el mensajero
+  // seleccionado en la grilla de arriba (así no se pisa la lista que el admin ya tenía abierta).
+  // El pago/atribución sigue siendo correcto porque GestionEntregaModal usa el mensajero
+  // asignado real del propio envío encontrado, no el filtro de la grilla.
+  function abrirEnvioDirecto(envio){
+    setResultadosCodigo([]);
+    setBuscarCodigoInput('');
+    setEnvioActivo(envio);
+  }
+
   return React.createElement('div',null,
     React.createElement('div',{className:'section-head'},
       React.createElement('div',{className:'section-title'},'Firmas · Gestión de Entregas'),
@@ -266,6 +300,27 @@ function Firmas(props){
     React.createElement('div',{className:'info-banner'},
       '✍ Selecciona un mensajero para ver sus entregas pendientes y gestionarlas desde acá — con las mismas opciones que tiene el mensajero en su celular (estado, motivo, fotos). ',
       'Lo que gestiones acá se refleja al instante en la app del mensajero.'),
+
+    React.createElement('div',{style:{display:'flex',gap:8,marginBottom:18,flexWrap:'wrap',alignItems:'flex-start'}},
+      React.createElement('input',{className:'form-input',placeholder:'🔍 Ir directo a un código de envío (cualquier mensajero/fecha)...',
+        value:buscarCodigoInput,
+        onChange:function(e){setBuscarCodigoInput(e.target.value);},
+        onKeyDown:function(e){if(e.key==='Enter'){e.preventDefault();buscarPorCodigo();}},
+        style:{maxWidth:360,margin:0}}),
+      React.createElement('button',{className:'btn-secondary',disabled:buscandoCodigo||!buscarCodigoInput.trim(),onClick:buscarPorCodigo},buscandoCodigo?'Buscando...':'🔍 Buscar código')),
+
+    resultadosCodigo.length>0&&React.createElement('div',{style:{border:'1px solid var(--border)',borderRadius:10,marginBottom:18,overflow:'hidden'}},
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 12px',background:'rgba(200,168,75,0.1)'}},
+        React.createElement('span',{style:{fontSize:12,fontWeight:700,color:'#8a6d1a'}},resultadosCodigo.length+' resultados — elige uno'),
+        React.createElement('button',{onClick:function(){setResultadosCodigo([]);},style:{background:'none',border:'none',cursor:'pointer',color:'var(--text-soft)',fontSize:14}},'✕')),
+      resultadosCodigo.map(function(r){
+        return React.createElement('div',{key:r.codigo,onClick:function(){abrirEnvioDirecto(r);},
+          style:{padding:'10px 12px',borderTop:'1px solid var(--border)',cursor:'pointer',display:'flex',gap:12,alignItems:'center',flexWrap:'wrap',fontSize:12}},
+          React.createElement('span',{style:{fontFamily:'JetBrains Mono',fontWeight:700}},r.codigo),
+          React.createElement('span',{style:{color:'var(--text-soft)'}},r.destinatario||'—'),
+          React.createElement('span',{style:{color:'var(--text-soft)'}},(r.mensajero||'Sin mensajero').replace(/,\s*/g,' ')),
+          estadoBadge(r.estado));
+      })),
 
     React.createElement('div',{style:{marginBottom:16}},
       React.createElement('input',{className:'form-input',placeholder:'🔍 Buscar mensajero...',value:busqueda,onChange:function(e){setBusqueda(e.target.value);},style:{maxWidth:320,marginBottom:10}}),
@@ -303,12 +358,15 @@ function Firmas(props){
 
     envioActivo&&React.createElement(GestionEntregaModal,{
       envio:envioActivo,
-      mensajeroNombre:mensajeroSel,
+      // Se usa el mensajero asignado del PROPIO envío (no el filtro de la grilla de arriba) --
+      // así el pago/atribución queda siempre correcto, incluso cuando el envío se abrió por el
+      // buscador de código directo con un mensajero distinto (o ninguno) seleccionado arriba.
+      mensajeroNombre:envioActivo.mensajero||mensajeroSel,
       adminNombre:adminNombre,
       motivosReprogramacion:motivosReprogramacion,
       toast:toast,
       onClose:function(){setEnvioActivo(null);},
-      onGuardado:function(){setEnvioActivo(null);cargarEnvios(mensajeroSel);}
+      onGuardado:function(){setEnvioActivo(null);if(mensajeroSel)cargarEnvios(mensajeroSel);}
     }));
 }
 
