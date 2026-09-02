@@ -624,7 +624,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788382014;
+window.__MODULES_VERSION=1788387071;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -6372,7 +6372,10 @@ function ColectaRider(_ref_cr){
           // El registro base ya se guardó al escanear — completar con los datos de dirección
           // que detectó la IA (si no está protegido por PDF, en cuyo caso no se tocan).
           if(!esPDFRefCol.current.has(codigoFinalIA)){
-            db.from('envios').update({destinatario:datos.destinatario||'',direccion:datos.direccion||'',telefono:datos.telefono||'',comuna:datos.comuna?(matchComuna(datos.comuna)||String(datos.comuna).trim().toUpperCase()):''}).eq('codigo',codigoFinalIA).then(function(r2){
+            db.from('envios').update({destinatario:datos.destinatario||'',direccion:datos.direccion||'',telefono:datos.telefono||'',comuna:datos.comuna?(matchComuna(datos.comuna)||String(datos.comuna).trim().toUpperCase()):'',
+              // Limpiar coords cacheadas: cambió dirección/comuna, así que el pin del Mapa de
+              // Rutas (que reusa lat/lng guardado en vez de re-geocodificar) debe recalcularse.
+              lat:null,lng:null}).eq('codigo',codigoFinalIA).then(function(r2){
               if(!r2.error) setPaquetes(prev=>prev.map(p=>p.codigo===codigoFinalIA?{...p,syncEstado:'guardado'}:p));
             }).catch(function(){});
           }
@@ -10483,7 +10486,7 @@ videoGrabado&&React.createElement("div",{style:{position:'relative',marginTop:8,
   React.createElement('button',{onClick:quitarVideo,style:{position:'absolute',top:3,right:3,background:'rgba(176,48,48,0.9)',border:'none',borderRadius:4,color:'#fff',width:22,height:22,cursor:'pointer',fontSize:13,lineHeight:'22px',padding:0,textAlign:'center'}},'✕')
 ),
 videoSubidaError&&React.createElement("div",{style:{marginTop:8,padding:'8px 12px',background:'rgba(176,48,48,0.12)',border:'1px solid rgba(176,48,48,0.35)',borderRadius:8,color:'#b03030',fontSize:12,fontWeight:600,maxWidth:320}},videoSubidaError),
-avisoFotos&&React.createElement("div",{style:{marginTop:8,padding:'10px 14px',background:'rgba(200,168,75,0.14)',border:'1px solid rgba(200,168,75,0.45)',borderRadius:8,color:'#e0b040',fontSize:13,fontWeight:700,maxWidth:340}},avisoFotos)),motivoModalOpen&&/*#__PURE__*/React.createElement("div",{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:10000,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},/*#__PURE__*/React.createElement("div",{style:{background:'#1a1d14',borderRadius:'16px 16px 0 0',maxHeight:'75vh',overflow:'hidden',display:'flex',flexDirection:'column',border:'1px solid rgba(200,168,75,0.2)'}},/*#__PURE__*/React.createElement("div",{style:{padding:'14px 16px',borderBottom:'1px solid rgba(255,255,255,0.08)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}},/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:16,color:'var(--gold)',letterSpacing:2}},"Motivo de la reagenda"),/*#__PURE__*/React.createElement("button",{onClick:()=>setMotivoModalOpen(false),style:{background:'none',border:'none',color:'rgba(255,255,255,0.5)',fontSize:20,cursor:'pointer'}},"✕")),/*#__PURE__*/React.createElement("div",{style:{overflowY:'auto',flex:1}},motivosReprogramacion.map(m=>/*#__PURE__*/React.createElement("div",{key:m.id,onClick:()=>{setNota(m.texto);setMotivoModalOpen(false);},style:{padding:'13px 16px',borderBottom:'1px solid rgba(255,255,255,0.05)',cursor:'pointer',fontSize:14,color:nota===m.texto?'var(--gold)':'#fff',background:nota===m.texto?'rgba(200,168,75,0.08)':'transparent',display:'flex',justifyContent:'space-between'}},m.texto,nota===m.texto&&/*#__PURE__*/React.createElement("span",null,"✓")))))),comunaModal&&/*#__PURE__*/React.createElement("div",{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:10000,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},/*#__PURE__*/React.createElement("div",{style:{background:'#1a1d14',borderRadius:'16px 16px 0 0',maxHeight:'75vh',overflow:'hidden',display:'flex',flexDirection:'column',border:'1px solid rgba(200,168,75,0.2)'}},/*#__PURE__*/React.createElement("div",{style:{padding:'14px 16px',borderBottom:'1px solid rgba(255,255,255,0.08)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}},/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:16,color:'var(--gold)',letterSpacing:2}},"Seleccionar Comuna"),/*#__PURE__*/React.createElement("button",{onClick:()=>setComunaModal(false),style:{background:'none',border:'none',color:'rgba(255,255,255,0.5)',fontSize:20,cursor:'pointer'}},"\u2715")),/*#__PURE__*/React.createElement("div",{style:{overflowY:'auto',flex:1}},COMUNAS_CHILE.map(c=>/*#__PURE__*/React.createElement("div",{key:c,onClick:async()=>{setComunaSel(c);setComunaModal(false);try{await db.from('envios').update({comuna:c}).eq('codigo',envio.codigo);}catch(e){}if(onComunaUpdate)onComunaUpdate(envio.codigo,c);},style:{padding:'13px 16px',borderBottom:'1px solid rgba(255,255,255,0.05)',cursor:'pointer',fontSize:14,color:comunaSel===c?'var(--gold)':'#fff',background:comunaSel===c?'rgba(200,168,75,0.08)':'transparent',display:'flex',justifyContent:'space-between'}},c,comunaSel===c&&/*#__PURE__*/React.createElement("span",null,"\u2713")))))),direccionModal&&/*#__PURE__*/React.createElement("div",{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:10000,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},/*#__PURE__*/React.createElement("div",{style:{background:'#1a1d14',borderRadius:'16px 16px 0 0',maxHeight:'75vh',overflow:'hidden',display:'flex',flexDirection:'column',border:'1px solid rgba(200,168,75,0.2)',padding:16}},/*#__PURE__*/React.createElement("div",{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,flexShrink:0}},/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:16,color:'var(--gold)',letterSpacing:2}},"Direcci\u00f3n de entrega"),/*#__PURE__*/React.createElement("button",{onClick:()=>setDireccionModal(false),style:{background:'none',border:'none',color:'rgba(255,255,255,0.5)',fontSize:20,cursor:'pointer'}},"\u2715")),/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'rgba(255,255,255,0.5)',marginBottom:10}},"La colecta no reconoci\u00f3 la direcci\u00f3n de este env\u00edo \u2014 escr\u00edbela tal como aparece en la etiqueta o preg\u00fantale al cliente."),/*#__PURE__*/React.createElement("textarea",{autoFocus:true,value:direccionInput,onChange:e=>setDireccionInput(e.target.value),placeholder:"Ej: Av. Providencia 1234, depto 5B",rows:3,style:{width:'100%',padding:'10px 12px',background:'rgba(255,255,255,0.06)',border:'1px solid rgba(200,168,75,0.3)',borderRadius:8,color:'#fff',fontFamily:'DM Sans',fontSize:14,outline:'none',resize:'none',boxSizing:'border-box',marginBottom:14}}),/*#__PURE__*/React.createElement("button",{onClick:async()=>{const val=direccionInput.trim();setDireccionSel(val);setDireccionModal(false);try{await db.from('envios').update({direccion:val}).eq('codigo',envio.codigo);}catch(e){}if(onDireccionUpdate)onDireccionUpdate(envio.codigo,val);},style:{width:'100%',padding:'13px',borderRadius:10,border:'none',cursor:'pointer',background:'linear-gradient(135deg,#2e7d4f,#1a5c38)',color:'#fff',fontFamily:'Bebas Neue',fontSize:15,letterSpacing:1.5}},"Guardar direcci\u00f3n"))),/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:10}},/*#__PURE__*/React.createElement("button",{onClick:onClose,style:{flex:1,padding:'14px',borderRadius:10,border:'1px solid rgba(255,255,255,0.15)',background:'transparent',color:'rgba(255,255,255,0.5)',cursor:'pointer',fontFamily:'Bebas Neue',fontSize:16,letterSpacing:1}},"Cancelar"),/*#__PURE__*/React.createElement("button",{onClick:function(){if(guardando||estadoEsTerminal(envio.estado))return;const estadoFinalClick=estadoSel||'entregado';if(estadoFinalClick==='entregado'&&fotos.length<MIN_FOTOS_ENTREGA){setAvisoFotos('⚠ Debes cargar al menos '+MIN_FOTOS_ENTREGA+' fotos para marcar como entregado ('+fotos.length+'/'+MIN_FOTOS_ENTREGA+' cargadas)');return;}if(estadoFinalClick==='reprogramado'&&usaMotivoDesplegable&&!nota){setAvisoFotos('⚠ Selecciona el motivo de la reagenda');return;}if(estadoFinalClick==='reprogramado'&&!usaMotivoDesplegable&&!nota.trim()){setAvisoFotos('⚠ Escribe el motivo de la reagenda antes de guardar');return;}setAvisoFotos('');guardarConEstado(estadoFinalClick);},disabled:guardando||estadoEsTerminal(envio.estado),style:{flex:2,padding:'14px',borderRadius:10,border:'none',cursor:guardando||estadoEsTerminal(envio.estado)?'not-allowed':'pointer',background:estadoEsTerminal(envio.estado)?'rgba(255,255,255,0.1)':guardando?'rgba(200,168,75,0.3)':'linear-gradient(135deg,#2e7d4f,#1a5c38)',color:estadoEsTerminal(envio.estado)?'rgba(255,255,255,0.3)':'#fff',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,transition:'all 0.2s',boxShadow:estadoEsTerminal(envio.estado)?'none':'0 4px 15px rgba(46,125,79,0.4)'}},guardando?'GUARDANDO...':estadoSel&&estadoSel!=='entregado'?'CONFIRMAR '+(estados.find(function(s){return s.val===estadoSel;})||{label:estadoSel}).label.toUpperCase():'✅ ENTREGADO'))));}function PerfilSelector(_ref34){let mensajeros=_ref34.mensajeros,usuario=_ref34.usuario,onConfirm=_ref34.onConfirm;const activos=mensajeros.filter(m=>m.activo);const _useState94=useState(new Set(activos.map(m=>m.id))),selected=_useState94[0],setSelected=_useState94[1];function toggle(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function selAll(){setSelected(new Set(activos.map(m=>m.id)));}function selNone(){setSelected(new Set());}function confirmar(){if(selected.size===0)return;onConfirm({nombre:usuario.nombre,rol:'operador',mensajerosIds:Array.from(selected),verTodo:selected.size===activos.length,esAdmin:false,esSuperAdmin:false});}return/*#__PURE__*/React.createElement("div",{className:"perfil-screen"},/*#__PURE__*/React.createElement("div",{className:"perfil-card"},/*#__PURE__*/React.createElement("div",{className:"perfil-logo"},/*#__PURE__*/React.createElement("img",{src:LOGO_SRC,alt:"TransPgso"}),/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{style:{fontFamily:"Bebas Neue",fontSize:22,letterSpacing:3,color:"var(--gold)"}},"TRANSPGSO"),/*#__PURE__*/React.createElement("div",{className:"perfil-sub"},"Centro de Operaciones"))),/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',marginBottom:20,fontSize:15,color:'var(--text)'}},"Hola, ",/*#__PURE__*/React.createElement("strong",{style:{color:'var(--gold)'}},usuario.nombre),/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginTop:4}},"Selecciona los mensajeros que supervisas")),/*#__PURE__*/React.createElement("div",{className:"form-group"},/*#__PURE__*/React.createElement("div",{className:"sel-actions"},/*#__PURE__*/React.createElement("button",{className:"sel-link",onClick:selAll},"Seleccionar todos"),/*#__PURE__*/React.createElement("span",{style:{color:'var(--border)',margin:'0 6px'}},"|"),/*#__PURE__*/React.createElement("button",{className:"sel-link",onClick:selNone},"Limpiar"),/*#__PURE__*/React.createElement("span",{style:{marginLeft:'auto',fontSize:12,color:'var(--text-soft)',fontFamily:'JetBrains Mono'}},selected.size,"/",activos.length," seleccionados")),/*#__PURE__*/React.createElement("div",{className:"men-grid"},activos.map(m=>/*#__PURE__*/React.createElement("div",{key:m.id,className:`men-chip${selected.has(m.id)?' selected':''}`,onClick:()=>toggle(m.id)},/*#__PURE__*/React.createElement("div",{className:"men-chip-check"},selected.has(m.id)?'✓':''),/*#__PURE__*/React.createElement("span",{className:"men-chip-name"},m.nombre))))),/*#__PURE__*/React.createElement("div",{style:{marginTop:24,display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10}},/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)'}},selected.size===0&&/*#__PURE__*/React.createElement("span",{style:{color:'var(--danger)',fontWeight:600}},"Selecciona al menos un mensajero"),selected.size>0&&/*#__PURE__*/React.createElement("span",null,/*#__PURE__*/React.createElement("strong",{style:{color:'var(--gold)'}},selected.size)," mensajero",selected.size!==1?'s':''," seleccionado",selected.size!==1?'s':'')),/*#__PURE__*/React.createElement("button",{className:"btn-confirm",onClick:confirmar,disabled:selected.size===0,style:{opacity:selected.size===0?0.5:1}},"Entrar al sistema \u2192"))));}// ANTES usaba d.getFullYear()/getMonth()/getDate(), que devuelven el año/mes/día en la zona
+avisoFotos&&React.createElement("div",{style:{marginTop:8,padding:'10px 14px',background:'rgba(200,168,75,0.14)',border:'1px solid rgba(200,168,75,0.45)',borderRadius:8,color:'#e0b040',fontSize:13,fontWeight:700,maxWidth:340}},avisoFotos)),motivoModalOpen&&/*#__PURE__*/React.createElement("div",{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:10000,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},/*#__PURE__*/React.createElement("div",{style:{background:'#1a1d14',borderRadius:'16px 16px 0 0',maxHeight:'75vh',overflow:'hidden',display:'flex',flexDirection:'column',border:'1px solid rgba(200,168,75,0.2)'}},/*#__PURE__*/React.createElement("div",{style:{padding:'14px 16px',borderBottom:'1px solid rgba(255,255,255,0.08)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}},/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:16,color:'var(--gold)',letterSpacing:2}},"Motivo de la reagenda"),/*#__PURE__*/React.createElement("button",{onClick:()=>setMotivoModalOpen(false),style:{background:'none',border:'none',color:'rgba(255,255,255,0.5)',fontSize:20,cursor:'pointer'}},"✕")),/*#__PURE__*/React.createElement("div",{style:{overflowY:'auto',flex:1}},motivosReprogramacion.map(m=>/*#__PURE__*/React.createElement("div",{key:m.id,onClick:()=>{setNota(m.texto);setMotivoModalOpen(false);},style:{padding:'13px 16px',borderBottom:'1px solid rgba(255,255,255,0.05)',cursor:'pointer',fontSize:14,color:nota===m.texto?'var(--gold)':'#fff',background:nota===m.texto?'rgba(200,168,75,0.08)':'transparent',display:'flex',justifyContent:'space-between'}},m.texto,nota===m.texto&&/*#__PURE__*/React.createElement("span",null,"✓")))))),comunaModal&&/*#__PURE__*/React.createElement("div",{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:10000,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},/*#__PURE__*/React.createElement("div",{style:{background:'#1a1d14',borderRadius:'16px 16px 0 0',maxHeight:'75vh',overflow:'hidden',display:'flex',flexDirection:'column',border:'1px solid rgba(200,168,75,0.2)'}},/*#__PURE__*/React.createElement("div",{style:{padding:'14px 16px',borderBottom:'1px solid rgba(255,255,255,0.08)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}},/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:16,color:'var(--gold)',letterSpacing:2}},"Seleccionar Comuna"),/*#__PURE__*/React.createElement("button",{onClick:()=>setComunaModal(false),style:{background:'none',border:'none',color:'rgba(255,255,255,0.5)',fontSize:20,cursor:'pointer'}},"\u2715")),/*#__PURE__*/React.createElement("div",{style:{overflowY:'auto',flex:1}},COMUNAS_CHILE.map(c=>/*#__PURE__*/React.createElement("div",{key:c,onClick:async()=>{setComunaSel(c);setComunaModal(false);try{await db.from('envios').update({comuna:c,lat:null,lng:null}).eq('codigo',envio.codigo);}catch(e){}if(onComunaUpdate)onComunaUpdate(envio.codigo,c);},style:{padding:'13px 16px',borderBottom:'1px solid rgba(255,255,255,0.05)',cursor:'pointer',fontSize:14,color:comunaSel===c?'var(--gold)':'#fff',background:comunaSel===c?'rgba(200,168,75,0.08)':'transparent',display:'flex',justifyContent:'space-between'}},c,comunaSel===c&&/*#__PURE__*/React.createElement("span",null,"\u2713")))))),direccionModal&&/*#__PURE__*/React.createElement("div",{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:10000,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},/*#__PURE__*/React.createElement("div",{style:{background:'#1a1d14',borderRadius:'16px 16px 0 0',maxHeight:'75vh',overflow:'hidden',display:'flex',flexDirection:'column',border:'1px solid rgba(200,168,75,0.2)',padding:16}},/*#__PURE__*/React.createElement("div",{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,flexShrink:0}},/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:16,color:'var(--gold)',letterSpacing:2}},"Direcci\u00f3n de entrega"),/*#__PURE__*/React.createElement("button",{onClick:()=>setDireccionModal(false),style:{background:'none',border:'none',color:'rgba(255,255,255,0.5)',fontSize:20,cursor:'pointer'}},"\u2715")),/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'rgba(255,255,255,0.5)',marginBottom:10}},"La colecta no reconoci\u00f3 la direcci\u00f3n de este env\u00edo \u2014 escr\u00edbela tal como aparece en la etiqueta o preg\u00fantale al cliente."),/*#__PURE__*/React.createElement("textarea",{autoFocus:true,value:direccionInput,onChange:e=>setDireccionInput(e.target.value),placeholder:"Ej: Av. Providencia 1234, depto 5B",rows:3,style:{width:'100%',padding:'10px 12px',background:'rgba(255,255,255,0.06)',border:'1px solid rgba(200,168,75,0.3)',borderRadius:8,color:'#fff',fontFamily:'DM Sans',fontSize:14,outline:'none',resize:'none',boxSizing:'border-box',marginBottom:14}}),/*#__PURE__*/React.createElement("button",{onClick:async()=>{const val=direccionInput.trim();setDireccionSel(val);setDireccionModal(false);try{await db.from('envios').update({direccion:val,lat:null,lng:null}).eq('codigo',envio.codigo);}catch(e){}if(onDireccionUpdate)onDireccionUpdate(envio.codigo,val);},style:{width:'100%',padding:'13px',borderRadius:10,border:'none',cursor:'pointer',background:'linear-gradient(135deg,#2e7d4f,#1a5c38)',color:'#fff',fontFamily:'Bebas Neue',fontSize:15,letterSpacing:1.5}},"Guardar direcci\u00f3n"))),/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:10}},/*#__PURE__*/React.createElement("button",{onClick:onClose,style:{flex:1,padding:'14px',borderRadius:10,border:'1px solid rgba(255,255,255,0.15)',background:'transparent',color:'rgba(255,255,255,0.5)',cursor:'pointer',fontFamily:'Bebas Neue',fontSize:16,letterSpacing:1}},"Cancelar"),/*#__PURE__*/React.createElement("button",{onClick:function(){if(guardando||estadoEsTerminal(envio.estado))return;const estadoFinalClick=estadoSel||'entregado';if(estadoFinalClick==='entregado'&&fotos.length<MIN_FOTOS_ENTREGA){setAvisoFotos('⚠ Debes cargar al menos '+MIN_FOTOS_ENTREGA+' fotos para marcar como entregado ('+fotos.length+'/'+MIN_FOTOS_ENTREGA+' cargadas)');return;}if(estadoFinalClick==='reprogramado'&&usaMotivoDesplegable&&!nota){setAvisoFotos('⚠ Selecciona el motivo de la reagenda');return;}if(estadoFinalClick==='reprogramado'&&!usaMotivoDesplegable&&!nota.trim()){setAvisoFotos('⚠ Escribe el motivo de la reagenda antes de guardar');return;}setAvisoFotos('');guardarConEstado(estadoFinalClick);},disabled:guardando||estadoEsTerminal(envio.estado),style:{flex:2,padding:'14px',borderRadius:10,border:'none',cursor:guardando||estadoEsTerminal(envio.estado)?'not-allowed':'pointer',background:estadoEsTerminal(envio.estado)?'rgba(255,255,255,0.1)':guardando?'rgba(200,168,75,0.3)':'linear-gradient(135deg,#2e7d4f,#1a5c38)',color:estadoEsTerminal(envio.estado)?'rgba(255,255,255,0.3)':'#fff',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,transition:'all 0.2s',boxShadow:estadoEsTerminal(envio.estado)?'none':'0 4px 15px rgba(46,125,79,0.4)'}},guardando?'GUARDANDO...':estadoSel&&estadoSel!=='entregado'?'CONFIRMAR '+(estados.find(function(s){return s.val===estadoSel;})||{label:estadoSel}).label.toUpperCase():'✅ ENTREGADO'))));}function PerfilSelector(_ref34){let mensajeros=_ref34.mensajeros,usuario=_ref34.usuario,onConfirm=_ref34.onConfirm;const activos=mensajeros.filter(m=>m.activo);const _useState94=useState(new Set(activos.map(m=>m.id))),selected=_useState94[0],setSelected=_useState94[1];function toggle(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function selAll(){setSelected(new Set(activos.map(m=>m.id)));}function selNone(){setSelected(new Set());}function confirmar(){if(selected.size===0)return;onConfirm({nombre:usuario.nombre,rol:'operador',mensajerosIds:Array.from(selected),verTodo:selected.size===activos.length,esAdmin:false,esSuperAdmin:false});}return/*#__PURE__*/React.createElement("div",{className:"perfil-screen"},/*#__PURE__*/React.createElement("div",{className:"perfil-card"},/*#__PURE__*/React.createElement("div",{className:"perfil-logo"},/*#__PURE__*/React.createElement("img",{src:LOGO_SRC,alt:"TransPgso"}),/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{style:{fontFamily:"Bebas Neue",fontSize:22,letterSpacing:3,color:"var(--gold)"}},"TRANSPGSO"),/*#__PURE__*/React.createElement("div",{className:"perfil-sub"},"Centro de Operaciones"))),/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',marginBottom:20,fontSize:15,color:'var(--text)'}},"Hola, ",/*#__PURE__*/React.createElement("strong",{style:{color:'var(--gold)'}},usuario.nombre),/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginTop:4}},"Selecciona los mensajeros que supervisas")),/*#__PURE__*/React.createElement("div",{className:"form-group"},/*#__PURE__*/React.createElement("div",{className:"sel-actions"},/*#__PURE__*/React.createElement("button",{className:"sel-link",onClick:selAll},"Seleccionar todos"),/*#__PURE__*/React.createElement("span",{style:{color:'var(--border)',margin:'0 6px'}},"|"),/*#__PURE__*/React.createElement("button",{className:"sel-link",onClick:selNone},"Limpiar"),/*#__PURE__*/React.createElement("span",{style:{marginLeft:'auto',fontSize:12,color:'var(--text-soft)',fontFamily:'JetBrains Mono'}},selected.size,"/",activos.length," seleccionados")),/*#__PURE__*/React.createElement("div",{className:"men-grid"},activos.map(m=>/*#__PURE__*/React.createElement("div",{key:m.id,className:`men-chip${selected.has(m.id)?' selected':''}`,onClick:()=>toggle(m.id)},/*#__PURE__*/React.createElement("div",{className:"men-chip-check"},selected.has(m.id)?'✓':''),/*#__PURE__*/React.createElement("span",{className:"men-chip-name"},m.nombre))))),/*#__PURE__*/React.createElement("div",{style:{marginTop:24,display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10}},/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)'}},selected.size===0&&/*#__PURE__*/React.createElement("span",{style:{color:'var(--danger)',fontWeight:600}},"Selecciona al menos un mensajero"),selected.size>0&&/*#__PURE__*/React.createElement("span",null,/*#__PURE__*/React.createElement("strong",{style:{color:'var(--gold)'}},selected.size)," mensajero",selected.size!==1?'s':''," seleccionado",selected.size!==1?'s':'')),/*#__PURE__*/React.createElement("button",{className:"btn-confirm",onClick:confirmar,disabled:selected.size===0,style:{opacity:selected.size===0?0.5:1}},"Entrar al sistema \u2192"))));}// ANTES usaba d.getFullYear()/getMonth()/getDate(), que devuelven el año/mes/día en la zona
 // horaria del DISPOSITIVO que ejecuta el código (el navegador de quien mira la pantalla), no
 // necesariamente la de Chile. Si ese dispositivo tiene el reloj en UTC (pasa en equipos mal
 // configurados, o en navegadores/VMs con esa zona por defecto), un evento ocurrido después de
@@ -12728,7 +12731,9 @@ function PanelComunasSinValidar(props){
   function aplicarCorreccion(raw,nuevo){
     if(!nuevo)return;
     setCorrigiendo(function(p){var n=Object.assign({},p);n[raw]=true;return n;});
-    db.from('envios').update({comuna:nuevo}).eq('comuna',raw).then(function(r){
+    // lat/lng en null: cambia la comuna (entra en la dirección que se geocodifica), así que
+    // hay que forzar que el Mapa de Rutas vuelva a geocodificar estos envíos.
+    db.from('envios').update({comuna:nuevo,lat:null,lng:null}).eq('comuna',raw).then(function(r){
       if(r.error){
         if(toastFn)toastFn('⚠ Error: '+r.error.message);
         setCorrigiendo(function(p){var n=Object.assign({},p);delete n[raw];return n;});
@@ -12977,6 +12982,18 @@ function MapaRutas(props){
   var _useFichaModal=React.useState(null),fichaModalCodigo=_useFichaModal[0],setFichaModalCodigo=_useFichaModal[1];
   function onVerEnGestion(codigo){setFichaModalCodigo(codigo);}
   var markersEnviosRef=React.useRef({}); // {codigo: marker}
+  // Pines de resultados de búsqueda múltiple (buscarVariosCodigos) -- van APARTE de
+  // markersEnviosRef porque no dependen del filtro de período (Hoy/Pendientes/Todos): pueden
+  // ser envíos de cualquier fecha, así que no hay que confundirlos con los pines "normales"
+  // que sí se agregan/quitan cuando cambia el filtro.
+  var markersBusquedaRef=React.useRef({}); // {codigo: marker}
+  var _nrb=React.useState(0);var numResultadosBusqueda=_nrb[0];var setNumResultadosBusqueda=_nrb[1];
+  var _bmm=React.useState(false);var buscandoMasivo=_bmm[0];var setBuscandoMasivo=_bmm[1];
+  function limpiarBusquedaMasiva(){
+    Object.keys(markersBusquedaRef.current).forEach(function(cod){markersBusquedaRef.current[cod].setMap(null);});
+    markersBusquedaRef.current={};
+    setNumResultadosBusqueda(0);
+  }
   var pinFiltroAnteriorRef=React.useRef(null);
   var pinsVisibleRef=React.useRef(true);
   var geocodTimeoutsRef=React.useRef([]);
@@ -13574,14 +13591,113 @@ function MapaRutas(props){
     });
   }
 
-  // Buscador único de la barra superior: primero intenta como código de envío exacto,
-  // si no, intenta como nombre de mensajero (lo resalta en el listado y, si tiene GPS
-  // activo ahora mismo, centra el mapa en su posición).
-  function buscarEnMapa(query){
-    var q=(query||'').trim();
-    if(!q)return;
-    var envioMatch=envios.find(function(e){return e.codigo&&String(e.codigo).toLowerCase()===q.toLowerCase();});
-    if(envioMatch){buscarYMostrarEnvio(envioMatch);return;}
+  // Pin de un resultado de búsqueda múltiple -- visualmente distinto de los pines normales
+  // (más grande, con anillo dorado) para que se note que es un resultado de búsqueda y no
+  // parte del filtro de período activo. Se guarda en markersBusquedaRef, no en markersEnviosRef.
+  function crearPinBusqueda(e,pos){
+    var color=colorEstado(e.estado);
+    var marker=new google.maps.Marker({
+      position:pos,map:mapObj.current,title:e.destinatario||e.codigo,zIndex:1500,
+      icon:{path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:color,fillOpacity:0.95,strokeColor:'#C8A84B',strokeWeight:3}
+    });
+    var iw=new google.maps.InfoWindow({content:'<div style="font-family:DM Sans,sans-serif;padding:8px;min-width:180px">'+
+      '<div style="font-weight:700;font-size:13px;margin-bottom:4px">'+(e.destinatario||'')+'</div>'+
+      '<div style="font-size:11px;color:#666;margin-bottom:2px">'+(e.direccion||'')+'</div>'+
+      '<div style="font-size:11px;color:#666;margin-bottom:6px">'+(e.comuna||'')+'</div>'+
+      '<div style="font-size:11px;font-weight:700;color:'+color+'">'+(e.estado||'').replace(/_/g,' ').toUpperCase()+'</div>'+
+      '<div style="font-size:10px;color:#999;margin-top:4px">'+e.codigo+'</div>'+
+      '<button id="tp-iw-btn-b-'+e.codigo+'" style="margin-top:8px;width:100%;padding:7px 10px;border:none;border-radius:6px;background:linear-gradient(135deg,#d4b050,#C8A84B);color:#1a1d13;font-weight:700;font-size:11px;cursor:pointer;letter-spacing:0.3px;">Ver ficha completa →</button>'+
+      '</div>'});
+    google.maps.event.addListener(iw,'domready',function(){
+      var btn=document.getElementById('tp-iw-btn-b-'+e.codigo);
+      if(btn)btn.onclick=function(){if(onVerEnGestion)onVerEnGestion(e.codigo);};
+    });
+    marker.addListener('click',function(){iw.open(mapObj.current,marker);});
+    markersBusquedaRef.current[e.codigo]=marker;
+  }
+
+  // Búsqueda de MUCHOS códigos a la vez (pegados uno por línea, separados por espacio o coma).
+  // A diferencia del resto del mapa, consulta Supabase DIRECTO por código -- no depende de qué
+  // período esté cargado en la pestaña Envíos (envios llega por props limitado a ese período,
+  // normalmente "Hoy"), así que encuentra un envío de CUALQUIER fecha, no solo las de hoy.
+  async function buscarVariosCodigos(codigosRaw){
+    if(!mapObj.current||!geocoderRef.current){if(toastFn)toastFn('⚠ El mapa todavía está cargando');return;}
+    var codigosUnicos=Array.from(new Set(codigosRaw.map(function(c){return c.toUpperCase();})));
+    setBuscandoMasivo(true);
+    if(toastFn)toastFn('🔍 Buscando '+codigosUnicos.length+' envíos...');
+    limpiarBusquedaMasiva();
+    var chunks=[];
+    for(var ci=0;ci<codigosUnicos.length;ci+=200)chunks.push(codigosUnicos.slice(ci,ci+200));
+    var resultados=[];
+    try{
+      var respuestas=await Promise.all(chunks.map(function(chunk){
+        return db.from('envios').select('codigo,destinatario,direccion,comuna,estado,mensajero,lat,lng').in('codigo',chunk).then(function(r){return r.data||[];}).catch(function(){return [];});
+      }));
+      respuestas.forEach(function(rows){resultados=resultados.concat(rows);});
+    }catch(err){setBuscandoMasivo(false);if(toastFn)toastFn('⚠ Error buscando: '+err.message);return;}
+    var encontradosMap={};resultados.forEach(function(e){encontradosMap[e.codigo.toUpperCase()]=true;});
+    var noEncontrados=codigosUnicos.filter(function(c){return !encontradosMap[c];});
+    var conDireccion=resultados.filter(function(e){return e.direccion&&e.comuna;});
+    var sinDireccion=resultados.length-conDireccion.length;
+
+    var bounds=new google.maps.LatLngBounds();
+    var conCoordsYa=0;
+    conDireccion.forEach(function(e){
+      if(e.lat&&e.lng){
+        var pos={lat:+e.lat,lng:+e.lng};
+        crearPinBusqueda(e,pos);
+        bounds.extend(pos);
+        conCoordsYa++;
+      }
+    });
+    var pendientesGeocod=conDireccion.filter(function(e){return !(e.lat&&e.lng);});
+    pendientesGeocod.forEach(function(e,i){
+      setTimeout(function(){
+        var dir=(e.direccion||'').trim();var com=(e.comuna||'').trim();
+        dir=dir.replace(/,?\s*(depto?|apt|of|piso|block|bl|dpto)[.\s]*[0-9a-z-]*/gi,'').trim();
+        var partsDir=dir.split(/\s+/);
+        var numIdx=partsDir.findIndex(function(p){return /^\d+$/.test(p);});
+        var calleCorta=numIdx>0?partsDir.slice(0,numIdx+1).join(' '):partsDir.slice(0,3).join(' ');
+        var addr=calleCorta+', '+com+', Santiago, Chile';
+        geocoderRef.current.geocode({address:addr,region:'CL'},function(results,status){
+          if(status==='OK'&&results[0]){
+            var loc=results[0].geometry.location;var pos={lat:loc.lat(),lng:loc.lng()};
+            crearPinBusqueda(e,pos);
+            bounds.extend(pos);
+            if(!bounds.isEmpty())mapObj.current.fitBounds(bounds,60);
+            db.rpc('guardar_coords_envio',{p_codigo:e.codigo,p_lat:pos.lat,p_lng:pos.lng}).then(function(){},function(){});
+          }
+        });
+      },i*70);
+    });
+    if(!bounds.isEmpty()){
+      if(resultados.length===1)mapObj.current.setZoom(16);
+      mapObj.current.fitBounds(bounds,60);
+    }
+    setNumResultadosBusqueda(resultados.length);
+    setBuscandoMasivo(false);
+    var msg='📍 '+resultados.length+' de '+codigosUnicos.length+' encontrados';
+    if(sinDireccion>0)msg+=' · '+sinDireccion+' sin dirección';
+    if(noEncontrados.length>0)msg+=' · '+noEncontrados.length+' no existen';
+    if(toastFn)toastFn(msg);
+  }
+
+  // Buscador único de la barra superior: si se pegan VARIOS códigos (uno por línea, separados
+  // por espacio o coma), busca todos a la vez con buscarVariosCodigos (cualquier fecha). Con
+  // uno solo, primero intenta como código de envío exacto -- consultando Supabase directo, no
+  // el array 'envios' que llega por props (ese sí está limitado al período cargado en la
+  // pestaña Envíos, típicamente "Hoy") -- y si no es un código, prueba como nombre de mensajero.
+  async function buscarEnMapa(query){
+    var raw=(query||'').trim();
+    if(!raw)return;
+    var tokens=raw.split(/[\s,;]+/).map(function(t){return t.trim();}).filter(Boolean);
+    if(tokens.length>1){buscarVariosCodigos(tokens);return;}
+    var q=tokens[0];
+    if(toastFn)toastFn('🔍 Buscando '+q+'...');
+    try{
+      var res=await db.from('envios').select('codigo,destinatario,direccion,comuna,estado,mensajero,lat,lng').ilike('codigo',q).limit(1);
+      if(res.data&&res.data[0]){buscarYMostrarEnvio(res.data[0]);return;}
+    }catch(err){}
     var qn=q.toLowerCase();
     var mMatch=mensajeros.find(function(m){return (m.nombre||'').toLowerCase().includes(qn);});
     if(mMatch){
@@ -14085,21 +14201,38 @@ function MapaRutas(props){
 
       React.createElement('div',{style:{padding:'14px 16px',textTransform:'uppercase',letterSpacing:4,color:'var(--gold)',borderBottom:'1px solid rgba(200,168,75,0.2)',fontFamily:'Bebas Neue',fontSize:18,background:'linear-gradient(135deg,rgba(200,168,75,0.08),transparent)',textShadow:'0 0 14px rgba(200,168,75,0.5)',boxShadow:'inset 0 -1px 0 rgba(200,168,75,0.1)'}},'⬡ Mapa de Rutas'),
 
-      // Buscador único: código de envío o nombre de mensajero
-      React.createElement('div',{style:{padding:'8px 10px',borderBottom:'1px solid rgba(200,168,75,0.15)',display:'flex',gap:5}},
-        React.createElement('input',{
-          className:'search-box',
-          placeholder:'🔍 Código de envío o mensajero...',
-          value:busquedaMapa,
-          onChange:function(e){setBusquedaMapa(e.target.value);},
-          onKeyDown:function(e){if(e.key==='Enter')buscarEnMapa(busquedaMapa);},
-          style:{flex:1,margin:0,fontSize:11,padding:'7px 10px',background:'rgba(255,255,255,0.04)',border:'1px solid rgba(200,168,75,0.2)',borderRadius:8,color:'#fff'}
-        }),
-        busquedaMapa&&React.createElement('button',{
-          onClick:function(){setBusquedaMapa('');},
-          title:'Limpiar',
-          style:{padding:'0 10px',borderRadius:8,border:'1px solid rgba(255,255,255,0.15)',background:'transparent',color:'rgba(255,255,255,0.5)',cursor:'pointer',fontSize:12}
-        },'✕')
+      // Buscador único: código de envío o nombre de mensajero. Ahora es un textarea -- se
+      // pueden pegar VARIOS códigos (uno por línea, o separados por espacio/coma) y busca todos
+      // a la vez en Supabase directo, de cualquier fecha (ver buscarVariosCodigos/buscarEnMapa).
+      React.createElement('div',{style:{padding:'8px 10px',borderBottom:'1px solid rgba(200,168,75,0.15)'}},
+        React.createElement('div',{style:{display:'flex',gap:5,alignItems:'flex-start'}},
+          React.createElement('textarea',{
+            className:'search-box',
+            placeholder:'🔍 Código de envío o mensajero — pega varios (uno por línea) para buscarlos todos',
+            value:busquedaMapa,
+            rows:busquedaMapa.split('\n').length>1?Math.min(busquedaMapa.split('\n').length,5):1,
+            onChange:function(e){setBusquedaMapa(e.target.value);},
+            onKeyDown:function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();buscarEnMapa(busquedaMapa);}},
+            style:{flex:1,margin:0,fontSize:11,padding:'7px 10px',background:'rgba(255,255,255,0.04)',border:'1px solid rgba(200,168,75,0.2)',borderRadius:8,color:'#fff',fontFamily:'inherit',resize:'vertical',minHeight:30}
+          }),
+          busquedaMapa&&React.createElement('button',{
+            onClick:function(){setBusquedaMapa('');limpiarBusquedaMasiva();},
+            title:'Limpiar',
+            style:{padding:'7px 10px',borderRadius:8,border:'1px solid rgba(255,255,255,0.15)',background:'transparent',color:'rgba(255,255,255,0.5)',cursor:'pointer',fontSize:12,flexShrink:0}
+          },'✕')
+        ),
+        React.createElement('button',{
+          onClick:function(){buscarEnMapa(busquedaMapa);},
+          disabled:buscandoMasivo||!busquedaMapa.trim(),
+          style:{width:'100%',marginTop:6,padding:'7px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',
+            background:buscandoMasivo?'rgba(200,168,75,0.15)':'rgba(200,168,75,0.1)',color:'var(--gold)',
+            cursor:buscandoMasivo||!busquedaMapa.trim()?'default':'pointer',fontSize:11,fontFamily:'Bebas Neue',
+            letterSpacing:1.5,opacity:!busquedaMapa.trim()?0.4:1}
+        },buscandoMasivo?'Buscando...':'🔍 Buscar en el mapa'),
+        numResultadosBusqueda>0&&React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:6,fontSize:10.5,color:'var(--gold)',background:'rgba(200,168,75,0.1)',border:'1px solid rgba(200,168,75,0.3)',borderRadius:8,padding:'5px 10px'}},
+          React.createElement('span',null,'📍 '+numResultadosBusqueda+' resultado'+(numResultadosBusqueda===1?'':'s')+' de búsqueda'),
+          React.createElement('button',{onClick:limpiarBusquedaMasiva,title:'Quitar pines de búsqueda',style:{background:'rgba(255,255,255,0.1)',border:'none',color:'inherit',borderRadius:'50%',width:16,height:16,cursor:'pointer',fontSize:10,lineHeight:'16px',padding:0}},'✕')
+        )
       ),
 
       // Stats
