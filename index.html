@@ -624,7 +624,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788380661;
+window.__MODULES_VERSION=1788382014;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -2767,7 +2767,15 @@ function PestanasMensajero(_ref_pm){
   );
 }
 
-var COMUNAS_RM_LIST=["BUIN", "CALERA DE TANGO", "CERRILLOS", "CERRO NAVIA", "COLINA", "CONCHALI", "EL BOSQUE", "EL MONTE", "ESTACION CENTRAL", "HUECHURABA", "INDEPENDENCIA", "ISLA DE MAIPO", "LA CISTERNA", "LA FLORIDA", "LA GRANJA", "LA PINTANA", "LA REINA", "LAMPA", "LAS CONDES", "LO BARNECHEA", "LO ESPEJO", "LO PRADO", "MACUL", "MAIPU", "MARIA PINTO", "MELIPILLA", "PADRE HURTADO", "PAINE", "PEDRO AGUIRRE CERDA", "PENAFLOR", "PENALOLEN", "PIRQUE", "PROVIDENCIA", "PUDAHUEL", "PUENTE ALTO", "QUILICURA", "QUINTA NORMAL", "RECOLETA", "RENCA", "SAN BERNARDO", "SAN JOAQUIN", "SAN JOSE DE MAIPO", "SAN MIGUEL", "SAN PEDRO", "SAN RAMON", "SANTIAGO", "TALAGANTE", "TIL TIL", "VITACURA", "NUNOA", "EL ARRAYAN", "CURACAVI"];
+var COMUNAS_RM_LIST=["BUIN", "CALERA DE TANGO", "CERRILLOS", "CERRO NAVIA", "COLINA", "CONCHALI", "EL BOSQUE", "EL MONTE", "ESTACION CENTRAL", "HUECHURABA", "INDEPENDENCIA", "ISLA DE MAIPO", "LA CISTERNA", "LA FLORIDA", "LA GRANJA", "LA PINTANA", "LA REINA", "LAMPA", "LAS CONDES", "LO BARNECHEA", "LO ESPEJO", "LO PRADO", "MACUL", "MAIPU", "MARIA PINTO", "MELIPILLA", "PADRE HURTADO", "PAINE", "PEDRO AGUIRRE CERDA", "PENAFLOR", "PENALOLEN", "PIRQUE", "PROVIDENCIA", "PUDAHUEL", "PUENTE ALTO", "QUILICURA", "QUINTA NORMAL", "RECOLETA", "RENCA", "SAN BERNARDO", "SAN JOAQUIN", "SAN JOSE DE MAIPO", "SAN MIGUEL", "SAN PEDRO", "SAN RAMON", "SANTIAGO", "TALAGANTE", "TIL TIL", "VITACURA", "NUNOA", "EL ARRAYAN", "CURACAVI",
+  // Comunas de periferia: existen como entradas propias en COMUNAS_CHILE (ver más abajo) porque un
+  // envío puede venir marcado específicamente como zona de periferia de estas 7 comunas, y eso se
+  // paga distinto. Antes esta lista (la que alimenta el buscador de "Tarifas por Comuna" en Editar
+  // Mensajero) no las incluía, así que buscar "periferia" ahí no mostraba nada y no había forma de
+  // asignarles una tarifa especial por mensajero -- aunque el cálculo semanal de pagos (conteoDetalle
+  // en pagos-mensajeros.js) sí las agrupa aparte vía matchComuna() y sí respeta una tarifa propia si
+  // existiera una guardada en tarifas_comunas.
+  "PUENTE ALTO - PERIFERIA", "LA FLORIDA - PERIFERIA", "PUDAHUEL - PERIFERIA", "PADRE HURTADO - PERIFERIA", "COLINA - PERIFERIA", "SAN BERNARDO - PERIFERIA", "LO BARNECHEA - PERIFERIA"];
 /* GestionMensajeros se carga en modules/gestion-mensajeros.js (lazy-load, solo para admins que abren Mensajeros) */function ManifiestoExport(_ref16){var _window$_importedRows;let mensajerosDia=_ref16.mensajerosDia,clientes=_ref16.clientes,kpi=_ref16.kpi,onClose=_ref16.onClose,esAdmin=_ref16.esAdmin;const _useState30=useState('TODOS'),clienteFiltro=_useState30[0],setClienteFiltro=_useState30[1];const _useState31=useState('cierre'),tipoManifiesto=_useState31[0],setTipoManifiesto=_useState31[1];const _useState32=useState('TODOS'),mensajeroFiltro=_useState32[0],setMensajeroFiltro=_useState32[1];const rawRows=useMemo(()=>{const rows=[];mensajerosDia.forEach(m=>{const base={despachador:m.nombre};for(let i=0;i<m.entregados;i++)rows.push({...base,estado:'Entregado',cliente:m.clientePrincipal||''});for(let i=0;i<(m.reprogram||0);i++)rows.push({...base,estado:'ReProgramado',cliente:m.clientePrincipal||''});for(let i=0;i<(m.cancelados||0);i++)rows.push({...base,estado:'Cancelado',cliente:m.clientePrincipal||''});for(let i=0;i<(m.enCamino||0);i++)rows.push({...base,estado:'En Camino',cliente:m.clientePrincipal||''});for(let i=0;i<(m.pendientes||0);i++)rows.push({...base,estado:'Pendiente por Retiro',cliente:m.clientePrincipal||''});});return rows;},[mensajerosDia]);const _useState33=useState([]),supabaseRows=_useState33[0],setSupabaseRows=_useState33[1];const _useCargM=useState(true),cargandoManifiesto=_useCargM[0],setCargandoManifiesto=_useCargM[1];
 const _useFechaMan=useState(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}),fechaManifiesto=_useFechaMan[0],setFechaManifiesto=_useFechaMan[1];
 useEffect(()=>{// Cargar envíos del día seleccionado desde Supabase
