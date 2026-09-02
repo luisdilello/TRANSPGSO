@@ -765,12 +765,36 @@ function AdelantosTab(_ref2){
   var _nom=React.useState(''); var nombreSel=_nom[0]; var setNombreSel=_nom[1];
   var _mon=React.useState(''); var monto=_mon[0]; var setMonto=_mon[1];
   var _nota=React.useState(''); var nota=_nota[0]; var setNota=_nota[1];
+  var _fecha=React.useState(function(){return fechaHoyCL();}); var fechaAdelanto=_fecha[0]; var setFechaAdelanto=_fecha[1];
   var _edit=React.useState(null); var editandoKey=_edit[0]; var setEditandoKey=_edit[1];
   var _editVal=React.useState(''); var editandoVal=_editVal[0]; var setEditandoVal=_editVal[1];
 
   var nombresOrdenados=(mensajeros||[]).slice().sort(function(a,b){return (a.nombre||'').localeCompare(b.nombre||'');});
 
   var saldos=Object.keys(adelantosDB||{}).map(function(key){return {key:key,saldo:adelantosDB[key].saldo,updated_at:adelantosDB[key].updated_at};}).filter(function(s){return s.saldo>0;}).sort(function(a,b){return b.saldo-a.saldo;});
+
+  // Lista de adelantos recién registrados (NO los descuentos semanales ni los ajustes manuales de
+  // saldo -- esos ya tienen su propia vista en "🕘 Historial" de cada mensajero) para que, apenas
+  // se van anotando, queden visibles debajo del formulario con la fecha que se les asignó, sin
+  // tener que entrar mensajero por mensajero. Se distinguen por su nota: guardarAdelanto siempre
+  // anota 'Descuento {semana}' y ajustarSaldoAdelanto siempre anota 'Ajuste manual del saldo';
+  // cualquier otra fila viene de este formulario (submitNuevo → registrarAdelanto).
+  var _lista=React.useState([]); var listaAdelantos=_lista[0]; var setListaAdelantos=_lista[1];
+  var _cargandoLista=React.useState(true); var cargandoLista=_cargandoLista[0]; var setCargandoLista=_cargandoLista[1];
+
+  function esAdelantoNuevo(row){
+    var n=row.nota||'';
+    return n.indexOf('Descuento ')!==0 && n!=='Ajuste manual del saldo';
+  }
+
+  function cargarListaAdelantos(){
+    setCargandoLista(true);
+    db.from('adelantos_mensajeros').select('*').order('fecha',{ascending:false}).order('created_at',{ascending:false}).limit(200).then(function(r){
+      setListaAdelantos(((r&&r.data)||[]).filter(esAdelantoNuevo));
+      setCargandoLista(false);
+    });
+  }
+  React.useEffect(function(){cargarListaAdelantos();},[]);
 
   function nombreCrudo(key){
     var m=(mensajeros||[]).find(function(mm){return (mm.nombre||'').toUpperCase().trim()===key;});
@@ -782,7 +806,8 @@ function AdelantosTab(_ref2){
     if(!nombreSel){toast&&toast('⚠ Elegí un mensajero');return;}
     var m=parseFloat(monto);
     if(!m||m<=0){toast&&toast('⚠ Ingresá un monto válido');return;}
-    registrarAdelanto(nombreSel,m,nota);
+    if(!fechaAdelanto){toast&&toast('⚠ Elegí una fecha');return;}
+    Promise.resolve(registrarAdelanto(nombreSel,m,nota,fechaAdelanto)).then(cargarListaAdelantos);
     setMonto('');setNota('');
   }
 
@@ -808,6 +833,10 @@ function AdelantosTab(_ref2){
           /*#__PURE__*/React.createElement("label",{className:"form-label"},"Monto ($)"),
           /*#__PURE__*/React.createElement("input",{className:"form-input",type:"number",value:monto,onChange:function(e){setMonto(e.target.value);},style:{margin:0}})
         ),
+        /*#__PURE__*/React.createElement("div",{style:{width:160}},
+          /*#__PURE__*/React.createElement("label",{className:"form-label"},"Fecha del adelanto"),
+          /*#__PURE__*/React.createElement("input",{className:"form-input",type:"date",value:fechaAdelanto,onChange:function(e){setFechaAdelanto(e.target.value);},style:{margin:0}})
+        ),
         /*#__PURE__*/React.createElement("div",{style:{flex:'1 1 200px',minWidth:180}},
           /*#__PURE__*/React.createElement("label",{className:"form-label"},"Nota (opcional)"),
           /*#__PURE__*/React.createElement("input",{className:"form-input",type:"text",placeholder:"Ej: Adelanto solicitado por urgencia",value:nota,onChange:function(e){setNota(e.target.value);},style:{margin:0}})
@@ -815,6 +844,25 @@ function AdelantosTab(_ref2){
         /*#__PURE__*/React.createElement("button",{className:"btn-add",onClick:submitNuevo},"+ Registrar Adelanto")
       )
     ),
+    /*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)',marginBottom:10}},"Adelantos Registrados"),
+    cargandoLista?/*#__PURE__*/React.createElement("div",{className:"info-banner"},"Cargando..."):
+    listaAdelantos.length===0?/*#__PURE__*/React.createElement("div",{className:"info-banner"},"Todavía no se ha registrado ningún adelanto."):
+    /*#__PURE__*/React.createElement("div",{className:"table-wrap",style:{maxHeight:320,overflowY:'auto',marginBottom:20}},/*#__PURE__*/React.createElement("table",null,
+      /*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,
+        /*#__PURE__*/React.createElement("th",null,"Fecha"),
+        /*#__PURE__*/React.createElement("th",null,"Mensajero"),
+        /*#__PURE__*/React.createElement("th",null,"Monto"),
+        /*#__PURE__*/React.createElement("th",null,"Nota")
+      )),
+      /*#__PURE__*/React.createElement("tbody",null,listaAdelantos.map(function(row){
+        return /*#__PURE__*/React.createElement("tr",{key:row.id},
+          /*#__PURE__*/React.createElement("td",{style:{fontSize:11,color:'var(--text-soft)',whiteSpace:'nowrap'}},row.fecha?new Date(row.fecha+'T00:00:00').toLocaleDateString('es-CL'):'—'),
+          /*#__PURE__*/React.createElement("td",{style:{fontWeight:700}},formatear(row.mensajero_nombre)),
+          /*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("span",{className:"mono",style:{color:'#e67e22',fontWeight:700}},"$",Math.round(row.monto_adelanto||0).toLocaleString('es-CL'))),
+          /*#__PURE__*/React.createElement("td",{style:{fontSize:11,color:'var(--text-soft)'}},row.nota||'—')
+        );
+      }))
+    )),
     /*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)',marginBottom:10}},"Saldos Pendientes"),
     saldos.length===0?/*#__PURE__*/React.createElement("div",{className:"info-banner"},"No hay adelantos con saldo pendiente."):
     /*#__PURE__*/React.createElement("div",{className:"table-wrap"},/*#__PURE__*/React.createElement("table",null,
@@ -1241,7 +1289,7 @@ async function guardarAdelanto(nombre,montoDesc,saldoPrev,sem){
 // pendiente en vez de restar. Esta es la pieza que a Préstamos le faltaba: sin esto, la única
 // forma de "crear" un préstamo era escribir un monto directo en la fila de Pagos y marcarla
 // PAGADO, lo que fijaba a la vez el monto pedido Y el descuento en el mismo paso.
-async function registrarAdelanto(nombre,monto,nota){
+async function registrarAdelanto(nombre,monto,nota,fecha){
 
   var key=nombre.toUpperCase().trim();
 
@@ -1253,7 +1301,7 @@ async function registrarAdelanto(nombre,monto,nota){
 
     await db.from('adelantos_mensajeros').insert({
 
-      mensajero_nombre:nombre,semana:semana,monto_adelanto:monto,
+      mensajero_nombre:nombre,semana:semana,monto_adelanto:monto,fecha:fecha||fechaHoyCL(),
 
       monto_descontado:0,saldo_pendiente:nuevoSaldo,nota:nota||('Adelanto solicitado '+semana)
 
