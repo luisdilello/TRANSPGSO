@@ -48,6 +48,8 @@ function GestionEntregaModal(props){
   var _nota=useState(''), nota=_nota[0], setNota=_nota[1];
   var _guardando=useState(false), guardando=_guardando[0], setGuardando=_guardando[1];
   var _aviso=useState(''), aviso=_aviso[0], setAviso=_aviso[1];
+  var _pasteFocus=useState(false), pasteZoneFocus=_pasteFocus[0], setPasteZoneFocus=_pasteFocus[1];
+  var pasteZoneRef=useRef(null);
 
   var usaMotivoDesplegable=estadoSel==='reprogramado' && (motivosReprogramacion||[]).length>0;
   var terminal=estadoEsTerminal(envio.estado);
@@ -76,24 +78,38 @@ function GestionEntregaModal(props){
   }
 
   // Copiar y pegar (Ctrl+V) una imagen directamente -- pedido explícito de Luis para que la
-  // gestión sea rápida, sin tener que guardar el archivo primero. Escucha el paste a nivel de
-  // documento mientras este modal está abierto, así funciona sin tener que hacer foco en un
-  // campo específico primero.
+  // gestión sea rápida, sin tener que descargar cada foto a una carpeta primero.
+  // OJO: un listener de 'paste' a nivel de document NO alcanza -- Chrome solo dispara el
+  // evento 'paste' sobre un elemento que puede recibir foco/edición (input, textarea,
+  // contentEditable); si el foco queda en un botón o en el fondo de la página, Ctrl+V no
+  // genera ningún evento y por eso antes no funcionaba (el admin terminaba usando el botón
+  // "Subir foto", que abre el explorador de archivos del sistema operativo). Por eso esta
+  // "zona de pegado" es un div contentEditable enfocado automáticamente al abrir el panel:
+  // así el pegado queda listo de inmediato, sin tener que hacer clic en nada primero.
   useEffect(function(){
-    function onPaste(e){
-      var items=(e.clipboardData && e.clipboardData.items)||[];
-      var imgFiles=[];
-      for(var i=0;i<items.length;i++){
-        if(items[i].type && items[i].type.indexOf('image')===0){
-          var f=items[i].getAsFile();
-          if(f)imgFiles.push(f);
-        }
+    if(pasteZoneRef.current)pasteZoneRef.current.focus();
+  },[]);
+  function manejarPasteZona(e){
+    e.preventDefault();
+    var items=(e.clipboardData && e.clipboardData.items)||[];
+    var imgFiles=[];
+    for(var i=0;i<items.length;i++){
+      if(items[i].type && items[i].type.indexOf('image')===0){
+        var f=items[i].getAsFile();
+        if(f)imgFiles.push(f);
       }
-      if(imgFiles.length>0){e.preventDefault();agregarFotos(imgFiles);}
     }
-    document.addEventListener('paste',onPaste);
-    return function(){document.removeEventListener('paste',onPaste);};
-  },[fotos.length]);
+    if(imgFiles.length>0){agregarFotos(imgFiles);}
+    else{setAviso('⚠ El portapapeles no tiene una imagen — copiá la foto primero (clic derecho → "Copiar imagen") y volvé a pegar acá.');}
+    // El div es solo un "blanco" para recibir el pegado -- nunca debe quedar texto/imagen
+    // insertada visualmente adentro (ya se procesó arriba y se guardó como miniatura aparte).
+    if(pasteZoneRef.current)pasteZoneRef.current.textContent='';
+  }
+  function manejarDropZona(e){
+    e.preventDefault();
+    var files=(e.dataTransfer && e.dataTransfer.files)||[];
+    if(files.length>0)agregarFotos(files);
+  }
 
   async function guardar(estadoFinal){
     if(terminal || guardando)return;
@@ -166,14 +182,41 @@ function GestionEntregaModal(props){
 
     React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginBottom:8}},'Fotos de la entrega'),
     React.createElement('div',{style:{border:'1.5px dashed var(--border)',borderRadius:10,padding:14,marginBottom:14,background:'#fafaf7'}},
-      React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginBottom:10}},'📋 Pega una imagen con Ctrl+V (o Cmd+V), o súbela desde un archivo.'),
+      // Zona de pegado: contentEditable + foco automático al abrir el panel, así con solo
+      // copiar la imagen (clic derecho → "Copiar imagen", o Ctrl+C sobre una captura) y
+      // presionar Ctrl+V queda cargada al instante -- sin pasar por ningún explorador de
+      // archivos. También acepta arrastrar y soltar un archivo encima.
+      React.createElement('div',{
+        ref:pasteZoneRef,
+        contentEditable:!terminal,
+        suppressContentEditableWarning:true,
+        onPaste:manejarPasteZona,
+        onDrop:manejarDropZona,
+        onDragOver:function(e){e.preventDefault();},
+        onFocus:function(){setPasteZoneFocus(true);},
+        onBlur:function(){setPasteZoneFocus(false);},
+        onKeyDown:function(e){
+          // Esto no es un campo de texto -- solo un blanco para pegar imágenes. Se deja pasar
+          // Ctrl+V/Cmd+V (el pegado en sí lo maneja onPaste) y se bloquea cualquier otra tecla
+          // para que no se pueda escribir texto por error adentro.
+          if(!(e.ctrlKey||e.metaKey))e.preventDefault();
+        },
+        style:{
+          minHeight:44,borderRadius:8,padding:'12px 14px',marginBottom:10,cursor:'text',outline:'none',
+          textAlign:'center',fontSize:12,fontWeight:700,
+          border:'2px dashed '+(pasteZoneFocus?'var(--gold)':'rgba(200,168,75,0.4)'),
+          background:pasteZoneFocus?'rgba(200,168,75,0.12)':'#fff',
+          color:pasteZoneFocus?'#8a6d1a':'var(--text-soft)',
+          transition:'all 0.15s'
+        }
+      },pasteZoneFocus?'📋 Listo — pegá con Ctrl+V (o Cmd+V)':'📋 Hacé clic acá y pegá la imagen copiada (Ctrl+V) — o arrastrala y soltala'),
       React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:8,marginBottom:fotos.length>0?10:0}},
         fotos.map(function(f,i){
           return React.createElement('div',{key:i,style:{position:'relative',width:64,height:64}},
             React.createElement('img',{src:f.data,style:{width:64,height:64,objectFit:'cover',borderRadius:8,border:'1px solid var(--border)'}}),
             React.createElement('button',{onClick:function(){quitarFoto(i);},style:{position:'absolute',top:-6,right:-6,background:'var(--danger)',border:'2px solid #fff',borderRadius:'50%',color:'#fff',width:20,height:20,cursor:'pointer',fontSize:11,lineHeight:'16px',padding:0}},'✕'));
         })),
-      React.createElement('button',{className:'btn-secondary',type:'button',disabled:terminal||fotos.length>=MAX_FOTOS,onClick:elegirArchivo},'📁 Subir foto ('+fotos.length+'/'+MAX_FOTOS+')')),
+      React.createElement('button',{className:'btn-secondary',type:'button',disabled:terminal||fotos.length>=MAX_FOTOS,onClick:elegirArchivo},'📁 O subir un archivo ('+fotos.length+'/'+MAX_FOTOS+')')),
 
     React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginBottom:8}},'Actualizar estado'),
     React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))',gap:8,marginBottom:16}},
