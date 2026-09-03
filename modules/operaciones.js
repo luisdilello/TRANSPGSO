@@ -480,7 +480,27 @@ function CierreDiario(props){
       setHistorialDia((r&&r.data)||[]);
     }).catch(function(){});
   }
-  useEffect(function(){cargarHistorialDia(fecha);},[fecha]);
+  // Al entrar a la pestaña (o cambiar de fecha) autoabre el reporte más reciente de ese día si
+  // ya existe uno -- antes quedaba un formulario en blanco aunque ya hubiera un reporte cargado
+  // (por ejemplo, uno recién creado desde el botón "⚠ Reportar" de Firmas en Vivo), y para verlo
+  // había que acordarse de tocar su chip en "Reportes de este día"; fácil pensar que el dato "no
+  // llegó" cuando en realidad sí se guardó, solo que no estaba a la vista. Prioriza un borrador
+  // (lo más probable que se quiera seguir editando) y si no hay ninguno abre el más reciente
+  // igual (aunque esté cerrado) para no dejar la pantalla en blanco sin motivo.
+  // OJO: esto NO se ejecuta al usar "+ Nuevo reporte" (esa acción no cambia `fecha`, así que este
+  // efecto no se vuelve a disparar) ni después de Guardar/Cerrar/Reabrir (esos casos llaman
+  // directo a cargarHistorialDia(fecha), que solo refresca los chips sin autoabrir nada) --
+  // en ambos casos se respeta el reporte que la persona ya tiene abierto en pantalla.
+  useEffect(function(){
+    db.from('cierres_ruta').select('id,fecha,turno,estado_reporte,creado_por,cerrado_por').eq('fecha',fecha).order('created_at',{ascending:false}).then(function(r){
+      var filas=(r&&r.data)||[];
+      setHistorialDia(filas);
+      if(filas.length>0){
+        var preferido=filas.find(function(x){return x.estado_reporte==='borrador';})||filas[0];
+        abrirDesdeHistorial(preferido.id);
+      }
+    }).catch(function(){});
+  },[fecha]);
 
   function limpiarFormulario(){
     setReporteId(null);setEstadoReporte('borrador');setTurno('');
