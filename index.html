@@ -624,7 +624,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788459630;
+window.__MODULES_VERSION=1788465591;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -12287,8 +12287,32 @@ function NavDropdown(_ref_nd){
   );
 }
 
+// Catálogo de faltas del Reglamento Operativo (sección 7: Clasificación de Faltas) — se
+// definía antes SOLO dentro de modules/pagos-mensajeros.js, pero ahora también lo necesita
+// modules/operaciones.js (botón "Reportar" de Firmas en Vivo, para poder multar directo desde
+// ahí). Se centraliza acá y ambos módulos lo leen de window.__app.CATALOGO_FALTAS_REGLAMENTO,
+// así queda una sola fuente de verdad (importante: esto afecta plata real de mensajeros).
+const CATALOGO_FALTAS_REGLAMENTO=[
+  {grupo:'Leve',label:'No enviar respaldos de salida de bodega (pantallazos Flex + Interna)',envios:1},
+  {grupo:'Leve',label:'Respaldos incompletos o enviados fuera de tiempo',envios:1},
+  {grupo:'Leve',label:'Retraso menor sin justificación válida',envios:1},
+  {grupo:'Grave',label:'Entrega sin evidencia obligatoria completa (etiqueta / fachada / entrega / datos receptor)',envios:5},
+  {grupo:'Grave',label:'No entregar encomienda el mismo día sin justificación válida',envios:10},
+  {grupo:'Grave',label:'No registrar correctamente el estado en la aplicación',envios:3},
+  {grupo:'Grave',label:'Finalizar jornada sin autorización',envios:5},
+  {grupo:'Grave',label:'Devolver paquete sin respaldo',envios:5},
+  {grupo:'Grave',label:'Diferencia entre paquetes retirados / entregados / devueltos',envios:10},
+  {grupo:'Crítica',label:'Falsificación de entrega',envios:20},
+  {grupo:'Crítica',label:'Manipulación o alteración de evidencias',envios:20},
+  {grupo:'Crítica',label:'Pérdida de encomienda por negligencia',envios:15},
+  {grupo:'Crítica',label:'Delegar entregas sin autorización',envios:15},
+  {grupo:'Crítica',label:'Abandono de ruta',envios:20},
+  {grupo:'Crítica',label:'Ocultamiento de información relevante',envios:10},
+  {grupo:'Otro',label:'Otro (personalizado)',envios:0}
+];
 // Dependencias compartidas para los modulos con carga diferida (lazy-load). Ver /modules/*.js
 window.__app = {
+  CATALOGO_FALTAS_REGLAMENTO,
   db, lsLoad, lsSave, exportToExcel, ExportBtn, ImportarPDFColecta, fechaHoyCL,
   AdminEditarEnvio, COMUNAS_CHILE, ESTADOS_ENVIO, FotosEntregaConRecarga, Modal, matchComuna, esComunaValida,
   confirmarCodigo, crearEntradaHistorial, diasDesdeFecha, esEnvioAtrasado, estadoBadge,
