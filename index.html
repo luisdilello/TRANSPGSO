@@ -624,7 +624,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788391553;
+window.__MODULES_VERSION=1788450416;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3079,6 +3079,17 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
   // porque antes la clave única incluía también el mensajero).
   var clienteSincronizadoRef=React.useRef({});
 
+  // Lista negra de clientes que el admin BORRÓ explícitamente en esta sesión (por fecha). Existe
+  // porque había una condición de carrera real: si se editaba un campo de una fila (ej. Piezas)
+  // y, antes de que pasaran los 700ms del guardado automático (debounce, más abajo), el admin la
+  // borraba con la ✕, la solicitud de guardado (upsert) ya podía estar en camino a Supabase --
+  // esa solicitud terminaba de llegar DESPUÉS del borrado y volvía a insertar la fila, que luego
+  // reaparecía sola al final de la lista en la siguiente sincronización (cada 15s o por tiempo
+  // real). Como el navegador no puede cancelar una solicitud de red que ya salió, la fila
+  // "resucitada" se filtra acá y además se vuelve a borrar sola apenas se la vuelve a ver.
+  var borradosRef=React.useRef({});
+  React.useEffect(function(){borradosRef.current={};},[retiroFecha]);
+
   // Sube TODAS las filas con cliente asignado a Supabase -- antes solo se subían las que ya
   // estaban "Confirmado", por eso lo que Yohana cargaba en su dispositivo nunca aparecía en el
   // de otro admin hasta confirmar, y como confirmar exigía tener el Pago Mensajero puesto a
@@ -3088,6 +3099,7 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
     var t=setTimeout(function(){
       filas.forEach(function(r){
         if(!r.cliente)return;
+        if(borradosRef.current[r.cliente])return; // se borró explícitamente -- no revivirlo
         var clienteAntes=clienteSincronizadoRef.current[r.id];
         var previo=(clienteAntes&&clienteAntes!==r.cliente)
           ?db.from('retiros').delete().eq('fecha',retiroFecha).eq('cliente',clienteAntes).then(function(){}).catch(function(){})
@@ -3112,20 +3124,30 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
     db.from('retiros').select('*').eq('fecha',retiroFecha)
       .then(function(res){
         if(!res.data)return;
-        res.data.forEach(function(row){clienteSincronizadoRef.current[row.id]=row.cliente;});
+        // Autolimpieza: si una fila que el admin ya borró explícitamente (lista negra) sigue
+        // apareciendo acá, es la resurrección por la carrera explicada arriba -- se vuelve a
+        // borrar sola, sin esperar a que el admin la note y la borre de nuevo a mano.
+        var zombies=res.data.filter(function(row){return row.cliente&&borradosRef.current[row.cliente];});
+        if(zombies.length>0){
+          zombies.forEach(function(row){
+            db.from('retiros').delete().eq('fecha',retiroFecha).eq('cliente',row.cliente).then(function(){}).catch(function(){});
+          });
+        }
+        var datosVivos=res.data.filter(function(row){return!row.cliente||!borradosRef.current[row.cliente];});
+        datosVivos.forEach(function(row){clienteSincronizadoRef.current[row.id]=row.cliente;});
         if(fusionCompleta){
           setFilas(function(prev){
             var borradores=prev.filter(function(f){return!f.cliente;});
-            return res.data.map(rowAFila).concat(borradores);
+            return datosVivos.map(rowAFila).concat(borradores);
           });
           return;
         }
         setFilas(function(prev){
           var yaPresentes={};
           prev.forEach(function(f){if(f.cliente)yaPresentes[f.cliente]=true;});
-          var nuevas=res.data.filter(function(row){return row.cliente&&!yaPresentes[row.cliente];}).map(rowAFila);
+          var nuevas=datosVivos.filter(function(row){return row.cliente&&!yaPresentes[row.cliente];}).map(rowAFila);
           var actualizadas=prev.map(function(fila){
-            var supaRow=res.data.find(function(r){return r.cliente===fila.cliente;});
+            var supaRow=datosVivos.find(function(r){return r.cliente===fila.cliente;});
             if(!supaRow)return fila;
             return Object.assign({},fila,{retirado:!!supaRow.retirado,enBodega:!!supaRow.en_bodega});
           });
@@ -3195,6 +3217,10 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
   },[colectaPorCliente,filas]);
 
   function actualizarFila(idx,campo,valor){
+    // Si el admin vuelve a elegir explícitamente este cliente en una fila (recién agregada u
+    // otra), se lo saca de la lista negra de borrados -- así sí se lo puede volver a cargar el
+    // mismo día si hacía falta, en vez de quedar bloqueado para siempre por error.
+    if(campo==='cliente'&&valor)delete borradosRef.current[valor];
     setFilas(function(prev){
       var nueva=prev.map(function(r,i){
         if(i!==idx)return r;
@@ -3254,6 +3280,7 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
     setFilas(nueva);
     guardarRetirosDia(retiroFecha,nueva);
     if(fila&&fila.cliente){
+      borradosRef.current[fila.cliente]=true;
       db.from('retiros').delete().eq('fecha',retiroFecha).eq('cliente',fila.cliente).then(function(){}).catch(function(){});
       delete clienteSincronizadoRef.current[fila.id];
     }
