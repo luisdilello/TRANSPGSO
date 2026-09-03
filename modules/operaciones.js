@@ -1,6 +1,11 @@
 (function(){
 var useState=React.useState, useEffect=React.useEffect, useMemo=React.useMemo;
 var db=window.__app.db, estadoBadge=window.__app.estadoBadge, fechaHoyCL=window.__app.fechaHoyCL;
+// Catálogo de faltas del Reglamento (Leve/Grave/Crítica) y lista de estados de envío —
+// compartidos desde index.html / window.__app para no duplicarlos (ver comentario en
+// modules/pagos-mensajeros.js: es lo mismo que usa el botón "🎯 Descuentos" de Pagos).
+var CATALOGO_FALTAS_REGLAMENTO=window.__app.CATALOGO_FALTAS_REGLAMENTO||[];
+var ESTADOS_ENVIO=window.__app.ESTADOS_ENVIO||[];
 
 // Logo embebido en base64 (mismo que usan los Recibos de Cobro) — para que el reporte
 // exportado se vea igual estando offline / abierto desde un correo, sin depender de que
@@ -200,6 +205,123 @@ function miniStat(label,val,alerta){
 }
 
 // ══════════════════════════════════════════════════════════════════════════════════════
+// Puente Firmas en Vivo ↔ Cierre Diario ↔ Multas (Pagos Mensajeros).
+// ══════════════════════════════════════════════════════════════════════════════════════
+// Agrega una fila a "Excepciones detectadas" (Sección B) del reporte de Cierre Diario de esa
+// fecha -- si ya hay un reporte en BORRADOR para ese día lo actualiza, y si no existe ninguno
+// (o todos los que hay ya están cerrados) crea uno nuevo en borrador. Ojo: esto escribe directo
+// en la base (no pasa por el estado local de CierreDiario), así que si alguien tiene ese mismo
+// reporte abierto en pantalla sin guardar, su próximo "Guardar borrador" puede pisar esta fila
+// (limitación que ya existía antes para cualquier edición concurrente del mismo reporte).
+async function registrarExcepcionEnCierre(fecha,fila,toast,nombreUsuario){
+  try{
+    var r=await db.from('cierres_ruta').select('id,firmas_excepciones').eq('fecha',fecha).eq('estado_reporte','borrador').order('created_at',{ascending:false}).limit(1);
+    if(r.error)throw r.error;
+    if(r.data&&r.data.length>0){
+      var row=r.data[0];
+      var nuevas=(row.firmas_excepciones||[]).concat([fila]);
+      var w=await db.from('cierres_ruta').update({firmas_excepciones:nuevas,updated_at:new Date().toISOString()}).eq('id',row.id);
+      if(w.error)throw w.error;
+    }else{
+      var ins=await db.from('cierres_ruta').insert({fecha:fecha,estado_reporte:'borrador',firmas_excepciones:[fila],creado_por:nombreUsuario||null}).select().single();
+      if(ins.error)throw ins.error;
+    }
+    return true;
+  }catch(e){
+    toast&&toast('⚠ No se pudo registrar en el Cierre Diario: '+(e&&e.message?e.message:'error desconocido'));
+    return false;
+  }
+}
+
+// Modal "⚠ Reportar excepción" -- se abre desde cada tarjeta de Firmas en Vivo. Deja elegir
+// CADA VEZ entre solo dejar constancia en el Cierre Diario, o además aplicar la multa/descuento
+// real al mensajero (reutilizando el mismo catálogo y cálculo que "🎯 Descuentos" en Pagos
+// Mensajeros, vía window.__app.aplicarMultaExterna -- carga ese módulo al vuelo si todavía no
+// estaba cargado). Los "puntos" quedan guardados en la fila igual se multe o no, para poder
+// calcular la ponderación económica del día en el Cierre Diario aunque no se haya multado.
+function ReportarModal(props){
+  var envio=props.envio, onClose=props.onClose, onDone=props.onDone, toast=props.toast, nombreUsuario=props.nombreUsuario;
+  var grupos=['Leve','Grave','Crítica','Otro'];
+  var primero=CATALOGO_FALTAS_REGLAMENTO[0]||{label:'',envios:0};
+  var _falta=useState(primero.label), faltaSel=_falta[0], setFaltaSel=_falta[1];
+  var _puntos=useState(primero.envios||0), puntos=_puntos[0], setPuntos=_puntos[1];
+  var _accion=useState(''), accion=_accion[0], setAccion=_accion[1];
+  var _enviando=useState(false), enviando=_enviando[0], setEnviando=_enviando[1];
+
+  function onChangeFalta(label){
+    setFaltaSel(label);
+    var it=CATALOGO_FALTAS_REGLAMENTO.find(function(f){return f.label===label;});
+    setPuntos(it?it.envios:0);
+  }
+
+  async function ejecutar(conMulta){
+    if(!envio.mensajero){toast&&toast('⚠ Este envío no tiene mensajero asignado, no se puede reportar.');return;}
+    if(conMulta&&(+puntos||0)<=0){toast&&toast('⚠ Ingresa una cantidad de puntos/envíos mayor a 0 para poder multar.');return;}
+    setEnviando(true);
+    var monto=0, multaOk=false;
+    if(conMulta){
+      try{
+        await loadScriptOnce('pagos-mensajeros','modules/pagos-mensajeros.js');
+      }catch(e){
+        toast&&toast('⚠ No se pudo cargar el módulo de Pagos Mensajeros.');
+      }
+      if(window.__app.aplicarMultaExterna){
+        var rr=await window.__app.aplicarMultaExterna(envio.mensajero,faltaSel,puntos,accion,fechaHoyCL());
+        if(rr.ok){monto=rr.monto;multaOk=true;}
+        else if(rr.motivo==='sin_semana')toast&&toast('⚠ No hay pagos calculados para esta semana todavía. Ve a Pagos Mensajeros → "Calcular Envíos Semana" y vuelve a intentar.');
+        else if(rr.motivo==='sin_mensajero')toast&&toast('⚠ '+envio.mensajero.split(',')[0]+' no aparece en los pagos de esta semana.');
+        else toast&&toast('⚠ Error al aplicar la multa: '+(rr.mensaje||'desconocido'));
+      }else{
+        toast&&toast('⚠ No se pudo cargar el módulo de Pagos Mensajeros.');
+      }
+    }
+    var fila={
+      mensajero:envio.mensajero,codigo:envio.codigo,falta:faltaSel,
+      accion:accion||(multaOk?'Multa aplicada desde Firmas en Vivo':'Registrado desde Firmas en Vivo'),
+      puntos:+puntos||0,multaAplicada:multaOk,monto:multaOk?monto:0,origen:'firmas_vivo',hora:new Date().toISOString()
+    };
+    var ok=await registrarExcepcionEnCierre(fechaHoyCL(),fila,toast,nombreUsuario);
+    setEnviando(false);
+    if(ok){
+      toast&&toast(multaOk?'✓ Multa aplicada y registrada en el Cierre Diario':'✓ Registrado en el Cierre Diario de hoy');
+      onDone&&onDone(fila);
+      onClose();
+    }
+  }
+
+  return React.createElement('div',{style:{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999},onClick:onClose},
+    React.createElement('div',{style:{background:'#fff',borderRadius:14,padding:20,width:460,maxWidth:'92vw',maxHeight:'85vh',overflowY:'auto'},onClick:function(e){e.stopPropagation();}},
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}},
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1,color:'var(--dark)'}},'⚠ Reportar excepción'),
+        React.createElement('button',{onClick:onClose,style:{border:'none',background:'none',fontSize:18,cursor:'pointer',color:'var(--text-soft)'}},'✕')
+      ),
+      React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginBottom:14}},(envio.mensajero||'Sin mensajero asignado').replace(/,\s*/g,' ')+' · Código '+envio.codigo),
+      React.createElement('div',{style:{marginBottom:10}},
+        React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',display:'block',marginBottom:3}},'Falta detectada (Reglamento Operativo)'),
+        React.createElement('select',{value:faltaSel,onChange:function(e){onChangeFalta(e.target.value);},style:{width:'100%',padding:'7px 8px',borderRadius:7,border:'1px solid var(--border)',fontSize:12,outline:'none'}},
+          grupos.map(function(g){
+            return React.createElement('optgroup',{key:g,label:g},
+              CATALOGO_FALTAS_REGLAMENTO.filter(function(f){return f.grupo===g;}).map(function(f){
+                return React.createElement('option',{key:f.label,value:f.label},f.label+(f.envios>0?' (-'+f.envios+')':''));
+              })
+            );
+          })
+        )
+      ),
+      React.createElement('div',{style:{marginBottom:10}},
+        React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',display:'block',marginBottom:3}},'Puntos de gravedad (= envíos de descuento si se multa)'),
+        React.createElement('input',{type:'number',min:0,value:puntos,onChange:function(e){setPuntos(e.target.value);},style:{width:140,padding:'6px 8px',borderRadius:7,border:'1px solid var(--border)',fontSize:12,outline:'none',fontFamily:'JetBrains Mono'}})
+      ),
+      React.createElement('textarea',{placeholder:'Acción / comentario (opcional)...',rows:2,value:accion,onChange:function(e){setAccion(e.target.value);},style:{width:'100%',padding:'7px 10px',borderRadius:7,border:'1px solid var(--border)',fontSize:12,outline:'none',marginBottom:14,boxSizing:'border-box',resize:'vertical'}}),
+      React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'flex-end'}},
+        React.createElement('button',{disabled:enviando,onClick:function(){ejecutar(false);},style:{padding:'8px 14px',borderRadius:8,border:'1px solid var(--border)',background:'var(--cream)',color:'var(--text-main)',fontWeight:700,fontSize:12,cursor:enviando?'default':'pointer'}},'📋 Solo registrar incidencia'),
+        React.createElement('button',{disabled:enviando,onClick:function(){ejecutar(true);},style:{padding:'8px 14px',borderRadius:8,border:'none',background:'var(--danger)',color:'#fff',fontWeight:700,fontSize:12,cursor:enviando?'default':'pointer'}},enviando?'...':'🎯 Aplicar multa y registrar')
+      )
+    )
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════
 // Estilo visual compartido con los Recibos de Cobro, para que todo lo exportado desde
 // TransPgso se vea igual (mismo dorado/crema, mismo header con logo).
 // ══════════════════════════════════════════════════════════════════════════════════════
@@ -261,6 +383,12 @@ function exportarCierreHTML(r){
       +'<div style="grid-column:1/-1">'+infoBoxHTML('Observaciones generales',r.observaciones_generales)+'</div>'
       +infoBoxHTML('Creado por',r.creado_por)+infoBoxHTML('Cerrado por',r.cerrado_por)
       +'</div>')
+    +(r.ponderacion_economica?tarjetaHTML('Ponderación económica del día','💰','<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+      +infoBoxHTML('Puntaje de gravedad',String(r.ponderacion_economica.puntosGravedadDia))
+      +infoBoxHTML('Multas detectadas hoy','$'+Math.round(r.ponderacion_economica.montoMultasDia).toLocaleString('es-CL'))
+      +infoBoxHTML('Costo del día (operador)','$'+Math.round(r.ponderacion_economica.costoDiarioOperador).toLocaleString('es-CL'))
+      +'</div><div style="margin-top:10px;font-size:12px;font-weight:700;color:'+(r.ponderacion_economica.seRecuperoCosto?'#2E7D32':'#C62828')+'">'
+      +(r.ponderacion_economica.seRecuperoCosto?'✓ El trabajo de hoy se pagó solo.':'⚠ Por debajo del costo del día.')+'</div>'):'')
     +'</div></body></html>';
   descargarHTML('Cierre_Ruta_'+r.fecha+(r.turno?'_'+r.turno.replace(/\s+/g,'_'):'')+'.html',html);
 }
@@ -313,6 +441,33 @@ function CierreDiario(props){
   var _cerradoPor=useState(''), cerradoPor=_cerradoPor[0], setCerradoPor=_cerradoPor[1];
   var _guardando=useState(false), guardando=_guardando[0], setGuardando=_guardando[1];
   var _historialDia=useState([]), historialDia=_historialDia[0], setHistorialDia=_historialDia[1];
+
+  // ── Ponderación económica del día ──────────────────────────────────────────────────
+  // Compara lo detectado (en pesos, vía multas efectivamente aplicadas + un puntaje de
+  // gravedad aunque no se haya multado) contra el costo de ese día de trabajo del operador
+  // (sueldo mensual en USD, convertido a pesos con un tipo de cambio editable, dividido entre
+  // los días laborables del mes) -- así se puede ver de un vistazo si el día "se pagó solo".
+  // Los 3 parámetros (tipo de cambio, sueldo, días laborables) se guardan en la tabla
+  // genérica `configuracion` (mismo mecanismo que usan otras pantallas del sistema, ej.
+  // "motivos_reprogramacion") para que Luis los pueda ajustar sin tocar código.
+  var CFG_ECON_DEFAULT={valorDolarClp:936,sueldoOperadorUsdMensual:150,diasLaborablesMes:26};
+  var _cfgEcon=useState(CFG_ECON_DEFAULT), cfgEcon=_cfgEcon[0], setCfgEcon=_cfgEcon[1];
+  var _editandoCfg=useState(false), editandoCfg=_editandoCfg[0], setEditandoCfg=_editandoCfg[1];
+  var _cfgBorrador=useState(CFG_ECON_DEFAULT), cfgBorrador=_cfgBorrador[0], setCfgBorrador=_cfgBorrador[1];
+  useEffect(function(){
+    db.from('configuracion').select('valor').eq('clave','operaciones_valor_economico').maybeSingle().then(function(r){
+      if(r&&r.data&&r.data.valor){var fusion=Object.assign({},CFG_ECON_DEFAULT,r.data.valor);setCfgEcon(fusion);setCfgBorrador(fusion);}
+    }).catch(function(){});
+  },[]);
+  function guardarCfgEcon(){
+    var limpio={
+      valorDolarClp:+cfgBorrador.valorDolarClp||CFG_ECON_DEFAULT.valorDolarClp,
+      sueldoOperadorUsdMensual:+cfgBorrador.sueldoOperadorUsdMensual||CFG_ECON_DEFAULT.sueldoOperadorUsdMensual,
+      diasLaborablesMes:+cfgBorrador.diasLaborablesMes||CFG_ECON_DEFAULT.diasLaborablesMes
+    };
+    setCfgEcon(limpio);setEditandoCfg(false);
+    db.from('configuracion').upsert({clave:'operaciones_valor_economico',valor:limpio,updated_at:new Date().toISOString()},{onConflict:'clave'}).then(function(){toast&&toast('✓ Parámetros de ponderación económica actualizados');}).catch(function(){});
+  }
 
   var _histOpen=useState(false), historialAbierto=_histOpen[0], setHistorialAbierto=_histOpen[1];
   var _histDesde=useState(function(){var d=new Date();d.setDate(d.getDate()-6);return ymd(d);}), histDesde=_histDesde[0], setHistDesde=_histDesde[1];
@@ -416,6 +571,15 @@ function CierreDiario(props){
 
   var totIncidencias=incidencias.length, totExcepFirmas=firmasExcepciones.length, totRespaldos=respaldos.length, totPendientes=pendientes.length;
 
+  // "puntos" y "monto"/"multaAplicada" solo existen en filas creadas desde el botón "⚠ Reportar"
+  // de Firmas en Vivo (o cargadas manualmente con esos mismos campos) -- una excepción tipeada a
+  // mano en la tabla de siempre, sin esos campos, simplemente no suma nada acá (no se pierde ni
+  // rompe, solo no aporta a la ponderación económica).
+  var puntosGravedadDia=firmasExcepciones.reduce(function(a,x){return a+(+x.puntos||0);},0);
+  var montoMultasDia=firmasExcepciones.reduce(function(a,x){return a+(x.multaAplicada?(+x.monto||0):0);},0);
+  var costoDiarioOperador=Math.round((cfgEcon.sueldoOperadorUsdMensual*cfgEcon.valorDolarClp)/(cfgEcon.diasLaborablesMes||1));
+  var seRecuperoCosto=montoMultasDia>=costoDiarioOperador&&costoDiarioOperador>0;
+
   return React.createElement('div',null,
     React.createElement('datalist',{id:'dl-mensajeros-operaciones'},mensajeros.map(function(m){return React.createElement('option',{key:m.id||m.nombre,value:m.nombre});})),
 
@@ -481,6 +645,40 @@ function CierreDiario(props){
         React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,color:soloLectura?'#2e7d4f':'#8a6d1a'}},soloLectura?'🔒 CERRADO':'📝 BORRADOR'))
     ),
 
+    // ── Ponderación económica del día ──
+    React.createElement('div',{style:{background:'#fff',border:'1.5px solid '+(seRecuperoCosto?'rgba(46,125,79,0.3)':'rgba(200,168,75,0.35)'),borderRadius:10,padding:14,marginBottom:20}},
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,marginBottom:10}},
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:15,letterSpacing:1,color:'var(--dark)'}},'💰 Ponderación económica del día'+(creadoPor?' — '+creadoPor:'')),
+        esAdmin&&React.createElement('button',{className:'btn-secondary',onClick:function(){setCfgBorrador(cfgEcon);setEditandoCfg(function(v){return!v;});}},editandoCfg?'✕ Cerrar':'⚙ Parámetros')
+      ),
+      editandoCfg&&React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:8,padding:12,marginBottom:12}},
+        React.createElement('div',null,
+          React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',display:'block',marginBottom:3}},'Sueldo mensual operador (USD)'),
+          React.createElement('input',{type:'number',className:'form-input',style:{width:110,padding:'6px 8px'},value:cfgBorrador.sueldoOperadorUsdMensual,onChange:function(e){setCfgBorrador(Object.assign({},cfgBorrador,{sueldoOperadorUsdMensual:e.target.value}));}})),
+        React.createElement('div',null,
+          React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',display:'block',marginBottom:3}},'Tipo de cambio (CLP por USD)'),
+          React.createElement('input',{type:'number',className:'form-input',style:{width:110,padding:'6px 8px'},value:cfgBorrador.valorDolarClp,onChange:function(e){setCfgBorrador(Object.assign({},cfgBorrador,{valorDolarClp:e.target.value}));}})),
+        React.createElement('div',null,
+          React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',display:'block',marginBottom:3}},'Días laborables al mes'),
+          React.createElement('input',{type:'number',className:'form-input',style:{width:100,padding:'6px 8px'},value:cfgBorrador.diasLaborablesMes,onChange:function(e){setCfgBorrador(Object.assign({},cfgBorrador,{diasLaborablesMes:e.target.value}));}})),
+        React.createElement('button',{className:'btn-confirm',onClick:guardarCfgEcon},'💾 Guardar')
+      ),
+      React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:10}},
+        miniStat('Puntaje de gravedad',puntosGravedadDia,puntosGravedadDia>0),
+        React.createElement('div',{style:{flex:'1 1 160px',background:montoMultasDia>0?'rgba(176,48,48,0.06)':'#fff',border:'1px solid '+(montoMultasDia>0?'rgba(176,48,48,0.25)':'var(--border)'),borderRadius:10,padding:'10px 14px'}},
+          React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',letterSpacing:0.5,textTransform:'uppercase',marginBottom:4}},'Multas detectadas hoy'),
+          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:22,color:montoMultasDia>0?'#b03030':'var(--text)'}},'$'+montoMultasDia.toLocaleString('es-CL'))),
+        React.createElement('div',{style:{flex:'1 1 160px',background:'#fff',border:'1px solid var(--border)',borderRadius:10,padding:'10px 14px'}},
+          React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',letterSpacing:0.5,textTransform:'uppercase',marginBottom:4}},'Costo del día (operador)'),
+          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:22,color:'var(--text)'}},'$'+costoDiarioOperador.toLocaleString('es-CL')))
+      ),
+      React.createElement('div',{style:{fontSize:12,fontWeight:600,padding:'8px 12px',borderRadius:8,background:seRecuperoCosto?'rgba(46,125,79,0.08)':'rgba(176,48,48,0.06)',color:seRecuperoCosto?'#2e7d4f':'#b03030'}},
+        seRecuperoCosto
+          ?'✓ El trabajo de hoy se pagó solo: lo detectado ($'+montoMultasDia.toLocaleString('es-CL')+') cubre el costo del día ($'+costoDiarioOperador.toLocaleString('es-CL')+').'
+          :'⚠ Por debajo del costo del día: lo detectado ($'+montoMultasDia.toLocaleString('es-CL')+') no alcanza el costo del día ($'+costoDiarioOperador.toLocaleString('es-CL')+'). Faltan $'+Math.max(0,costoDiarioOperador-montoMultasDia).toLocaleString('es-CL')+'.'),
+      React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginTop:6,fontStyle:'italic'}},'Calculado solo con las excepciones registradas en este reporte (Sección B). El puntaje de gravedad suma aunque no se haya multado; el monto en pesos solo cuenta multas efectivamente aplicadas.')
+    ),
+
     soloLectura&&React.createElement('div',{style:{background:'rgba(46,125,79,0.08)',border:'1px solid rgba(46,125,79,0.3)',borderRadius:8,padding:'10px 14px',marginBottom:16,fontSize:12,display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}},
       React.createElement('span',null,'🔒 Esta revisión ya fue cerrada'+(cerradoPor?' por '+cerradoPor:'')+(fechaHoraCierre?' el '+new Date(fechaHoraCierre).toLocaleString('es-CL'):'')+'. No se puede editar.'),
       esAdmin&&React.createElement('button',{className:'btn-secondary',onClick:reabrir},'🔓 Reabrir para editar')
@@ -532,7 +730,7 @@ function CierreDiario(props){
     React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap'}},
       !soloLectura&&React.createElement('button',{className:'btn-secondary',disabled:guardando,onClick:function(){guardar(false);}},guardando?'Guardando...':'💾 Guardar borrador'),
       !soloLectura&&React.createElement('button',{className:'btn-confirm',disabled:guardando,onClick:function(){guardar(true);}},guardando?'Guardando...':'🔒 Cerrar revisión'),
-      reporteId&&React.createElement('button',{className:'btn-secondary',onClick:function(){exportarCierreHTML({fecha:fecha,turno:turno,supervisor_responsable:supervisorResponsable,jefe_responsable:jefeResponsable,estado_ruta:estadoRuta,incidencias:incidencias,firmas_checklist:firmasChecklist,firmas_excepciones:firmasExcepciones,respaldos:respaldos,respaldos_checklist:respaldosChecklist,pendientes:pendientes,resultado_revision:resultadoRevision,observaciones_generales:observacionesGenerales,fecha_hora_cierre:fechaHoraCierre,estado_reporte:estadoReporte,creado_por:creadoPor,cerrado_por:cerradoPor});}},'⬇ Exportar a HTML')
+      reporteId&&React.createElement('button',{className:'btn-secondary',onClick:function(){exportarCierreHTML({fecha:fecha,turno:turno,supervisor_responsable:supervisorResponsable,jefe_responsable:jefeResponsable,estado_ruta:estadoRuta,incidencias:incidencias,firmas_checklist:firmasChecklist,firmas_excepciones:firmasExcepciones,respaldos:respaldos,respaldos_checklist:respaldosChecklist,pendientes:pendientes,resultado_revision:resultadoRevision,observaciones_generales:observacionesGenerales,fecha_hora_cierre:fechaHoraCierre,estado_reporte:estadoReporte,creado_por:creadoPor,cerrado_por:cerradoPor,ponderacion_economica:{puntosGravedadDia:puntosGravedadDia,montoMultasDia:montoMultasDia,costoDiarioOperador:costoDiarioOperador,seRecuperoCosto:seRecuperoCosto}});}},'⬇ Exportar a HTML')
     )
   );
 }
@@ -542,10 +740,12 @@ function CierreDiario(props){
 // filtros por cliente/mensajero/período y exportación.
 // ══════════════════════════════════════════════════════════════════════════════════════
 function FirmasEnVivo(props){
-  var clientes=props.clientes||[], mensajeros=props.mensajeros||[], toast=props.toast;
+  var clientes=props.clientes||[], mensajeros=props.mensajeros||[], toast=props.toast, usuario=props.usuario;
+  var nombreUsuario=(usuario&&usuario.nombre)||'';
 
   var _clienteSel=useState(''), clienteSel=_clienteSel[0], setClienteSel=_clienteSel[1];
   var _mensajeroSel=useState(''), mensajeroSel=_mensajeroSel[0], setMensajeroSel=_mensajeroSel[1];
+  var _estadoSel=useState(''), estadoSel=_estadoSel[0], setEstadoSel=_estadoSel[1];
   var _filtro=useState('hoy'), filtro=_filtro[0], setFiltro=_filtro[1];
   var _fechaDesde=useState(''), fechaDesde=_fechaDesde[0], setFechaDesde=_fechaDesde[1];
   var _fechaHasta=useState(''), fechaHasta=_fechaHasta[0], setFechaHasta=_fechaHasta[1];
@@ -555,6 +755,8 @@ function FirmasEnVivo(props){
   var _cargando=useState(false), cargando=_cargando[0], setCargando=_cargando[1];
   var _ultimaAct=useState(null), ultimaActualizacion=_ultimaAct[0], setUltimaActualizacion=_ultimaAct[1];
   var _zoomUrl=useState(null), zoomUrl=_zoomUrl[0], setZoomUrl=_zoomUrl[1];
+  var _reportarEnvio=useState(null), reportarEnvio=_reportarEnvio[0], setReportarEnvio=_reportarEnvio[1];
+  var _reportados=useState({}), reportados=_reportados[0], setReportados=_reportados[1];
 
   function cargar(){
     var lim=limitesRango(filtro,fechaDesde,fechaHasta);
@@ -565,17 +767,18 @@ function FirmasEnVivo(props){
     if(lim.hasta)q=q.lte('fecha',lim.hasta);
     if(clienteSel)q=q.eq('cliente',clienteSel);
     if(mensajeroSel)q=q.eq('mensajero',mensajeroSel);
+    if(estadoSel)q=q.eq('estado',estadoSel);
     q.order('updated_at',{ascending:false}).limit(200).then(function(r){
       setEnvios((r&&r.data)||[]);setCargando(false);setUltimaActualizacion(new Date());
     }).catch(function(){setCargando(false);toast&&toast('⚠ Error cargando envíos');});
   }
-  useEffect(function(){cargar();},[clienteSel,mensajeroSel,filtro,fechaDesde,fechaHasta]);
+  useEffect(function(){cargar();},[clienteSel,mensajeroSel,estadoSel,filtro,fechaDesde,fechaHasta]);
   // "En vivo": se refresca sola cada 25s mientras esta pestaña está abierta (además del
   // botón "Actualizar" manual). Es de solo lectura, así que no hay riesgo de pisar cambios.
   useEffect(function(){
     var iv=setInterval(cargar,25000);
     return function(){clearInterval(iv);};
-  },[clienteSel,mensajeroSel,filtro,fechaDesde,fechaHasta]);
+  },[clienteSel,mensajeroSel,estadoSel,filtro,fechaDesde,fechaHasta]);
 
   var filtrados=useMemo(function(){
     var q=busqueda.trim().toLowerCase();
@@ -597,6 +800,9 @@ function FirmasEnVivo(props){
       React.createElement('select',{className:'form-input',style:{maxWidth:220,padding:'7px 10px'},value:mensajeroSel,onChange:function(e){setMensajeroSel(e.target.value);}},
         React.createElement('option',{value:''},'Todos los mensajeros'),
         mensajeros.map(function(m){return React.createElement('option',{key:m.id||m.nombre,value:m.nombre},(m.nombre||'').replace(/,\s*/g,' '));})),
+      React.createElement('select',{className:'form-input',style:{maxWidth:180,padding:'7px 10px'},value:estadoSel,onChange:function(e){setEstadoSel(e.target.value);}},
+        React.createElement('option',{value:''},'Todos los estados'),
+        ESTADOS_ENVIO.map(function(es){return React.createElement('option',{key:es.val,value:es.val},es.label);})),
       React.createElement('input',{className:'form-input',style:{maxWidth:220,padding:'7px 10px'},placeholder:'🔍 Buscar código o destinatario...',value:busqueda,onChange:function(e){setBusqueda(e.target.value);}})
     ),
     React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:18}},
@@ -639,11 +845,20 @@ function FirmasEnVivo(props){
               todas.length>6&&React.createElement('div',{style:{width:56,height:56,borderRadius:6,border:'1px dashed var(--border)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'var(--text-soft)'}},'+'+(todas.length-6))
             ):
             React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',fontStyle:'italic'}},'Sin evidencia cargada'),
-          React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginTop:8}},'Actualizado '+(e.updated_at?new Date(e.updated_at).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—'))
+          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:8,gap:8}},
+            React.createElement('span',{style:{fontSize:10,color:'var(--text-soft)'}},'Actualizado '+(e.updated_at?new Date(e.updated_at).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—')),
+            reportados[e.codigo]?
+              React.createElement('span',{style:{fontSize:10,fontWeight:700,color:'#2e7d4f'}},'✓ Reportado'):
+              React.createElement('button',{onClick:function(){setReportarEnvio(e);},style:{padding:'3px 10px',borderRadius:6,border:'1px solid rgba(176,48,48,0.3)',background:'rgba(176,48,48,0.06)',color:'#b03030',fontWeight:700,fontSize:10,cursor:'pointer',whiteSpace:'nowrap'}},'⚠ Reportar'))
         );
       })
     ),
-    zoomUrl&&React.createElement(Lightbox,{url:zoomUrl,onClose:function(){setZoomUrl(null);}})
+    zoomUrl&&React.createElement(Lightbox,{url:zoomUrl,onClose:function(){setZoomUrl(null);}}),
+    reportarEnvio&&React.createElement(ReportarModal,{
+      envio:reportarEnvio,toast:toast,nombreUsuario:nombreUsuario,
+      onClose:function(){setReportarEnvio(null);},
+      onDone:function(){setReportados(function(prev){var n=Object.assign({},prev);n[reportarEnvio.codigo]=true;return n;});}
+    })
   );
 }
 

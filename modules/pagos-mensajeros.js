@@ -143,24 +143,10 @@ function ConsumoModal(props){
 // mismo día: costo de mensajero de emergencia, $2.500 por encomienda); para el resto, la
 // gravedad Leve/Grave/Crítica que define el propio Reglamento (sección 7) es la que orienta
 // el número de envíos sugerido aquí. Luis puede ajustar cualquier valor antes de aplicar.
-var CATALOGO_FALTAS_REGLAMENTO=[
-  {grupo:'Leve',label:'No enviar respaldos de salida de bodega (pantallazos Flex + Interna)',envios:1},
-  {grupo:'Leve',label:'Respaldos incompletos o enviados fuera de tiempo',envios:1},
-  {grupo:'Leve',label:'Retraso menor sin justificación válida',envios:1},
-  {grupo:'Grave',label:'Entrega sin evidencia obligatoria completa (etiqueta / fachada / entrega / datos receptor)',envios:5},
-  {grupo:'Grave',label:'No entregar encomienda el mismo día sin justificación válida',envios:10},
-  {grupo:'Grave',label:'No registrar correctamente el estado en la aplicación',envios:3},
-  {grupo:'Grave',label:'Finalizar jornada sin autorización',envios:5},
-  {grupo:'Grave',label:'Devolver paquete sin respaldo',envios:5},
-  {grupo:'Grave',label:'Diferencia entre paquetes retirados / entregados / devueltos',envios:10},
-  {grupo:'Crítica',label:'Falsificación de entrega',envios:20},
-  {grupo:'Crítica',label:'Manipulación o alteración de evidencias',envios:20},
-  {grupo:'Crítica',label:'Pérdida de encomienda por negligencia',envios:15},
-  {grupo:'Crítica',label:'Delegar entregas sin autorización',envios:15},
-  {grupo:'Crítica',label:'Abandono de ruta',envios:20},
-  {grupo:'Crítica',label:'Ocultamiento de información relevante',envios:10},
-  {grupo:'Otro',label:'Otro (personalizado)',envios:0}
-];
+// Se centralizó en window.__app.CATALOGO_FALTAS_REGLAMENTO (ver index.html) porque
+// modules/operaciones.js también lo necesita (botón "Reportar" de Firmas en Vivo) -- una sola
+// fuente de verdad para algo que afecta plata real de mensajeros.
+var CATALOGO_FALTAS_REGLAMENTO=window.__app.CATALOGO_FALTAS_REGLAMENTO;
 
 // Modal de descuentos/multas por falta operativa, por mensajero -- se abre desde el botón
 // "🎯 Descuentos" de la tarjeta (carnet) de Pagos. Cada aplicación queda guardada dentro del
@@ -266,6 +252,48 @@ function calcularSemanaDeFecha(fechaStr){
   return fmt(lunes)+' al '+fmt(sabado);
 }
 
+// Normaliza un nombre de mensajero para poder compararlo/matchearlo sin que importen comas,
+// espacios dobles ni mayúsculas/minúsculas -- antes vivía SOLO dentro de ConsumoDiario, se subió
+// acá arriba porque aplicarMultaExterna (más abajo) también la necesita para encontrar el pago
+// correcto dentro del blob de la semana.
+function normNombreConsumo(n){return(n||'').toUpperCase().replace(/,\s*/g,' ').replace(/\s+/g,' ').trim();}
+
+// Aplica una multa/descuento a un mensajero DESDE OTRO MÓDULO (hoy: modules/operaciones.js,
+// botón "Reportar" de Firmas en Vivo) -- hace exactamente lo mismo que aplicar()/onAplicar en
+// PenalizacionModal (mismo cálculo de monto, mismo formato de item), pero en vez de operar
+// sobre el estado local `pagos` de esta pantalla, lee y escribe directo la fila de
+// pagos_mensajeros_semanales de la semana correspondiente -- por eso hace su propio
+// select-modify-update (lectura fresca justo antes de escribir) y toca SOLO el arreglo
+// `penalizaciones` del mensajero encontrado, sin tocar nada más de esa fila ni de los demás
+// mensajeros (es plata real de nómina, no hay margen para pisar datos a ciegas).
+// Devuelve {ok:true,monto,item} o {ok:false,motivo:'sin_semana'|'sin_mensajero'|'error',mensaje?}.
+async function aplicarMultaExterna(nombreMensajero,motivo,envios,nota,fecha){
+  try{
+    var semana=calcularSemanaDeFecha(fecha);
+    var r=await db.from('pagos_mensajeros_semanales').select('data').eq('semana',semana).maybeSingle();
+    if(r.error)return{ok:false,motivo:'error',mensaje:r.error.message};
+    if(!r.data||!r.data.data||!Array.isArray(r.data.data.pagos))return{ok:false,motivo:'sin_semana'};
+    var blob=r.data.data;
+    var nombreNorm=normNombreConsumo(nombreMensajero);
+    var idx=blob.pagos.findIndex(function(p){return normNombreConsumo(p.nombre)===nombreNorm;});
+    if(idx===-1)return{ok:false,motivo:'sin_mensajero'};
+    var pago=blob.pagos[idx];
+    var env=+envios||0;
+    var monto=Math.round(env*(+pago.tarifa||0));
+    var item={id:Date.now(),motivo:motivo,envios:env,monto:monto,nota:nota||'',fecha:fecha,origen:'firmas_vivo'};
+    var nuevoPago=Object.assign({},pago,{penalizaciones:(pago.penalizaciones||[]).concat([item])});
+    var nuevosPagos=blob.pagos.slice();
+    nuevosPagos[idx]=nuevoPago;
+    var nuevoBlob=Object.assign({},blob,{pagos:nuevosPagos});
+    var w=await db.from('pagos_mensajeros_semanales').update({data:nuevoBlob,updated_at:new Date().toISOString()}).eq('semana',semana);
+    if(w.error)return{ok:false,motivo:'error',mensaje:w.error.message};
+    return{ok:true,monto:monto,item:item};
+  }catch(e){
+    return{ok:false,motivo:'error',mensaje:e&&e.message?e.message:'desconocido'};
+  }
+}
+window.__app.aplicarMultaExterna=aplicarMultaExterna;
+
 // Pantalla de carga rápida de consumo, día a día, para TODOS los mensajeros a la vez -- pensada
 // para que quien anota los consumos (colaciones, bebidas, etc.) no tenga que entrar mensajero por
 // mensajero desde la tabla de Pagos: acá aparecen todos en una lista (como la Planilla de
@@ -308,8 +336,7 @@ function ConsumoDiario(props){
   var _consumoRango=useState([]),consumoRango=_consumoRango[0],setConsumoRango=_consumoRango[1];
   var _cargandoRango=useState(false),cargandoRango=_cargandoRango[0],setCargandoRango=_cargandoRango[1];
   var _detalleNombre=useState(null),detalleNombre=_detalleNombre[0],setDetalleNombre=_detalleNombre[1];
-
-  function normNombreConsumo(n){return(n||'').toUpperCase().replace(/,\s*/g,' ').replace(/\s+/g,' ').trim();}
+  // normNombreConsumo ahora vive arriba, a nivel de módulo (la necesita también aplicarMultaExterna).
 
   var activos=mensajeros.filter(function(m){return m.activo!==false&&m.activo!=='paused'&&m.nombre&&m.nombre.trim();});
   var activosOrdenados=activos.slice().sort(function(a,b){return a.nombre.localeCompare(b.nombre,'es');});
