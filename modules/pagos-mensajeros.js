@@ -1008,6 +1008,74 @@ function construirHTMLResumenCobros(periodoLabel,resumen,totales){
     +'</body></html>';
 }
 
+// Documento de UN cliente puntual dentro de "Cobros a Clientes" -- Luis pidió que la tabla
+// "Resumen por Cliente" de esta pestaña tenga el mismo tipo de detalle que ya existe en
+// Calendario de Cobros (el botón "📄 Recibo"), pero acá se llama "Detalle de Cobro" y NO
+// "Recibo": esta vista es solo informativa por período (no permite ajustes manuales, no
+// descuenta siniestros ya aplicados ni suma cobros de retiro -- ver nota en
+// calcularResumenCobrosClientes más arriba), así que no se puede confundir con el Recibo de
+// Cobro oficial que sí sirve para cobrarle al cliente (ese sigue siendo, sin cambios, el de
+// Calendario de Cobros). Reutiliza el mismo lenguaje visual (marca dorada, tabla de envíos con
+// estado en píldora de color) que ya usa ese Recibo oficial, para que se sienta parte del mismo
+// sistema.
+var TIPO_LABEL_COBRO={normal:'Flex',d10kg:'Flex sobre 10kg',d18kg:'Flex sobre 18kg',colina:'Flex Colina',ph:'Flex Padre Hurtado'};
+var ESTADO_LABEL_COBRO={entregado:'Entregado',cancelado:'Cancelado',siniestro:'Siniestro',reprogramado:'Reprogramado',en_ruta:'En Ruta',en_bodega:'En Bodega',retorno:'Retorno',en_bodega_cancelado:'En Bodega Cancelado'};
+function colorEstadoCobro(estado){
+  if(estado==='entregado')return{color:'#2E7D32',bg:'#E8F5E9'};
+  if(estado==='cancelado'||estado==='siniestro')return{color:'#C62828',bg:'#FFEBEE'};
+  if(estado==='reprogramado')return{color:'#E65100',bg:'#FFF3E0'};
+  return{color:'#7A7D6A',bg:'#F0F0EC'};
+}
+function construirHTMLDetalleCobro(cliente,enviosCliente,r,periodoLabel){
+  var fmtCLP=function(n){return '$'+Math.round(n).toLocaleString('es-CL');};
+  var filas=(enviosCliente||[]).slice().sort(function(a,b){return (a.fecha||'').localeCompare(b.fecha||'')||(a.codigo||'').localeCompare(b.codigo||'');}).map(function(e,i){
+    var t=getTipoEnvioCobro(e);
+    var col=colorEstadoCobro(e.estado);
+    var estLabel=ESTADO_LABEL_COBRO[e.estado]||e.estado;
+    var marcaSin=e.tuvo_siniestro?' <span style="background:#C62828;color:#fff;padding:1px 6px;border-radius:999px;font-size:9px;font-weight:700;margin-left:4px">⚠ SINIESTRO</span>':'';
+    return '<tr style="border-bottom:1px solid #EDE3C8'+(e.tuvo_siniestro?';background:#FFF5F5':'')+'">'
+      +'<td style="padding:7px 9px;color:#aaa;font-size:11px;text-align:center">'+(i+1)+'</td>'
+      +'<td style="padding:7px 9px;font-family:monospace;color:#A0842A;font-weight:700;font-size:11px">'+(e.codigo||'—')+'</td>'
+      +'<td style="padding:7px 9px;font-size:12px;color:#444">'+(e.fecha||'—')+'</td>'
+      +'<td style="padding:7px 9px;font-size:12px;color:#444">'+(e.comuna||'—')+'</td>'
+      +'<td style="padding:7px 9px;font-size:12px;color:#666">'+(TIPO_LABEL_COBRO[t]||'Flex')+'</td>'
+      +'<td style="padding:7px 9px"><span style="background:'+col.bg+';color:'+col.color+';padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700">'+estLabel+'</span>'+marcaSin+'</td>'
+      +'</tr>';
+  }).join('');
+  var efTxt=r.total>0?(r.efectividad*100).toFixed(1)+'%':'—';
+  var stat=function(label,val,color){
+    return '<div style="background:#FDF8EC;border:1px solid #EDE3C8;border-radius:10px;padding:12px 14px;text-align:center;min-width:110px;flex:1">'
+      +'<div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:#7a7d6a;margin-bottom:5px">'+label+'</div>'
+      +'<div style="font-size:16px;font-weight:900;color:'+(color||'#2b2e20')+'">'+val+'</div></div>';
+  };
+  return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>'
+    +'<title>Detalle de Cobro - '+cliente+' - '+periodoLabel+'</title>'
+    +'<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;padding:28px;background:#F9F6EE;font-size:13px;color:#2b2e20;}'
+    +'.hdr{border-bottom:3px solid #C8A84B;padding-bottom:14px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}'
+    +'.brand{font-size:22px;font-weight:900;letter-spacing:2px;color:#A0842A;}'
+    +'.sub{font-size:11px;color:#888;letter-spacing:1px;text-transform:uppercase;margin-top:2px}'
+    +'.cliente{font-size:16px;font-weight:800;color:#2b2e20}'
+    +'.periodo-chip{background:#FDF8EC;border:1.5px solid #C8A84B;color:#A0842A;font-size:10px;font-weight:700;padding:4px 10px;border-radius:999px;white-space:nowrap}'
+    +'.stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}'
+    +'table{width:100%;border-collapse:collapse;margin-bottom:16px;}thead tr{background:#2b2e20;}'
+    +'thead th{color:#C8A84B;padding:8px 9px;font-size:10px;letter-spacing:1px;text-transform:uppercase;text-align:left;}'
+    +'.nota{font-size:11px;color:#7a7d6a;line-height:1.6;border-top:1px solid #EDE3C8;padding-top:12px}'
+    +'@media print{body{padding:14px;background:#fff;}}</style></head><body>'
+    +'<div class="hdr"><div><div class="brand">TRANSPGSO</div><div class="sub">Detalle de Cobro</div></div>'
+    +'<div style="text-align:right"><div class="cliente">'+cliente+'</div><span class="periodo-chip">'+periodoLabel.toUpperCase()+'</span></div></div>'
+    +'<div class="stats">'
+      +stat('Recibidos',r.total)
+      +stat('Entregados',r.entregados,'#2E7D32')
+      +stat('Efectividad',efTxt,r.total>0&&r.efectividad>=0.95?'#2E7D32':'#b03030')
+      +stat('Neto',fmtCLP(r.montoNeto))
+      +stat('IVA',fmtCLP(r.iva))
+      +stat('Total a Cobrar',fmtCLP(r.montoTotal),'#A0842A')
+    +'</div>'
+    +'<table><thead><tr><th>#</th><th>Código</th><th>Fecha</th><th>Comuna</th><th>Tipo</th><th>Estado</th></tr></thead><tbody>'+(filas||'<tr><td colspan="6" style="padding:14px;text-align:center;color:#999">Sin envíos en este período</td></tr>')+'</tbody></table>'
+    +'<div class="nota">Este detalle es informativo, por período: no incluye ajustes manuales, descuentos por siniestro ya aplicados ni cobros de retiro. Para emitir el Recibo de Cobro oficial de este cliente (con esos ajustes incluidos), usa Calendario de Cobros.</div>'
+    +'</body></html>';
+}
+
 // Pestaña "Cobros a Clientes": antes esta sección solo mostraba lo que hay que PAGARLE a los
 // mensajeros -- no había ninguna vista de lo que hay que COBRARLE a los clientes. Este resumen
 // deja ver de un vistazo, por día/semana/mes/rango, cuánto se le cobraría a cada cliente activo
@@ -1080,6 +1148,28 @@ function CobrosClientesTab(_ref4){
     setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},1500);
   }
 
+  // "📋 Detalle de Cobro" / "⬇ Descargar" por fila -- mismo patrón (ventana con auto-print /
+  // descarga de .html) que ya usa el botón "📄 Recibo" de Calendario de Cobros, para que se
+  // sienta consistente, pero generando el documento informativo (sin ajustes) de este resumen.
+  function enviosDeCliente(r){
+    return envios.filter(function(e){return (e.cliente||'Sin cliente')===r.nombre;});
+  }
+  function abrirDetalleCobro(r){
+    var win=window.open('','_blank','width=900,height=700');
+    if(!win){toast&&toast('⚠ El navegador bloqueó la ventana. Habilita ventanas emergentes para exportar.');return;}
+    win.document.write(construirHTMLDetalleCobro(r.nombre,enviosDeCliente(r),r,periodo.label)+'<scr'+'ipt>window.onload=function(){window.print();}</scr'+'ipt>');
+    win.document.close();
+  }
+  function descargarDetalleCobro(r){
+    var html=construirHTMLDetalleCobro(r.nombre,enviosDeCliente(r),r,periodo.label);
+    var nombreArchivo='Detalle_Cobro_'+r.nombre.replace(/[^a-zA-Z0-9]/g,'_')+'_'+periodo.desde+'_a_'+periodo.hasta+'.html';
+    var blob=new Blob([html],{type:'text/html;charset=utf-8'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download=nombreArchivo;document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},1500);
+  }
+
   var tiposPeriodo=[{val:'dia',label:'Día'},{val:'semana',label:'Semana'},{val:'mes',label:'Mes'},{val:'rango',label:'Rango'}];
 
   return /*#__PURE__*/React.createElement("div",{style:{padding:'0 20px 20px'}},
@@ -1113,7 +1203,8 @@ function CobrosClientesTab(_ref4){
         /*#__PURE__*/React.createElement("th",{style:{textAlign:'center'}},"Efectividad"),
         /*#__PURE__*/React.createElement("th",{style:{textAlign:'right'}},"Neto"),
         /*#__PURE__*/React.createElement("th",{style:{textAlign:'right'}},"IVA"),
-        /*#__PURE__*/React.createElement("th",{style:{textAlign:'right'}},"Total a Cobrar")
+        /*#__PURE__*/React.createElement("th",{style:{textAlign:'right'}},"Total a Cobrar"),
+        /*#__PURE__*/React.createElement("th",null,"Acciones")
       )),
       /*#__PURE__*/React.createElement("tbody",null,resumen.map(function(r){
         return /*#__PURE__*/React.createElement("tr",{key:r.nombre},
@@ -1123,7 +1214,11 @@ function CobrosClientesTab(_ref4){
           /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',color:colorEfectividadCobro(r.efectividad)}},r.total>0?(r.efectividad*100).toFixed(1)+'%':'—'),
           /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'right'}},"$",Math.round(r.montoNeto).toLocaleString('es-CL')),
           /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'right',color:'var(--text-soft)'}},"$",Math.round(r.iva).toLocaleString('es-CL')),
-          /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'right',fontWeight:700,color:'var(--gold)'}},"$",Math.round(r.montoTotal).toLocaleString('es-CL'))
+          /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'right',fontWeight:700,color:'var(--gold)'}},"$",Math.round(r.montoTotal).toLocaleString('es-CL')),
+          /*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:6}},
+            /*#__PURE__*/React.createElement("button",{onClick:function(){abrirDetalleCobro(r);},style:{padding:'5px 10px',borderRadius:6,border:'1px solid var(--gold)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',fontWeight:700,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}},"📋 Detalle de Cobro"),
+            /*#__PURE__*/React.createElement("button",{onClick:function(){descargarDetalleCobro(r);},style:{padding:'5px 10px',borderRadius:6,border:'1px solid var(--border)',background:'#fff',color:'var(--text-soft)',fontWeight:700,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}},"⬇ Descargar")
+          ))
         );
       })),
       /*#__PURE__*/React.createElement("tfoot",null,/*#__PURE__*/React.createElement("tr",{className:"totales-row"},
@@ -1133,7 +1228,8 @@ function CobrosClientesTab(_ref4){
         /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',fontWeight:700}},totales.total>0?((totales.entregados/totales.total)*100).toFixed(1)+'%':'—'),
         /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'right',fontWeight:700}},"$",Math.round(totales.montoNeto).toLocaleString('es-CL')),
         /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'right',fontWeight:700}},"$",Math.round(totales.iva).toLocaleString('es-CL')),
-        /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'right',fontWeight:900,fontSize:13,color:'var(--gold)'}},"$",Math.round(totales.montoTotal).toLocaleString('es-CL'))
+        /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'right',fontWeight:900,fontSize:13,color:'var(--gold)'}},"$",Math.round(totales.montoTotal).toLocaleString('es-CL')),
+        /*#__PURE__*/React.createElement("td",null)
       ))
     ))
   );
