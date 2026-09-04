@@ -130,6 +130,32 @@ function Lightbox(props){
       React.createElement('div',{style:{textAlign:'center',marginTop:10,fontSize:12,color:'rgba(255,255,255,0.5)'}},'Toca para cerrar')));
 }
 
+// Miniatura de evidencia con reintento automático. En Firmas en Vivo las fotos pueden llegar
+// a la pantalla (que se auto-refresca cada 25s) prácticamente en el mismo instante en que el
+// mensajero recién terminó de subirlas — si esa primera carga del <img> pega justo en ese
+// margen de milisegundos, el navegador la marca como fallida (icono de imagen rota) y no la
+// reintenta solo, aunque el archivo sí exista y quede accesible un segundo después. Antes eso
+// se veía como "fotos rotas" permanentes en la tarjeta. Ahora, si falla, se reintenta un par de
+// veces con una URL con parámetro anti-caché (para no toparse otra vez con el mismo error
+// guardado en caché del navegador) antes de darla por perdida de verdad.
+function FotoThumb(props){
+  var url=props.url, onClick=props.onClick;
+  var _intentos=useState(0), intentos=_intentos[0], setIntentos=_intentos[1];
+  var _fallo=useState(false), fallo=_fallo[0], setFallo=_fallo[1];
+  var MAX_REINTENTOS=2;
+  function onError(){
+    if(intentos<MAX_REINTENTOS){
+      setTimeout(function(){setIntentos(function(n){return n+1;});},1500*(intentos+1));
+    }else{
+      setFallo(true);
+    }
+  }
+  var srcActual=intentos>0?(url+(url.indexOf('?')===-1?'?':'&')+'_r='+intentos):url;
+  return React.createElement('div',{onClick:onClick,style:{width:56,height:56,borderRadius:6,overflow:'hidden',border:'1px solid var(--border)',cursor:'zoom-in',flexShrink:0,position:'relative',background:fallo?'var(--cream)':undefined}},
+    !fallo&&React.createElement('img',{key:intentos,src:srcActual,style:{width:'100%',height:'100%',objectFit:'cover'},onError:onError}),
+    fallo&&React.createElement('span',{style:{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,color:'var(--text-soft)',textAlign:'center',padding:2,lineHeight:1.2}},'⚠ No cargó'));
+}
+
 // Tabla de filas dinámicas genérica: agregar/editar/borrar filas de cualquiera de las
 // secciones del formato (todas comparten la misma forma: cantidad variable de filas con
 // columnas de texto/número/selección).
@@ -946,8 +972,7 @@ function FirmasEnVivo(props){
           todas.length>0?
             React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
               todas.slice(0,6).map(function(f,i){
-                return React.createElement('div',{key:i,onClick:function(){setZoomUrl(f.url);},style:{width:56,height:56,borderRadius:6,overflow:'hidden',border:'1px solid var(--border)',cursor:'zoom-in',flexShrink:0}},
-                  React.createElement('img',{src:f.url,style:{width:'100%',height:'100%',objectFit:'cover'},onError:function(ev){ev.target.style.opacity=0.15;}}));
+                return React.createElement(FotoThumb,{key:i,url:f.url,onClick:function(){setZoomUrl(f.url);}});
               }),
               todas.length>6&&React.createElement('div',{style:{width:56,height:56,borderRadius:6,border:'1px dashed var(--border)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'var(--text-soft)'}},'+'+(todas.length-6))
             ):
