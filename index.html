@@ -624,7 +624,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788547859;
+window.__MODULES_VERSION=1788550316;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1118,14 +1118,17 @@ async function sincronizarEntregaOffline(payload){
 async function sbUpdateEstado(codigo,estado,nota,usuario,canal){try{const ts=new Date().toISOString();await db.from('envios').update({estado,mensajero:usuario&&estado!=='sin_asignar'?usuario:undefined,updated_at:ts}).eq('codigo',codigo);await db.from('historial_envios').insert({envio_id:null,codigo_envio:codigo,estado,nota:nota||'',usuario:usuario||'Sistema',canal:canal||'sistema',created_at:ts});if(estado==='siniestro'){try{await registrarSiniestro(codigo,usuario||'',nota||'');}catch(errSin){console.warn('registrarSiniestro error:',errSin.message);}}}catch(e){console.warn('Update estado error:',e.message);}}
 // Registra (o actualiza) el "expediente" de un siniestro: marca el código con tuvo_siniestro=true
 // para siempre (asi se vea el fondo rojo aunque despues el paquete se entregue/retorne), y crea
-// una fila en la tabla 'siniestros' para poder despues descontarle a un mensajero y/o a un cliente
-// EN EL MOMENTO QUE SE DESEE (nunca automatico). Si ya existe un siniestro abierto (sin descontar
-// ni a cliente ni a mensajero) para este código, no crea uno nuevo -- evita duplicados si el
-// mismo evento dispara esta función más de una vez (reintentos, cola offline, etc).
+// una fila en la tabla 'siniestros' para poder despues resolverlo (pagar al proveedor, descontarle
+// a un mensajero y/o a un cliente, o marcar que no hace falta descuento) EN EL MOMENTO QUE SE DESEE
+// (nunca automatico). Si ya existe un siniestro con resolucion='pendiente' para este código, no crea
+// uno nuevo -- evita duplicados si el mismo evento dispara esta función más de una vez (reintentos,
+// cola offline, etc). Antes este chequeo miraba los dos booleanos descontado_cliente/mensajero, pero
+// eso dejaba "abierto para siempre" un siniestro ya resuelto como "proveedor" o "sin_descuento" (esos
+// dos estados nunca tocan esos booleanos) -- por eso ahora mira directamente el campo resolucion.
 async function registrarSiniestro(codigo,mensajero,nota){
   try{
     await db.from('envios').update({tuvo_siniestro:true}).eq('codigo',codigo);
-    const{data:abiertos}=await db.from('siniestros').select('id').eq('codigo',codigo).eq('descontado_cliente',false).eq('descontado_mensajero',false).limit(1);
+    const{data:abiertos}=await db.from('siniestros').select('id').eq('codigo',codigo).eq('resolucion','pendiente').limit(1);
     if(!abiertos||abiertos.length===0){
       await db.from('siniestros').insert({codigo:codigo,mensajero:mensajero||null,nota:nota||'',fecha_siniestro:new Date().toISOString().slice(0,10)});
     }
