@@ -356,7 +356,6 @@ function Analitica(){
   var _fd=useState(''),fechaDesde=_fd[0],setFechaDesde=_fd[1];
   var _fh=useState(''),fechaHasta=_fh[0],setFechaHasta=_fh[1];
   var filtrados=filtrarPorRango(envios,filtro,fechaDesde,fechaHasta);
-  var total=filtrados.length;
   // 'Entregados' (aca y en Top Mensajeros) se calcula con la fecha REAL de entrega
   // (historial_envios), no con la fecha de despacho de 'filtrados' -- mismo criterio que ya usan
   // Pagos Mensajeros y la app del mensajero para calcular lo que se paga. Antes esta pantalla
@@ -393,17 +392,34 @@ function Analitica(){
   // Si aun no cargo (o el periodo es 'todo', sin acotar), se cae al criterio anterior por fecha
   // de despacho -- para no mostrar 0 mientras carga ni romper la opcion 'todo'.
   var entregadosReales=entregadosPeriodoReal===null?filtrados.filter(function(e){return e.estado==='entregado';}):entregadosPeriodoReal;
+  // 'universo' = TODO lo que cuenta para este período: lo despachado en el período (filtrados)
+  // MAS lo entregado en el período según su fecha real aunque se haya despachado antes (ej. un
+  // paquete despachado el sábado pero entregado el lunes). ANTES 'total' solo contaba lo
+  // despachado en el período (filtrados.length) mientras 'entregados' contaba por fecha real una
+  // población DISTINTA (entregadosReales) -- un envío entregado dentro del período pero
+  // despachado afuera sumaba al numerador sin sumar nunca al denominador, y con suficientes
+  // casos así (semanas con backlog: se despacha una cantidad pero se entrega otra, de días
+  // distintos) la Efectividad y las filas de TOP CLIENTES/TOP MENSAJEROS terminaban mostrando
+  // más de 100% (caso real reportado por Luis: Efectividad 108%, MR SHENG 109%, etc.). Ahora el
+  // denominador ('universo'/'total') siempre incluye a todo lo que se está contando como
+  // entregado, así el numerador nunca puede superar al denominador -- ya no por un tope
+  // cosmético, sino porque ambos lados de la razón salen de la misma población de envíos.
+  var mapaUniverso={};
+  filtrados.forEach(function(e){mapaUniverso[e.id]=e;});
+  entregadosReales.forEach(function(e){if(!mapaUniverso[e.id])mapaUniverso[e.id]=e;});
+  var universo=Object.values(mapaUniverso);
+  var total=universo.length;
   var entregados=entregadosReales.length;
-  var enRuta=filtrados.filter(function(e){return e.estado==='en_ruta';}).length;
-  var reprog=filtrados.filter(function(e){return e.estado==='reprogramado';}).length;
-  var cancelados=filtrados.filter(function(e){return e.estado==='cancelado';}).length;
+  var enRuta=universo.filter(function(e){return e.estado==='en_ruta';}).length;
+  var reprog=universo.filter(function(e){return e.estado==='reprogramado';}).length;
+  var cancelados=universo.filter(function(e){return e.estado==='cancelado';}).length;
   var efectividad=total>0?Math.round(entregados/total*100):0;
   var porCliente={};
-  filtrados.forEach(function(e){var c=e.cliente||'Sin cliente';if(!porCliente[c])porCliente[c]={total:0,entregados:0};porCliente[c].total++;});
+  universo.forEach(function(e){var c=e.cliente||'Sin cliente';if(!porCliente[c])porCliente[c]={total:0,entregados:0};porCliente[c].total++;});
   entregadosReales.forEach(function(e){var c=e.cliente||'Sin cliente';if(!porCliente[c])porCliente[c]={total:0,entregados:0};porCliente[c].entregados++;});
   var clientesArr=Object.entries(porCliente).sort(function(a,b){return b[1].total-a[1].total;}).slice(0,10);
   var porMen={};
-  filtrados.forEach(function(e){var m=e.mensajero||'Sin asignar';if(!porMen[m])porMen[m]={total:0,entregados:0};porMen[m].total++;});
+  universo.forEach(function(e){var m=e.mensajero||'Sin asignar';if(!porMen[m])porMen[m]={total:0,entregados:0};porMen[m].total++;});
   entregadosReales.forEach(function(e){var m=e.mensajero||'Sin asignar';if(!porMen[m])porMen[m]={total:0,entregados:0};porMen[m].entregados++;});
   var mensArr=Object.entries(porMen).filter(function(x){return x[0]!=='Sin asignar';}).sort(function(a,b){return b[1].entregados-a[1].entregados;}).slice(0,10);
 
