@@ -13,25 +13,40 @@ function fmtFechaHora(iso){
   try{return new Date(iso).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}catch(e){return iso;}
 }
 
-// Antes cada siniestro tenía DOS banderas independientes (descontado a cliente / descontado a
-// mensajero) que se podían marcar por separado o incluso las dos a la vez. Luis maneja esto en
-// su planilla con UN solo estado por código -- así es como realmente se resuelve un siniestro en
-// la práctica (se le cobra al proveedor, se le cobra al cliente, se le descuenta al mensajero, o
-// no corresponde ningún descuento) -- así que ahora la UI usa ese mismo modelo de un solo estado.
-// Por debajo, "cliente" y "mensajero" siguen escribiendo los mismos campos de siempre
-// (descontado_cliente/descontado_mensajero + su valor/fecha/semana) porque el Recibo de Cobro
-// oficial (generarReciboCobro en index.html) y el cálculo de pago semanal de mensajeros
-// (modules/pagos-mensajeros.js) dependen de esos campos exactos -- nada de eso cambió.
-var ESTADOS_SINIESTRO=[
-  {val:'pendiente',label:'Por pagar o descontar',color:'#b03030',bg:'#FCEAEA'},
-  {val:'proveedor',label:'Pagada al proveedor',color:'#2e7d4f',bg:'#E8F5EC'},
-  {val:'cliente',label:'Pagada al cliente',color:'#2e7d4f',bg:'#E8F5EC'},
+// Luis explicó que el estado con el MENSAJERO y la forma de pago al CLIENTE son dos cosas
+// independientes que pueden pasar al mismo tiempo (ej: se le pagó al proveedor por transferencia
+// Y por separado se le descontó al mensajero; o no corresponde descontarle nada al mensajero pero
+// al cliente igual se le aplicó un descuento en la facturación). Antes esto vivía en un solo campo
+// "resolucion" con 5 opciones mezcladas, y eso no dejaba marcar las dos cosas a la vez. Ahora son
+// dos campos separados, cada uno con su propio selector en la tabla:
+//   resolucion    -> SOLO el estado con el mensajero (pendiente / mensajero / sin_descuento)
+//   pago_cliente  -> SOLO la forma de pago al cliente (5 opciones, igual que la planilla)
+// Por debajo, "mensajero" y "descuento_facturacion" siguen escribiendo los mismos campos de
+// siempre (descontado_cliente/descontado_mensajero + su valor/fecha/semana) porque el Recibo de
+// Cobro oficial (generarReciboCobro en index.html) y el cálculo de pago semanal de mensajeros
+// (modules/pagos-mensajeros.js) dependen de esos campos exactos -- nada de eso cambió. De las 5
+// formas de pago al cliente, SOLO "descuento_facturacion" resta plata de su Recibo de Cobro; las
+// otras 4 (no pagado, transferencia al proveedor, mediación, sin informar) son solo un registro
+// informativo y no le tocan la factura al cliente.
+var ESTADOS_MENSAJERO=[
+  {val:'pendiente',label:'Pendiente',color:'#b03030',bg:'#FCEAEA'},
   {val:'mensajero',label:'Descontada al mensajero',color:'#2e7d4f',bg:'#E8F5EC'},
-  {val:'sin_descuento',label:'No hace falta descuento',color:'#3a6ea5',bg:'#E9F1F9'}
+  {val:'sin_descuento',label:'No corresponde descuento',color:'#3a6ea5',bg:'#E9F1F9'}
 ];
-function estadoInfoSiniestro(val){
-  for(var i=0;i<ESTADOS_SINIESTRO.length;i++)if(ESTADOS_SINIESTRO[i].val===val)return ESTADOS_SINIESTRO[i];
-  return ESTADOS_SINIESTRO[0];
+function estadoMensajeroInfo(val){
+  for(var i=0;i<ESTADOS_MENSAJERO.length;i++)if(ESTADOS_MENSAJERO[i].val===val)return ESTADOS_MENSAJERO[i];
+  return ESTADOS_MENSAJERO[0];
+}
+var ESTADOS_PAGO_CLIENTE=[
+  {val:'no_pagado',label:'No se ha pagado',color:'#b03030',bg:'#FCEAEA'},
+  {val:'descuento_facturacion',label:'Descuento de la facturación',color:'#2e7d4f',bg:'#E8F5EC'},
+  {val:'transferencia_proveedor',label:'Transferencia al proveedor',color:'#2e7d4f',bg:'#E8F5EC'},
+  {val:'mediacion',label:'Se logra mediación',color:'#3a6ea5',bg:'#E9F1F9'},
+  {val:'sin_informar',label:'Sin informar',color:'#8a6d1a',bg:'#FBF3DC'}
+];
+function pagoClienteInfo(val){
+  for(var i=0;i<ESTADOS_PAGO_CLIENTE.length;i++)if(ESTADOS_PAGO_CLIENTE[i].val===val)return ESTADOS_PAGO_CLIENTE[i];
+  return ESTADOS_PAGO_CLIENTE[0];
 }
 
 // Modal chico para elegir la semana de pago (mismo formato que usa Pagos Mensajeros:
@@ -116,7 +131,8 @@ function Siniestros(props){
   var nombreUsuario=(usuario&&(usuario.nombre||usuario))||'Admin';
   var _registros=useState([]), registros=_registros[0], setRegistros=_registros[1];
   var _cargando=useState(true), cargando=_cargando[0], setCargando=_cargando[1];
-  var _filtro=useState('pendiente'), filtro=_filtro[0], setFiltro=_filtro[1]; // uno de ESTADOS_SINIESTRO.val, o 'todos'
+  var _filtro=useState('pendiente'), filtro=_filtro[0], setFiltro=_filtro[1]; // uno de ESTADOS_MENSAJERO.val, o 'todos'
+  var _filtroCliente=useState('todos'), filtroCliente=_filtroCliente[0], setFiltroCliente=_filtroCliente[1]; // uno de ESTADOS_PAGO_CLIENTE.val, o 'todos'
   var _modalMensajero=useState(null), modalMensajero=_modalMensajero[0], setModalMensajero=_modalMensajero[1];
   var _modalNuevo=useState(false), modalNuevo=_modalNuevo[0], setModalNuevo=_modalNuevo[1];
   var _valorEdit=useState({}), valorEdit=_valorEdit[0], setValorEdit=_valorEdit[1];
@@ -130,7 +146,8 @@ function Siniestros(props){
   // tabla, así sigue siendo válida aunque cambie el filtro o el orden.
   var _seleccionados=useState({}), seleccionados=_seleccionados[0], setSeleccionados=_seleccionados[1];
   var _modalMensajeroBulk=useState(false), modalMensajeroBulk=_modalMensajeroBulk[0], setModalMensajeroBulk=_modalMensajeroBulk[1];
-  var _bulkEstado=useState(''), bulkEstado=_bulkEstado[0], setBulkEstado=_bulkEstado[1]; // estado elegido en la barra de selección masiva
+  var _bulkMensajero=useState(''), bulkMensajero=_bulkMensajero[0], setBulkMensajero=_bulkMensajero[1]; // estado elegido en la barra de selección masiva (mensajero)
+  var _bulkCliente=useState(''), bulkCliente=_bulkCliente[0], setBulkCliente=_bulkCliente[1]; // forma de pago elegida en la barra de selección masiva (cliente)
   var _rangoHasta=useState(''), rangoHasta=_rangoHasta[0], setRangoHasta=_rangoHasta[1];
 
   // Límites de fecha (formato YYYY-MM-DD, igual que fecha_siniestro) según el preset elegido.
@@ -182,12 +199,15 @@ function Siniestros(props){
     if(lim.hasta&&f>lim.hasta)return false;
     return true;
   });
+  // Los dos filtros (mensajero y cliente) son independientes entre sí -- se pueden combinar,
+  // por ejemplo "Descontada al mensajero" + "Se logra mediación" a la vez.
   var filtrados=enRango.filter(function(r){
-    if(filtro==='todos')return true;
-    return (r.resolucion||'pendiente')===filtro;
+    var okMensajero=filtro==='todos'||(r.resolucion||'pendiente')===filtro;
+    var okCliente=filtroCliente==='todos'||(r.pago_cliente||'no_pagado')===filtroCliente;
+    return okMensajero&&okCliente;
   });
   // Buscador libre por código, mensajero, cliente o fecha del siniestro -- se aplica encima
-  // del período y del filtro de estado, para poder acotar rápido dentro de "Este mes",
+  // del período y de los filtros de estado, para poder acotar rápido dentro de "Este mes",
   // "Esta semana", etc. sin perder esos filtros.
   var q=busqueda.trim().toLowerCase();
   if(q){
@@ -199,32 +219,46 @@ function Siniestros(props){
     });
   }
 
-  // Totales acumulados del período/filtro actual — para hacerle seguimiento rápido a pagos y descuentos.
+  // Totales acumulados del período actual — para hacerle seguimiento rápido a pagos y descuentos.
+  // Mensajero y cliente se cuentan por separado porque son campos independientes.
   var totales=enRango.reduce(function(a,r){
     var v=parseFloat(r.valor_siniestro)||0;
-    var res=r.resolucion||'pendiente';
+    var resM=r.resolucion||'pendiente';
+    var resC=r.pago_cliente||'no_pagado';
     a.cantidad+=1;
     a.valorTotal+=v;
-    if(res==='pendiente'){a.pendienteCantidad+=1;a.pendienteValor+=v;}
-    else if(res==='proveedor'){a.proveedorCantidad+=1;}
-    else if(res==='cliente'){a.clienteValor+=parseFloat(r.descontado_cliente_valor)||0;}
-    else if(res==='mensajero'){a.mensajeroValor+=parseFloat(r.descontado_mensajero_valor)||0;}
-    else if(res==='sin_descuento'){a.sinDescuentoCantidad+=1;}
+    if(resM==='pendiente'){a.mensajeroPendienteCantidad+=1;a.mensajeroPendienteValor+=v;}
+    else if(resM==='mensajero'){a.mensajeroDescontadoValor+=parseFloat(r.descontado_mensajero_valor)||0;}
+    else if(resM==='sin_descuento'){a.mensajeroSinDescuentoCantidad+=1;}
+    if(resC==='no_pagado'){a.clienteNoPagadoCantidad+=1;}
+    else if(resC==='descuento_facturacion'){a.clienteDescuentoValor+=parseFloat(r.descontado_cliente_valor)||0;}
+    else if(resC==='transferencia_proveedor'){a.clienteTransferenciaCantidad+=1;}
+    else if(resC==='mediacion'){a.clienteMediacionCantidad+=1;}
+    else if(resC==='sin_informar'){a.clienteSinInformarCantidad+=1;}
     return a;
-  },{cantidad:0,valorTotal:0,pendienteCantidad:0,pendienteValor:0,proveedorCantidad:0,clienteValor:0,mensajeroValor:0,sinDescuentoCantidad:0});
+  },{cantidad:0,valorTotal:0,
+     mensajeroPendienteCantidad:0,mensajeroPendienteValor:0,mensajeroDescontadoValor:0,mensajeroSinDescuentoCantidad:0,
+     clienteNoPagadoCantidad:0,clienteDescuentoValor:0,clienteTransferenciaCantidad:0,clienteMediacionCantidad:0,clienteSinInformarCantidad:0});
 
   function exportarExcel(){
-    var headers=['Código','Cliente','Mensajero','Estado actual','Fecha siniestro','Valor','Estado del siniestro','Valor aplicado','Semana (si aplica)','Fecha de resolución','Resuelto por','Nota'];
+    var headers=['Código','Cliente','Mensajero','Estado actual','Fecha siniestro','Valor',
+      'Estado con mensajero','Valor descontado a mensajero','Semana descuento mensajero','Fecha resolución mensajero','Resuelto por (mensajero)',
+      'Forma de pago al cliente','Valor descuento facturación','Fecha resolución cliente','Resuelto por (cliente)',
+      'Nota'];
     var rows=filtrados.map(function(r){
       var est=estadoInfo?estadoInfo(r.estado):{label:r.estado};
-      var res=r.resolucion||'pendiente';
-      var valorAplicado=res==='cliente'?(r.descontado_cliente_valor||0):res==='mensajero'?(r.descontado_mensajero_valor||0):'';
+      var resM=r.resolucion||'pendiente';
+      var resC=r.pago_cliente||'no_pagado';
       return[r.codigo,r.cliente,(r.mensajero||'—').replace(/,\s*/g,' '),est.label,r.fecha_siniestro||'',r.valor_siniestro||0,
-        estadoInfoSiniestro(res).label,
-        valorAplicado,
-        res==='mensajero'?(r.descontado_mensajero_semana||''):'',
-        res==='pendiente'?'':fmtFechaHora(r.resolucion_fecha),
-        res==='pendiente'?'':(r.resolucion_por||''),
+        estadoMensajeroInfo(resM).label,
+        resM==='mensajero'?(r.descontado_mensajero_valor||0):'',
+        resM==='mensajero'?(r.descontado_mensajero_semana||''):'',
+        resM==='pendiente'?'':fmtFechaHora(r.resolucion_fecha),
+        resM==='pendiente'?'':(r.resolucion_por||''),
+        pagoClienteInfo(resC).label,
+        resC==='descuento_facturacion'?(r.descontado_cliente_valor||0):'',
+        resC==='no_pagado'?'':fmtFechaHora(r.pago_cliente_fecha),
+        resC==='no_pagado'?'':(r.pago_cliente_por||''),
         r.nota||''];
     });
     exportToExcel('Siniestros_TransPgso_'+fechaHoyCL(),[{name:'Siniestros',headers:headers,rows:rows}]);
@@ -264,57 +298,82 @@ function Siniestros(props){
     });
   }
 
-  // ---- Cambio de estado único (reemplaza los antiguos botones independientes) ----
-  // Solo "cliente" y "mensajero" tocan los campos descontado_cliente/descontado_mensajero (el
-  // Recibo de Cobro y el pago semanal de mensajeros siguen leyendo esos campos exactamente
-  // igual que siempre). "proveedor" y "sin_descuento" son estados nuevos: cierran el caso sin
-  // cobrarle nada ni al cliente ni al mensajero, así que limpian ambos.
-  function limpiarCamposCliente(){
-    return{descontado_cliente:false,descontado_cliente_valor:null,descontado_cliente_fecha:null,descontado_cliente_por:null};
-  }
+  // ---- Estado con el MENSAJERO (independiente de la forma de pago al cliente) ----
+  // Solo "mensajero" toca los campos descontado_mensajero (el pago semanal de mensajeros sigue
+  // leyendo esos campos exactamente igual que siempre). "sin_descuento" cierra el caso sin
+  // cobrarle nada al mensajero.
   function limpiarCamposMensajero(){
     return{descontado_mensajero:false,descontado_mensajero_valor:null,descontado_mensajero_semana:null,descontado_mensajero_fecha:null,descontado_mensajero_por:null};
   }
-  function payloadEstado(row,nuevo,semana){
-    if(nuevo==='cliente'){
-      return Object.assign({resolucion:'cliente',resolucion_fecha:new Date().toISOString(),resolucion_por:nombreUsuario},
-        limpiarCamposMensajero(),
-        {descontado_cliente:true,descontado_cliente_valor:row.valor_siniestro,
-         descontado_cliente_fecha:new Date().toISOString(),descontado_cliente_por:nombreUsuario});
-    }
+  function payloadMensajero(row,nuevo,semana){
     if(nuevo==='mensajero'){
       return Object.assign({resolucion:'mensajero',resolucion_fecha:new Date().toISOString(),resolucion_por:nombreUsuario},
-        limpiarCamposCliente(),
         {descontado_mensajero:true,descontado_mensajero_valor:row.valor_siniestro,descontado_mensajero_semana:semana,
          descontado_mensajero_fecha:new Date().toISOString(),descontado_mensajero_por:nombreUsuario});
     }
     if(nuevo==='pendiente'){
-      return Object.assign({resolucion:'pendiente',resolucion_fecha:null,resolucion_por:null},
-        limpiarCamposCliente(),limpiarCamposMensajero());
+      return Object.assign({resolucion:'pendiente',resolucion_fecha:null,resolucion_por:null},limpiarCamposMensajero());
     }
-    // proveedor | sin_descuento -- se resuelve el caso sin cobrarle a nadie
-    return Object.assign({resolucion:nuevo,resolucion_fecha:new Date().toISOString(),resolucion_por:nombreUsuario},
-      limpiarCamposCliente(),limpiarCamposMensajero());
+    // sin_descuento -- no corresponde descontarle nada al mensajero
+    return Object.assign({resolucion:'sin_descuento',resolucion_fecha:new Date().toISOString(),resolucion_por:nombreUsuario},limpiarCamposMensajero());
   }
-  function mensajeConfirmacionEstado(cantidad,codigoTexto,nuevo,montoTexto){
-    var label=estadoInfoSiniestro(nuevo).label;
-    if(nuevo==='cliente')return '¿Marcar '+codigoTexto+' como "'+label+'"? Se descuenta '+montoTexto+' al cliente.';
-    if(nuevo==='pendiente')return '¿Volver '+codigoTexto+' a "'+label+'"? Se deshace cualquier descuento ya aplicado a cliente o mensajero.';
-    return '¿Marcar '+codigoTexto+' como "'+label+'"? No se le descuenta nada ni al cliente ni al mensajero.';
+  function mensajeConfirmacionMensajero(codigoTexto,nuevo,montoTexto){
+    var label=estadoMensajeroInfo(nuevo).label;
+    if(nuevo==='pendiente')return '¿Volver '+codigoTexto+' a "'+label+'"? Se deshace el descuento al mensajero ya aplicado.';
+    if(nuevo==='sin_descuento')return '¿Marcar '+codigoTexto+' como "'+label+'"? No se le descuenta nada al mensajero.';
+    return '¿Marcar '+codigoTexto+' como "'+label+'"? Se descuenta '+montoTexto+' al mensajero.';
   }
-  function guardarEstado(row,nuevo,semana){
-    return db.from('siniestros').update(payloadEstado(row,nuevo,semana)).eq('id',row.id).then(function(r){
+  function guardarEstadoMensajero(row,nuevo,semana){
+    return db.from('siniestros').update(payloadMensajero(row,nuevo,semana)).eq('id',row.id).then(function(r){
       if(r.error){toast&&toast('⚠ Error: '+r.error.message);return;}
       setModalMensajero(null);
       cargar();
-      toast&&toast('✓ '+row.codigo+' → '+estadoInfoSiniestro(nuevo).label);
+      toast&&toast('✓ '+row.codigo+' (mensajero) → '+estadoMensajeroInfo(nuevo).label);
     });
   }
-  function cambiarEstado(row,nuevo){
+  function cambiarEstadoMensajero(row,nuevo){
     if(nuevo===(row.resolucion||'pendiente'))return;
     if(nuevo==='mensajero'){setModalMensajero(row);return;} // pide la semana antes de guardar
-    if(!window.confirm(mensajeConfirmacionEstado(1,row.codigo,nuevo,fmtCLP(row.valor_siniestro))))return;
-    guardarEstado(row,nuevo);
+    if(!window.confirm(mensajeConfirmacionMensajero(row.codigo,nuevo,fmtCLP(row.valor_siniestro))))return;
+    guardarEstadoMensajero(row,nuevo);
+  }
+
+  // ---- Forma de pago al CLIENTE (independiente del estado con el mensajero) ----
+  // Solo "descuento_facturacion" toca los campos descontado_cliente (el Recibo de Cobro oficial
+  // sigue leyendo esos campos exactamente igual que siempre). Las otras formas de pago son solo
+  // un registro informativo -- no le descuentan nada de la factura al cliente.
+  function limpiarCamposCliente(){
+    return{descontado_cliente:false,descontado_cliente_valor:null,descontado_cliente_fecha:null,descontado_cliente_por:null};
+  }
+  function payloadPagoCliente(row,nuevo){
+    if(nuevo==='descuento_facturacion'){
+      return Object.assign({pago_cliente:'descuento_facturacion',pago_cliente_fecha:new Date().toISOString(),pago_cliente_por:nombreUsuario},
+        {descontado_cliente:true,descontado_cliente_valor:row.valor_siniestro,
+         descontado_cliente_fecha:new Date().toISOString(),descontado_cliente_por:nombreUsuario});
+    }
+    if(nuevo==='no_pagado'){
+      return Object.assign({pago_cliente:'no_pagado',pago_cliente_fecha:null,pago_cliente_por:null},limpiarCamposCliente());
+    }
+    // transferencia_proveedor | mediacion | sin_informar -- no le descuentan nada de la factura al cliente
+    return Object.assign({pago_cliente:nuevo,pago_cliente_fecha:new Date().toISOString(),pago_cliente_por:nombreUsuario},limpiarCamposCliente());
+  }
+  function mensajeConfirmacionCliente(codigoTexto,nuevo,montoTexto){
+    var label=pagoClienteInfo(nuevo).label;
+    if(nuevo==='no_pagado')return '¿Volver '+codigoTexto+' a "'+label+'"? Se deshace el descuento a la facturación si ya estaba aplicado.';
+    if(nuevo==='descuento_facturacion')return '¿Marcar '+codigoTexto+' como "'+label+'"? Se descuenta '+montoTexto+' de la facturación al cliente.';
+    return '¿Marcar '+codigoTexto+' como "'+label+'"? No se le descuenta nada de la factura al cliente.';
+  }
+  function guardarPagoCliente(row,nuevo){
+    return db.from('siniestros').update(payloadPagoCliente(row,nuevo)).eq('id',row.id).then(function(r){
+      if(r.error){toast&&toast('⚠ Error: '+r.error.message);return;}
+      cargar();
+      toast&&toast('✓ '+row.codigo+' (cliente) → '+pagoClienteInfo(nuevo).label);
+    });
+  }
+  function cambiarPagoCliente(row,nuevo){
+    if(nuevo===(row.pago_cliente||'no_pagado'))return;
+    if(!window.confirm(mensajeConfirmacionCliente(row.codigo,nuevo,fmtCLP(row.valor_siniestro))))return;
+    guardarPagoCliente(row,nuevo);
   }
 
   // ---- Selección con checks y acciones masivas ----
@@ -343,40 +402,66 @@ function Siniestros(props){
       return n;
     });
   }
-  function limpiarSeleccion(){setSeleccionados({});setBulkEstado('');}
+  function limpiarSeleccion(){setSeleccionados({});setBulkMensajero('');setBulkCliente('');}
 
-  // Aplica el MISMO estado a todos los seleccionados que todavía no lo tengan -- así se puede
-  // marcar de una sola vez, por ejemplo, "toda la semana" como "No hace falta descuento", o
-  // descontarle a varios códigos del mes al mismo mensajero en la misma semana de pago.
-  function candidatosBulk(nuevo){
+  // Aplica el MISMO estado con el mensajero a todos los seleccionados que todavía no lo tengan --
+  // así se puede, por ejemplo, descontarle a varios códigos del mes al mismo mensajero en la
+  // misma semana de pago, de una sola vez.
+  function candidatosBulkMensajero(nuevo){
     return filasSeleccionadas().filter(function(r){return(r.resolucion||'pendiente')!==nuevo;});
   }
-  function aplicarEstadoMasivo(nuevo,semana){
-    var cand=candidatosBulk(nuevo);
+  function aplicarEstadoMensajeroMasivo(nuevo,semana){
+    var cand=candidatosBulkMensajero(nuevo);
     if(cand.length===0){toast&&toast('Los seleccionados ya están en ese estado');return Promise.resolve();}
     return Promise.all(cand.map(function(row){
-      return db.from('siniestros').update(payloadEstado(row,nuevo,semana)).eq('id',row.id);
+      return db.from('siniestros').update(payloadMensajero(row,nuevo,semana)).eq('id',row.id);
     })).then(function(results){
       var errores=results.filter(function(r){return r&&r.error;});
       setModalMensajeroBulk(false);
       cargar();
       limpiarSeleccion();
       if(errores.length>0)toast&&toast('⚠ '+errores.length+' de '+cand.length+' tuvieron error, revisa e intenta de nuevo');
-      else toast&&toast('✓ '+cand.length+' código(s) → '+estadoInfoSiniestro(nuevo).label);
+      else toast&&toast('✓ '+cand.length+' código(s) (mensajero) → '+estadoMensajeroInfo(nuevo).label);
     });
   }
-  function aplicarBulkClick(){
-    if(!bulkEstado){toast&&toast('Elige primero a qué estado los quieres pasar');return;}
-    var cand=candidatosBulk(bulkEstado);
+  function aplicarBulkMensajeroClick(){
+    if(!bulkMensajero){toast&&toast('Elige primero a qué estado los quieres pasar');return;}
+    var cand=candidatosBulkMensajero(bulkMensajero);
     if(cand.length===0){toast&&toast('Los seleccionados ya están en ese estado');return;}
-    if(bulkEstado==='mensajero'){setModalMensajeroBulk(true);return;} // pide la semana antes de guardar
-    var total=cand.reduce(function(a,r){return a+(parseFloat(r.valor_siniestro)||0);},0);
-    var extra=bulkEstado==='cliente'?(' Se descuenta '+fmtCLP(total)+' en total al cliente, cada uno con su propio monto.'):'';
-    if(!window.confirm('¿Marcar '+cand.length+' código(s) seleccionados como "'+estadoInfoSiniestro(bulkEstado).label+'"?'+extra))return;
-    aplicarEstadoMasivo(bulkEstado);
+    if(bulkMensajero==='mensajero'){setModalMensajeroBulk(true);return;} // pide la semana antes de guardar
+    if(!window.confirm('¿Marcar '+cand.length+' código(s) seleccionados como "'+estadoMensajeroInfo(bulkMensajero).label+'"? No se les descuenta nada al mensajero.'))return;
+    aplicarEstadoMensajeroMasivo(bulkMensajero);
   }
 
-  var FILTROS=ESTADOS_SINIESTRO.map(function(e){return{val:e.val,label:e.label};}).concat([{val:'todos',label:'Todos'}]);
+  // Aplica la MISMA forma de pago al cliente a todos los seleccionados que todavía no la tengan.
+  function candidatosBulkCliente(nuevo){
+    return filasSeleccionadas().filter(function(r){return(r.pago_cliente||'no_pagado')!==nuevo;});
+  }
+  function aplicarPagoClienteMasivo(nuevo){
+    var cand=candidatosBulkCliente(nuevo);
+    if(cand.length===0){toast&&toast('Los seleccionados ya están en esa forma de pago');return Promise.resolve();}
+    return Promise.all(cand.map(function(row){
+      return db.from('siniestros').update(payloadPagoCliente(row,nuevo)).eq('id',row.id);
+    })).then(function(results){
+      var errores=results.filter(function(r){return r&&r.error;});
+      cargar();
+      limpiarSeleccion();
+      if(errores.length>0)toast&&toast('⚠ '+errores.length+' de '+cand.length+' tuvieron error, revisa e intenta de nuevo');
+      else toast&&toast('✓ '+cand.length+' código(s) (cliente) → '+pagoClienteInfo(nuevo).label);
+    });
+  }
+  function aplicarBulkClienteClick(){
+    if(!bulkCliente){toast&&toast('Elige primero a qué forma de pago los quieres pasar');return;}
+    var cand=candidatosBulkCliente(bulkCliente);
+    if(cand.length===0){toast&&toast('Los seleccionados ya están en esa forma de pago');return;}
+    var total=cand.reduce(function(a,r){return a+(parseFloat(r.valor_siniestro)||0);},0);
+    var extra=bulkCliente==='descuento_facturacion'?(' Se descuenta '+fmtCLP(total)+' en total de la facturación, cada uno con su propio monto.'):' No se les descuenta nada de la factura.';
+    if(!window.confirm('¿Marcar '+cand.length+' código(s) seleccionados como "'+pagoClienteInfo(bulkCliente).label+'"?'+extra))return;
+    aplicarPagoClienteMasivo(bulkCliente);
+  }
+
+  var FILTROS_MENSAJERO=ESTADOS_MENSAJERO.map(function(e){return{val:e.val,label:e.label};}).concat([{val:'todos',label:'Todos'}]);
+  var FILTROS_CLIENTE=ESTADOS_PAGO_CLIENTE.map(function(e){return{val:e.val,label:e.label};}).concat([{val:'todos',label:'Todos'}]);
 
   var RANGOS=[
     {val:'todos',label:'Todo el historial'},
@@ -388,11 +473,14 @@ function Siniestros(props){
   var STATS=[
     {label:'Siniestros en el período',val:totales.cantidad,color:'var(--dark)'},
     {label:'Valor total',val:fmtCLP(totales.valorTotal),color:'var(--dark)'},
-    {label:'Por pagar o descontar',val:totales.pendienteCantidad+' · '+fmtCLP(totales.pendienteValor),color:'var(--danger)'},
-    {label:'Pagadas al proveedor',val:totales.proveedorCantidad,color:'var(--success)'},
-    {label:'Descontado a clientes',val:fmtCLP(totales.clienteValor),color:'var(--success)'},
-    {label:'Descontado a mensajeros',val:fmtCLP(totales.mensajeroValor),color:'var(--success)'},
-    {label:'Sin descuento',val:totales.sinDescuentoCantidad,color:'#3a6ea5'}
+    {label:'Mensajero: pendiente',val:totales.mensajeroPendienteCantidad+' · '+fmtCLP(totales.mensajeroPendienteValor),color:'var(--danger)'},
+    {label:'Mensajero: descontado',val:fmtCLP(totales.mensajeroDescontadoValor),color:'var(--success)'},
+    {label:'Mensajero: sin descuento',val:totales.mensajeroSinDescuentoCantidad,color:'#3a6ea5'},
+    {label:'Cliente: no pagado',val:totales.clienteNoPagadoCantidad,color:'var(--danger)'},
+    {label:'Cliente: descuento facturación',val:fmtCLP(totales.clienteDescuentoValor),color:'var(--success)'},
+    {label:'Cliente: transferencia proveedor',val:totales.clienteTransferenciaCantidad,color:'var(--success)'},
+    {label:'Cliente: mediación',val:totales.clienteMediacionCantidad,color:'#3a6ea5'},
+    {label:'Cliente: sin informar',val:totales.clienteSinInformarCantidad,color:'#8a6d1a'}
   ];
 
   return React.createElement('div',null,
@@ -403,8 +491,8 @@ function Siniestros(props){
         React.createElement('button',{className:'action-btn btn-edit',disabled:filtrados.length===0,onClick:exportarExcel},'📊 Exportar Excel'))),
     React.createElement('div',{className:'info-banner'},
       '⚠ Aquí quedan registrados todos los códigos que alguna vez pasaron por estado "Siniestro", ',
-      'aunque después salgan a despacho o se entreguen. El descuento al cliente y al mensajero ',
-      'se hace manualmente, cuando tú decidas — nunca automático.'),
+      'aunque después salgan a despacho o se entreguen. El estado con el mensajero y la forma de pago ',
+      'al cliente son independientes entre sí, y se marcan manualmente, cuando tú decidas — nunca automático.'),
     React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginBottom:6}},'Período'),
     React.createElement('div',{style:{display:'flex',gap:8,marginBottom:rango==='rango'?10:16,flexWrap:'wrap',alignItems:'center'}},
       RANGOS.map(function(r){
@@ -426,25 +514,43 @@ function Siniestros(props){
           React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',textTransform:'uppercase',letterSpacing:0.5,marginBottom:6}},s.label),
           React.createElement('div',{style:{fontSize:16,fontWeight:700,color:s.color,fontFamily:'JetBrains Mono'}},s.val));
       })),
-    React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginBottom:6}},'Estado del descuento'),
+    React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginBottom:6}},'Estado con el mensajero'),
     React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}},
-      FILTROS.map(function(f){
+      FILTROS_MENSAJERO.map(function(f){
         return React.createElement('button',{key:f.val,onClick:function(){setFiltro(f.val);},
           style:{padding:'8px 14px',borderRadius:20,border:'1px solid '+(filtro===f.val?'var(--gold)':'var(--border)'),
             background:filtro===f.val?'rgba(200,168,75,0.15)':'#fff',color:filtro===f.val?'#8a6d1a':'var(--text-mid)',
             fontSize:12,fontWeight:700,cursor:'pointer'}},f.label);
       })),
+    React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginBottom:6}},'Forma de pago al cliente'),
+    React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}},
+      FILTROS_CLIENTE.map(function(f){
+        return React.createElement('button',{key:f.val,onClick:function(){setFiltroCliente(f.val);},
+          style:{padding:'8px 14px',borderRadius:20,border:'1px solid '+(filtroCliente===f.val?'var(--gold)':'var(--border)'),
+            background:filtroCliente===f.val?'rgba(200,168,75,0.15)':'#fff',color:filtroCliente===f.val?'#8a6d1a':'var(--text-mid)',
+            fontSize:12,fontWeight:700,cursor:'pointer'}},f.label);
+      })),
     React.createElement('input',{type:'text',className:'form-input',placeholder:'🔍 Buscar por código, mensajero, cliente o fecha (AAAA-MM-DD)...',
       value:busqueda,onChange:function(e){setBusqueda(e.target.value);},style:{marginBottom:16,maxWidth:420}}),
-    filasSeleccionadas().length>0&&React.createElement('div',{style:{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',
+    filasSeleccionadas().length>0&&React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:10,
       background:'rgba(200,168,75,0.12)',border:'1px solid var(--gold)',borderRadius:10,padding:'10px 14px',marginBottom:16}},
-      React.createElement('span',{style:{fontSize:12,fontWeight:700,color:'#8a6d1a'}},filasSeleccionadas().length+' seleccionado(s)'),
-      React.createElement('select',{value:bulkEstado,onChange:function(e){setBulkEstado(e.target.value);},
-        style:{fontSize:12,padding:'8px 10px',border:'1px solid var(--border)',borderRadius:8,background:'#fff',color:'var(--text-mid)',fontWeight:700}},
-        React.createElement('option',{value:''},'Pasar a estado...'),
-        ESTADOS_SINIESTRO.map(function(e){return React.createElement('option',{key:e.val,value:e.val},e.label);})),
-      React.createElement('button',{className:'action-btn btn-edit',onClick:aplicarBulkClick},'Aplicar a seleccionados'),
-      React.createElement('button',{onClick:limpiarSeleccion,style:{fontSize:11,color:'var(--text-soft)',background:'none',border:'none',cursor:'pointer',textDecoration:'underline'}},'Limpiar selección')),
+      React.createElement('div',{style:{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}},
+        React.createElement('span',{style:{fontSize:12,fontWeight:700,color:'#8a6d1a'}},filasSeleccionadas().length+' seleccionado(s)'),
+        React.createElement('button',{onClick:limpiarSeleccion,style:{fontSize:11,color:'var(--text-soft)',background:'none',border:'none',cursor:'pointer',textDecoration:'underline'}},'Limpiar selección')),
+      React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
+        React.createElement('span',{style:{fontSize:11,color:'var(--text-mid)',fontWeight:700,minWidth:70}},'Mensajero:'),
+        React.createElement('select',{value:bulkMensajero,onChange:function(e){setBulkMensajero(e.target.value);},
+          style:{fontSize:12,padding:'8px 10px',border:'1px solid var(--border)',borderRadius:8,background:'#fff',color:'var(--text-mid)',fontWeight:700}},
+          React.createElement('option',{value:''},'Pasar a...'),
+          ESTADOS_MENSAJERO.map(function(e){return React.createElement('option',{key:e.val,value:e.val},e.label);})),
+        React.createElement('button',{className:'action-btn btn-edit',onClick:aplicarBulkMensajeroClick},'Aplicar')),
+      React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
+        React.createElement('span',{style:{fontSize:11,color:'var(--text-mid)',fontWeight:700,minWidth:70}},'Cliente:'),
+        React.createElement('select',{value:bulkCliente,onChange:function(e){setBulkCliente(e.target.value);},
+          style:{fontSize:12,padding:'8px 10px',border:'1px solid var(--border)',borderRadius:8,background:'#fff',color:'var(--text-mid)',fontWeight:700}},
+          React.createElement('option',{value:''},'Pasar a...'),
+          ESTADOS_PAGO_CLIENTE.map(function(e){return React.createElement('option',{key:e.val,value:e.val},e.label);})),
+        React.createElement('button',{className:'action-btn btn-edit',onClick:aplicarBulkClienteClick},'Aplicar'))),
     cargando?React.createElement('div',{style:{textAlign:'center',padding:'40px 20px',color:'var(--text-soft)'}},'Cargando siniestros...'):
     filtrados.length===0?React.createElement('div',{style:{textAlign:'center',padding:'40px 20px',color:'var(--text-soft)'}},'No hay siniestros en este filtro 🎉'):
     React.createElement('div',{className:'table-wrap'},
@@ -457,7 +563,8 @@ function Siniestros(props){
           React.createElement('th',null,'Estado actual'),
           React.createElement('th',null,'Fecha siniestro'),
           React.createElement('th',null,'Valor'),
-          React.createElement('th',null,'Estado del siniestro'),
+          React.createElement('th',null,'Estado con mensajero'),
+          React.createElement('th',null,'Forma de pago al cliente'),
           React.createElement('th',null,'Nota'))),
         React.createElement('tbody',null,filtrados.map(function(row){
           var est=estadoInfo?estadoInfo(row.estado):{label:row.estado,color:'#7A7D6A'};
@@ -481,17 +588,29 @@ function Siniestros(props){
                 onFocus:function(e){e.target.select();}})),
             React.createElement('td',null,
               (function(){
-                var resActual=row.resolucion||'pendiente';
-                var info=estadoInfoSiniestro(resActual);
+                var resM=row.resolucion||'pendiente';
+                var infoM=estadoMensajeroInfo(resM);
                 return React.createElement('div',null,
-                  React.createElement('select',{value:resActual,
-                    onChange:function(e){cambiarEstado(row,e.target.value);},
-                    style:{fontSize:11,fontWeight:700,padding:'4px 6px',borderRadius:6,border:'1px solid '+info.color,
-                      background:info.bg,color:info.color,maxWidth:180}},
-                    ESTADOS_SINIESTRO.map(function(e){return React.createElement('option',{key:e.val,value:e.val},e.label);})),
-                  resActual==='cliente'&&React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)',marginTop:2}},fmtCLP(row.descontado_cliente_valor)+' · '+fmtFechaHora(row.descontado_cliente_fecha)),
-                  resActual==='mensajero'&&React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)',marginTop:2}},fmtCLP(row.descontado_mensajero_valor)+' · '+(row.descontado_mensajero_semana||'')),
-                  (resActual==='proveedor'||resActual==='sin_descuento')&&React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)',marginTop:2}},fmtFechaHora(row.resolucion_fecha)));
+                  React.createElement('select',{value:resM,
+                    onChange:function(e){cambiarEstadoMensajero(row,e.target.value);},
+                    style:{fontSize:11,fontWeight:700,padding:'4px 6px',borderRadius:6,border:'1px solid '+infoM.color,
+                      background:infoM.bg,color:infoM.color,maxWidth:170}},
+                    ESTADOS_MENSAJERO.map(function(e){return React.createElement('option',{key:e.val,value:e.val},e.label);})),
+                  resM==='mensajero'&&React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)',marginTop:2}},fmtCLP(row.descontado_mensajero_valor)+' · '+(row.descontado_mensajero_semana||'')),
+                  resM==='sin_descuento'&&React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)',marginTop:2}},fmtFechaHora(row.resolucion_fecha)));
+              })()),
+            React.createElement('td',null,
+              (function(){
+                var resC=row.pago_cliente||'no_pagado';
+                var infoC=pagoClienteInfo(resC);
+                return React.createElement('div',null,
+                  React.createElement('select',{value:resC,
+                    onChange:function(e){cambiarPagoCliente(row,e.target.value);},
+                    style:{fontSize:11,fontWeight:700,padding:'4px 6px',borderRadius:6,border:'1px solid '+infoC.color,
+                      background:infoC.bg,color:infoC.color,maxWidth:190}},
+                    ESTADOS_PAGO_CLIENTE.map(function(e){return React.createElement('option',{key:e.val,value:e.val},e.label);})),
+                  resC==='descuento_facturacion'&&React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)',marginTop:2}},fmtCLP(row.descontado_cliente_valor)+' · '+fmtFechaHora(row.descontado_cliente_fecha)),
+                  (resC==='transferencia_proveedor'||resC==='mediacion'||resC==='sin_informar')&&React.createElement('div',{style:{fontSize:9,color:'var(--text-soft)',marginTop:2}},fmtFechaHora(row.pago_cliente_fecha)));
               })()),
             React.createElement('td',null,
               React.createElement('input',{type:'text',style:{width:150,padding:'4px 6px',border:'1px solid var(--border)',borderRadius:6,fontSize:11,color:'var(--text-mid)'},
@@ -500,11 +619,11 @@ function Siniestros(props){
                 onChange:function(e){setNotaEdit(function(prev){var n=Object.assign({},prev);n[row.id]=e.target.value;return n;});},
                 onBlur:function(){if(notaEdit[row.id]!=null)guardarNota(row);}})));
         })))),
-    modalMensajero&&React.createElement(ModalSemana,{row:modalMensajero,onClose:function(){setModalMensajero(null);},onConfirm:function(semana){return guardarEstado(modalMensajero,'mensajero',semana);}}),
+    modalMensajero&&React.createElement(ModalSemana,{row:modalMensajero,onClose:function(){setModalMensajero(null);},onConfirm:function(semana){return guardarEstadoMensajero(modalMensajero,'mensajero',semana);}}),
     modalMensajeroBulk&&React.createElement(ModalSemana,{bulk:(function(){
-        var pend=candidatosBulk('mensajero');
+        var pend=candidatosBulkMensajero('mensajero');
         return{cantidad:pend.length,total:pend.reduce(function(a,r){return a+(parseFloat(r.valor_siniestro)||0);},0)};
-      })(),onClose:function(){setModalMensajeroBulk(false);},onConfirm:function(semana){return aplicarEstadoMasivo('mensajero',semana);}}),
+      })(),onClose:function(){setModalMensajeroBulk(false);},onConfirm:function(semana){return aplicarEstadoMensajeroMasivo('mensajero',semana);}}),
     modalNuevo&&React.createElement(ModalNuevo,{mensajeros:mensajeros,onClose:function(){setModalNuevo(false);},onCreado:function(){setModalNuevo(false);cargar();toast&&toast('✓ Siniestro registrado');}}));
 }
 
