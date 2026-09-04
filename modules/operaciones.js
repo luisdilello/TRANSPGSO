@@ -243,8 +243,9 @@ var ESTADOS_CRITICOS=['reprogramado','cancelado','siniestro'];
 // tamaño reducido y CLICKEABLE — funciona a la vez como indicador en vivo y como filtro
 // rápido (clic = filtrar Firmas en Vivo por ese estado; clic de nuevo sobre el ya activo =
 // quitar el filtro y volver a "Todos").
-function EstadoStatTile(label,val,count,total,color,valClass,activo,critico,onClick){
-  var pctTxt=total>0?Math.round(count/total*100)+'%':'—';
+function EstadoStatTile(label,val,count,total,color,bg,valClass,activo,critico,onClick){
+  var pct=total>0?Math.round(count/total*100):0;
+  var pctTxt=total>0?pct+'%':'—';
   return React.createElement('div',{
     key:val||'todos',onClick:onClick,className:'stat-card',
     style:{
@@ -256,7 +257,12 @@ function EstadoStatTile(label,val,count,total,color,valClass,activo,critico,onCl
     critico&&count>0&&React.createElement('span',{style:{position:'absolute',top:6,right:8,fontSize:11}},'⚠'),
     React.createElement('div',{className:'stat-label',style:{fontSize:8,marginBottom:5,paddingRight:(critico&&count>0)?14:0}},label),
     React.createElement('div',{className:'stat-value '+valClass,style:{fontSize:26}},count),
-    React.createElement('div',{className:'stat-sub',style:{fontSize:9,marginTop:3}},pctTxt));
+    // Barra de efectividad: el relleno lleva el color propio del estado y el riel es un tono
+    // más claro del mismo color (no un gris genérico), así el estado se reconoce de un
+    // vistazo aunque el número y el % ya lo digan.
+    React.createElement('div',{style:{height:5,borderRadius:20,background:bg,marginTop:7,overflow:'hidden'}},
+      React.createElement('div',{style:{height:'100%',width:pct+'%',borderRadius:20,background:color,transition:'width 0.3s ease'}})),
+    React.createElement('div',{className:'stat-sub',style:{fontSize:9,marginTop:5}},pctTxt));
 }
 
 // ══════════════════════════════════════════════════════════════════════════════════════
@@ -931,9 +937,9 @@ function FirmasEnVivo(props){
         cargandoConteos&&React.createElement('span',{style:{fontSize:10,color:'var(--text-soft)'}},'actualizando…')
       ),
       React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(80px,1fr))',gap:8}},
-        EstadoStatTile('Todos','',totalCounts,totalCounts,'#C8A84B','gold',estadoSel==='',false,function(){setEstadoSel('');}),
+        EstadoStatTile('Todos','',totalCounts,totalCounts,'#C8A84B','rgba(200,168,75,0.15)','gold',estadoSel==='',false,function(){setEstadoSel('');}),
         ESTADOS_ENVIO.map(function(es){
-          return EstadoStatTile(es.label,es.val,estadoCounts[es.val]||0,totalCounts,es.color,ESTADO_VALUE_CLASS[es.val]||'gold',estadoSel===es.val,ESTADOS_CRITICOS.indexOf(es.val)!==-1,function(){setEstadoSel(estadoSel===es.val?'':es.val);});
+          return EstadoStatTile(es.label,es.val,estadoCounts[es.val]||0,totalCounts,es.color,es.bg,ESTADO_VALUE_CLASS[es.val]||'gold',estadoSel===es.val,ESTADOS_CRITICOS.indexOf(es.val)!==-1,function(){setEstadoSel(estadoSel===es.val?'':es.val);});
         })
       )
     ),
@@ -968,7 +974,15 @@ function FirmasEnVivo(props){
             estadoBadge(e.estado)),
           React.createElement('div',{style:{fontSize:12,fontWeight:700,marginBottom:2}},e.cliente||'—'),
           React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginBottom:2}},e.destinatario||'—'),
-          React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginBottom:8}},'🏍 '+(e.mensajero||'Sin asignar').replace(/,\s*/g,' ')+' · 🏘 '+(e.comuna||'—')),
+          // Mensajero y comuna como chips de color (antes era una línea de texto gris, igual
+          // que el destinatario de arriba, y costaba distinguir a simple vista quién es el
+          // cliente final vs. quién es el mensajero/dónde entrega) — dorado = persona
+          // (mensajero), teal = lugar (comuna), consistente con los acentos que ya usa el
+          // resto de la app para esos mismos roles.
+          React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}},
+            React.createElement('span',{style:{display:'inline-flex',alignItems:'center',gap:4,fontSize:11,fontWeight:700,color:'#a87d2a',background:'rgba(200,168,75,0.14)',padding:'3px 8px',borderRadius:20}},'🏍 '+(e.mensajero||'Sin asignar').replace(/,\s*/g,' ')),
+            React.createElement('span',{style:{display:'inline-flex',alignItems:'center',gap:4,fontSize:11,fontWeight:700,color:'#1a6b8a',background:'rgba(26,107,138,0.1)',padding:'3px 8px',borderRadius:20}},'🏘 '+(e.comuna||'—'))
+          ),
           todas.length>0?
             React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
               todas.slice(0,6).map(function(f,i){
