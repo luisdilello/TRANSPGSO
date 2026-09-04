@@ -204,6 +204,35 @@ function miniStat(label,val,alerta){
     React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:26,color:alerta&&val>0?'#b03030':'var(--text)'}},val));
 }
 
+// Mismo mapeo color→clase de degradé que usa el Dashboard principal para sus tarjetas KPI
+// por estado (.stat-value.green/.red/.gold/etc, definidas en el CSS global) — así el mini
+// dashboard de Firmas en Vivo se ve exactamente igual, solo que en tamaño reducido.
+var ESTADO_VALUE_CLASS={en_bodega:'teal',en_ruta:'gold',entregado:'green',reprogramado:'purple',cancelado:'red',siniestro:'orange',retorno:'brown',en_bodega_cancelado:'rust'};
+// Estados que ameritan una señal de alerta cuando su conteo es mayor a 0 (no incluye
+// 'retorno' ni 'en_bodega_cancelado' porque son desenlaces esperados del flujo, no fallas).
+var ESTADOS_CRITICOS=['reprogramado','cancelado','siniestro'];
+
+// Tarjeta de conteo por estado: mismo estilo visual que las KPI del Dashboard principal
+// (.stat-card/.stat-label/.stat-value/.stat-sub, con acento de color por estado) pero en
+// tamaño reducido y CLICKEABLE — funciona a la vez como indicador en vivo y como filtro
+// rápido (clic = filtrar Firmas en Vivo por ese estado; clic de nuevo sobre el ya activo =
+// quitar el filtro y volver a "Todos").
+function EstadoStatTile(label,val,count,total,color,valClass,activo,critico,onClick){
+  var pctTxt=total>0?Math.round(count/total*100)+'%':'—';
+  return React.createElement('div',{
+    key:val||'todos',onClick:onClick,className:'stat-card',
+    style:{
+      '--card-accent':color,borderTop:'4px solid '+color,padding:'10px 8px 8px',cursor:'pointer',minWidth:0,
+      boxShadow:activo?('0 0 0 2px '+color+', 6px 6px 14px rgba(43,46,32,0.14)'):(critico&&count>0?'0 0 0 1px rgba(176,48,48,0.35)':undefined),
+      transform:activo?'translateY(-2px)':undefined,transition:'all 0.15s'
+    }
+  },
+    critico&&count>0&&React.createElement('span',{style:{position:'absolute',top:6,right:8,fontSize:11}},'⚠'),
+    React.createElement('div',{className:'stat-label',style:{fontSize:8,marginBottom:5,paddingRight:(critico&&count>0)?14:0}},label),
+    React.createElement('div',{className:'stat-value '+valClass,style:{fontSize:26}},count),
+    React.createElement('div',{className:'stat-sub',style:{fontSize:9,marginTop:3}},pctTxt));
+}
+
 // ══════════════════════════════════════════════════════════════════════════════════════
 // Puente Firmas en Vivo ↔ Cierre Diario ↔ Multas (Pagos Mensajeros).
 // ══════════════════════════════════════════════════════════════════════════════════════
@@ -777,6 +806,44 @@ function FirmasEnVivo(props){
   var _zoomUrl=useState(null), zoomUrl=_zoomUrl[0], setZoomUrl=_zoomUrl[1];
   var _reportarEnvio=useState(null), reportarEnvio=_reportarEnvio[0], setReportarEnvio=_reportarEnvio[1];
   var _reportados=useState({}), reportados=_reportados[0], setReportados=_reportados[1];
+  var _estadoCounts=useState({}), estadoCounts=_estadoCounts[0], setEstadoCounts=_estadoCounts[1];
+  var _totalCounts=useState(0), totalCounts=_totalCounts[0], setTotalCounts=_totalCounts[1];
+  var _cargandoConteos=useState(false), cargandoConteos=_cargandoConteos[0], setCargandoConteos=_cargandoConteos[1];
+
+  // Conteo en vivo por estado para el mini dashboard/filtro de arriba. Va aparte de cargar()
+  // porque cargar() trae como mucho 200 envíos (los más recientes, para las tarjetas con
+  // fotos) y además ya viene filtrado por estadoSel — acá en cambio se pide, para CADA
+  // estado, un conteo exacto (head:true = solo el número, no trae filas) respetando
+  // cliente/mensajero/período pero NUNCA el estado, para poder mostrar "cuántos hay en cada
+  // uno" al mismo tiempo. Barato aunque haya miles de envíos en el rango, porque head:true no
+  // transfiere datos, solo el total.
+  function cargarConteos(){
+    var lim=limitesRango(filtro,fechaDesde,fechaHasta);
+    if(filtro==='rango'&&(!lim.desde||!lim.hasta)){setEstadoCounts({});setTotalCounts(0);return;}
+    setCargandoConteos(true);
+    function base(){
+      var q=db.from('envios').select('id',{count:'exact',head:true}).neq('estado','eliminado');
+      if(lim.desde)q=q.gte('fecha',lim.desde);
+      if(lim.hasta)q=q.lte('fecha',lim.hasta);
+      if(clienteSel)q=q.eq('cliente',clienteSel);
+      if(mensajeroSel)q=q.eq('mensajero',mensajeroSel);
+      return q;
+    }
+    var pedidos=ESTADOS_ENVIO.map(function(es){
+      return base().eq('estado',es.val).then(function(r){return{val:es.val,count:r.count||0};});
+    });
+    pedidos.push(base().then(function(r){return{val:'__total',count:r.count||0};}));
+    Promise.all(pedidos).then(function(resultados){
+      var mapa={},tot=0;
+      resultados.forEach(function(r){if(r.val==='__total')tot=r.count;else mapa[r.val]=r.count;});
+      setEstadoCounts(mapa);setTotalCounts(tot);setCargandoConteos(false);
+    }).catch(function(){setCargandoConteos(false);});
+  }
+  useEffect(function(){cargarConteos();},[clienteSel,mensajeroSel,filtro,fechaDesde,fechaHasta]);
+  useEffect(function(){
+    var iv=setInterval(cargarConteos,25000);
+    return function(){clearInterval(iv);};
+  },[clienteSel,mensajeroSel,filtro,fechaDesde,fechaHasta]);
 
   function cargar(){
     var lim=limitesRango(filtro,fechaDesde,fechaHasta);
@@ -825,6 +892,26 @@ function FirmasEnVivo(props){
         ESTADOS_ENVIO.map(function(es){return React.createElement('option',{key:es.val,value:es.val},es.label);})),
       React.createElement('input',{className:'form-input',style:{maxWidth:220,padding:'7px 10px'},placeholder:'🔍 Buscar código o destinatario...',value:busqueda,onChange:function(e){setBusqueda(e.target.value);}})
     ),
+
+    // ── MINI DASHBOARD / FILTRO POR ESTADO ── mismo estilo (.stat-card) que el Dashboard
+    // principal, en tamaño reducido: cada tarjeta muestra el conteo en vivo de ese estado
+    // (respetando cliente/mensajero/período elegidos arriba, no busqueda ni "solo con
+    // evidencia" — esos dos son para acotar las tarjetas de abajo, no el panorama general) y
+    // funciona como filtro: un clic selecciona ese estado (se sincroniza con el selector de
+    // arriba), y un clic sobre el que ya está activo lo quita y vuelve a "Todos".
+    React.createElement('div',{style:{marginBottom:16}},
+      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:8}},
+        React.createElement('span',{style:{fontFamily:'Bebas Neue',fontSize:12,letterSpacing:1.5,color:'var(--text-soft)'}},'📊 CONTEO EN VIVO POR ESTADO'),
+        cargandoConteos&&React.createElement('span',{style:{fontSize:10,color:'var(--text-soft)'}},'actualizando…')
+      ),
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(80px,1fr))',gap:8}},
+        EstadoStatTile('Todos','',totalCounts,totalCounts,'#C8A84B','gold',estadoSel==='',false,function(){setEstadoSel('');}),
+        ESTADOS_ENVIO.map(function(es){
+          return EstadoStatTile(es.label,es.val,estadoCounts[es.val]||0,totalCounts,es.color,ESTADO_VALUE_CLASS[es.val]||'gold',estadoSel===es.val,ESTADOS_CRITICOS.indexOf(es.val)!==-1,function(){setEstadoSel(estadoSel===es.val?'':es.val);});
+        })
+      )
+    ),
+
     React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:18}},
       React.createElement('button',{style:btnStyle(filtro==='hoy'),onClick:function(){setFiltro('hoy');}},'Hoy'),
       React.createElement('button',{style:btnStyle(filtro==='semana'),onClick:function(){setFiltro('semana');}},'Esta semana'),
