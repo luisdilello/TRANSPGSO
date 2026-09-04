@@ -16,7 +16,10 @@ function fmtFechaHora(iso){
 // Modal chico para elegir la semana de pago (mismo formato que usa Pagos Mensajeros:
 // "DD-MM-YYYY al DD-MM-YYYY") a la que se le va a restar el valor del siniestro.
 function ModalSemana(props){
-  var row=props.row, onClose=props.onClose, onConfirm=props.onConfirm;
+  // Modo normal: props.row trae un único registro. Modo masivo (selección con checks):
+  // props.bulk trae {cantidad, total} y aplica la MISMA semana elegida a todos los
+  // seleccionados de una sola vez -- así no hay que abrir el modal código por código.
+  var row=props.row, bulk=props.bulk, onClose=props.onClose, onConfirm=props.onConfirm;
   var hoy=new Date();
   var lunes=new Date(hoy); lunes.setDate(hoy.getDate()-((hoy.getDay()+6)%7));
   var sabado=new Date(lunes); sabado.setDate(lunes.getDate()+5);
@@ -31,9 +34,13 @@ function ModalSemana(props){
     setGuardando(true);
     onConfirm(semana).finally(function(){setGuardando(false);});
   }
-  return React.createElement(Modal,{title:'🧾 Descontar a mensajero',sub:row.codigo+' · '+(row.mensajero||'Sin mensajero'),onClose:onClose},
-    React.createElement('div',{style:{fontSize:13,marginBottom:14,color:'var(--text-mid)'}},
-      'Se va a restar ',React.createElement('strong',null,fmtCLP(row.valor_siniestro)),' del pago de la semana que elijas.'),
+  return React.createElement(Modal,{title:'🧾 Descontar a mensajero',
+    sub:bulk?(bulk.cantidad+' código(s) seleccionados'):(row.codigo+' · '+(row.mensajero||'Sin mensajero')),onClose:onClose},
+    bulk?
+      React.createElement('div',{style:{fontSize:13,marginBottom:14,color:'var(--text-mid)'}},
+        'Se va a restar ',React.createElement('strong',null,fmtCLP(bulk.total)),' en total, repartido entre los '+bulk.cantidad+' código(s) seleccionados, del pago de la semana que elijas (a cada mensajero se le descuenta lo que corresponda a su propio código).'):
+      React.createElement('div',{style:{fontSize:13,marginBottom:14,color:'var(--text-mid)'}},
+        'Se va a restar ',React.createElement('strong',null,fmtCLP(row.valor_siniestro)),' del pago de la semana que elijas.'),
     React.createElement('div',{style:{display:'flex',gap:10,marginBottom:16}},
       React.createElement('div',{style:{flex:1}},
         React.createElement('label',{style:{fontSize:11,color:'var(--text-soft)',display:'block',marginBottom:4}},'Desde'),
@@ -95,6 +102,13 @@ function Siniestros(props){
   var _notaEdit=useState({}), notaEdit=_notaEdit[0], setNotaEdit=_notaEdit[1];
   var _rango=useState('todos'), rango=_rango[0], setRango=_rango[1]; // todos|hoy|semana|mes|rango
   var _rangoDesde=useState(''), rangoDesde=_rangoDesde[0], setRangoDesde=_rangoDesde[1];
+  var _busqueda=useState(''), busqueda=_busqueda[0], setBusqueda=_busqueda[1];
+  // Selección con checks -- para elegir a mano qué códigos procesar (de la semana, del mes o
+  // de cualquier combinación que arme con el buscador) y descontarlos todos juntos, en vez de
+  // tener que entrar código por código. Se guarda por id de siniestro, no por posición en la
+  // tabla, así sigue siendo válida aunque cambie el filtro o el orden.
+  var _seleccionados=useState({}), seleccionados=_seleccionados[0], setSeleccionados=_seleccionados[1];
+  var _modalMensajeroBulk=useState(false), modalMensajeroBulk=_modalMensajeroBulk[0], setModalMensajeroBulk=_modalMensajeroBulk[1];
   var _rangoHasta=useState(''), rangoHasta=_rangoHasta[0], setRangoHasta=_rangoHasta[1];
 
   // Límites de fecha (formato YYYY-MM-DD, igual que fecha_siniestro) según el preset elegido.
@@ -153,6 +167,18 @@ function Siniestros(props){
     if(filtro==='resueltos')return r.descontado_cliente&&r.descontado_mensajero;
     return true;
   });
+  // Buscador libre por código, mensajero, cliente o fecha del siniestro -- se aplica encima
+  // del período y del filtro de estado, para poder acotar rápido dentro de "Este mes",
+  // "Esta semana", etc. sin perder esos filtros.
+  var q=busqueda.trim().toLowerCase();
+  if(q){
+    filtrados=filtrados.filter(function(r){
+      return (r.codigo||'').toLowerCase().indexOf(q)!==-1
+        || (r.mensajero||'').toLowerCase().indexOf(q)!==-1
+        || (r.cliente||'').toLowerCase().indexOf(q)!==-1
+        || (r.fecha_siniestro||'').toLowerCase().indexOf(q)!==-1;
+    });
+  }
 
   // Totales acumulados del período/filtro actual — para hacerle seguimiento rápido a pagos y descuentos.
   var totales=enRango.reduce(function(a,r){
@@ -256,6 +282,69 @@ function Siniestros(props){
     });
   }
 
+  // ---- Selección con checks y acciones masivas ----
+  // La selección se guarda por id de siniestro (no por fila de la tabla filtrada), así que
+  // sigue siendo válida aunque el usuario cambie de período, de filtro de estado o escriba
+  // algo en el buscador entre medio.
+  function filasSeleccionadas(){
+    return registros.filter(function(r){return!!seleccionados[r.id];});
+  }
+  function toggleSeleccion(row){
+    setSeleccionados(function(prev){
+      var n=Object.assign({},prev);
+      if(n[row.id])delete n[row.id];else n[row.id]=true;
+      return n;
+    });
+  }
+  var todosFiltradosSeleccionados=filtrados.length>0&&filtrados.every(function(r){return!!seleccionados[r.id];});
+  function toggleTodosFiltrados(){
+    setSeleccionados(function(prev){
+      var n=Object.assign({},prev);
+      if(todosFiltradosSeleccionados){
+        filtrados.forEach(function(r){delete n[r.id];});
+      }else{
+        filtrados.forEach(function(r){n[r.id]=true;});
+      }
+      return n;
+    });
+  }
+  function limpiarSeleccion(){setSeleccionados({});}
+
+  function descontarClienteMasivo(){
+    var pend=filasSeleccionadas().filter(function(r){return!r.descontado_cliente;});
+    if(pend.length===0){toast&&toast('Los seleccionados ya están descontados al cliente');return;}
+    var total=pend.reduce(function(a,r){return a+(parseFloat(r.valor_siniestro)||0);},0);
+    if(!window.confirm('¿Descontar '+fmtCLP(total)+' en total al cliente, repartido entre los '+pend.length+' código(s) seleccionados?'))return;
+    Promise.all(pend.map(function(row){
+      return db.from('siniestros').update({
+        descontado_cliente:true,descontado_cliente_valor:row.valor_siniestro,
+        descontado_cliente_fecha:new Date().toISOString(),descontado_cliente_por:nombreUsuario
+      }).eq('id',row.id);
+    })).then(function(results){
+      var errores=results.filter(function(r){return r&&r.error;});
+      cargar();
+      limpiarSeleccion();
+      if(errores.length>0)toast&&toast('⚠ '+errores.length+' de '+pend.length+' tuvieron error, revisa e intenta de nuevo');
+      else toast&&toast('✓ Descontado al cliente en '+pend.length+' código(s)');
+    });
+  }
+  function descontarMensajeroMasivo(semana){
+    var pend=filasSeleccionadas().filter(function(r){return!r.descontado_mensajero;});
+    return Promise.all(pend.map(function(row){
+      return db.from('siniestros').update({
+        descontado_mensajero:true,descontado_mensajero_valor:row.valor_siniestro,descontado_mensajero_semana:semana,
+        descontado_mensajero_fecha:new Date().toISOString(),descontado_mensajero_por:nombreUsuario
+      }).eq('id',row.id);
+    })).then(function(results){
+      var errores=results.filter(function(r){return r&&r.error;});
+      setModalMensajeroBulk(false);
+      cargar();
+      limpiarSeleccion();
+      if(errores.length>0)toast&&toast('⚠ '+errores.length+' de '+pend.length+' tuvieron error, revisa e intenta de nuevo');
+      else toast&&toast('✓ Descontado al mensajero en '+pend.length+' código(s) · semana '+semana);
+    });
+  }
+
   var FILTROS=[
     {val:'pendientes',label:'Pendientes'},
     {val:'cliente-pendiente',label:'Falta descontar a cliente'},
@@ -319,11 +408,23 @@ function Siniestros(props){
             background:filtro===f.val?'rgba(200,168,75,0.15)':'#fff',color:filtro===f.val?'#8a6d1a':'var(--text-mid)',
             fontSize:12,fontWeight:700,cursor:'pointer'}},f.label);
       })),
+    React.createElement('input',{type:'text',className:'form-input',placeholder:'🔍 Buscar por código, mensajero, cliente o fecha (AAAA-MM-DD)...',
+      value:busqueda,onChange:function(e){setBusqueda(e.target.value);},style:{marginBottom:16,maxWidth:420}}),
+    filasSeleccionadas().length>0&&React.createElement('div',{style:{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',
+      background:'rgba(200,168,75,0.12)',border:'1px solid var(--gold)',borderRadius:10,padding:'10px 14px',marginBottom:16}},
+      React.createElement('span',{style:{fontSize:12,fontWeight:700,color:'#8a6d1a'}},filasSeleccionadas().length+' seleccionado(s)'),
+      React.createElement('button',{className:'action-btn btn-edit',onClick:descontarClienteMasivo},'💰 Descontar a cliente (seleccionados)'),
+      React.createElement('button',{className:'action-btn btn-edit',onClick:function(){
+        if(filasSeleccionadas().filter(function(r){return!r.descontado_mensajero;}).length===0){toast&&toast('Los seleccionados ya están descontados al mensajero');return;}
+        setModalMensajeroBulk(true);
+      }},'🧾 Descontar a mensajero (seleccionados)'),
+      React.createElement('button',{onClick:limpiarSeleccion,style:{fontSize:11,color:'var(--text-soft)',background:'none',border:'none',cursor:'pointer',textDecoration:'underline'}},'Limpiar selección')),
     cargando?React.createElement('div',{style:{textAlign:'center',padding:'40px 20px',color:'var(--text-soft)'}},'Cargando siniestros...'):
     filtrados.length===0?React.createElement('div',{style:{textAlign:'center',padding:'40px 20px',color:'var(--text-soft)'}},'No hay siniestros en este filtro 🎉'):
     React.createElement('div',{className:'table-wrap'},
       React.createElement('table',null,
         React.createElement('thead',null,React.createElement('tr',null,
+          React.createElement('th',null,React.createElement('input',{type:'checkbox',checked:todosFiltradosSeleccionados,onChange:toggleTodosFiltrados,title:'Seleccionar todos los filtrados'})),
           React.createElement('th',null,'Código'),
           React.createElement('th',null,'Cliente'),
           React.createElement('th',null,'Mensajero'),
@@ -335,7 +436,8 @@ function Siniestros(props){
           React.createElement('th',null,'Nota'))),
         React.createElement('tbody',null,filtrados.map(function(row){
           var est=estadoInfo?estadoInfo(row.estado):{label:row.estado,color:'#7A7D6A'};
-          return React.createElement('tr',{key:row.id,style:{background:'rgba(198,40,40,0.03)'}},
+          return React.createElement('tr',{key:row.id,style:{background:seleccionados[row.id]?'rgba(200,168,75,0.10)':'rgba(198,40,40,0.03)'}},
+            React.createElement('td',null,React.createElement('input',{type:'checkbox',checked:!!seleccionados[row.id],onChange:function(){toggleSeleccion(row);}})),
             React.createElement('td',{style:{fontFamily:'JetBrains Mono',fontWeight:700,fontSize:11,color:'var(--dark)'}},row.codigo),
             React.createElement('td',{style:{fontSize:12}},row.cliente),
             React.createElement('td',null,
@@ -374,6 +476,10 @@ function Siniestros(props){
                 onBlur:function(){if(notaEdit[row.id]!=null)guardarNota(row);}})));
         })))),
     modalMensajero&&React.createElement(ModalSemana,{row:modalMensajero,onClose:function(){setModalMensajero(null);},onConfirm:function(semana){return confirmarDescuentoMensajero(modalMensajero,semana);}}),
+    modalMensajeroBulk&&React.createElement(ModalSemana,{bulk:(function(){
+        var pend=filasSeleccionadas().filter(function(r){return!r.descontado_mensajero;});
+        return{cantidad:pend.length,total:pend.reduce(function(a,r){return a+(parseFloat(r.valor_siniestro)||0);},0)};
+      })(),onClose:function(){setModalMensajeroBulk(false);},onConfirm:descontarMensajeroMasivo}),
     modalNuevo&&React.createElement(ModalNuevo,{mensajeros:mensajeros,onClose:function(){setModalNuevo(false);},onCreado:function(){setModalNuevo(false);cargar();toast&&toast('✓ Siniestro registrado');}}));
 }
 
