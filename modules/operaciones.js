@@ -327,7 +327,7 @@ function ReportarModal(props){
         toast&&toast('⚠ No se pudo cargar el módulo de Pagos Mensajeros.');
       }
       if(window.__app.aplicarMultaExterna){
-        var rr=await window.__app.aplicarMultaExterna(envio.mensajero,faltaSel,puntos,accion,fechaHoyCL());
+        var rr=await window.__app.aplicarMultaExterna(envio.mensajero,faltaSel,puntos,accion,fechaHoyCL(),envio.codigo);
         if(rr.ok){monto=rr.monto;multaOk=true;}
         else if(rr.motivo==='sin_semana')toast&&toast('⚠ No hay pagos calculados para esta semana todavía. Ve a Pagos Mensajeros → "Calcular Envíos Semana" y vuelve a intentar.');
         else if(rr.motivo==='sin_mensajero')toast&&toast('⚠ '+envio.mensajero.split(',')[0]+' no aparece en los pagos de esta semana.');
@@ -339,7 +339,8 @@ function ReportarModal(props){
     var fila={
       mensajero:envio.mensajero,codigo:envio.codigo,falta:faltaSel,
       accion:accion||(multaOk?'Multa aplicada desde Firmas en Vivo':'Registrado desde Firmas en Vivo'),
-      puntos:+puntos||0,multaAplicada:multaOk,monto:multaOk?monto:0,origen:'firmas_vivo',hora:new Date().toISOString()
+      puntos:+puntos||0,multaAplicada:multaOk,monto:multaOk?monto:0,origen:'firmas_vivo',hora:new Date().toISOString(),
+      reportado_por:nombreUsuario||null
     };
     var ok=await registrarExcepcionEnCierre(fechaHoyCL(),fila,toast,nombreUsuario);
     setEnviando(false);
@@ -899,6 +900,33 @@ function FirmasEnVivo(props){
     return function(){clearInterval(iv);};
   },[clienteSel,mensajeroSel,estadoSel,filtro,fechaDesde,fechaHasta]);
 
+  // El badge "✓ Reportado" de cada tarjeta antes vivía SOLO en este estado local
+  // (_reportados), así que se perdía apenas se recargaba la página -- Luis: "si yo recargo la
+  // pagina no hay nada que me diga que ya fue reportado". Ahora se hidrata leyendo directo de
+  // `cierres_ruta.firmas_excepciones` (donde registrarExcepcionEnCierre ya venía guardando cada
+  // reporte), para el mismo rango de fechas que cargar() -- sin filtrar por estado_reporte,
+  // porque un reporte sigue siendo válido aunque el Cierre Diario de ese día ya se haya cerrado.
+  // Se guarda el objeto completo (quién, qué falta, cuándo) para poder mostrar "por quién" y un
+  // tooltip con el detalle, no solo un booleano.
+  function cargarExcepciones(){
+    var lim=limitesRango(filtro,fechaDesde,fechaHasta);
+    if(filtro==='rango'&&(!lim.desde||!lim.hasta)){setReportados({});return;}
+    var q=db.from('cierres_ruta').select('fecha,firmas_excepciones');
+    if(lim.desde)q=q.gte('fecha',lim.desde);
+    if(lim.hasta)q=q.lte('fecha',lim.hasta);
+    q.then(function(r){
+      var mapa={};
+      ((r&&r.data)||[]).forEach(function(row){
+        (row.firmas_excepciones||[]).forEach(function(f){
+          if(!f||!f.codigo)return;
+          mapa[f.codigo]={reportado_por:f.reportado_por||null,falta:f.falta||'',accion:f.accion||'',hora:f.hora||null,fecha:row.fecha};
+        });
+      });
+      setReportados(mapa);
+    }).catch(function(){});
+  }
+  useEffect(function(){cargarExcepciones();},[filtro,fechaDesde,fechaHasta]);
+
   var filtrados=useMemo(function(){
     var q=busqueda.trim().toLowerCase();
     return envios.filter(function(e){
@@ -994,7 +1022,7 @@ function FirmasEnVivo(props){
           React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:8,gap:8}},
             React.createElement('span',{style:{fontSize:10,color:'var(--text-soft)'}},'Actualizado '+(e.updated_at?new Date(e.updated_at).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—')),
             reportados[e.codigo]?
-              React.createElement('span',{style:{fontSize:10,fontWeight:700,color:'#2e7d4f'}},'✓ Reportado'):
+              React.createElement('span',{title:'Falta: '+(reportados[e.codigo].falta||'—')+(reportados[e.codigo].accion?'\nAcción: '+reportados[e.codigo].accion:'')+(reportados[e.codigo].hora?'\n'+new Date(reportados[e.codigo].hora).toLocaleString('es-CL'):''),style:{fontSize:10,fontWeight:700,color:'#2e7d4f',cursor:'help'}},'✓ Reportado'+(reportados[e.codigo].reportado_por?' por '+reportados[e.codigo].reportado_por.split(',')[0]:'')):
               React.createElement('button',{onClick:function(){setReportarEnvio(e);},style:{padding:'3px 10px',borderRadius:6,border:'1px solid rgba(176,48,48,0.3)',background:'rgba(176,48,48,0.06)',color:'#b03030',fontWeight:700,fontSize:10,cursor:'pointer',whiteSpace:'nowrap'}},'⚠ Reportar'))
         );
       })
@@ -1003,7 +1031,7 @@ function FirmasEnVivo(props){
     reportarEnvio&&React.createElement(ReportarModal,{
       envio:reportarEnvio,toast:toast,nombreUsuario:nombreUsuario,
       onClose:function(){setReportarEnvio(null);},
-      onDone:function(){setReportados(function(prev){var n=Object.assign({},prev);n[reportarEnvio.codigo]=true;return n;});}
+      onDone:function(fila){setReportados(function(prev){var n=Object.assign({},prev);n[reportarEnvio.codigo]={reportado_por:(fila&&fila.reportado_por)||nombreUsuario||null,falta:fila&&fila.falta,accion:fila&&fila.accion,hora:fila&&fila.hora,fecha:fechaHoyCL()};return n;});}
     })
   );
 }

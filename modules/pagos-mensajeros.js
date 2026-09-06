@@ -224,7 +224,14 @@ function PenalizacionModal(props){
           lista.map(function(x,i){
             return React.createElement('div',{key:x.id,style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 12px',background:i%2===0?'#fff':'var(--cream)',borderBottom:'1px solid var(--border)',gap:8}},
               React.createElement('div',{style:{flex:1,minWidth:0}},
-                React.createElement('div',{style:{fontSize:12,fontWeight:600}},x.motivo),
+                React.createElement('div',{style:{fontSize:12,fontWeight:600,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}},
+                  x.motivo,
+                  // Si la multa vino de "⚠ Reportar" en Firmas en Vivo (Operaciones), queda
+                  // enlazada al código concreto del envío que la originó -- Luis: "si tengo un
+                  // reporte o multa deberia de estar enlazado". Los descuentos aplicados a mano
+                  // acá (sin pasar por Firmas en Vivo) no tienen código y no muestran el badge.
+                  x.codigo?React.createElement('span',{style:{fontFamily:'JetBrains Mono',fontSize:10,fontWeight:700,color:'#a87d2a',background:'rgba(200,168,75,0.14)',padding:'1px 6px',borderRadius:4}},x.codigo):null
+                ),
                 x.nota?React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)'}},x.nota):null,
                 React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)'}},x.fecha)
               ),
@@ -266,8 +273,11 @@ function normNombreConsumo(n){return(n||'').toUpperCase().replace(/,\s*/g,' ').r
 // select-modify-update (lectura fresca justo antes de escribir) y toca SOLO el arreglo
 // `penalizaciones` del mensajero encontrado, sin tocar nada más de esa fila ni de los demás
 // mensajeros (es plata real de nómina, no hay margen para pisar datos a ciegas).
+// `codigo` (el envío que originó el reporte desde Firmas en Vivo) queda guardado en el item --
+// Luis pidió que la multa quede ENLAZADA al paquete concreto y se vea en el carnet de pago del
+// mensajero, no solo como un monto suelto.
 // Devuelve {ok:true,monto,item} o {ok:false,motivo:'sin_semana'|'sin_mensajero'|'error',mensaje?}.
-async function aplicarMultaExterna(nombreMensajero,motivo,envios,nota,fecha){
+async function aplicarMultaExterna(nombreMensajero,motivo,envios,nota,fecha,codigo){
   try{
     var semana=calcularSemanaDeFecha(fecha);
     var r=await db.from('pagos_mensajeros_semanales').select('data').eq('semana',semana).maybeSingle();
@@ -280,7 +290,7 @@ async function aplicarMultaExterna(nombreMensajero,motivo,envios,nota,fecha){
     var pago=blob.pagos[idx];
     var env=+envios||0;
     var monto=Math.round(env*(+pago.tarifa||0));
-    var item={id:Date.now(),motivo:motivo,envios:env,monto:monto,nota:nota||'',fecha:fecha,origen:'firmas_vivo'};
+    var item={id:Date.now(),motivo:motivo,envios:env,monto:monto,nota:nota||'',fecha:fecha,origen:'firmas_vivo',codigo:codigo||null};
     var nuevoPago=Object.assign({},pago,{penalizaciones:(pago.penalizaciones||[]).concat([item])});
     var nuevosPagos=blob.pagos.slice();
     nuevosPagos[idx]=nuevoPago;
@@ -734,7 +744,10 @@ function PagosTarjetas(props){
               );
             })
           ):null,
-          (p.penalizacion||0)>0?fila('Penalización','-'+(p.penalizaciones||[]).reduce(function(a,x){return a+(x.envios||0);},0)+' env. ($'+Math.round(p.penalizacion).toLocaleString('es-CL')+')','var(--danger)'):null,
+          // Igual que Siniestro: tooltip con el detalle de cada multa (código del envío si vino
+          // de "⚠ Reportar" en Firmas en Vivo, motivo y nota) -- Luis pidió que la multa quede
+          // enlazada al paquete y visible acá, no solo como un monto agregado.
+          (p.penalizacion||0)>0?fila('Penalización',React.createElement('span',{title:(p.penalizaciones&&p.penalizaciones.length)?p.penalizaciones.map(function(x){return (x.codigo?x.codigo+': ':'')+x.motivo+(x.nota?' ('+x.nota+')':'');}).join(' | '):''},'-'+(p.penalizaciones||[]).reduce(function(a,x){return a+(x.envios||0);},0)+' env. ($'+Math.round(p.penalizacion).toLocaleString('es-CL')+')'),'var(--danger)'):null,
           fila('Adelanto',inputMini(p.adelanto,function(e){updatePago(p.id,'adelanto',e.target.value);}),'#e67e22'),
           fila('Préstamo',inputMini(p.prestamo,function(e){updatePago(p.id,'prestamo',e.target.value);}),'#c0392b'),
           saldoPrestamo>0?fila('Saldo Pend.',React.createElement('span',{style:{cursor:'pointer'},onClick:function(){setPrestamosModal(p.nombre);},title:'Ver historial de préstamos'},'$'+Math.round(saldoPrestamo).toLocaleString('es-CL')),'#c0392b'):null
@@ -2605,6 +2618,18 @@ const totales=pagos.filter(mensajeroActivo).reduce((a,p)=>{const m=montoPago(p);
           return{label:'Descuento por Siniestro · Código: '+(d.codigo||'sin código registrado')+' · Siniestro del '+fechaFmt,val:-d.valor,positivo:false};
         })
       :((p.descSiniestro||0)>0?[{label:'Descuento por Siniestro',val:-p.descSiniestro,positivo:false}]:[]);
+    // Penalización por Falta: mismo criterio -- un renglón por multa, con el código del envío
+    // que la originó (si vino de "⚠ Reportar" en Firmas en Vivo), el motivo/falta, la fecha y la
+    // nota, en vez de un solo monto agregado. Las multas aplicadas a mano (sin pasar por Firmas
+    // en Vivo) no tienen código, así que ese dato simplemente no aparece para esas.
+    const filasPenalizacion=(p.penalizaciones&&p.penalizaciones.length)
+      ?p.penalizaciones.map(function(x){
+          const fechaFmt=x.fecha?new Date(x.fecha+'T12:00:00').toLocaleDateString('es-CL'):'sin fecha';
+          const cod=x.codigo?(' · Código: '+x.codigo):'';
+          const notaTxt=x.nota?(' · '+x.nota):'';
+          return{label:'Penalización · '+x.motivo+cod+' · '+fechaFmt+notaTxt+' ('+(x.envios||0)+' env.)',val:-(x.monto||0),positivo:false};
+        })
+      :[];
     const filasDescuento=[].concat(
       [
         p.ajuste!==0?{label:'Ajuste',val:p.ajuste,positivo:p.ajuste>0}:null,
@@ -2615,8 +2640,8 @@ const totales=pagos.filter(mensajeroActivo).reduce((a,p)=>{const m=montoPago(p);
       filasEfectividad,
       p.consumo>0?[{label:'Consumo Local',val:-p.consumo,positivo:false}]:[],
       filasSiniestro,
+      filasPenalizacion,
       [
-        (p.penalizacion||0)>0?{label:'Penalización por Falta ('+(p.penalizaciones||[]).reduce(function(a,x){return a+(x.envios||0);},0)+' env.)',val:-p.penalizacion,positivo:false}:null,
         p.adelanto>0?{label:'Adelanto Recibido',val:-p.adelanto,positivo:false}:null,
         p.prestamo>0?{label:'Préstamo Descontado',val:-p.prestamo,positivo:false}:null
       ].filter(Boolean)
