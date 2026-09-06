@@ -2512,33 +2512,47 @@ const totales=pagos.filter(mensajeroActivo).reduce((a,p)=>{const m=montoPago(p);
           return{comuna:com||'SIN COMUNA',cant:cant,tarifa:tar,subtotal:cant*tar};
         })
       :[{comuna:'General',cant:p.envios,tarifa:p.tarifa,subtotal:p.bruto}];
-    const filasDescuento=[
-      p.ajuste!==0?{label:'Ajuste',val:p.ajuste,positivo:p.ajuste>0}:null,
-      p.iva>0?{label:'IVA / Descuento',val:-p.iva,positivo:false}:null,
-      p.extra>0?{label:'Extra / Bono',val:p.extra,positivo:true}:null,
-      (p.bonoEfectividad||0)>0?{label:'Bono Efectividad'+(p.efectividad!=null?' ('+(p.efectividad*100).toFixed(1)+'%)':''),val:p.bonoEfectividad,positivo:true}:null,
-      (p.descuentoEfectividad||0)>0?{label:'Descuento Efectividad ('+(p.paquetesNoEntregadosEfectividad||0)+' paq. en '+(p.diasBajoEfectividad||0)+' día'+(p.diasBajoEfectividad===1?'':'s')+')',val:-p.descuentoEfectividad,positivo:false}:null,
-      p.consumo>0?{label:'Consumo Local',val:-p.consumo,positivo:false}:null,
-      (p.descSiniestro||0)>0?{label:'Descuento por Siniestro',val:-p.descSiniestro,positivo:false}:null,
-      (p.penalizacion||0)>0?{label:'Penalización por Falta ('+(p.penalizaciones||[]).reduce(function(a,x){return a+(x.envios||0);},0)+' env.)',val:-p.penalizacion,positivo:false}:null,
-      p.adelanto>0?{label:'Adelanto Recibido',val:-p.adelanto,positivo:false}:null,
-      p.prestamo>0?{label:'Préstamo Descontado',val:-p.prestamo,positivo:false}:null
-    ].filter(Boolean);
+    // Descuento Efectividad y Descuento por Siniestro: en vez de una sola línea con el monto
+    // agregado, se abre UN RENGLÓN POR CADA INCIDENTE -- Luis pidió que quede "bien detallado:
+    // código, incidencia y explicación", no un total sin desglosar. Si el pago viene de un
+    // respaldo guardado en Supabase de ANTES de este cambio (no se volvió a correr "Calcular
+    // Envíos Semana"/no se recargaron los siniestros todavía), se cae a una sola línea con el
+    // monto total como antes, dejando claro que falta recalcular para ver el detalle.
+    const filasEfectividad=(p.detalleEfectividad&&p.detalleEfectividad.length)
+      ?p.detalleEfectividad.map(function(d){
+          const montoDia=d.paquetes*(+criterioEf.descuento||0);
+          const fechaFmt=new Date(d.fecha+'T12:00:00').toLocaleDateString('es-CL');
+          const cods=d.codigos&&d.codigos.length?d.codigos.join(', '):'sin código registrado';
+          return{label:'Descuento Efectividad · '+fechaFmt+' · Código(s) no entregado(s): '+cods+' · '+d.paquetes+' paq. bajo el umbral de efectividad ese día',val:-montoDia,positivo:false};
+        })
+      :((p.descuentoEfectividad||0)>0?[{label:'Descuento Efectividad ('+(p.paquetesNoEntregadosEfectividad||0)+' paq. en '+(p.diasBajoEfectividad||0)+' día'+(p.diasBajoEfectividad===1?'':'s')+') -- recalcular "Calcular Envíos Semana" para ver el código de cada paquete',val:-p.descuentoEfectividad,positivo:false}]:[]);
+    const filasSiniestro=(p.detalleSiniestro&&p.detalleSiniestro.length)
+      ?p.detalleSiniestro.map(function(d){
+          const fechaFmt=d.fecha?new Date(d.fecha+'T12:00:00').toLocaleDateString('es-CL'):'sin fecha';
+          return{label:'Descuento por Siniestro · Código: '+(d.codigo||'sin código registrado')+' · Siniestro del '+fechaFmt,val:-d.valor,positivo:false};
+        })
+      :((p.descSiniestro||0)>0?[{label:'Descuento por Siniestro',val:-p.descSiniestro,positivo:false}]:[]);
+    const filasDescuento=[].concat(
+      [
+        p.ajuste!==0?{label:'Ajuste',val:p.ajuste,positivo:p.ajuste>0}:null,
+        p.iva>0?{label:'IVA / Descuento',val:-p.iva,positivo:false}:null,
+        p.extra>0?{label:'Extra / Bono',val:p.extra,positivo:true}:null,
+        (p.bonoEfectividad||0)>0?{label:'Bono Efectividad'+(p.efectividad!=null?' ('+(p.efectividad*100).toFixed(1)+'%)':''),val:p.bonoEfectividad,positivo:true}:null
+      ].filter(Boolean),
+      filasEfectividad,
+      p.consumo>0?[{label:'Consumo Local',val:-p.consumo,positivo:false}]:[],
+      filasSiniestro,
+      [
+        (p.penalizacion||0)>0?{label:'Penalización por Falta ('+(p.penalizaciones||[]).reduce(function(a,x){return a+(x.envios||0);},0)+' env.)',val:-p.penalizacion,positivo:false}:null,
+        p.adelanto>0?{label:'Adelanto Recibido',val:-p.adelanto,positivo:false}:null,
+        p.prestamo>0?{label:'Préstamo Descontado',val:-p.prestamo,positivo:false}:null
+      ].filter(Boolean)
+    );
     const filasComunaHtml=filasComuna.map(function(f){
       return`<tr><td>${f.comuna}</td><td class="c">${f.cant}</td><td class="r">${fmtCLP(f.tarifa)}</td><td class="r sub">${fmtCLP(f.subtotal)}</td></tr>`;
     }).join('');
     const filasDescuentoHtml=filasDescuento.length?filasDescuento.map(function(f){
       return`<tr><td>${f.label}</td><td class="r" style="color:${f.positivo?'#1a6b3a':'#b03030'};font-weight:700">${f.positivo?'+':''}${fmtCLP(f.val)}</td></tr>`;
-    }).join(''):'';
-    // Detalle código por código de los dos descuentos que sí son rastreables a un paquete
-    // puntual -- Luis pidió ver exactamente qué paquete(s) generaron cada descuento, no solo el
-    // monto agregado (p.detalleEfectividad viene del loop día-por-día en calcularEnviosSemana,
-    // p.detalleSiniestro del useEffect que trae los siniestros marcados 'descontado_mensajero').
-    const filasEfectividadHtml=(p.detalleEfectividad&&p.detalleEfectividad.length)?p.detalleEfectividad.map(function(d){
-      return`<tr><td>${new Date(d.fecha+'T12:00:00').toLocaleDateString('es-CL')}</td><td>${d.codigos&&d.codigos.length?d.codigos.join(', '):'—'}</td><td class="r" style="color:#b03030;font-weight:700">${d.paquetes}</td></tr>`;
-    }).join(''):'';
-    const filasSiniestroHtml=(p.detalleSiniestro&&p.detalleSiniestro.length)?p.detalleSiniestro.map(function(d){
-      return`<tr><td>${d.codigo||'—'}</td><td>${d.fecha?new Date(d.fecha+'T12:00:00').toLocaleDateString('es-CL'):'—'}</td><td class="r" style="color:#b03030;font-weight:700">${fmtCLP(d.valor)}</td></tr>`;
     }).join(''):'';
     win.document.write(`<!DOCTYPE html><html><head>
     <meta charset="UTF-8"/>
@@ -2632,20 +2646,6 @@ const totales=pagos.filter(mensajeroActivo).reduce((a,p)=>{const m=montoPago(p);
         ${filasDescuentoHtml?`
         <div class="section-title">⚖ Ajustes y Descuentos</div>
         <table><tbody>${filasDescuentoHtml}</tbody></table>`:''}
-
-        ${filasEfectividadHtml?`
-        <div class="section-title">🕒 Detalle Descuento por Efectividad</div>
-        <table>
-          <thead><tr><th>Fecha</th><th>Código(s) no entregados</th><th class="r">Paquetes</th></tr></thead>
-          <tbody>${filasEfectividadHtml}</tbody>
-        </table>`:''}
-
-        ${filasSiniestroHtml?`
-        <div class="section-title">📦 Detalle Descuento por Siniestro</div>
-        <table>
-          <thead><tr><th>Código</th><th>Fecha siniestro</th><th class="r">Valor descontado</th></tr></thead>
-          <tbody>${filasSiniestroHtml}</tbody>
-        </table>`:''}
 
         ${p.obs?`<div class="obs-box"><strong>Observaciones:</strong> ${p.obs}</div>`:''}
 
