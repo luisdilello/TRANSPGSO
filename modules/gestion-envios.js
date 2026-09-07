@@ -170,29 +170,6 @@ async function cargarRetornadosPeriodoReal(){
   setCargandoRetornadosReal(false);
 }
 useEffect(()=>{cargarRetornadosPeriodoReal();const _ivRetReal=setInterval(cargarRetornadosPeriodoReal,60000);return()=>clearInterval(_ivRetReal);},[periodo,mesFiltro,desde,hasta]);
-// enviosPeriodoEfectivo: para el resto de los estados (En Bodega, En Ruta, Reprogramado,
-// Cancelado, Siniestro, En Bodega Cancelado) -- los que NO tienen su propia lista "fecha real"
-// como Entregado/Retorno de arriba -- calcula el ESTADO AL CIERRE del rango elegido, no el
-// estado en vivo de hoy. Luis reporto el mismo problema mirando 'Todos'/una quincena cerrada:
-// un envio despachado en agosto podia mostrar 'Retorno' (su estado de HOY) aunque ese retorno
-// se haya gestionado recien en septiembre, DESPUES de que la quincena de agosto ya habia
-// cerrado -- "el punto clave de contar con un filtro de rango es que me de lo gestionado en
-// ese rango de fechas... me tiene que dar todo con el estado final de esas fechas, no
-// diferente". calcularEstadoEfectivo (index.html) detecta solo los envios con algun evento de
-// historial POSTERIOR al cierre (el "drift", se espera chico) y unicamente para esos recalcula
-// cual era su estado real al cierre -- el resto conserva su estado en vivo tal cual (ya es
-// correcto, porque nada cambio despues del cierre).
-const _uEnvPerEfec=useState([]),enviosPeriodoEfectivo=_uEnvPerEfec[0],setEnviosPeriodoEfectivo=_uEnvPerEfec[1];
-async function cargarEnviosPeriodoEfectivo(){
-  const{hasta:hastaQ}=limitesPeriodoGE();
-  if(!hastaQ||!enviosPeriodo.length){setEnviosPeriodoEfectivo(enviosPeriodo);return;}
-  try{
-    const hastaISO=limiteDiaChileUTC(hastaQ,true);
-    const rows=await calcularEstadoEfectivo(enviosPeriodo,hastaISO);
-    setEnviosPeriodoEfectivo(rows);
-  }catch(eEfec){console.warn('Error calculando estado efectivo:',eEfec.message);setEnviosPeriodoEfectivo(enviosPeriodo);}
-}
-useEffect(()=>{cargarEnviosPeriodoEfectivo();},[enviosPeriodo,periodo,mesFiltro,desde,hasta]);
 async function sincronizarDesdeSupabase(){setSincronizando(true);try{
   // Solo trae el periodo activo (Hoy por defecto), no la tabla completa. Se pagina en bloques
   // de 1000 igual que antes por si un periodo amplio (Mes/Rango grande) supera esa cantidad,
@@ -717,6 +694,29 @@ function enPeriodoGE(e){
   return true;
 }
 const enviosPeriodo=useMemo(()=>envios.filter(enPeriodoGE),[envios,periodo,mesFiltro,desde,hasta]);
+// enviosPeriodoEfectivo: para el resto de los estados (En Bodega, En Ruta, Reprogramado,
+// Cancelado, Siniestro, En Bodega Cancelado) -- los que NO tienen su propia lista "fecha real"
+// como Entregado/Retorno de arriba -- calcula el ESTADO AL CIERRE del rango elegido, no el
+// estado en vivo de hoy. Luis reporto el mismo problema mirando 'Todos'/una quincena cerrada:
+// un envio despachado en agosto podia mostrar 'Retorno' (su estado de HOY) aunque ese retorno
+// se haya gestionado recien en septiembre, DESPUES de que la quincena de agosto ya habia
+// cerrado -- "el punto clave de contar con un filtro de rango es que me de lo gestionado en
+// ese rango de fechas... me tiene que dar todo con el estado final de esas fechas, no
+// diferente". calcularEstadoEfectivo (index.html) detecta solo los envios con algun evento de
+// historial POSTERIOR al cierre (el "drift", se espera chico) y unicamente para esos recalcula
+// cual era su estado real al cierre -- el resto conserva su estado en vivo tal cual (ya es
+// correcto, porque nada cambio despues del cierre).
+const _uEnvPerEfec=useState([]),enviosPeriodoEfectivo=_uEnvPerEfec[0],setEnviosPeriodoEfectivo=_uEnvPerEfec[1];
+async function cargarEnviosPeriodoEfectivo(){
+  const{hasta:hastaQ}=limitesPeriodoGE();
+  if(!hastaQ||!enviosPeriodo.length){setEnviosPeriodoEfectivo(enviosPeriodo);return;}
+  try{
+    const hastaISO=limiteDiaChileUTC(hastaQ,true);
+    const rows=await calcularEstadoEfectivo(enviosPeriodo,hastaISO);
+    setEnviosPeriodoEfectivo(rows);
+  }catch(eEfec){console.warn('Error calculando estado efectivo:',eEfec.message);setEnviosPeriodoEfectivo(enviosPeriodo);}
+}
+useEffect(()=>{cargarEnviosPeriodoEfectivo();},[enviosPeriodo,periodo,mesFiltro,desde,hasta]);
 const baseTardioMap=useMemo(()=>calcularBaseTardio(envios),[envios]);
 const tardiosPendientes=useMemo(()=>enviosPeriodo.filter(e=>esEnvioTardio(e,baseTardioMap)&&!e.aviso_tardio),[enviosPeriodo,baseTardioMap]);
 async function marcarAvisoTardio(id,codigo,valor){
