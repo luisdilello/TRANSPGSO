@@ -624,7 +624,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788786555;
+window.__MODULES_VERSION=1788797005;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1373,6 +1373,60 @@ async function fetchEntregadosPorFechaReal(desde,hasta,cols){
   const rows=await fetchPorFechaRealDeEstado('entregado',desde,hasta,cols);
   rows.forEach(function(e){e._fechaRealEntrega=e._fechaRealEstado;e._fechaRealEntregaISO=e._fechaRealEstadoISO;});
   return rows;
+}
+// calcularEstadoEfectivo: dado un conjunto de envíos y el cierre (hasta) de un rango de
+// fechas, calcula el "estado al cierre del rango" (_estadoEfectivo) de cada uno -- es decir,
+// el estado que tenía CADA envío en el instante `hastaISO`, no su estado en vivo de hoy.
+// Esto es necesario porque envios.estado siempre refleja el último evento (puede ser de
+// HOY), aunque el usuario esté mirando un rango cerrado hace semanas (ej: quincena pasada).
+// Estrategia "detectar drift, recalcular solo eso" para no pagar el costo de reconstruir el
+// historial completo de miles de envíos cuando la enorme mayoría no cambió después del cierre:
+//   1) De una sola pasada (por lotes), preguntar qué códigos tienen ALGÚN evento de historial
+//      posterior a `hastaISO` -- ese es el conjunto con "drift" (se espera chico).
+//   2) Solo para esos, traer TODO su historial hasta `hastaISO` y quedarse con el más
+//      reciente -- ese es su estado real al cierre.
+//   3) Los que no tienen drift mantienen su estado en vivo (ya es correcto, porque nada
+//      cambió después del cierre).
+async function calcularEstadoEfectivo(envios,hastaISO){
+  if(!envios||!envios.length)return envios||[];
+  const codigos=envios.map(e=>e.codigo);
+  const conDriftPosterior=new Set();
+  {
+    const LOTE=200;
+    for(let i=0;i<codigos.length;i+=LOTE){
+      const lote=codigos.slice(i,i+LOTE);
+      const r=await db.from('historial_envios').select('codigo_envio')
+        .gt('created_at',hastaISO).in('codigo_envio',lote);
+      if(r.error)throw r.error;
+      (r.data||[]).forEach(h=>conDriftPosterior.add(h.codigo_envio));
+    }
+  }
+  if(!conDriftPosterior.size)return envios.map(e=>({...e,_estadoEfectivo:e.estado,_fechaEfectivaISO:null}));
+  const drift=[...conDriftPosterior];
+  const ultimoAlCierre={};
+  {
+    const LOTE=200;
+    for(let i=0;i<drift.length;i+=LOTE){
+      const lote=drift.slice(i,i+LOTE);
+      const r=await db.from('historial_envios').select('codigo_envio,estado,created_at')
+        .lte('created_at',hastaISO).in('codigo_envio',lote);
+      if(r.error)throw r.error;
+      (r.data||[]).forEach(h=>{
+        const actual=ultimoAlCierre[h.codigo_envio];
+        if(!actual||new Date(h.created_at)>new Date(actual.created_at))ultimoAlCierre[h.codigo_envio]=h;
+      });
+    }
+  }
+  return envios.map(e=>{
+    if(conDriftPosterior.has(e.codigo)){
+      const u=ultimoAlCierre[e.codigo];
+      // Caso raro (no debería pasar en la práctica: envios.fecha cae en el período pero no hay
+      // NINGÚN evento de historial <= hasta): más seguro mostrar el estado en vivo que ocultar
+      // el envío o mostrar un estado vacío.
+      return{...e,_estadoEfectivo:u?u.estado:e.estado,_fechaEfectivaISO:u?u.created_at:null};
+    }
+    return{...e,_estadoEfectivo:e.estado,_fechaEfectivaISO:null};
+  });
 }
 const _React=React,useState=_React.useState,useEffect=_React.useEffect,useMemo=_React.useMemo,useRef=_React.useRef;const INIT_CLIENTES=[{id:1,nombre:'MR SHENG',activo:true,tarifa:1600,pagaIVA:false,obs:'Valor ÚNICO S/IVA. Mínimo diario 200 pcs.',rut:'',direccion:'',contacto:'',tarifa10kg:3200,tarifa18kg:12800,tarifaColina:2600,tarifaPH:2600},{id:2,nombre:'YAFA LTDA',activo:true,tarifa:2300,pagaIVA:true,obs:''},{id:3,nombre:'ALMA BONSAI',activo:true,tarifa:2500,pagaIVA:false,obs:'No suele enviar paquetería grande ni PH y Colina'},{id:4,nombre:'ANDES (COLINA)',activo:true,tarifa:2101,pagaIVA:true,obs:'Tarifada por cantidad, precio fijo en Colina y PH'},{id:5,nombre:'DMT',activo:true,tarifa:2261,pagaIVA:false,obs:'No suele enviar paquetería grande'},{id:6,nombre:'HUANG SPA',activo:true,tarifa:1849,pagaIVA:true,obs:'No envía paquetería de Colina y PH'},{id:7,nombre:'IAITECH',activo:true,tarifa:1765,pagaIVA:true,obs:'Suele enviar paquetería pesada o grande'},{id:8,nombre:'QUE COMPRARAS',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:9,nombre:'MARDA',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:10,nombre:'ILAHUI',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:11,nombre:'MEDICALAB',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:12,nombre:'HOME ELECTRO',activo:true,tarifa:2521,pagaIVA:true,obs:''},{id:13,nombre:'SHOP HEY',activo:false,tarifa:2101,pagaIVA:true,obs:''},{id:14,nombre:'MALL SANHOO',activo:true,tarifa:2101,pagaIVA:false,obs:''},{id:15,nombre:'HUANG XIUDAN',activo:true,tarifa:2380,pagaIVA:false,obs:''},{id:16,nombre:'PUMA',activo:true,tarifa:1933,pagaIVA:true,obs:'No envía paquetería de Colina y PH'},{id:17,nombre:'DON TANG',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:18,nombre:'DENTAL ALAMEDA',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:19,nombre:'IMPORTADORA VINI',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:20,nombre:'MAX BELLEZA',activo:true,tarifa:2101,pagaIVA:false,obs:''},{id:21,nombre:'GALVORA',activo:true,tarifa:2300,pagaIVA:true,obs:''},{id:22,nombre:'MAKA',activo:false,tarifa:1891,pagaIVA:true,obs:'Cliente con retiro complicado'},{id:23,nombre:'WEIHOME',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:24,nombre:'NEXO',activo:true,tarifa:2101,pagaIVA:true,obs:'El cliente viene a dejar la paquetería'},{id:25,nombre:'POWERSUPPS',activo:true,tarifa:2500,pagaIVA:false,obs:''},{id:26,nombre:'SUPER XIYU',activo:true,tarifa:1950,pagaIVA:true,obs:''},{id:27,nombre:'PLAZA LILA',activo:true,tarifa:2101,pagaIVA:true,obs:''},{id:28,nombre:'ROMERO',activo:false,tarifa:1849,pagaIVA:true,obs:''},{id:29,nombre:'YEAH',activo:false,tarifa:2101,pagaIVA:true,obs:''},{id:30,nombre:'MODA Y MARKET',activo:false,tarifa:2101,pagaIVA:true,obs:''},{id:31,nombre:'NUEVA SHENGA',activo:false,tarifa:2101,pagaIVA:true,obs:''}];const INIT_MENSAJEROS=[{id:1,nombre:'ALEX ARAUJO',activo:true,tarifa:1200},{id:2,nombre:'ANGEL OSUNA',activo:true,tarifa:1200},{id:3,nombre:'ANGEL CARPIO',activo:true,tarifa:1200},{id:4,nombre:'EDBEL MORILLO',activo:true,tarifa:1000},{id:5,nombre:'ELIS CHANGAROTE',activo:true,tarifa:1200},{id:6,nombre:'EXPRESS',activo:true,tarifa:1200},{id:7,nombre:'EXPRESSCOLINA',activo:true,tarifa:1200},{id:8,nombre:'FERNANDOCHECK',activo:false,tarifa:1200},{id:9,nombre:'FIDEL REVERON',activo:true,tarifa:1800},{id:10,nombre:'GERARDO NAHUELPAN',activo:true,tarifa:1200},{id:11,nombre:'GUSTAVO ROMAN',activo:true,tarifa:1300},{id:12,nombre:'HILDEMARO CABRILES',activo:true,tarifa:1200},{id:13,nombre:'JYF',activo:true,tarifa:1200},{id:14,nombre:'JONATHAN RAMIREZ',activo:true,tarifa:1300},{id:15,nombre:'JORGE GATICA',activo:true,tarifa:1300},{id:16,nombre:'MARCOS GIOVACCHINI',activo:true,tarifa:1000},{id:17,nombre:'MARCOS FUENTEALBA',activo:true,tarifa:1200},{id:18,nombre:'MARTIN GATICA',activo:true,tarifa:1300},{id:19,nombre:'MATIAS PARRA',activo:true,tarifa:1200},{id:20,nombre:'RONALD GARCIA',activo:true,tarifa:1200},{id:21,nombre:'YULFER JIMENEZ',activo:true,tarifa:1200},{id:22,nombre:'JONJAIRO CANTILLO',activo:true,tarifa:1200},{id:23,nombre:'JUAN BARTOLI',activo:true,tarifa:1400},{id:24,nombre:'JAVIER CASTRO',activo:true,tarifa:1200},{id:25,nombre:'VICTOR PEREZ',activo:true,tarifa:1000},{id:26,nombre:'MATIAS MORA',activo:true,tarifa:1000},{id:27,nombre:'DAVID MOLINA',activo:true,tarifa:1300},{id:28,nombre:'HERNAN MELEAN',activo:true,tarifa:1200},{id:29,nombre:'ALEJANDRO PADRINO',activo:true,tarifa:1200},{id:30,nombre:'JF LOGISTIC',activo:true,tarifa:2300},{id:31,nombre:'PBCLIS EXPRESS',activo:true,tarifa:0},{id:32,nombre:'MARTIN, PALMA',activo:true,tarifa:1300},{id:33,nombre:'LEONARDO, ESTUPIAÑAN',activo:true,tarifa:1200},{id:34,nombre:'DANIELA, TOLEDO',activo:true,tarifa:1200}];const pct=v=>isNaN(v)||!isFinite(v)?'—':(v*100).toFixed(1)+'%';const barColor=v=>v>=0.95?'#2e7d4f':'#b03030';const badgeKpi=v=>v>=0.95?'green':'red';const fmt=n=>typeof n==='number'?n.toLocaleString('es-CL'):'—';const today=()=>new Date().toLocaleDateString('es-CL',{weekday:'long',year:'numeric',month:'long',day:'numeric'});function normalizarNombre(raw){if(!raw)return'';return raw.toString().trim().replace(/,\s*/g,' ').replace(/\s+/g,' ').toUpperCase();}function normNombre(n){return(n||'').toUpperCase().replace(/,/g,'').replace(/\s+/g,' ').trim();}function parsearFecha(raw){try{if(!raw)return'';if(raw instanceof Date){if(isNaN(raw.getTime()))return'';return raw.toISOString().slice(0,10);}if(typeof raw==='number'){const d=new Date(Math.round((raw-25569)*86400*1000));if(isNaN(d.getTime()))return'';return d.toISOString().slice(0,10);}const s=raw.toString().trim();if(!s)return'';const d=new Date(s);if(!isNaN(d.getTime()))return d.toISOString().slice(0,10);const m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);if(m){const d2=new Date(`${m[3].length===2?'20'+m[3]:m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`);if(!isNaN(d2.getTime()))return d2.toISOString().slice(0,10);}return'';}catch(e){return'';}}function parsearEstatus(est){const e=(est||'').toString().toLowerCase();if(e.includes('entregado'))return'entregado';if(e.includes('cancelado'))return'cancelado';if(e.includes('reprogramado')||e.includes('reprog'))return'reprogramado';if(e.includes('camino'))return'camino';return'pendiente';}function procesarImport(rows){const map={};let fechaGlobal='';rows.forEach(r=>{const desp=normalizarNombre(r['Despachador']);const cli=(r['Cliente']||'').toString().trim().toUpperCase();const est=parsearEstatus(r['Estatus de Envio']);const fecha=parsearFecha(r['Fecha Envio']);if(fecha&&!fechaGlobal)fechaGlobal=fecha;if(!desp)return;if(!map[desp])map[desp]={nombre:desp,total:0,entregados:0,enCamino:0,reprogram:0,cancelados:0,pendientes:0,fecha:fecha||fechaGlobal,clientes:{}};map[desp].total++;if(est==='entregado')map[desp].entregados++;else if(est==='cancelado')map[desp].cancelados++;else if(est==='reprogramado')map[desp].reprogram++;else if(est==='camino')map[desp].enCamino++;else map[desp].pendientes++;if(cli){if(!map[desp].clientes[cli])map[desp].clientes[cli]=0;map[desp].clientes[cli]++;}});return{data:Object.values(map),fecha:fechaGlobal};}function KpiBar(_ref2){let value=_ref2.value;const pv=Math.min(Math.max(isFinite(value)?value:0,0),1);return/*#__PURE__*/React.createElement("div",{className:"kpi-bar"},/*#__PURE__*/React.createElement("div",{className:"bar-track"},/*#__PURE__*/React.createElement("div",{className:"bar-fill",style:{width:pv*100+'%',background:barColor(pv)}})),/*#__PURE__*/React.createElement("span",{className:"bar-pct"},pct(value)));}
 // Estilo "Anillos": gauge circular animado (barra de progreso en forma de anillo, con degradado
@@ -12367,7 +12421,7 @@ window.__app = {
   normNombre, sbSelect, EnvioDetalleCard, UMBRAL_ATRASO_DIAS, EtiquetaPreview,
   UMBRAL_TARDIO_HORAS, calcularBaseTardio, esEnvioTardio, horasTardanza,
   sbUpdateEstado, sbRegistrarHistorial, sbRegistrarHistorialLote, fetchPaginadoParalelo, fetchPorDiasParalelo,
-  fetchEntregadosPorFechaReal, fetchPorFechaRealDeEstado,
+  fetchEntregadosPorFechaReal, fetchPorFechaRealDeEstado, calcularEstadoEfectivo, limiteDiaChileUTC,
   analizarEtiqueta, rotarImagenSiVertical, analizarConFallback180, rotar180,
   registrarSiniestro, sincronizarEntregaOffline,
   // Agregados para modules/firmas.js (gestión de entregas desde panel admin/operador):
