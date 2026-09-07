@@ -1,6 +1,6 @@
 (function(){
 var useEffect=React.useEffect, useMemo=React.useMemo, useRef=React.useRef, useState=React.useState;
-var AdminEditarEnvio=window.__app.AdminEditarEnvio, abrirVentanaEtiquetas=window.__app.abrirVentanaEtiquetas, COMUNAS_CHILE=window.__app.COMUNAS_CHILE, ESTADOS_ENVIO=window.__app.ESTADOS_ENVIO, EnvioDetalleCard=window.__app.EnvioDetalleCard, EtiquetaPreview=window.__app.EtiquetaPreview, ExportBtn=window.__app.ExportBtn, FotosEntregaConRecarga=window.__app.FotosEntregaConRecarga, Modal=window.__app.Modal, matchComuna=window.__app.matchComuna, esComunaValida=window.__app.esComunaValida, confirmarCodigo=window.__app.confirmarCodigo, crearEntradaHistorial=window.__app.crearEntradaHistorial, db=window.__app.db, diasDesdeFecha=window.__app.diasDesdeFecha, esEnvioAtrasado=window.__app.esEnvioAtrasado, UMBRAL_ATRASO_DIAS=window.__app.UMBRAL_ATRASO_DIAS, calcularBaseTardio=window.__app.calcularBaseTardio, esEnvioTardio=window.__app.esEnvioTardio, horasTardanza=window.__app.horasTardanza, UMBRAL_TARDIO_HORAS=window.__app.UMBRAL_TARDIO_HORAS, estadoBadge=window.__app.estadoBadge, estadoInfo=window.__app.estadoInfo, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, imprimirFotoEtiqueta=window.__app.imprimirFotoEtiqueta, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, normalizarNombre=window.__app.normalizarNombre, perfil=window.__app.perfil, playSound=window.__app.playSound, subirFotoStorage=window.__app.subirFotoStorage, sbRegistrarHistorial=window.__app.sbRegistrarHistorial, sbRegistrarHistorialLote=window.__app.sbRegistrarHistorialLote, fetchPaginadoParalelo=window.__app.fetchPaginadoParalelo, fetchPorDiasParalelo=window.__app.fetchPorDiasParalelo, fetchEntregadosPorFechaReal=window.__app.fetchEntregadosPorFechaReal;
+var AdminEditarEnvio=window.__app.AdminEditarEnvio, abrirVentanaEtiquetas=window.__app.abrirVentanaEtiquetas, COMUNAS_CHILE=window.__app.COMUNAS_CHILE, ESTADOS_ENVIO=window.__app.ESTADOS_ENVIO, EnvioDetalleCard=window.__app.EnvioDetalleCard, EtiquetaPreview=window.__app.EtiquetaPreview, ExportBtn=window.__app.ExportBtn, FotosEntregaConRecarga=window.__app.FotosEntregaConRecarga, Modal=window.__app.Modal, matchComuna=window.__app.matchComuna, esComunaValida=window.__app.esComunaValida, confirmarCodigo=window.__app.confirmarCodigo, crearEntradaHistorial=window.__app.crearEntradaHistorial, db=window.__app.db, diasDesdeFecha=window.__app.diasDesdeFecha, esEnvioAtrasado=window.__app.esEnvioAtrasado, UMBRAL_ATRASO_DIAS=window.__app.UMBRAL_ATRASO_DIAS, calcularBaseTardio=window.__app.calcularBaseTardio, esEnvioTardio=window.__app.esEnvioTardio, horasTardanza=window.__app.horasTardanza, UMBRAL_TARDIO_HORAS=window.__app.UMBRAL_TARDIO_HORAS, estadoBadge=window.__app.estadoBadge, estadoInfo=window.__app.estadoInfo, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, imprimirFotoEtiqueta=window.__app.imprimirFotoEtiqueta, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, normalizarNombre=window.__app.normalizarNombre, perfil=window.__app.perfil, playSound=window.__app.playSound, subirFotoStorage=window.__app.subirFotoStorage, sbRegistrarHistorial=window.__app.sbRegistrarHistorial, sbRegistrarHistorialLote=window.__app.sbRegistrarHistorialLote, fetchPaginadoParalelo=window.__app.fetchPaginadoParalelo, fetchPorDiasParalelo=window.__app.fetchPorDiasParalelo, fetchEntregadosPorFechaReal=window.__app.fetchEntregadosPorFechaReal, fetchPorFechaRealDeEstado=window.__app.fetchPorFechaRealDeEstado;
 function GestionEnvios(_ref26){var _detalleEnvio$mensaje;let mensajeros=_ref26.mensajeros,clientes=_ref26.clientes,toast=_ref26.toast,esSuperAdmin=_ref26.esSuperAdmin,esAdmin=_ref26.esAdmin,usuario=_ref26.usuario,codigoInicial=_ref26.codigoInicial,onCodigoInicialConsumido=_ref26.onCodigoInicialConsumido;const _useState60=useState(()=>lsLoad('gestion_envios',[])),envios=_useState60[0],setEnvios=_useState60[1];const _useState61=useState('lista'),subTab=_useState61[0],setSubTab=_useState61[1];const _useState62=useState(''),search=_useState62[0],setSearch=_useState62[1];const _useState63=useState('todos'),filtroEst=_useState63[0],setFiltroEst=_useState63[1];const _useState64=useState('todos'),filtroCli=_useState64[0],setFiltroCli=_useState64[1];const _useState65=useState('todos'),filtroMen=_useState65[0],setFiltroMen=_useState65[1];const _useState65b=useState('todos'),filtroFuente=_useState65b[0],setFiltroFuente=_useState65b[1];// Antes "⚠ Atrasados" era un simple interruptor on/off que solo miraba envíos 'en_ruta' con
 // UMBRAL_ATRASO_DIAS+ días sin entregar. Luis pidió que también se puedan ver ahí los envíos que
 // llevan 2 o más veces en estado Reprogramado (sin importar hace cuántos días fue la última
@@ -140,6 +140,36 @@ async function cargarEntregadosPeriodoReal(){
   setCargandoEntregadosReal(false);
 }
 useEffect(()=>{cargarEntregadosPeriodoReal();const _ivEntReal=setInterval(cargarEntregadosPeriodoReal,60000);return()=>clearInterval(_ivEntReal);},[periodo,mesFiltro,desde,hasta]);
+// Mismo criterio que 'Entregado' arriba, pero para 'Retorno': Luis reporto que al sacar los
+// retornos de la quincena 2 de un cliente (filtro de fecha en Gestion de Envios) le salian 18
+// paquetes cuando en realidad eran 14 -- el filtro estaba usando la fecha de DESPACHO
+// (envios.fecha) en vez de la fecha en que el ultimo estado 'retorno' quedo registrado en
+// historial_envios. Con esto 'Retorno' deja de ser subconjunto de 'Todos' igual que 'Entregado':
+// puede haber paquetes despachados ANTES del periodo pero retornados DENTRO de el (o al reves).
+const _uRetPerReal=useState([]),retornadosPeriodoReal=_uRetPerReal[0],setRetornadosPeriodoReal=_uRetPerReal[1];
+const _uCargRetReal=useState(false),cargandoRetornadosReal=_uCargRetReal[0],setCargandoRetornadosReal=_uCargRetReal[1];
+async function cargarRetornadosPeriodoReal(){
+  const{desde:desdeQ,hasta:hastaQ}=limitesPeriodoGE();
+  if(!desdeQ||!hastaQ){setRetornadosPeriodoReal([]);return;}
+  setCargandoRetornadosReal(true);
+  try{
+    const COLS_RET='id,codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,nota_admin,fuente,peso,valor_siniestro,tuvo_siniestro,updated_at,created_at,aviso_tardio';
+    const rows=await fetchPorFechaRealDeEstado('retorno',desdeQ,hastaQ,COLS_RET);
+    const normalizados=rows.map(function(sb){
+      return{id:sb.id,codigo:sb.codigo,cliente:sb.cliente||'',destinatario:sb.destinatario||'',telefono:sb.telefono||'',
+        direccion:sb.direccion||'',comuna:sb.comuna||'',referencia:sb.referencia||'',fecha:sb.fecha||'',
+        estado:sb.estado||'retorno',mensajero:sb.mensajero||'',monto:sb.monto||0,enUnCambio:sb.en_un_cambio||false,
+        nota:sb.nota||'',nota_admin:sb.nota_admin||'',fuente:sb.fuente||'propio',peso:sb.peso||null,
+        valor_siniestro:sb.valor_siniestro||null,tuvo_siniestro:sb.tuvo_siniestro||false,created_at:sb.created_at||null,
+        updated_at:sb.updated_at||null,aviso_tardio:sb.aviso_tardio||false,
+        historial:[{fecha:sb.created_at,estado:sb.estado,nota:'Desde Supabase'}],_synced:true,
+        _fechaRealEstado:sb._fechaRealEstado,_fechaRealEstadoISO:sb._fechaRealEstadoISO};
+    });
+    setRetornadosPeriodoReal(normalizados);
+  }catch(eReal){console.warn('Error cargando retornados por fecha real:',eReal.message);}
+  setCargandoRetornadosReal(false);
+}
+useEffect(()=>{cargarRetornadosPeriodoReal();const _ivRetReal=setInterval(cargarRetornadosPeriodoReal,60000);return()=>clearInterval(_ivRetReal);},[periodo,mesFiltro,desde,hasta]);
 async function sincronizarDesdeSupabase(){setSincronizando(true);try{
   // Solo trae el periodo activo (Hoy por defecto), no la tabla completa. Se pagina en bloques
   // de 1000 igual que antes por si un periodo amplio (Mes/Rango grande) supera esa cantidad,
@@ -677,13 +707,14 @@ async function marcarAvisoTardio(id,codigo,valor){
 const clientesUnicos=[...new Set(envios.map(e=>e.cliente).filter(Boolean))].sort();const mensajerosUnicos=[...new Set(envios.map(e=>e.mensajero).filter(Boolean))].sort();const fuentesUnicas=[...new Set(envios.map(e=>e.fuente).filter(Boolean))].sort();function fuenteLabel(f){const m={etiqueta:'Manual (Etiqueta)',flex:'PDF Flex',externo:'Excel',propio:'Excel (propio)',sistema:'Excel (sistema)',colecta_AM:'Colecta AM',colecta_PM:'Colecta PM',cliente:'Portal Cliente',retiro_masivo:'Retiro Masivo'};return m[f]||f;}const filtrados=useMemo(()=>{const q=search.trim().toLowerCase();
   // El bucket 'Entregado' se arma con la fecha REAL de entrega (ver entregadosPeriodoReal mas
   // arriba), no filtrando enviosPeriodo (que esta acotado por fecha de despacho) -- por eso usa
-  // su propia lista en vez de 'enviosPeriodo.filter(estado==="entregado")'.
-  const baseLista=filtroEst==='entregado'?entregadosPeriodoReal:enviosPeriodo;
+  // su propia lista en vez de 'enviosPeriodo.filter(estado==="entregado")'. 'Retorno' usa el
+  // mismo criterio (ver retornadosPeriodoReal mas arriba).
+  const baseLista=filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:enviosPeriodo;
   return baseLista.filter(e=>{const qTerms=q.split(/[\n,;\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
       const esMultiple=qTerms.length>1;
       const matchQ=!q||(esMultiple
         ?qTerms.some(t=>e.codigo.toLowerCase()===t||e.codigo.toLowerCase().includes(t))
-        :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));const matchEst=filtroEst==='todos'||filtroEst==='entregado'||e.estado===filtroEst;const matchCli=filtroCli==='todos'||e.cliente===filtroCli;const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;const matchAtraso=filtroAtrasoModo==='off'?true:filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoRepetido(e):(esEnvioAtrasado(e)||esReprogramadoRepetido(e));return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente&&matchAtraso;});},[envios,entregadosPeriodoReal,search,filtroEst,filtroCli,filtroMen,filtroFuente,filtroAtrasoModo,reprogCount]);
+        :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));const matchEst=filtroEst==='todos'||filtroEst==='entregado'||filtroEst==='retorno'||e.estado===filtroEst;const matchCli=filtroCli==='todos'||e.cliente===filtroCli;const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;const matchAtraso=filtroAtrasoModo==='off'?true:filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoRepetido(e):(esEnvioAtrasado(e)||esReprogramadoRepetido(e));return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente&&matchAtraso;});},[envios,entregadosPeriodoReal,retornadosPeriodoReal,search,filtroEst,filtroCli,filtroMen,filtroFuente,filtroAtrasoModo,reprogCount]);
 // Cantidad de envíos atrasados en el período actual (antes del filtro de "solo atrasados"),
 // para mostrar el contador en el botón de filtro sin que el usuario tenga que activarlo primero.
 const atrasadosCount=useMemo(()=>enviosPeriodo.filter(esEnvioAtrasado).length,[enviosPeriodo]);
@@ -706,20 +737,20 @@ const filtradosOrdenados=useMemo(()=>{if(!sortCol)return filtrados;const copia=f
 // principal, y este modal ahora debe mostrar también los reprogramados de una sola vez.
 const atrasadosDetalleFiltrados=useMemo(()=>{
   const q=search.trim().toLowerCase();
-  const baseLista=filtroEst==='entregado'?entregadosPeriodoReal:enviosPeriodo;
+  const baseLista=filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:enviosPeriodo;
   return baseLista.filter(e=>{
     const qTerms=q.split(/[\n,;\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
     const esMultiple=qTerms.length>1;
     const matchQ=!q||(esMultiple
       ?qTerms.some(t=>e.codigo.toLowerCase()===t||e.codigo.toLowerCase().includes(t))
       :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));
-    const matchEst=filtroEst==='todos'||filtroEst==='entregado'||e.estado===filtroEst;
+    const matchEst=filtroEst==='todos'||filtroEst==='entregado'||filtroEst==='retorno'||e.estado===filtroEst;
     const matchCli=filtroCli==='todos'||e.cliente===filtroCli;
     const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;
     const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;
     return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente;
   });
-},[enviosPeriodo,entregadosPeriodoReal,filtroEst,search,filtroCli,filtroMen,filtroFuente]);
+},[enviosPeriodo,entregadosPeriodoReal,retornadosPeriodoReal,filtroEst,search,filtroCli,filtroMen,filtroFuente]);
 const atrasadosDetalleBase=useMemo(()=>atrasadosDetalleFiltrados.filter(e=>filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoAlMenos1Vez(e):(esEnvioAtrasado(e)||esReprogramadoAlMenos1Vez(e))),[atrasadosDetalleFiltrados,filtroAtrasoModo,reprogCount]);
 // Conteos de las pestañas del modal (Todos/Atrasados en ruta/Reprogramados) -- a diferencia de
 // atrasadosCount/reprogramadosRepetidosCount (que solo miran el período, para el botón/dropdown
@@ -731,7 +762,7 @@ const reprogramadosCountModal=useMemo(()=>atrasadosDetalleFiltrados.filter(esRep
 const combinadoAtrasoCountModal=atrasadosCountModal+reprogramadosCountModal;
 function toggleSort(col){if(sortCol===col)setSortDir(d=>d==='asc'?'desc':'asc');else{setSortCol(col);setSortDir('asc');}setPage(1);}
 function iconoSort(col){if(sortCol!==col)return'';return sortDir==='asc'?' ▲':' ▼';}
-const totalPags=Math.max(1,Math.ceil(filtradosOrdenados.length/PAGE_SIZE));const paginado=filtradosOrdenados.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);const stats=useMemo(()=>{const s={};ESTADOS_ENVIO.forEach(est=>{s[est.val]=est.val==='entregado'?entregadosPeriodoReal.length:enviosPeriodo.filter(e=>e.estado===est.val).length;});return s;},[enviosPeriodo,entregadosPeriodoReal]);function toggleSelect(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function toggleAll(){const todosIds=new Set(filtrados.map(e=>e.id));if(selected.size===filtrados.length&&filtrados.every(e=>selected.has(e.id)))setSelected(new Set());else setSelected(todosIds);}async function imprimirEtiquetasSeleccionadas(){
+const totalPags=Math.max(1,Math.ceil(filtradosOrdenados.length/PAGE_SIZE));const paginado=filtradosOrdenados.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);const stats=useMemo(()=>{const s={};ESTADOS_ENVIO.forEach(est=>{s[est.val]=est.val==='entregado'?entregadosPeriodoReal.length:est.val==='retorno'?retornadosPeriodoReal.length:enviosPeriodo.filter(e=>e.estado===est.val).length;});return s;},[enviosPeriodo,entregadosPeriodoReal,retornadosPeriodoReal]);function toggleSelect(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function toggleAll(){const todosIds=new Set(filtrados.map(e=>e.id));if(selected.size===filtrados.length&&filtrados.every(e=>selected.has(e.id)))setSelected(new Set());else setSelected(todosIds);}async function imprimirEtiquetasSeleccionadas(){
   const seleccionados=envios.filter(e=>selected.has(e.id));
   if(seleccionados.length===0)return;
   toast('Buscando etiquetas...');
