@@ -722,7 +722,26 @@ async function cargarEnviosPeriodoEfectivo(){
     if(miGen===efectivoGenRef.current)setEnviosPeriodoEfectivo(rows);
   }catch(eEfec){console.warn('Error calculando estado efectivo:',eEfec.message);if(miGen===efectivoGenRef.current)setEnviosPeriodoEfectivo(enviosPeriodo);}
 }
-useEffect(()=>{cargarEnviosPeriodoEfectivo();},[enviosPeriodo,periodo,mesFiltro,desde,hasta]);
+// URGENTE (fix incidente 07-09): este efecto dependia de 'enviosPeriodo', que cambia de
+// referencia CADA VEZ que 'envios' se actualiza por tiempo real (ver "TIEMPO REAL" en el
+// header) -- con varios admins con un Rango/Mes activo y actividad constante de mensajeros,
+// esto disparaba cargarEnviosPeriodoEfectivo (que pagina TODO historial_envios con
+// created_at > cierre) miles de veces por hora, saturando la base de datos y provocando
+// "canceling statement due to statement timeout" en TODO el sistema -- incluida la app de
+// mensajeros, que no tiene nada que ver con esta pantalla. Se limita a como maximo 1
+// ejecucion real cada 5 segundos por pestaña (throttle): si ya pasaron 5s+ desde la ultima
+// corrida, dispara al toque; si no, agenda para completar los 5s. Los cambios reales de
+// filtro (periodo/mes/desde/hasta) casi siempre caen en el primer caso, asi que la pantalla
+// sigue sintiendose instantanea -- lo que se corta es el disparo repetido por cada tick de
+// tiempo real mientras el filtro no cambio.
+const efectivoUltimaCorridaRef=useRef(0);
+useEffect(()=>{
+  const ahora=Date.now();
+  const transcurrido=ahora-efectivoUltimaCorridaRef.current;
+  const espera=transcurrido>5000?0:5000-transcurrido;
+  const t=setTimeout(()=>{efectivoUltimaCorridaRef.current=Date.now();cargarEnviosPeriodoEfectivo();},espera);
+  return()=>clearTimeout(t);
+},[enviosPeriodo,periodo,mesFiltro,desde,hasta]);
 const baseTardioMap=useMemo(()=>calcularBaseTardio(envios),[envios]);
 const tardiosPendientes=useMemo(()=>enviosPeriodo.filter(e=>esEnvioTardio(e,baseTardioMap)&&!e.aviso_tardio),[enviosPeriodo,baseTardioMap]);
 async function marcarAvisoTardio(id,codigo,valor){
