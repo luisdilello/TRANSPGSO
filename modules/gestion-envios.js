@@ -704,17 +704,32 @@ async function marcarAvisoTardio(id,codigo,valor){
     else toast(valor?`✓ ${codigo} marcado como avisado al cliente`:`${codigo} vuelve a quedar pendiente de avisar`);
   }catch(e){toast('⚠ '+e.message);}
 }
-const clientesUnicos=[...new Set(envios.map(e=>e.cliente).filter(Boolean))].sort();const mensajerosUnicos=[...new Set(envios.map(e=>e.mensajero).filter(Boolean))].sort();const fuentesUnicas=[...new Set(envios.map(e=>e.fuente).filter(Boolean))].sort();function fuenteLabel(f){const m={etiqueta:'Manual (Etiqueta)',flex:'PDF Flex',externo:'Excel',propio:'Excel (propio)',sistema:'Excel (sistema)',colecta_AM:'Colecta AM',colecta_PM:'Colecta PM',cliente:'Portal Cliente',retiro_masivo:'Retiro Masivo'};return m[f]||f;}const filtrados=useMemo(()=>{const q=search.trim().toLowerCase();
+const clientesUnicos=[...new Set(envios.map(e=>e.cliente).filter(Boolean))].sort();const mensajerosUnicos=[...new Set(envios.map(e=>e.mensajero).filter(Boolean))].sort();const fuentesUnicas=[...new Set(envios.map(e=>e.fuente).filter(Boolean))].sort();function fuenteLabel(f){const m={etiqueta:'Manual (Etiqueta)',flex:'PDF Flex',externo:'Excel',propio:'Excel (propio)',sistema:'Excel (sistema)',colecta_AM:'Colecta AM',colecta_PM:'Colecta PM',cliente:'Portal Cliente',retiro_masivo:'Retiro Masivo'};return m[f]||f;}
+// 'Todos' filtrado solo por fecha de despacho (enviosPeriodo) dejaba afuera los mismos casos que
+// 'Entregado' y 'Retorno' ya resuelven por separado con su fecha real (despachado antes del periodo
+// pero entregado/retornado dentro de el, o al reves) -- Luis reporto que buscando un codigo puntual
+// con el filtro en 'Todos' no aparecia nada, pero ese mismo codigo si aparecia filtrando por
+// 'Retorno'. Si 'Retorno' y 'Entregado' tienen su propia lista "real", 'Todos' tiene que ser el
+// superset de ambas, no solo lo que calza por fecha de despacho.
+const todosPeriodoReal=useMemo(()=>{
+  const vistos=new Set();const out=[];
+  [...enviosPeriodo,...entregadosPeriodoReal,...retornadosPeriodoReal].forEach(e=>{if(!vistos.has(e.codigo)){vistos.add(e.codigo);out.push(e);}});
+  return out;
+},[enviosPeriodo,entregadosPeriodoReal,retornadosPeriodoReal]);
+const filtrados=useMemo(()=>{const q=search.trim().toLowerCase();
   // El bucket 'Entregado' se arma con la fecha REAL de entrega (ver entregadosPeriodoReal mas
   // arriba), no filtrando enviosPeriodo (que esta acotado por fecha de despacho) -- por eso usa
   // su propia lista en vez de 'enviosPeriodo.filter(estado==="entregado")'. 'Retorno' usa el
-  // mismo criterio (ver retornadosPeriodoReal mas arriba).
-  const baseLista=filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:enviosPeriodo;
+  // mismo criterio (ver retornadosPeriodoReal mas arriba). 'Todos' usa el superset de las tres
+  // (ver todosPeriodoReal mas arriba) para que nunca esconda algo que si aparece en 'Entregado' o
+  // 'Retorno' -- antes buscar un codigo puntual con 'Todos' podia dar 0 resultados aunque ese mismo
+  // codigo apareciera filtrando por 'Retorno'.
+  const baseLista=filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?todosPeriodoReal:enviosPeriodo;
   return baseLista.filter(e=>{const qTerms=q.split(/[\n,;\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
       const esMultiple=qTerms.length>1;
       const matchQ=!q||(esMultiple
         ?qTerms.some(t=>e.codigo.toLowerCase()===t||e.codigo.toLowerCase().includes(t))
-        :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));const matchEst=filtroEst==='todos'||filtroEst==='entregado'||filtroEst==='retorno'||e.estado===filtroEst;const matchCli=filtroCli==='todos'||e.cliente===filtroCli;const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;const matchAtraso=filtroAtrasoModo==='off'?true:filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoRepetido(e):(esEnvioAtrasado(e)||esReprogramadoRepetido(e));return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente&&matchAtraso;});},[envios,entregadosPeriodoReal,retornadosPeriodoReal,search,filtroEst,filtroCli,filtroMen,filtroFuente,filtroAtrasoModo,reprogCount]);
+        :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));const matchEst=filtroEst==='todos'||filtroEst==='entregado'||filtroEst==='retorno'||e.estado===filtroEst;const matchCli=filtroCli==='todos'||e.cliente===filtroCli;const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;const matchAtraso=filtroAtrasoModo==='off'?true:filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoRepetido(e):(esEnvioAtrasado(e)||esReprogramadoRepetido(e));return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente&&matchAtraso;});},[envios,entregadosPeriodoReal,retornadosPeriodoReal,todosPeriodoReal,search,filtroEst,filtroCli,filtroMen,filtroFuente,filtroAtrasoModo,reprogCount]);
 // Cantidad de envíos atrasados en el período actual (antes del filtro de "solo atrasados"),
 // para mostrar el contador en el botón de filtro sin que el usuario tenga que activarlo primero.
 const atrasadosCount=useMemo(()=>enviosPeriodo.filter(esEnvioAtrasado).length,[enviosPeriodo]);
@@ -1000,7 +1015,7 @@ showListaNegra&&(()=>{const lista=lsLoad('envios_eliminados',[]);return/*#__PURE
   )
 ),
 sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'20px',color:'var(--text-soft)',fontSize:13,marginBottom:20}},'⏳ Sincronizando historial completo desde la nube...'):
-/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:20,paddingTop:14,overflowX:'auto'}},[{val:'todos',label:'Todos',color:'var(--gold)'},...ESTADOS_ENVIO].map(est=>{const count=est.val==='todos'?enviosPeriodo.length:stats[est.val]||0;const active=filtroEst===est.val;const accentColor=est.color||'var(--gold)';return/*#__PURE__*/React.createElement("div",{key:est.val,onClick:()=>{setFiltroEst(est.val);setPage(1);},style:{
+/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:20,paddingTop:14,overflowX:'auto'}},[{val:'todos',label:'Todos',color:'var(--gold)'},...ESTADOS_ENVIO].map(est=>{const count=est.val==='todos'?todosPeriodoReal.length:stats[est.val]||0;const active=filtroEst===est.val;const accentColor=est.color||'var(--gold)';return/*#__PURE__*/React.createElement("div",{key:est.val,onClick:()=>{setFiltroEst(est.val);setPage(1);},style:{
   padding:'16px 18px',borderRadius:14,cursor:'pointer',minWidth:100,textAlign:'center',
   background:active?'linear-gradient(145deg,#ffffff,#f0e8d0)':'linear-gradient(145deg,#fff,#faf3e0)',
   border:'2px solid '+(active?accentColor:'rgba(200,168,75,0.12)'),
