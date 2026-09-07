@@ -707,14 +707,20 @@ const enviosPeriodo=useMemo(()=>envios.filter(enPeriodoGE),[envios,periodo,mesFi
 // cual era su estado real al cierre -- el resto conserva su estado en vivo tal cual (ya es
 // correcto, porque nada cambio despues del cierre).
 const _uEnvPerEfec=useState([]),enviosPeriodoEfectivo=_uEnvPerEfec[0],setEnviosPeriodoEfectivo=_uEnvPerEfec[1];
+// Guard contra ejecuciones superpuestas: 'envios' se actualiza en tiempo real (ver "TIEMPO
+// REAL" en el header), así que enviosPeriodo puede recalcularse (nueva referencia) mientras
+// un calculo anterior de calcularEstadoEfectivo todavia esta en vuelo -- sin esto, una
+// respuesta vieja que llega tarde podia pisar el resultado de una mas nueva.
+const efectivoGenRef=useRef(0);
 async function cargarEnviosPeriodoEfectivo(){
+  const miGen=++efectivoGenRef.current;
   const{hasta:hastaQ}=limitesPeriodoGE();
-  if(!hastaQ||!enviosPeriodo.length){setEnviosPeriodoEfectivo(enviosPeriodo);return;}
+  if(!hastaQ||!enviosPeriodo.length){if(miGen===efectivoGenRef.current)setEnviosPeriodoEfectivo(enviosPeriodo);return;}
   try{
     const hastaISO=limiteDiaChileUTC(hastaQ,true);
     const rows=await calcularEstadoEfectivo(enviosPeriodo,hastaISO);
-    setEnviosPeriodoEfectivo(rows);
-  }catch(eEfec){console.warn('Error calculando estado efectivo:',eEfec.message);setEnviosPeriodoEfectivo(enviosPeriodo);}
+    if(miGen===efectivoGenRef.current)setEnviosPeriodoEfectivo(rows);
+  }catch(eEfec){console.warn('Error calculando estado efectivo:',eEfec.message);if(miGen===efectivoGenRef.current)setEnviosPeriodoEfectivo(enviosPeriodo);}
 }
 useEffect(()=>{cargarEnviosPeriodoEfectivo();},[enviosPeriodo,periodo,mesFiltro,desde,hasta]);
 const baseTardioMap=useMemo(()=>calcularBaseTardio(envios),[envios]);
