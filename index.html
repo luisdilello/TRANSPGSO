@@ -624,7 +624,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788831189;
+window.__MODULES_VERSION=1788834183;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -12739,38 +12739,71 @@ useEffect(()=>{
   if(tab==='dashboard')setEnviosGestion(lsLoad('gestion_envios',[]));
   return()=>window.removeEventListener('storage',onStorage);
 },[tab]);// Auto-sync desde Supabase al iniciar — retoma estados aunque se haya cerrado sesión
-useEffect(()=>{async function syncInicial(){
-  async function intentarSync(diasAtras,limite){
-    const desde=new Date();desde.setDate(desde.getDate()-diasAtras);
-    return await db.from('envios').select('id,codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,nota_admin,fuente,peso,valor_siniestro,tuvo_siniestro,created_at,updated_at').gte('fecha',fechaHoyCL(desde)).neq('estado','eliminado').order('updated_at',{ascending:false}).limit(limite);
-  }
-  try{
-    let{data,error}=await intentarSync(8,8000);
-    if(error){
-      // Reintentar con ventana mas chica en caso de timeout/500 del servidor
-      console.warn('Sync inicial: reintentando con ventana reducida —',error.message);
-      const retry=await intentarSync(3,3000);
-      data=retry.data;error=retry.error;
+useEffect(()=>{
+  let syncEnCurso=false;
+  async function syncInicial(){
+    // FIX incidente 08-09: este sync traía hasta 8000 envíos de TODA la empresa (sin filtrar
+    // por mensajero ni cliente) cada 60 segundos, por CADA sesión abierta -- incluyendo el
+    // celular de cada rider, que no necesita ver los envíos de los demás. Con varias decenas
+    // de riders conectados a la vez, eso eran cientos de consultas pesadas por minuto contra
+    // la misma tabla. Un rider ya tiene su propia vista de "Envíos" filtrada por su nombre en
+    // otra parte de la app -- este cache ('gestion_envios') solo lo usan las pantallas de
+    // administración (Gestión de Envíos, Dashboard, Mapa de Rutas), así que ahora se salta
+    // por completo para sesiones rider/cliente. Se lee la sesión fresca de localStorage (no
+    // del cierre de este efecto) para que funcione bien también en un login recién hecho.
+    const sesion=lsLoad('session_usuario',null);
+    if(!sesion||sesion.rol==='rider'||sesion.rol==='cliente')return;
+    // Si la consulta anterior todavía no termina (Supabase lenta), no lancemos otra encima --
+    // eso fue justo lo que hizo bola de nieve el 08-09: cada intento nuevo se sumaba a los que
+    // ya estaban esperando, hasta que la base no daba abasto para nadie.
+    if(syncEnCurso)return;
+    syncEnCurso=true;
+    try{
+      await intentarSync();
+    }finally{
+      syncEnCurso=false;
     }
-    if(error||!data||!data.length)return;
-    // OJO: este sync solo trae los últimos 8 días (para ser rápido al abrir la app). Antes,
-    // cualquier envío en el cache local MÁS VIEJO que esa ventana y ya marcado _synced (por
-    // el sync completo de Gestión de Envíos) se descartaba acá porque no venía en este fetch
-    // parcial — eso hacía que el total de Dashboard/Mapa se achicara cada vez que este sync
-    // corría, y volviera a crecer cuando Gestión de Envíos sincronizaba de nuevo: el número
-    // "aparecía y cambiaba" cada 60s sin que nadie tocara nada. Ahora este sync solo
-    // ACTUALIZA/AGREGA los códigos que trae (los últimos 8 días), y nunca elimina del cache
-    // local ningún código fuera de esa ventana — el historial completo queda intacto.
-    const local=lsLoad('gestion_envios',[]);const mapaLocal={};local.forEach(e=>{mapaLocal[e.codigo]=e;});
-    data.forEach(function(sb){
-      const existente=mapaLocal[sb.codigo];
-      mapaLocal[sb.codigo]={id:(existente&&existente.id)||sb.id,codigo:sb.codigo,cliente:sb.cliente||'',destinatario:sb.destinatario||'',telefono:sb.telefono||'',direccion:sb.direccion||'',comuna:sb.comuna||'',referencia:sb.referencia||'',fecha:sb.fecha||fechaHoyCL(),estado:sb.estado||'en_bodega',mensajero:sb.mensajero||'',monto:sb.monto||0,enUnCambio:sb.en_un_cambio||false,nota:sb.nota||'',fuente:sb.fuente||'propio',historial:(existente&&existente.historial)||[{fecha:sb.created_at||new Date().toISOString(),estado:sb.estado,nota:'Sincronizado desde Supabase'}],_synced:true};
-    });
-    const eliminadosInit=new Set(lsLoad('envios_eliminados',[]));
-    const final=Object.values(mapaLocal).filter(function(e){return!eliminadosInit.has(e.codigo);});
-    lsSave('gestion_envios',final);setEnviosGestion(final);console.log('✓ Sync inicial:',data.length,'envíos actualizados de los últimos 8 días · '+final.length+' en total');
-  }catch(e){console.warn('Sync inicial error:',e.message);}
-}syncInicial();const _autoSyncInterval2=setInterval(syncInicial,60000);return()=>clearInterval(_autoSyncInterval2);},[]);const mensajerosActivos=useMemo(()=>mensajeros.filter(m=>m.activo!==false),[mensajeros]);const mensajerosVista=useMemo(()=>{if(!perfil||perfil.verTodo)return mensajerosActivos;return mensajerosActivos.filter(m=>perfil.mensajerosIds.includes(m.id));},[perfil,mensajerosActivos]);const mensajerosDiaVista=useMemo(()=>{if(!perfil||perfil.verTodo)return mensajerosDia;const nombresPermitidos=new Set(mensajerosVista.map(m=>m.nombre));return mensajerosDia.filter(m=>nombresPermitidos.has(m.nombre));},[perfil,mensajerosDia,mensajerosVista]);const kpiVista=useMemo(()=>{if(!perfil||perfil.verTodo)return kpi;const totEnt=mensajerosDiaVista.reduce((a,m)=>a+m.entregados,0);const totCam=mensajerosDiaVista.reduce((a,m)=>a+(m.enCamino||0),0);const totRep=mensajerosDiaVista.reduce((a,m)=>a+m.reprogram,0);const totCan=mensajerosDiaVista.reduce((a,m)=>a+m.cancelados,0);const totTotal=mensajerosDiaVista.reduce((a,m)=>a+m.total,0);return{...kpi,totalPaquetes:totTotal,entregados:totEnt,enCamino:totCam,reprogramados:totRep,cancelados:totCan};},[perfil,kpi,mensajerosDiaVista]);if(!usuarioActivo){return/*#__PURE__*/React.createElement(LoginScreen,{onLogin:u=>{setUsuarioActivo(u);lsSave('session_usuario',u);let pf=null;if(u.rol==='superadmin'){pf={nombre:u.nombre,rol:'superadmin',esAdmin:true,esSuperAdmin:true,verTodo:true,mensajerosIds:[]};}else if(u.rol==='admin'){pf={nombre:u.nombre,rol:'admin',esAdmin:true,esSuperAdmin:false,verTodo:true,mensajerosIds:[]};}else if(u.rol==='rider'){pf={nombre:u.nombre,rol:'rider',esAdmin:false,esSuperAdmin:false,verTodo:false,mensajerosIds:[]};}if(pf){setPerfil(pf);lsSave('session_perfil',pf);}}});}if((usuarioActivo==null?void 0:usuarioActivo.rol)==='cliente'){return/*#__PURE__*/React.createElement(PortalCliente,{usuario:usuarioActivo,onLogout:()=>{setUsuarioActivo(null);lsSave('session_usuario',null);}});}if((usuarioActivo==null?void 0:usuarioActivo.rol)==='rider'){return/*#__PURE__*/React.createElement(RiderApp,{usuario:usuarioActivo,mensajeros:mensajeros,onLogout:()=>{setUsuarioActivo(null);setPerfil(null);lsSave('session_usuario',null);lsSave('session_perfil',null);}});}if(!perfil){return/*#__PURE__*/React.createElement(PerfilSelector,{mensajeros:mensajeros,usuario:usuarioActivo,onConfirm:p=>{const pf2={...p,rol:p.rol||usuarioActivo.rol,esAdmin:p.esAdmin,esSuperAdmin:p.esSuperAdmin||false};setPerfil(pf2);lsSave('session_perfil',pf2);}});}const tabs=[];return/*#__PURE__*/React.createElement(React.Fragment,null,
+  }
+  async function intentarSync(){
+    async function pedir(diasAtras,limite){
+      const desde=new Date();desde.setDate(desde.getDate()-diasAtras);
+      return await db.from('envios').select('id,codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,nota_admin,fuente,peso,valor_siniestro,tuvo_siniestro,created_at,updated_at').gte('fecha',fechaHoyCL(desde)).neq('estado','eliminado').order('updated_at',{ascending:false}).limit(limite);
+    }
+    try{
+      let{data,error}=await pedir(8,8000);
+      if(error){
+        // Reintentar con ventana mas chica en caso de timeout/500 del servidor
+        console.warn('Sync inicial: reintentando con ventana reducida —',error.message);
+        const retry=await pedir(3,3000);
+        data=retry.data;error=retry.error;
+      }
+      if(error||!data||!data.length)return;
+      // OJO: este sync solo trae los últimos 8 días (para ser rápido al abrir la app). Antes,
+      // cualquier envío en el cache local MÁS VIEJO que esa ventana y ya marcado _synced (por
+      // el sync completo de Gestión de Envíos) se descartaba acá porque no venía en este fetch
+      // parcial — eso hacía que el total de Dashboard/Mapa se achicara cada vez que este sync
+      // corría, y volviera a crecer cuando Gestión de Envíos sincronizaba de nuevo: el número
+      // "aparecía y cambiaba" cada 60s sin que nadie tocara nada. Ahora este sync solo
+      // ACTUALIZA/AGREGA los códigos que trae (los últimos 8 días), y nunca elimina del cache
+      // local ningún código fuera de esa ventana — el historial completo queda intacto.
+      const local=lsLoad('gestion_envios',[]);const mapaLocal={};local.forEach(e=>{mapaLocal[e.codigo]=e;});
+      data.forEach(function(sb){
+        const existente=mapaLocal[sb.codigo];
+        mapaLocal[sb.codigo]={id:(existente&&existente.id)||sb.id,codigo:sb.codigo,cliente:sb.cliente||'',destinatario:sb.destinatario||'',telefono:sb.telefono||'',direccion:sb.direccion||'',comuna:sb.comuna||'',referencia:sb.referencia||'',fecha:sb.fecha||fechaHoyCL(),estado:sb.estado||'en_bodega',mensajero:sb.mensajero||'',monto:sb.monto||0,enUnCambio:sb.en_un_cambio||false,nota:sb.nota||'',fuente:sb.fuente||'propio',historial:(existente&&existente.historial)||[{fecha:sb.created_at||new Date().toISOString(),estado:sb.estado,nota:'Sincronizado desde Supabase'}],_synced:true};
+      });
+      const eliminadosInit=new Set(lsLoad('envios_eliminados',[]));
+      const final=Object.values(mapaLocal).filter(function(e){return!eliminadosInit.has(e.codigo);});
+      lsSave('gestion_envios',final);setEnviosGestion(final);console.log('✓ Sync inicial:',data.length,'envíos actualizados de los últimos 8 días · '+final.length+' en total');
+    }catch(e){console.warn('Sync inicial error:',e.message);}
+  }
+  syncInicial();
+  // Antes cada 60s -- con el filtro de rol de arriba ya no lo hace cada rider, pero igual
+  // subimos el intervalo a 3 minutos para dejar más margen (este cache no necesita ser
+  // segundo a segundo, es de respaldo para las pantallas de administración).
+  const _autoSyncInterval2=setInterval(syncInicial,180000);
+  return()=>clearInterval(_autoSyncInterval2);
+},[]);
+const mensajerosActivos=useMemo(()=>mensajeros.filter(m=>m.activo!==false),[mensajeros]);const mensajerosVista=useMemo(()=>{if(!perfil||perfil.verTodo)return mensajerosActivos;return mensajerosActivos.filter(m=>perfil.mensajerosIds.includes(m.id));},[perfil,mensajerosActivos]);const mensajerosDiaVista=useMemo(()=>{if(!perfil||perfil.verTodo)return mensajerosDia;const nombresPermitidos=new Set(mensajerosVista.map(m=>m.nombre));return mensajerosDia.filter(m=>nombresPermitidos.has(m.nombre));},[perfil,mensajerosDia,mensajerosVista]);const kpiVista=useMemo(()=>{if(!perfil||perfil.verTodo)return kpi;const totEnt=mensajerosDiaVista.reduce((a,m)=>a+m.entregados,0);const totCam=mensajerosDiaVista.reduce((a,m)=>a+(m.enCamino||0),0);const totRep=mensajerosDiaVista.reduce((a,m)=>a+m.reprogram,0);const totCan=mensajerosDiaVista.reduce((a,m)=>a+m.cancelados,0);const totTotal=mensajerosDiaVista.reduce((a,m)=>a+m.total,0);return{...kpi,totalPaquetes:totTotal,entregados:totEnt,enCamino:totCam,reprogramados:totRep,cancelados:totCan};},[perfil,kpi,mensajerosDiaVista]);if(!usuarioActivo){return/*#__PURE__*/React.createElement(LoginScreen,{onLogin:u=>{setUsuarioActivo(u);lsSave('session_usuario',u);let pf=null;if(u.rol==='superadmin'){pf={nombre:u.nombre,rol:'superadmin',esAdmin:true,esSuperAdmin:true,verTodo:true,mensajerosIds:[]};}else if(u.rol==='admin'){pf={nombre:u.nombre,rol:'admin',esAdmin:true,esSuperAdmin:false,verTodo:true,mensajerosIds:[]};}else if(u.rol==='rider'){pf={nombre:u.nombre,rol:'rider',esAdmin:false,esSuperAdmin:false,verTodo:false,mensajerosIds:[]};}if(pf){setPerfil(pf);lsSave('session_perfil',pf);}}});}if((usuarioActivo==null?void 0:usuarioActivo.rol)==='cliente'){return/*#__PURE__*/React.createElement(PortalCliente,{usuario:usuarioActivo,onLogout:()=>{setUsuarioActivo(null);lsSave('session_usuario',null);}});}if((usuarioActivo==null?void 0:usuarioActivo.rol)==='rider'){return/*#__PURE__*/React.createElement(RiderApp,{usuario:usuarioActivo,mensajeros:mensajeros,onLogout:()=>{setUsuarioActivo(null);setPerfil(null);lsSave('session_usuario',null);lsSave('session_perfil',null);}});}if(!perfil){return/*#__PURE__*/React.createElement(PerfilSelector,{mensajeros:mensajeros,usuario:usuarioActivo,onConfirm:p=>{const pf2={...p,rol:p.rol||usuarioActivo.rol,esAdmin:p.esAdmin,esSuperAdmin:p.esSuperAdmin||false};setPerfil(pf2);lsSave('session_perfil',pf2);}});}const tabs=[];return/*#__PURE__*/React.createElement(React.Fragment,null,
 avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,left:0,right:0,zIndex:99999,display:'flex',flexDirection:'column',gap:4,padding:'8px 8px 0'}},
   avisosAdmin.slice(0,4).map(function(av){
     return React.createElement('div',{key:av.id,style:{display:'flex',alignItems:'center',gap:14,background:'linear-gradient(135deg,#C8A84B,#a87d2a)',color:'#1a1d13',borderRadius:12,padding:'14px 20px',boxShadow:'0 6px 24px rgba(0,0,0,0.35)',fontFamily:'DM Sans',animation:'pulse 2s infinite'}},
