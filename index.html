@@ -625,7 +625,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788840700;
+window.__MODULES_VERSION=1788842352;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1299,17 +1299,23 @@ async function fetchPorFechaRealDeEstado(estado,desde,hasta,cols){
   const codigosCandidatos=[...new Set(histEnRango.map(function(h){return h.codigo_envio;}))];
   const ultimaGlobalPorCodigo={};
   {
+    // Antes esto pedia los lotes de 200 codigos UNO DETRAS DE OTRO (secuencial) -- para un
+    // estado con mucho volumen (ej. 'entregado' en un Rango de varias semanas) eso significaba
+    // decenas de idas y vueltas a la base esperandose entre si en fila (caso real: Luis reporto
+    // que "Retorno" cargaba al toque pero "Entregado" se quedaba pegado en un Rango). Ahora se
+    // disparan todos los lotes juntos (Promise.all) y se espera solo al mas lento -- mismo
+    // resultado, mucho mas rapido.
     const LOTE3=200;
-    for(let i=0;i<codigosCandidatos.length;i+=LOTE3){
-      const lote=codigosCandidatos.slice(i,i+LOTE3);
-      if(!lote.length)continue;
-      const r=await db.from('historial_envios').select('codigo_envio,created_at').eq('estado',estado).in('codigo_envio',lote);
+    const lotes3=[];
+    for(let i=0;i<codigosCandidatos.length;i+=LOTE3)lotes3.push(codigosCandidatos.slice(i,i+LOTE3));
+    const resultados3=await Promise.all(lotes3.map(function(lote){return db.from('historial_envios').select('codigo_envio,created_at').eq('estado',estado).in('codigo_envio',lote);}));
+    resultados3.forEach(function(r){
       if(r.error)throw r.error;
       (r.data||[]).forEach(function(h){
         const actual=ultimaGlobalPorCodigo[h.codigo_envio];
         if(!actual||new Date(h.created_at)>new Date(actual))ultimaGlobalPorCodigo[h.codigo_envio]=h.created_at;
       });
-    }
+    });
   }
   const desdeDate=new Date(desdeTs),hastaDate=new Date(hastaTs);
   const ultimaPorCodigo={};
@@ -1324,15 +1330,13 @@ async function fetchPorFechaRealDeEstado(estado,desde,hasta,cols){
   //    una sola vez puede fallar por largo de URL). Se exige que el estado pedido siga vigente --
   //    si el envio cambio despues (correccion manual), no debe contarse aunque tenga el evento.
   async function traerPorCodigos(codigos){
-    let acumulado=[];
+    // Mismo arreglo que arriba: todos los lotes de 200 en paralelo en vez de uno por uno.
     const LOTE=200;
-    for(let i=0;i<codigos.length;i+=LOTE){
-      const lote=codigos.slice(i,i+LOTE);
-      if(!lote.length)continue;
-      const r=await db.from('envios').select(COLS).eq('estado',estado).in('codigo',lote);
-      if(r.error)throw r.error;
-      acumulado=acumulado.concat(r.data||[]);
-    }
+    const lotes=[];
+    for(let i=0;i<codigos.length;i+=LOTE){const lote=codigos.slice(i,i+LOTE);if(lote.length)lotes.push(lote);}
+    const resultados=await Promise.all(lotes.map(function(lote){return db.from('envios').select(COLS).eq('estado',estado).in('codigo',lote);}));
+    let acumulado=[];
+    resultados.forEach(function(r){if(r.error)throw r.error;acumulado=acumulado.concat(r.data||[]);});
     return acumulado;
   }
   const resultado=await traerPorCodigos(codigosConfirmados);
@@ -1355,12 +1359,11 @@ async function fetchPorFechaRealDeEstado(estado,desde,hasta,cols){
     const codigosPendientes=pendientes.map(function(e){return e.codigo;});
     const tienenHistorial=new Set();
     const LOTE2=200;
-    for(let i=0;i<codigosPendientes.length;i+=LOTE2){
-      const lote=codigosPendientes.slice(i,i+LOTE2);
-      const r=await db.from('historial_envios').select('codigo_envio').eq('estado',estado).in('codigo_envio',lote);
-      if(r.error)throw r.error;
-      (r.data||[]).forEach(function(h){tienenHistorial.add(h.codigo_envio);});
-    }
+    // Mismo arreglo: en paralelo en vez de secuencial.
+    const lotes2=[];
+    for(let i=0;i<codigosPendientes.length;i+=LOTE2)lotes2.push(codigosPendientes.slice(i,i+LOTE2));
+    const resultados2=await Promise.all(lotes2.map(function(lote){return db.from('historial_envios').select('codigo_envio').eq('estado',estado).in('codigo_envio',lote);}));
+    resultados2.forEach(function(r){if(r.error)throw r.error;(r.data||[]).forEach(function(h){tienenHistorial.add(h.codigo_envio);});});
     pendientes.forEach(function(e){
       if(!tienenHistorial.has(e.codigo)){e._fechaRealEstado=e.fecha;resultado.push(e);yaIncluido.add(e.codigo);}
     });
@@ -7945,18 +7948,21 @@ function CalendarioEntregasRider(_ref_cal){
         const codigosEntregados=propio.filter(e=>e.estado==='entregado').map(e=>e.codigo);
         const mapaReal={};
         const LOTE=250;
-        for(let i=0;i<codigosEntregados.length;i+=LOTE){
+        // Antes se pedia cada lote de 250 codigos uno detras de otro (secuencial) -- un mensajero
+        // con miles de entregas historicas eran decenas de idas y vueltas en fila. Ahora se
+        // disparan todos los lotes juntos (Promise.all) y se espera solo al mas lento.
+        const lotesCalEnt=[];
+        for(let i=0;i<codigosEntregados.length;i+=LOTE)lotesCalEnt.push(codigosEntregados.slice(i,i+LOTE));
+        try{
+          const resultadosCalEnt=await Promise.all(lotesCalEnt.map(lote=>db.from('historial_envios').select('codigo_envio,created_at').eq('estado','entregado').in('codigo_envio',lote)));
           if(cancelado)return;
-          const lote=codigosEntregados.slice(i,i+LOTE);
-          try{
-            const{data:histData}=await db.from('historial_envios').select('codigo_envio,created_at')
-              .eq('estado','entregado').in('codigo_envio',lote);
+          resultadosCalEnt.forEach(({data:histData})=>{
             (histData||[]).forEach(h=>{
               const actual=mapaReal[h.codigo_envio];
               if(!actual||new Date(h.created_at)>new Date(actual))mapaReal[h.codigo_envio]=h.created_at;
             });
-          }catch(eHist){}
-        }
+          });
+        }catch(eHist){}
         if(!cancelado)setMapaEntregaReal(mapaReal);
       }catch(e){console.warn('Error cargando calendario de entregas:',e.message);}
       if(!cancelado)setCargando(false);
@@ -8355,18 +8361,19 @@ function GananciasRider(_ref_gr){
         const codigosEnt=acumuladoPropio.map(e=>e.codigo);
         const mapaReal={};
         const LOTE=250;
-        for(let i=0;i<codigosEnt.length;i+=LOTE){
+        // Mismo arreglo que en Calendario de Entregas: todos los lotes en paralelo.
+        const lotesGanEnt=[];
+        for(let i=0;i<codigosEnt.length;i+=LOTE)lotesGanEnt.push(codigosEnt.slice(i,i+LOTE));
+        try{
+          const resultadosGanEnt=await Promise.all(lotesGanEnt.map(lote=>db.from('historial_envios').select('codigo_envio,created_at').eq('estado','entregado').in('codigo_envio',lote)));
           if(cancelado)return;
-          const lote=codigosEnt.slice(i,i+LOTE);
-          try{
-            const{data:histData}=await db.from('historial_envios').select('codigo_envio,created_at')
-              .eq('estado','entregado').in('codigo_envio',lote);
+          resultadosGanEnt.forEach(({data:histData})=>{
             (histData||[]).forEach(h=>{
               const actual=mapaReal[h.codigo_envio];
               if(!actual||new Date(h.created_at)>new Date(actual))mapaReal[h.codigo_envio]=h.created_at;
             });
-          }catch(eHist){}
-        }
+          });
+        }catch(eHist){}
         if(!cancelado)setMapaEntregaReal(mapaReal);
         // Tarifas especiales por comuna para este mensajero (mismo criterio que Pagos y Cobros).
         // Coincidencia EXACTA de nombre completo — el fallback por primer nombre traia tarifas
