@@ -625,7 +625,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788843956;
+window.__MODULES_VERSION=1788845981;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -5950,7 +5950,15 @@ function RetiroMasivoRider(_ref_rm){
     window.__TRANSPGSO_GUARDANDO_CRITICO=(window.__TRANSPGSO_GUARDANDO_CRITICO||0)+1;
     var clienteNombre=clienteSel&&clienteSel.nombre?clienteSel.nombre:'Sin cliente';
     var fecha=fechaHoyCL();
-    var paquetesValidos=paquetes.filter(function(p){return p.estado!=='error';});
+    // No volver a registrar en el historial (ni re-procesar) los paquetes que YA se guardaron
+    // con éxito al momento de escanear (sincronizarPaqueteRM) -- antes esta confirmación final
+    // reprocesaba TODO el lote sin importar si ya estaba guardado, así que cada paquete quedaba
+    // con su evento "Colecta / Retiro masivo" duplicado en el historial (una vez al escanear,
+    // otra acá), aunque el escaneo hubiera sido exitoso. Ahora solo se reintenta lo que de
+    // verdad quedó pendiente (falló o nunca se sincronizó) -- los ya guardados solo se suman al
+    // conteo final.
+    var yaSincronizadosRM=paquetes.filter(function(p){return p.estado!=='error'&&(p.syncEstado==='guardado'||p.syncEstado==='parcial');});
+    var paquetesValidos=paquetes.filter(function(p){return p.estado!=='error'&&p.syncEstado!=='guardado'&&p.syncEstado!=='parcial';});
     var paquetesPorCodigoRM=new Map(paquetesValidos.map(function(p){return[p.codigo,p];}));
     // Sin señal desde el vamos: directo a guardar el lote completo en el celular para
     // sincronizar solo apenas vuelva la conexión, en vez de intentar llamadas que van a fallar.
@@ -5998,7 +6006,7 @@ function RetiroMasivoRider(_ref_rm){
         foto_etiqueta:p.foto||null
       });
     });
-    var ok=0,err=0,offline=0;
+    var ok=yaSincronizadosRM.length,err=0,offline=0;
     var codigosFallidosRM=[];
     // Insertar en lotes de 50
     var LOTE=50;
@@ -6063,7 +6071,7 @@ function RetiroMasivoRider(_ref_rm){
       // para reintentar ahí mismo sin perder nada — nunca mostrar "completado" en falso.
       var setFallidosRM=new Set(codigosFallidosRM);
       setPaquetes(function(prev){return prev.filter(function(p){return setFallidosRM.has(p.codigo);});});
-      setResultadoErrorRM({ok:ok,err:err,total:paquetesValidos.length});
+      setResultadoErrorRM({ok:ok,err:err,total:paquetes.length});
       setFase('errorGuardadoRM');
       toast('⚠ '+ok+' guardados · '+err+' NO se guardaron — reintenta antes de salir');
     }
@@ -6827,10 +6835,26 @@ function ColectaRider(_ref_cr){
 
   async function cargarGaleriaEnSistema(){
     const clienteNombre=clienteSel?.nombre||clienteSel||'Sin cliente';
-    // Incluir paquetes aunque tengan error parcial, si tienen al menos código o datos básicos
-    const conCodigo=fotosGaleria.filter(f=>f.datos?.codigo&&f.datos?.tipo!=='manual');
+    // Incluir paquetes aunque tengan error parcial, si tienen al menos código o datos básicos.
+    // Los que YA se guardaron con éxito al analizar la foto (sincronizarFotoGaleria) quedan
+    // afuera de este reprocesamiento -- antes "cargar galería" volvía a insertar/actualizar Y a
+    // loguear en el historial TODOS los códigos otra vez, duplicando el evento "Colecta
+    // Galería" de cada paquete que ya se había registrado solo (una vez al analizar la foto,
+    // otra acá).
+    const conCodigoTodos=fotosGaleria.filter(f=>f.datos?.codigo&&f.datos?.tipo!=='manual');
+    const conCodigo=conCodigoTodos.filter(f=>f.syncEstado!=='guardado');
+    const yaSincronizadosGal=conCodigoTodos.length-conCodigo.length;
     const manuales=fotosGaleria.filter(f=>f.datos&&(f.datos?.tipo==='manual'||(!f.datos?.codigo&&(f.datos?.destinatario||f.datos?.direccion))));
-    if(conCodigo.length===0&&manuales.length===0){ toast('⚠ No hay paquetes para cargar'); return; }
+    if(conCodigo.length===0&&manuales.length===0){
+      if(yaSincronizadosGal>0){
+        toast('✓ '+yaSincronizadosGal+' paquete'+(yaSincronizadosGal!==1?'s':'')+' ya estaban guardados');
+        setFotosGaleria([]);
+        setFase('seleccion');
+      }else{
+        toast('⚠ No hay paquetes para cargar');
+      }
+      return;
+    }
     setProcesandoGaleria(true);
     // El PDF siempre manda: si el código ya fue cargado por PDF (fuente:'flex'), no pisar
     // destinatario/dirección/comuna/teléfono/referencia con lo leído de la foto de galería.
@@ -6936,7 +6960,7 @@ function ColectaRider(_ref_cr){
           }));
         }catch(e){console.warn('Error insertando manuales:',e.message);}
       }
-      const total=conCodigo.length+manuales.length;
+      const total=conCodigoTodos.length+manuales.length;
       toast('✓ '+total+' paquetes cargados'+(manuales.length>0?' · '+manuales.length+' manuales pendientes':'')+(fotasSubidas>0?' · '+fotasSubidas+' fotos':''));
       setFotosGaleria([]);
       setFase('seleccion');
@@ -6965,20 +6989,29 @@ function ColectaRider(_ref_cr){
       toast('📴 Sin conexión — colecta guardada en el celular ('+totalOffline+' paquetes), se sincroniza sola');
       return;
     }
-    let ok=0,err=0,bloqueados=0,offline=0;
-    const codigos=paquetes.map(p=>p.codigo);
+    // No volver a registrar en el historial (ni re-procesar) los paquetes que YA se guardaron
+    // con éxito al escanear (sincronizarPaqueteCol) -- antes esta confirmación final los volvía
+    // a insertar/actualizar Y a loguear en el historial sin importar que ya estuvieran
+    // guardados, duplicando el evento "Colecta" de cada paquete (una vez al escanear, otra
+    // acá). Ahora solo se reprocesa lo que de verdad quedó pendiente.
+    const yaSincronizadosCol=paquetes.filter(p=>p.syncEstado==='guardado'||p.syncEstado==='parcial');
+    const paquetesPendientesCol=paquetes.filter(p=>p.syncEstado!=='guardado'&&p.syncEstado!=='parcial');
+    let ok=yaSincronizadosCol.length,err=0,bloqueados=0,offline=0;
+    const codigos=paquetesPendientesCol.map(p=>p.codigo);
     // Buscar cuáles ya existen (con su estado actual, para no pisar piezas que requieren admin,
     // y con su fuente para no pisar datos cargados por PDF con lo leído por la cámara)
     let existentes=new Map();
-    try{
-      const {data}=await db.from('envios').select('codigo,estado,mensajero,fuente').in('codigo',codigos);
-      if(data) data.forEach(r=>existentes.set(r.codigo,r));
-    }catch(e){}
+    if(codigos.length>0){
+      try{
+        const {data}=await db.from('envios').select('codigo,estado,mensajero,fuente').in('codigo',codigos);
+        if(data) data.forEach(r=>existentes.set(r.codigo,r));
+      }catch(e){}
+    }
     const bloqueadosSet=new Set();
     // Procesar cada paquete
     const updates=[];
     const inserts=[];
-    for(const p of paquetes){
+    for(const p of paquetesPendientesCol){
       if(existentes.has(p.codigo)){
         const ex=existentes.get(p.codigo);
         if(!ESTADOS_ADQUIRIBLES_ESCANEO.includes(ex.estado)){
