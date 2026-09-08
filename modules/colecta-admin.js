@@ -119,40 +119,65 @@ async function guardarLoteScanner(){
   setScanGuardando(true);
   try{
     var ts=new Date().toISOString();
-    var inserts=scanList.map(function(e){
-      return{
-        codigo:e.codigo,
-        cliente:e.cliente||scanCliente||'',
-        mensajero:e.mensajero||scanMensajero||'',
-        destinatario:'',
-        telefono:'',
-        direccion:'',
-        comuna:'',
-        referencia:'',
-        fecha:hoy,
-        estado:'en_bodega',
-        monto:0,
-        en_un_cambio:false,
-        nota:'Ingresado por lector - '+hoy,
-        fuente:'flex',
-        updated_at:ts
-      };
-    });
-    var r=await db.from('envios').upsert(inserts,{onConflict:'codigo'});
-    if(r.error)throw new Error(r.error.message);
-    // También registrar en historial - quién y por qué medio (panel admin, lector fisico)
-    var hist=scanList.map(function(e){
-      return{
-        codigo_envio:e.codigo,
-        estado:'en_bodega',
-        nota:'Ingresado por lector en bodega',
-        usuario:nombreAdmin,
-        canal:'panel_admin',
-        created_at:ts
-      };
-    });
-    await db.from('historial_envios').insert(hist).then(function(){});
-    toast('✓ '+scanList.length+' envíos Flex registrados');
+    // ANTES esto era un upsert por codigo que pisaba CIEGAMENTE cualquier envio que ya
+    // existiera -- si un codigo escaneado aca ya estaba en el sistema (ej. ya Entregado,
+    // con cliente/destinatario/direccion reales), el upsert lo reseteaba a 'en_bodega' y le
+    // borraba esos datos (quedaban en blanco/0). Caso real detectado por Luis: un paquete de
+    // DMT ya entregado la noche anterior volvio a pasar por Bodega->Ruta->Entregado dos veces
+    // mas porque alguien volvio a escanear su codigo aca (probable etiqueta duplicada) --
+    // 'Entregado' es un estado terminal, no deberia poder "revivirse" por un escaneo masivo de
+    // bodega. Ahora se separan los codigos REALMENTE NUEVOS (se insertan igual que antes) de
+    // los que YA EXISTEN (no se tocan en absoluto -- se avisa al admin con su estado actual
+    // para que lo revise a mano, en vez de pisarlo en silencio).
+    var codigosEscaneados=scanList.map(function(e){return e.codigo;});
+    var mapaExistentes={};
+    try{
+      var rExist=await db.from('envios').select('codigo,estado').in('codigo',codigosEscaneados);
+      (rExist.data||[]).forEach(function(e){mapaExistentes[e.codigo]=e;});
+    }catch(eExist){}
+    var scanNuevos=scanList.filter(function(e){return!mapaExistentes[e.codigo];});
+    var scanOmitidos=scanList.filter(function(e){return!!mapaExistentes[e.codigo];});
+    if(scanNuevos.length>0){
+      var inserts=scanNuevos.map(function(e){
+        return{
+          codigo:e.codigo,
+          cliente:e.cliente||scanCliente||'',
+          mensajero:e.mensajero||scanMensajero||'',
+          destinatario:'',
+          telefono:'',
+          direccion:'',
+          comuna:'',
+          referencia:'',
+          fecha:hoy,
+          estado:'en_bodega',
+          monto:0,
+          en_un_cambio:false,
+          nota:'Ingresado por lector - '+hoy,
+          fuente:'flex',
+          updated_at:ts
+        };
+      });
+      var r=await db.from('envios').insert(inserts);
+      if(r.error)throw new Error(r.error.message);
+      // También registrar en historial - quién y por qué medio (panel admin, lector fisico)
+      var hist=scanNuevos.map(function(e){
+        return{
+          codigo_envio:e.codigo,
+          estado:'en_bodega',
+          nota:'Ingresado por lector en bodega',
+          usuario:nombreAdmin,
+          canal:'panel_admin',
+          created_at:ts
+        };
+      });
+      await db.from('historial_envios').insert(hist).then(function(){});
+    }
+    var msg=scanNuevos.length>0?('✓ '+scanNuevos.length+' envíos Flex registrados'):'';
+    if(scanOmitidos.length>0){
+      var detalleOmitidos=scanOmitidos.map(function(e){var ex=mapaExistentes[e.codigo];return e.codigo+' ('+(ex?ex.estado:'?')+')';}).join(', ');
+      msg+=(msg?' · ':'')+'⚠ '+scanOmitidos.length+' YA existían y NO se tocaron: '+detalleOmitidos;
+    }
+    toast(msg||'Sin cambios');
     setScanList([]);
     setScanCode('');
     cargarScanHoy(); // Actualizar KPIs
