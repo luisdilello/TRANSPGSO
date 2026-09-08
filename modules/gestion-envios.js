@@ -128,7 +128,7 @@ async function cargarEntregadosPeriodoReal(){
         valor_siniestro:sb.valor_siniestro||null,tuvo_siniestro:sb.tuvo_siniestro||false,created_at:sb.created_at||null,
         updated_at:sb.updated_at||null,aviso_tardio:sb.aviso_tardio||false,
         historial:[{fecha:sb.created_at,estado:sb.estado,nota:'Desde Supabase'}],_synced:true,
-        _fechaRealEntrega:sb._fechaRealEntrega};
+        _fechaRealEntrega:sb._fechaRealEntrega,_fechaRealEntregaISO:sb._fechaRealEntregaISO};
     });
     setEntregadosPeriodoReal(normalizados);
     // Estos códigos pueden no estar en 'entregasReal' (ese mapa solo se llena para los códigos
