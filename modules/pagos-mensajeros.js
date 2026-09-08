@@ -1027,6 +1027,15 @@ function getTipoEnvioCobro(e){
 // Clientes. OJO: esto es una vista RÁPIDA para dimensionar el cobro del período de un vistazo --
 // no reemplaza el Recibo de Cobro oficial de Calendario de Cobros, que además permite ajustes
 // manuales, descuenta siniestros ya aplicados a un cliente y suma cobros de retiro.
+// Facturable = Entregado + todo lo que sigue pendiente de resolución (en ruta/en bodega/
+// reprogramado, se cobra como si fuera entregado hasta que se resuelva) + Siniestro (tarifa
+// base, con descuento aparte). No Facturable = Cancelado + En Bodega Cancelado + Retorno, un
+// solo grupo (mismas reglas que generarReciboCobro en index.html -- ver comentario ahí para el
+// porqué). Antes esta vista rápida solo contaba estado==='entregado' como facturable, lo que
+// además de subestimar el cobro dejaba "en_bodega_cancelado" completamente invisible (ni
+// entregado, ni cancelado, ni retorno).
+var ESTADOS_FACTURABLE_RESUMEN=['entregado','en_ruta','en_bodega','reprogramado','siniestro'];
+var ESTADOS_NO_FACTURABLE_RESUMEN=['cancelado','en_bodega_cancelado','retorno'];
 function calcularResumenCobrosClientes(envios,clientes){
   var porCliente={};
   (envios||[]).forEach(function(e){
@@ -1034,12 +1043,12 @@ function calcularResumenCobrosClientes(envios,clientes){
     if(!porCliente[c])porCliente[c]={nombre:c,total:0,entregados:0,cancelados:0,siniestros:0,grupos:{normal:0,d10kg:0,d18kg:0,colina:0,ph:0}};
     var g=porCliente[c];
     g.total++;
-    if(e.estado==='entregado'){
-      g.entregados++;
+    if(e.estado==='entregado')g.entregados++;// KPI de efectividad real (entrega física), no de facturación
+    if(ESTADOS_FACTURABLE_RESUMEN.indexOf(e.estado)!==-1){
       var t=getTipoEnvioCobro(e);
       if(t==='10kg')g.grupos.d10kg++;else if(t==='18kg')g.grupos.d18kg++;else if(t==='colina')g.grupos.colina++;else if(t==='ph')g.grupos.ph++;else g.grupos.normal++;
     }
-    if(e.estado==='cancelado')g.cancelados++;
+    if(ESTADOS_NO_FACTURABLE_RESUMEN.indexOf(e.estado)!==-1)g.cancelados++;
     if(e.estado==='siniestro'||e.tuvo_siniestro)g.siniestros++;
   });
   return Object.keys(porCliente).map(function(nombre){
