@@ -233,9 +233,10 @@ function miniStat(label,val,alerta){
 // Mismo mapeo color→clase de degradé que usa el Dashboard principal para sus tarjetas KPI
 // por estado (.stat-value.green/.red/.gold/etc, definidas en el CSS global) — así el mini
 // dashboard de Firmas en Vivo se ve exactamente igual, solo que en tamaño reducido.
-var ESTADO_VALUE_CLASS={en_bodega:'teal',en_ruta:'gold',entregado:'green',reprogramado:'purple',cancelado:'red',siniestro:'orange',retorno:'brown',en_bodega_cancelado:'rust'};
+var ESTADO_VALUE_CLASS={en_bodega:'teal',en_ruta:'gold',entregado:'green',reprogramado:'purple',cancelado:'red',siniestro:'orange',retorno:'brown',en_bodega_cancelado:'rust',en_bodega_fecha:'blue'};
 // Estados que ameritan una señal de alerta cuando su conteo es mayor a 0 (no incluye
-// 'retorno' ni 'en_bodega_cancelado' porque son desenlaces esperados del flujo, no fallas).
+// 'retorno' ni 'en_bodega_cancelado' porque son desenlaces esperados del flujo, no fallas;
+// tampoco 'en_bodega_fecha' -- es una retención a propósito por fecha futura, no una falla).
 var ESTADOS_CRITICOS=['reprogramado','cancelado','siniestro'];
 
 // Tarjeta de conteo por estado: mismo estilo visual que las KPI del Dashboard principal

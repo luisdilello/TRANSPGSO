@@ -1034,7 +1034,7 @@ function getTipoEnvioCobro(e){
 // porqué). Antes esta vista rápida solo contaba estado==='entregado' como facturable, lo que
 // además de subestimar el cobro dejaba "en_bodega_cancelado" completamente invisible (ni
 // entregado, ni cancelado, ni retorno).
-var ESTADOS_FACTURABLE_RESUMEN=['entregado','en_ruta','en_bodega','reprogramado','siniestro'];
+var ESTADOS_FACTURABLE_RESUMEN=['entregado','en_ruta','en_bodega','reprogramado','siniestro','en_bodega_fecha'];
 var ESTADOS_NO_FACTURABLE_RESUMEN=['cancelado','en_bodega_cancelado','retorno'];
 function calcularResumenCobrosClientes(envios,clientes){
   var porCliente={};

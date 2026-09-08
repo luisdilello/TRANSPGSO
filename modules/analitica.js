@@ -137,7 +137,11 @@ function calcularKpiPorMensajero(enviosPeriodo, historial, mensajerosRoster, his
   return Object.keys(nombresSet).map(function(norm){
     var nombre=nombresSet[norm];
     var enRosterActivo=!!rosterNorm[norm];
-    var propios=enviosPeriodo.filter(function(e){return normNombreLocal(e.mensajero)===norm;});
+    // Se excluye 'en_bodega_fecha' del KPI de este mensajero: son paquetes retenidos a propósito
+    // por tener fecha de entrega futura (no es una falla ni siquiera un pendiente de HOY), así que
+    // no deben contarse ni en 'total' ni en 'efectividad' -- mismo criterio que ya se usa en el
+    // Dashboard (Top Mensajeros) y en el Calendario de Entregas para excluir 'en_bodega'.
+    var propios=enviosPeriodo.filter(function(e){return normNombreLocal(e.mensajero)===norm&&e.estado!=='en_bodega_fecha';});
     var total=propios.length;
     var porEstado={};
     ESTADOS_ENVIO.forEach(function(es){porEstado[es.val]=0;});
@@ -1129,7 +1133,7 @@ function Analitica(){
                     React.createElement('div',{className:'stats-grid',style:{marginBottom:12}},
                       [{val:'todos',label:'Total',color:'var(--gold)',cls:'gold',cnt:m.total}].concat(
                         ESTADOS_ENVIO.filter(function(es){return (m.porEstado[es.val]||0)>0;}).map(function(es){
-                          var cls=es.val==='en_bodega'?'teal':es.val==='en_ruta'?'gold':es.val==='entregado'?'green':es.val==='reprogramado'?'purple':es.val==='cancelado'?'red':es.val==='siniestro'?'orange':es.val==='retorno'?'brown':es.val==='en_bodega_cancelado'?'rust':'orange';
+                          var cls=es.val==='en_bodega'?'teal':es.val==='en_ruta'?'gold':es.val==='entregado'?'green':es.val==='reprogramado'?'purple':es.val==='cancelado'?'red':es.val==='siniestro'?'orange':es.val==='retorno'?'brown':es.val==='en_bodega_cancelado'?'rust':es.val==='en_bodega_fecha'?'blue':'orange';
                           return{val:es.val,label:es.label,color:es.color,cls:cls,cnt:m.porEstado[es.val]||0};
                         })
                       ).map(function(s){
