@@ -625,7 +625,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788845981;
+window.__MODULES_VERSION=1788847322;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -2256,7 +2256,10 @@ function Dashboard(_ref7){
       if(!cancelado)setCargandoExtra(false);
     }
     fetchExtra(false);
-    const _intervalExtra=setInterval(()=>fetchExtra(true),60000);
+    // Antes cada 60s: para una pantalla de solo lectura como el Dashboard (no hay riesgo de
+    // pisar cambios) no hace falta tan seguido -- se sube a 3 min, igual que 'Todo' más abajo,
+    // para no repetir esta consulta de más por cada pestaña de Dashboard que quede abierta.
+    const _intervalExtra=setInterval(()=>fetchExtra(true),180000);
     return()=>{cancelado=true;clearInterval(_intervalExtra);};
   },[periodo,mesFiltro,db]);
   // Consulta específica para Rango: se dispara cada vez que cambian las fechas elegidas,
@@ -2275,7 +2278,9 @@ function Dashboard(_ref7){
       if(!cancelado)setCargandoRango(false);
     }
     fetchRango(false);
-    const _intervalRango=setInterval(()=>fetchRango(true),60000);
+    // Mismo criterio que fetchExtra: se sube de 60s a 3 min, es de solo lectura y no necesita
+    // refrescarse tan seguido.
+    const _intervalRango=setInterval(()=>fetchRango(true),180000);
     return()=>{cancelado=true;clearInterval(_intervalRango);};
   },[periodo,desde,hasta,db]);
   // Consulta completa para 'Todo': trae TODA la tabla en bloques de 1000, sin tope artificial,
@@ -3402,7 +3407,10 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
     setFilas(data);
     setRetirosDB(data);
     sincronizarDesdeSupabaseRetiros(true);
-    var interval=setInterval(function(){sincronizarDesdeSupabaseRetiros(false);},15000);
+    // El canal realtime de abajo ya avisa al instante ante cualquier cambio -- este intervalo
+    // es solo una red de seguridad por si se pierde algún evento, así que puede ser mucho más
+    // espaciado de lo que estaba (antes cada 15s, repitiendo la misma consulta sin necesidad).
+    var interval=setInterval(function(){sincronizarDesdeSupabaseRetiros(false);},120000);
     var canal=db.channel('planilla-retiros-admin-'+retiroFecha).on('postgres_changes',{event:'*',schema:'public',table:'retiros',filter:'fecha=eq.'+retiroFecha},function(){sincronizarDesdeSupabaseRetiros(false);}).subscribe();
     return function(){clearInterval(interval);db.removeChannel(canal);};
   },[retiroFecha]);
@@ -3433,7 +3441,9 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
   }
   React.useEffect(function(){
     cargarColectaDelDia();
-    var interval=setInterval(cargarColectaDelDia,20000);
+    // Mismo criterio que el intervalo de arriba: el canal realtime ya cubre los cambios al
+    // instante, este polling es solo respaldo (antes cada 20s).
+    var interval=setInterval(cargarColectaDelDia,120000);
     var canal=db.channel('planilla-retiros-colecta-'+retiroFecha).on('postgres_changes',{event:'*',schema:'public',table:'envios',filter:'fecha=eq.'+retiroFecha},cargarColectaDelDia).subscribe();
     return function(){clearInterval(interval);db.removeChannel(canal);};
   },[retiroFecha]);
@@ -8732,7 +8742,8 @@ function RetirosRider(_ref_rr){
   React.useEffect(function(){
     cargarRetiros(fechaVer);
     calcularPiezasAuto(fechaVer);
-    var interval=setInterval(function(){cargarRetiros(fechaVer);calcularPiezasAuto(fechaVer);},30000);
+    // El canal realtime de abajo ya avisa al instante -- este polling es solo respaldo (antes cada 30s).
+    var interval=setInterval(function(){cargarRetiros(fechaVer);calcularPiezasAuto(fechaVer);},120000);
     var canalId='retiros-rider-'+(usuario.nombre||'').toLowerCase().replace(/[^a-z0-9]/g,'_');
     var canal=db.channel(canalId).on('postgres_changes',{event:'*',schema:'public',table:'retiros'},function(){cargarRetiros(fechaVer);}).subscribe();
     var canalId2='colecta-piezas-'+(usuario.nombre||'').toLowerCase().replace(/[^a-z0-9]/g,'_');
@@ -12639,6 +12650,14 @@ useEffect(()=>{
     return{...m,nombre:(m.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim(),optimizacionRutaActiva:!!m.optimizacion_ruta_activa,verGanancias:m.ver_ganancias!==false,colectaHabilitada:!!m.colecta_habilitada,tarifaRetiro:m.tarifa_retiro||500};
   }
   const channelMens=db.channel('mensajeros-realtime').on('postgres_changes',{event:'*',schema:'public',table:'mensajeros'},payload=>{
+    // Este roster completo de mensajeros solo lo usan las pantallas de administración -- un
+    // rider o un cliente nunca lo muestran, así que antes cada cambio (crear/editar/pausar un
+    // mensajero) hacía procesar y re-renderizar esto en el celular de CADA rider conectado sin
+    // que le sirviera de nada. Se lee la sesión fresca (no un valor de React que podría no
+    // estar listo todavía al momento de registrar este efecto) y se descarta el evento si no es
+    // una sesión de administración.
+    var sesionRT=lsLoad('session_usuario',null);
+    if(!sesionRT||sesionRT.rol==='rider'||sesionRT.rol==='cliente')return;
     if(payload.eventType==='INSERT'){
       const nuevo=normalizarMensajeroRT(payload.new);
       setMensajeros(prev=>prev.some(m=>String(m.id)===String(nuevo.id))?prev:[...prev,nuevo].sort((a,b)=>a.nombre.localeCompare(b.nombre)));
@@ -13468,7 +13487,9 @@ function MapaRutas(props){
     }
     cargarUbicaciones();
     var canal=db.channel('ubicaciones-live').on('postgres_changes',{event:'*',schema:'public',table:'ubicaciones_mensajeros'},function(){cargarConThrottle();}).subscribe();
-    var iv=setInterval(cargarUbicaciones,30000);
+    // El canal realtime ya avisa al instante ante cualquier cambio de ubicación -- este
+    // polling es solo respaldo por si se pierde algún evento (antes cada 30s).
+    var iv=setInterval(cargarUbicaciones,120000);
     return function(){db.removeChannel(canal);clearInterval(iv);};
   },[]);
 
