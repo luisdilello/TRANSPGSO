@@ -89,7 +89,7 @@ const pdfRef=useRef();const _usePS=useState(50),PAGE_SIZE=_usePS[0],setPageSize=
 // Los operadores ven y filtran envios en 'Retorno' igual que cualquier otro estado, pero no
 // pueden asignarselo — se les oculta de todos los botones/selectores que ESCRIBEN el estado.
 const estadosEditables=useMemo(()=>(esAdmin||esSuperAdmin)?ESTADOS_ENVIO:ESTADOS_ENVIO.filter(est=>!est.soloAdmin),[esAdmin,esSuperAdmin]);
-useEffect(()=>{sincronizarDesdeSupabase();const _autoSyncInterval=setInterval(sincronizarDesdeSupabase,60000);return()=>clearInterval(_autoSyncInterval);},[periodo,mesFiltro,desde,hasta]);// Igual que el sistema anterior de Luis: por defecto solo trae el DIA EN CURSO (rapido), y solo trae
+useEffect(()=>{sincronizarDesdeSupabase();const _autoSyncInterval=setInterval(sincronizarDesdeSupabase,180000);return()=>clearInterval(_autoSyncInterval);},[periodo,mesFiltro,desde,hasta]);// Antes cada 60s: se sube a 3 min (igual que los otros dos auto-refrescos de esta pantalla, ver más abajo) -- es de solo lectura, no necesita ser al segundo, y así no se repiten 3 consultas por minuto por cada pestaña de Gestión de Envíos que quede abierta.// Igual que el sistema anterior de Luis: por defecto solo trae el DIA EN CURSO (rapido), y solo trae
 // mas cuando el usuario cambia de periodo (Semana/Mes/Rango). Antes se traia SIEMPRE la tabla
 // completa cada 60s sin importar el filtro visible, lo que iba a pesar cada vez mas a medida
 // que crece el historico. Este helper calcula el rango de fechas exacto para el periodo activo
@@ -139,7 +139,7 @@ async function cargarEntregadosPeriodoReal(){
   }catch(eReal){console.warn('Error cargando entregados por fecha real:',eReal.message);}
   setCargandoEntregadosReal(false);
 }
-useEffect(()=>{cargarEntregadosPeriodoReal();const _ivEntReal=setInterval(cargarEntregadosPeriodoReal,60000);return()=>clearInterval(_ivEntReal);},[periodo,mesFiltro,desde,hasta]);
+useEffect(()=>{cargarEntregadosPeriodoReal();const _ivEntReal=setInterval(cargarEntregadosPeriodoReal,180000);return()=>clearInterval(_ivEntReal);},[periodo,mesFiltro,desde,hasta]);// Antes cada 60s: se sube a 3 min por la misma razón que sincronizarDesdeSupabase de arriba.
 // Mismo criterio que 'Entregado' arriba, pero para 'Retorno': Luis reporto que al sacar los
 // retornos de la quincena 2 de un cliente (filtro de fecha en Gestion de Envios) le salian 18
 // paquetes cuando en realidad eran 14 -- el filtro estaba usando la fecha de DESPACHO
@@ -169,7 +169,7 @@ async function cargarRetornadosPeriodoReal(){
   }catch(eReal){console.warn('Error cargando retornados por fecha real:',eReal.message);}
   setCargandoRetornadosReal(false);
 }
-useEffect(()=>{cargarRetornadosPeriodoReal();const _ivRetReal=setInterval(cargarRetornadosPeriodoReal,60000);return()=>clearInterval(_ivRetReal);},[periodo,mesFiltro,desde,hasta]);
+useEffect(()=>{cargarRetornadosPeriodoReal();const _ivRetReal=setInterval(cargarRetornadosPeriodoReal,180000);return()=>clearInterval(_ivRetReal);},[periodo,mesFiltro,desde,hasta]);// Antes cada 60s: se sube a 3 min por la misma razón que las otras dos.
 async function sincronizarDesdeSupabase(){setSincronizando(true);try{
   // Solo trae el periodo activo (Hoy por defecto), no la tabla completa. Se pagina en bloques
   // de 1000 igual que antes por si un periodo amplio (Mes/Rango grande) supera esa cantidad,

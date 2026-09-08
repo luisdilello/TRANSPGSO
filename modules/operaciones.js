@@ -879,6 +879,9 @@ function FirmasEnVivo(props){
     return function(){clearInterval(iv);};
   },[clienteSel,mensajeroSel,filtro,fechaDesde,fechaHasta]);
 
+  // Referencia al 'updated_at' más reciente que ya se cargó, para poder detectar si hay algo
+  // nuevo SIN tener que volver a traer las fotos completas de los 200 envíos cada vez.
+  var ultimoUpdatedRef=React.useRef(null);
   function cargar(){
     var lim=limitesRango(filtro,fechaDesde,fechaHasta);
     if(filtro==='rango'&&(!lim.desde||!lim.hasta)){setEnvios([]);return;}
@@ -890,14 +893,38 @@ function FirmasEnVivo(props){
     if(mensajeroSel)q=q.eq('mensajero',mensajeroSel);
     if(estadoSel)q=q.eq('estado',estadoSel);
     q.order('updated_at',{ascending:false}).limit(200).then(function(r){
-      setEnvios((r&&r.data)||[]);setCargando(false);setUltimaActualizacion(new Date());
+      var filas=(r&&r.data)||[];
+      setEnvios(filas);setCargando(false);setUltimaActualizacion(new Date());
+      ultimoUpdatedRef.current=filas.length>0?filas[0].updated_at:null;
     }).catch(function(){setCargando(false);toast&&toast('⚠ Error cargando envíos');});
   }
   useEffect(function(){cargar();},[clienteSel,mensajeroSel,estadoSel,filtro,fechaDesde,fechaHasta]);
-  // "En vivo": se refresca sola cada 25s mientras esta pestaña está abierta (además del
-  // botón "Actualizar" manual). Es de solo lectura, así que no hay riesgo de pisar cambios.
+  // "En vivo", pero SIN volver a bajar las fotos de los 200 envíos cada 25s si no cambió nada:
+  // antes este intervalo llamaba a cargar() completo (con foto_etiqueta y fotos_entrega, que
+  // pesan bastante porque van embebidas en base64) cada 25 segundos SIN PARAR mientras la
+  // pantalla quedara abierta -- eso podía significar varios MB de fotos repetidos por minuto
+  // por cada admin que la dejara abierta, sin que hubiera nada nuevo para ver. Ahora cada 25s
+  // solo se pregunta liviano (una sola fila, sin fotos) cuál es el 'updated_at' más reciente
+  // del filtro actual, y solo si cambió respecto a lo que ya se ve en pantalla se dispara la
+  // recarga completa con fotos. Sigue sintiéndose "en vivo" (se entera dentro de los 25s de
+  // cualquier novedad) pero deja de gastar ancho de banda y lecturas de Supabase en repetir lo
+  // mismo una y otra vez.
   useEffect(function(){
-    var iv=setInterval(cargar,25000);
+    function chequearLiviano(){
+      var lim=limitesRango(filtro,fechaDesde,fechaHasta);
+      if(filtro==='rango'&&(!lim.desde||!lim.hasta))return;
+      var q=db.from('envios').select('updated_at');
+      if(lim.desde)q=q.gte('fecha',lim.desde);
+      if(lim.hasta)q=q.lte('fecha',lim.hasta);
+      if(clienteSel)q=q.eq('cliente',clienteSel);
+      if(mensajeroSel)q=q.eq('mensajero',mensajeroSel);
+      if(estadoSel)q=q.eq('estado',estadoSel);
+      q.order('updated_at',{ascending:false}).limit(1).then(function(r){
+        var masReciente=(r&&r.data&&r.data[0])?r.data[0].updated_at:null;
+        if(masReciente!==ultimoUpdatedRef.current) cargar();
+      }).catch(function(){});
+    }
+    var iv=setInterval(chequearLiviano,25000);
     return function(){clearInterval(iv);};
   },[clienteSel,mensajeroSel,estadoSel,filtro,fechaDesde,fechaHasta]);
 
