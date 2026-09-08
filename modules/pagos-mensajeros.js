@@ -1054,7 +1054,10 @@ function calcularResumenCobrosClientes(envios,clientes){
   return Object.keys(porCliente).map(function(nombre){
     var g=porCliente[nombre];
     var cliData=(clientes||[]).find(function(c){return c.nombre===nombre;})||{};
-    var tar={normal:cliData.tarifa||0,d10kg:cliData.tarifa10kg||0,d18kg:cliData.tarifa18kg||0,colina:cliData.tarifaColina||0,ph:cliData.tarifaPH||0};
+    // Colina y Padre Hurtado: si el cliente no tiene tarifa especial cargada para esos tipos,
+    // se cobran igual que Flex normal (mismo criterio que en generarReciboCobro, index.html) --
+    // antes quedaban en $0 en este resumen rápido.
+    var tar={normal:cliData.tarifa||0,d10kg:cliData.tarifa10kg||0,d18kg:cliData.tarifa18kg||0,colina:cliData.tarifaColina||cliData.tarifa||0,ph:cliData.tarifaPH||cliData.tarifa||0};
     var montoNeto=g.grupos.normal*tar.normal+g.grupos.d10kg*tar.d10kg+g.grupos.d18kg*tar.d18kg+g.grupos.colina*tar.colina+g.grupos.ph*tar.ph;
     var iva=cliData.pagaIVA?Math.round(montoNeto*0.19):0;
     return Object.assign({},g,{montoNeto:montoNeto,iva:iva,montoTotal:montoNeto+iva,efectividad:g.total>0?g.entregados/g.total:0});
