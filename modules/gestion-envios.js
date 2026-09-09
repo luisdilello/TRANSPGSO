@@ -768,11 +768,15 @@ const filtrados=useMemo(()=>{const q=search.trim().toLowerCase();
   // El bucket 'Entregado' se arma con la fecha REAL de entrega (ver entregadosPeriodoReal mas
   // arriba), no filtrando enviosPeriodo (que esta acotado por fecha de despacho) -- por eso usa
   // su propia lista en vez de 'enviosPeriodo.filter(estado==="entregado")'. 'Retorno' usa el
-  // mismo criterio (ver retornadosPeriodoReal mas arriba). 'Todos' usa el superset de las tres
-  // (ver todosPeriodoReal mas arriba) para que nunca esconda algo que si aparece en 'Entregado' o
-  // 'Retorno' -- antes buscar un codigo puntual con 'Todos' podia dar 0 resultados aunque ese mismo
-  // codigo apareciera filtrando por 'Retorno'.
-  const baseLista=filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?todosPeriodoReal:enviosPeriodoEfectivo;
+  // mismo criterio (ver retornadosPeriodoReal mas arriba). 'Todos' CON busqueda usa el superset
+  // de las tres (ver todosPeriodoReal mas arriba) para que buscar un codigo puntual nunca de 0
+  // resultados aunque ese mismo codigo aparezca filtrando por 'Entregado' o 'Retorno'. Pero
+  // 'Todos' SIN busqueda -- la vista general que se usa para saber cuantas piezas se recibieron
+  // en el periodo, armar manifiestos, etc. -- debe seguir mostrando solo lo despachado DENTRO del
+  // periodo elegido: si no, un envio despachado dias antes pero entregado/retornado justo hoy se
+  // sumaba igual al total de "Hoy", inflando el conteo real de piezas recibidas (caso real
+  // reportado por el equipo: 189 despachados hoy pero 218 mostrados en 'Todos'+'Hoy').
+  const baseLista=filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?(q?todosPeriodoReal:enviosPeriodoEfectivo):enviosPeriodoEfectivo;
   return baseLista.filter(e=>{const qTerms=q.split(/[\n,;\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
       const esMultiple=qTerms.length>1;
       const matchQ=!q||(esMultiple
