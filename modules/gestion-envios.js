@@ -218,7 +218,55 @@ async function sincronizarDesdeSupabase(){setSincronizando(true);try{
   // 'codigo' al construir 'merged' (si por cualquier motivo llegara un código repetido,
   // se queda con la última versión en vez de contarlo dos veces).
   const rowsUnicas=[];const vistos={};rows.forEach(function(r){if(vistos[r.codigo])return;vistos[r.codigo]=true;rowsUnicas.push(r);});
-  setEnvios(prev=>{const mapaLocal={};prev.forEach(e=>{mapaLocal[e.codigo]=e;});const ahora=Date.now();const merged=rowsUnicas.map(sb=>{var _mapaLocal$sb$codigo,_mapaLocal$sb$codigo2;const local=mapaLocal[sb.codigo];const edicionReciente=edicionesRecientesRef.current[sb.codigo];const usarLocalReciente=edicionReciente&&(ahora-edicionReciente.ts)<10000;return{id:((_mapaLocal$sb$codigo=mapaLocal[sb.codigo])==null?void 0:_mapaLocal$sb$codigo.id)||sb.id,codigo:sb.codigo,cliente:sb.cliente||'',destinatario:sb.destinatario||'',telefono:sb.telefono||'',direccion:sb.direccion||'',comuna:sb.comuna||'',referencia:sb.referencia||'',fecha:sb.fecha||fechaHoyCL(),estado:usarLocalReciente?edicionReciente.estado:(sb.estado||'en_bodega'),mensajero:usarLocalReciente?edicionReciente.mensajero:(sb.mensajero||''),monto:sb.monto||0,enUnCambio:sb.en_un_cambio||false,nota:sb.nota||'',nota_admin:sb.nota_admin||'',fuente:sb.fuente||'propio',peso:sb.peso||null,valor_siniestro:sb.valor_siniestro||null,created_at:sb.created_at||null,aviso_tardio:sb.aviso_tardio||false,historial:((_mapaLocal$sb$codigo2=mapaLocal[sb.codigo])==null?void 0:_mapaLocal$sb$codigo2.historial)||[{fecha:sb.created_at,estado:sb.estado,nota:'Desde Supabase'}],_synced:true};});const codigosSupabase=new Set(rowsUnicas.map(e=>e.codigo));const eliminados=new Set(lsLoad('envios_eliminados',[]));const soloLocal=prev.filter(e=>!codigosSupabase.has(e.codigo)&&!eliminados.has(e.codigo)&&e._synced!==true);const mergedFiltrado=merged.filter(e=>!eliminados.has(e.codigo));return[...mergedFiltrado,...soloLocal];});toast(rows.length>0?`✓ Sincronizado: ${rows.length} envíos desde la nube`:'✓ Sincronizado: 0 envíos activos en la nube');}catch(e){toast('⚠ Error de sincronización: '+e.message);}setSincronizando(false);}useEffect(()=>{const channel=db.channel('admin-envios').on('postgres_changes',{event:'UPDATE',schema:'public',table:'envios',filter:'fecha=eq.'+fechaHoyCL()},payload=>{const sb=payload.new;const edicionReciente=edicionesRecientesRef.current[sb.codigo];const esPropio=edicionReciente&&(Date.now()-edicionReciente.ts)<10000;setEnvios(prev=>prev.map(e=>{if(e.codigo!==sb.codigo)return e;if(esPropio)return{...e,estado:sb.estado,mensajero:sb.mensajero||e.mensajero,nota:sb.nota||e.nota};if(e.historial.length>0&&e.historial[e.historial.length-1].estado===sb.estado&&e.historial[e.historial.length-1].nota==='Actualizado por Rider')return e;return{...e,estado:sb.estado,mensajero:sb.mensajero||e.mensajero,nota:sb.nota||e.nota,historial:[...e.historial,{fecha:new Date().toISOString(),estado:sb.estado,nota:'Actualizado por Rider'}]};}));}).subscribe();return()=>{db.removeChannel(channel);};},[]);function cargarHistorialReal(codigo){
+  setEnvios(prev=>{const mapaLocal={};prev.forEach(e=>{mapaLocal[e.codigo]=e;});const ahora=Date.now();const merged=rowsUnicas.map(sb=>{var _mapaLocal$sb$codigo,_mapaLocal$sb$codigo2;const local=mapaLocal[sb.codigo];const edicionReciente=edicionesRecientesRef.current[sb.codigo];const usarLocalReciente=edicionReciente&&(ahora-edicionReciente.ts)<10000;return{id:((_mapaLocal$sb$codigo=mapaLocal[sb.codigo])==null?void 0:_mapaLocal$sb$codigo.id)||sb.id,codigo:sb.codigo,cliente:sb.cliente||'',destinatario:sb.destinatario||'',telefono:sb.telefono||'',direccion:sb.direccion||'',comuna:sb.comuna||'',referencia:sb.referencia||'',fecha:sb.fecha||fechaHoyCL(),estado:usarLocalReciente?edicionReciente.estado:(sb.estado||'en_bodega'),mensajero:usarLocalReciente?edicionReciente.mensajero:(sb.mensajero||''),monto:sb.monto||0,enUnCambio:sb.en_un_cambio||false,nota:sb.nota||'',nota_admin:sb.nota_admin||'',fuente:sb.fuente||'propio',peso:sb.peso||null,valor_siniestro:sb.valor_siniestro||null,created_at:sb.created_at||null,aviso_tardio:sb.aviso_tardio||false,historial:((_mapaLocal$sb$codigo2=mapaLocal[sb.codigo])==null?void 0:_mapaLocal$sb$codigo2.historial)||[{fecha:sb.created_at,estado:sb.estado,nota:'Desde Supabase'}],_synced:true};});const codigosSupabase=new Set(rowsUnicas.map(e=>e.codigo));const eliminados=new Set(lsLoad('envios_eliminados',[]));const soloLocal=prev.filter(e=>!codigosSupabase.has(e.codigo)&&!eliminados.has(e.codigo)&&e._synced!==true);const mergedFiltrado=merged.filter(e=>!eliminados.has(e.codigo));return[...mergedFiltrado,...soloLocal];});toast(rows.length>0?`✓ Sincronizado: ${rows.length} envíos desde la nube`:'✓ Sincronizado: 0 envíos activos en la nube');}catch(e){toast('⚠ Error de sincronización: '+e.message);}setSincronizando(false);}useEffect(()=>{const channel=db.channel('admin-envios').on('postgres_changes',{event:'UPDATE',schema:'public',table:'envios',filter:'fecha=eq.'+fechaHoyCL()},payload=>{const sb=payload.new;const edicionReciente=edicionesRecientesRef.current[sb.codigo];const esPropio=edicionReciente&&(Date.now()-edicionReciente.ts)<10000;
+  // Antes este canal en vivo solo propagaba estado/mensajero/nota -- el cliente (y
+  // destinatario/direccion/comuna) se quedaban pegados con lo que fuera que tuviera la fila
+  // en memoria, aunque cambiaran en Supabase, porque este es uno de los pocos caminos que
+  // actualiza una fila SIN esperar el sync completo de 3 min (que ademas solo trae codigos
+  // DENTRO del periodo activo -- uno despachado otro dia nunca se refrescaba solo). Ahora se
+  // propagan tambien esos campos (con respaldo al valor local si vinieran vacios/null).
+  const camposExtra=e=>({cliente:sb.cliente||e.cliente,destinatario:sb.destinatario||e.destinatario,direccion:sb.direccion||e.direccion,comuna:sb.comuna||e.comuna});
+  setEnvios(prev=>prev.map(e=>{if(e.codigo!==sb.codigo)return e;if(esPropio)return{...e,estado:sb.estado,mensajero:sb.mensajero||e.mensajero,nota:sb.nota||e.nota,...camposExtra(e)};if(e.historial.length>0&&e.historial[e.historial.length-1].estado===sb.estado&&e.historial[e.historial.length-1].nota==='Actualizado por Rider')return{...e,...camposExtra(e)};return{...e,estado:sb.estado,mensajero:sb.mensajero||e.mensajero,nota:sb.nota||e.nota,...camposExtra(e),historial:[...e.historial,{fecha:new Date().toISOString(),estado:sb.estado,nota:'Actualizado por Rider'}]};}));}).subscribe();return()=>{db.removeChannel(channel);};},[]);
+// El sync automatico (mas arriba) y el canal en vivo (justo arriba) solo cubren envios DENTRO
+// del periodo activo (Hoy/Semana/Mes/etc) -- si alguien busca un codigo puntual despachado
+// OTRO dia (fuera del periodo que se esta mirando), ninguno de los dos lo refresca nunca, sin
+// importar cuanto tiempo pase. Antes eso significaba que buscar ese codigo podia mostrar datos
+// desactualizados (cliente/mensajero vacios aunque ya estuvieran asignados en Supabase) hasta
+// que alguien recargara la pagina a mano -- confuso para operadores y para responder consultas
+// de clientes (caso real: Luis). Ahora, cuando el buscador tiene algo que parece un codigo real
+// (6+ digitos, soporta pegar varios de una vez via el modo de busqueda masiva), se va a buscar
+// ese/esos codigo(s) fresco directo a Supabase -- aparte del periodo activo -- y se
+// actualiza/agrega en la lista local, asi buscar un codigo siempre muestra el dato real.
+useEffect(()=>{
+  const candidatosBus=[...new Set(search.split(/[\n,;\s]+/).map(t=>t.trim()).filter(t=>/^\d{6,}$/.test(t)))];
+  if(!candidatosBus.length)return;
+  const timerBus=setTimeout(async()=>{
+    try{
+      const eliminadosBus=new Set(lsLoad('envios_eliminados',[]));
+      const codigosBuscar=candidatosBus.filter(c=>!eliminadosBus.has(c));
+      if(!codigosBuscar.length)return;
+      const COLS_BUS='id,codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,nota_admin,fuente,peso,valor_siniestro,tuvo_siniestro,updated_at,created_at,aviso_tardio';
+      const LOTE_BUS=200;const lotesBus=[];
+      for(let i=0;i<codigosBuscar.length;i+=LOTE_BUS)lotesBus.push(codigosBuscar.slice(i,i+LOTE_BUS));
+      const resultadosBus=await Promise.all(lotesBus.map(function(lote){return db.from('envios').select(COLS_BUS).neq('estado','eliminado').in('codigo',lote);}));
+      let dataBus=[];resultadosBus.forEach(function(r){if(!r.error)dataBus=dataBus.concat(r.data||[]);});
+      if(!dataBus.length)return;
+      const ahoraBus=Date.now();
+      setEnvios(prev=>{
+        const mapaLocal={};prev.forEach(e=>{mapaLocal[e.codigo]=e;});
+        dataBus.forEach(function(sb){
+          const local=mapaLocal[sb.codigo];
+          const edicionReciente=edicionesRecientesRef.current[sb.codigo];
+          const usarLocalReciente=edicionReciente&&(ahoraBus-edicionReciente.ts)<10000;
+          mapaLocal[sb.codigo]={id:(local&&local.id)||sb.id,codigo:sb.codigo,cliente:sb.cliente||'',destinatario:sb.destinatario||'',telefono:sb.telefono||'',direccion:sb.direccion||'',comuna:sb.comuna||'',referencia:sb.referencia||'',fecha:sb.fecha||fechaHoyCL(),estado:usarLocalReciente?edicionReciente.estado:(sb.estado||'en_bodega'),mensajero:usarLocalReciente?edicionReciente.mensajero:(sb.mensajero||''),monto:sb.monto||0,enUnCambio:sb.en_un_cambio||false,nota:sb.nota||'',nota_admin:sb.nota_admin||'',fuente:sb.fuente||'propio',peso:sb.peso||null,valor_siniestro:sb.valor_siniestro||null,tuvo_siniestro:sb.tuvo_siniestro||false,created_at:sb.created_at||null,updated_at:sb.updated_at||null,aviso_tardio:sb.aviso_tardio||false,historial:(local&&local.historial)||[{fecha:sb.created_at,estado:sb.estado,nota:'Desde Supabase'}],_synced:true};
+        });
+        return Object.values(mapaLocal);
+      });
+    }catch(eBuscar){console.warn('Error refrescando códigos buscados:',eBuscar.message);}
+  },500);
+  return()=>clearTimeout(timerBus);
+},[search]);
+function cargarHistorialReal(codigo){
   if(!codigo){setHistorialReal([]);return;}
   setCargandoHistorial(true);
   db.from('historial_envios').select('id,estado,nota,usuario,canal,created_at').eq('codigo_envio',codigo).order('created_at',{ascending:false}).then(function(res){
