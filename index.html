@@ -625,7 +625,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1788960449;
+window.__MODULES_VERSION=1788968109;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7383,6 +7383,45 @@ function AsignacionRider(_ref_ar){
 
   const codigosRef=useRef(new Set());
 
+  // ── Sesión recuperable ──────────────────────────────────────────────
+  // Si el mensajero sale de la app, actualiza la página o se corta la señal a mitad de
+  // una Asignación, lo ya escaneado NO debe desaparecer: se guarda en localStorage a cada
+  // escaneo y, al volver a abrir Asignación, se ofrece continuar exactamente donde quedó
+  // (los códigos quedan esperando confirmación, igual que Retiro Masivo y Colecta).
+  const claveSesionAsig='transpgso_sesion_asignacion_'+(usuario.nombre||'').toLowerCase().replace(/[^a-z0-9]/g,'_');
+  const _sas=useState(function(){
+    try{
+      const g=JSON.parse(localStorage.getItem(claveSesionAsig)||'null');
+      if(g&&Array.isArray(g.paquetes)&&g.paquetes.length>0) return g;
+    }catch(e){}
+    return null;
+  }),sesionRecuperableAsig=_sas[0],setSesionRecuperableAsig=_sas[1];
+
+  useEffect(()=>{
+    if(sesionRecuperableAsig) return; // esperando que el mensajero decida continuar o descartar
+    try{
+      if(paquetes.length>0){
+        localStorage.setItem(claveSesionAsig,JSON.stringify({ts:new Date().toISOString(),paquetes:paquetes}));
+      }else{
+        localStorage.removeItem(claveSesionAsig);
+      }
+    }catch(e){}
+  },[paquetes,sesionRecuperableAsig]);
+
+  function continuarSesionAsig(){
+    // Solo se retoman los que quedaron pendientes de confirmar -- si por alguna razón la
+    // sesión guardada tenía paquetes ya resueltos (asignado/rechazado/noexiste), no se
+    // vuelven a mostrar como si faltara confirmarlos.
+    const pendientes=sesionRecuperableAsig.paquetes.filter(p=>p.estado==='pendiente');
+    setPaquetes(pendientes);
+    codigosRef.current=new Set(pendientes.map(p=>p.codigo));
+    setSesionRecuperableAsig(null);
+  }
+  function descartarSesionAsig(){
+    try{localStorage.removeItem(claveSesionAsig);}catch(e){}
+    setSesionRecuperableAsig(null);
+  }
+
   useEffect(()=>{
     if(modoInput==='camara') iniciarScannerAsig();
     return ()=>{ detenerScannerAsig(); };
@@ -7480,6 +7519,7 @@ function AsignacionRider(_ref_ar){
     if(typeof navigator!=='undefined'&&navigator.onLine===false){
       await encolarAccionOffline('asignacion',{codigos:codigos,mensajero:usuario.nombre},usuario.nombre);
       setPaquetes(prev=>prev.map(p=>({...p,estado:'asignado',motivo:null})));
+      try{localStorage.removeItem(claveSesionAsig);}catch(e){}
       window.__TRANSPGSO_GUARDANDO_CRITICO--;
       setGuardando(false);
       playSound('success');
@@ -7547,6 +7587,7 @@ function AsignacionRider(_ref_ar){
     // Actualizar estados locales -- lo que quedó en la cola offline se muestra como asignado
     // (igual que el camino sin señal desde el vamos), no como rechazado.
     setPaquetes(prev=>prev.map(p=>({...p,estado:!encontrados[p.codigo]?'noexiste':motivos[p.codigo]?'rechazado':'asignado',motivo:motivos[p.codigo]||null})));
+    try{localStorage.removeItem(claveSesionAsig);}catch(e){}
     window.__TRANSPGSO_GUARDANDO_CRITICO--;
     setGuardando(false);
     if(ok>0||offline>0) playSound('success');
@@ -7554,6 +7595,15 @@ function AsignacionRider(_ref_ar){
     const msg=(ok>0||offline>0)?'✓ '+ok+' en ruta'+(offline>0?' · '+offline+' guardados en el celular, se confirman solos':'')+(noExiste>0?' · '+noExiste+' no encontrados':'')+(err>0?' · '+err+' rechazados':''):'⚠ No se pudo confirmar — verifica conexión';
     toast(msg);
   }
+
+  if(sesionRecuperableAsig) return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:24,color:'#fff',fontFamily:'DM Sans,sans-serif'}},
+    React.createElement('div',{style:{fontSize:48,marginBottom:12}},'🚴'),
+    React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:22,color:'var(--gold)',letterSpacing:2,marginBottom:10,textAlign:'center'}},'ASIGNACIÓN SIN TERMINAR'),
+    React.createElement('div',{style:{fontSize:13,color:'rgba(255,255,255,0.6)',textAlign:'center',marginBottom:6,lineHeight:1.5,maxWidth:320}},'Quedaron '+sesionRecuperableAsig.paquetes.length+' paquete'+(sesionRecuperableAsig.paquetes.length!==1?'s':'')+' escaneado'+(sesionRecuperableAsig.paquetes.length!==1?'s':'')+' esperando confirmación.'),
+    React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.35)',textAlign:'center',marginBottom:22}},'Última actividad: '+new Date(sesionRecuperableAsig.ts).toLocaleString('es-CL')),
+    React.createElement('button',{onClick:continuarSesionAsig,style:{width:'100%',maxWidth:320,padding:'15px',borderRadius:10,border:'none',background:'linear-gradient(135deg,var(--gold),#a87d2a)',color:'var(--dark-deep)',fontFamily:'Bebas Neue',fontSize:17,letterSpacing:2,cursor:'pointer',marginBottom:10}},'▶ CONTINUAR DONDE QUEDÉ'),
+    React.createElement('button',{onClick:descartarSesionAsig,style:{width:'100%',maxWidth:320,padding:'13px',borderRadius:10,border:'1px solid rgba(255,255,255,0.2)',background:'transparent',color:'rgba(255,255,255,0.5)',fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1,cursor:'pointer'}},'🗑 DESCARTAR Y EMPEZAR DE NUEVO')
+  );
 
   if(finalizado){
     const rechazados=paquetes.filter(p=>p.estado==='rechazado');
