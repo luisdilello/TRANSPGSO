@@ -581,6 +581,13 @@ function ConsumoDiario(props){
 // descuento se RESTA del Total a Pagar (igual que "Extra" y "Consumo" respectivamente), sin
 // tocar ningún otro cálculo existente (tarifa, IVA, consumo, adelanto, préstamo, siniestro
 // siguen exactamente igual que antes de esta función).
+// Tasa de Gestión (Fase 4, decisión de Luis): el DESCUENTO día-por-día ya no cuenta como "no
+// entregado" un paquete que terminó Reprogramado con evidencia geo-verificada (foto+GPS, ver
+// Fase 1) -- eso demuestra que el mensajero SÍ visitó el punto, así que penalizarlo sería el
+// mismo error que ya se corrigió en Efectividad/Analítica. El BONO no cambia: sigue exigiendo
+// entrega real (efectividad pura), a propósito -- Luis decidió que el premio, a diferencia del
+// castigo, debe seguir midiendo entregas efectivas. Ver calcularEnviosSemana más abajo
+// (gestionVerifCodigos) para el detalle de cómo se excluye.
 function CriterioEfectividadModal(props){
   var criterio=props.criterio, onGuardar=props.onGuardar, onClose=props.onClose;
   var _bonAct=useState(!!criterio.bonoActivo),bonoActivo=_bonAct[0],setBonoActivo=_bonAct[1];
@@ -640,6 +647,7 @@ function CriterioEfectividadModal(props){
           )
         ),
         React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginTop:6}},'Por cada día que la efectividad de ESE día quede por debajo de este %, se descuenta este monto MULTIPLICADO por los paquetes que ese día quedaron sin entregar (no un monto único por semana).'),
+        React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginTop:6,padding:'6px 8px',background:'rgba(200,168,75,0.08)',borderRadius:6,borderLeft:'3px solid var(--gold)'}},'Un paquete Reprogramado con foto y GPS verificado (el mensajero sí visitó el punto) nunca cuenta como "sin entregar" para este descuento -- aunque no se haya podido entregar, no es una ausencia real.'),
         (+umbralDescuento>=+umbralBono)&&React.createElement('div',{style:{fontSize:10,color:'var(--danger)',marginTop:4,fontWeight:700}},'⚠ El % del descuento debería ser menor que el % del bono, para dejar una zona neutra entre los dos.')
       ),
 
@@ -2417,6 +2425,22 @@ async function calcularEnviosSemana(){
       if(e.codigo)entregadosCodigosPorDia[n][f].add(e.codigo);
     });
 
+    // Tasa de Gestión (Fase 4): códigos con AL MENOS un evento Reprogramado con evidencia
+    // geo-verificada (foto+GPS, ver Fase 1) en historial_envios -- no importa qué día quedó ese
+    // evento ni a qué mensajero pertenece, porque más abajo solo se usa para filtrar, código por
+    // código, la lista de "faltantes" que ya arma cada mensajero/día (esa lista ya está acotada
+    // a sus propios asignados). No hace falta acotar por fecha: un código que hoy sigue
+    // Reprogramado y no aparece en 'data' (entregados) de todos modos solo importa si además
+    // quedó "asignado" dentro del rango pedido (ver asigCodDia más abajo), así que no hay riesgo
+    // de arrastrar exclusiones de otras semanas. Solo se consulta cuando el descuento está
+    // activo -- es la única parte de Pagos que usa Tasa de Gestión (decisión de Luis: el Bono
+    // sigue exigiendo entrega real, sin cambios).
+    var histReprogVerif=(criterioEf.descuentoActivo)?await fetchPaginadoParalelo(function(cursor,limite){
+      return db.from('historial_envios').select('id,codigo_envio')
+        .eq('estado','reprogramado').eq('gestion_verificada',true).gt('id',cursor).order('id',{ascending:true}).limit(limite);
+    },0):[];
+    var gestionVerifCodigos=new Set();
+    histReprogVerif.forEach(function(h){if(h.codigo_envio)gestionVerifCodigos.add(h.codigo_envio);});
 
     // Actualizar pagos con cálculo por tarifa de comuna
 
@@ -2466,7 +2490,10 @@ async function calcularEnviosSemana(){
         // la tarjeta y el Detalle de Pago. Además, detalleEfectividad guarda por cada día bajo el
         // umbral el CÓDIGO exacto de cada paquete que quedó sin entregar ese día (Luis pidió ver
         // qué paquete específico penalizó, no solo un número) -- se calcula como los códigos
-        // asignados ese día que NO están entre los entregados ese mismo día.
+        // asignados ese día que NO están entre los entregados ese mismo día -- Y TAMPOCO en
+        // gestionVerifCodigos (Tasa de Gestión, Fase 4): un Reprogramado con foto+GPS verificado
+        // nunca entra a esta lista, porque el mensajero sí visitó el punto aunque no haya podido
+        // entregar (decisión de Luis: esto es solo para el Descuento, el Bono sigue igual).
         // excluidosEfectividad: paquetes que Luis excluyó a mano desde la tarjeta de pago (botón
         // ✕ en el desglose) porque ese descuento puntual no correspondía. Se filtran ACÁ, antes
         // de armar detalleEfectividad, para que un recálculo completo (este mismo botón, o el
@@ -2485,9 +2512,14 @@ async function calcularEnviosSemana(){
             var entD=entDia[f]||0;
             var efecD=Math.min(entD/asigD,1);
             if((efecD*100)<(+criterioEf.umbralDescuentoPct||0)){
-              var faltantesConteo=Math.max(asigD-entD,0);
               var entSet=entCodDia[f]||new Set();
-              var codigosFaltantesTodos=(asigCodDia[f]||[]).filter(function(c){return!entSet.has(c);});
+              // gestionVerifDCount: de los códigos ASIGNADOS ese día, cuántos son Reprogramado
+              // geo-verificado y no cuentan ya como entregados ese mismo día -- se restan de
+              // faltantesConteo (que si no, seguiría contándolos como "sin entregar" por ser un
+              // conteo numérico asigD-entD, no un cruce por código).
+              var gestionVerifDCount=(asigCodDia[f]||[]).filter(function(c){return gestionVerifCodigos.has(c)&&!entSet.has(c);}).length;
+              var faltantesConteo=Math.max(asigD-entD-gestionVerifDCount,0);
+              var codigosFaltantesTodos=(asigCodDia[f]||[]).filter(function(c){return!entSet.has(c)&&!gestionVerifCodigos.has(c);});
               var codigosFaltantes=codigosFaltantesTodos.filter(function(c){return!excluidosSet.has(f+'|'+c);});
               var excluidosEsteDia=codigosFaltantesTodos.length-codigosFaltantes.length;
               var faltantes=Math.max(faltantesConteo-excluidosEsteDia,0);
