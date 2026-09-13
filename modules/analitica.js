@@ -150,6 +150,21 @@ function calcularKpiPorMensajero(enviosPeriodo, historial, mensajerosRoster, his
     var falla=(porEstado.reprogramado||0)+(porEstado.cancelado||0)+(porEstado.retorno||0);
     var efectividad=total>0?Math.round(entregados/total*100):0;
     var tasaFalla=total>0?Math.round(falla/total*100):0;
+    // Tasa de Gestión (Fase 3): entregados + Reprogramados con evidencia geo-verificada (ver
+    // Fase 1) sobre el total -- premia al mensajero que SÍ visitó el punto aunque no haya podido
+    // entregar. Solo se puede calcular con el historial detallado disponible (mismo requisito que
+    // reintentos/correcciones/etc. más abajo); si el período es demasiado grande y se omitió el
+    // historial (historialLimitado), queda en null ('—') en vez de mostrar un número parcial.
+    var gestionadoExtra=0;
+    if(historialDisponible){
+      propios.forEach(function(e){
+        if(e.estado!=='reprogramado')return;
+        var hs=histPorCodigo[e.codigo]||[];
+        if(hs.some(function(h){return h.estado==='reprogramado'&&h.gestion_verificada===true;}))gestionadoExtra++;
+      });
+    }
+    var gestionado=entregados+gestionadoExtra;
+    var tasaGestion=historialDisponible&&total>0?Math.round(gestionado/total*100):null;
     var montoCobrado=propios.filter(function(e){return e.estado==='entregado';}).reduce(function(a,e){return a+(e.monto||0);},0);
     var montoPendiente=propios.filter(function(e){return e.estado==='en_ruta'||e.estado==='reprogramado';}).reduce(function(a,e){return a+(e.monto||0);},0);
     var comunas=new Set(propios.map(function(e){return (e.comuna||'').trim();}).filter(Boolean));
@@ -270,6 +285,7 @@ function calcularKpiPorMensajero(enviosPeriodo, historial, mensajerosRoster, his
     return{
       nombre:nombre, norm:norm, enRosterActivo:enRosterActivo,
       total:total, entregados:entregados, porEstado:porEstado, efectividad:efectividad, tasaFalla:tasaFalla,
+      gestionado:gestionado, tasaGestion:tasaGestion,
       montoCobrado:montoCobrado, montoPendiente:montoPendiente, comunas:comunas.size,
       atrasados:atrasados, pendientesAtrasados:pendientesAtrasados, pctFoto:pctFoto, pctNota:pctNota,
       reintentos:reintentos, correccionesAdmin:correccionesAdmin,
@@ -518,7 +534,7 @@ function Analitica(){
           return(async function(){
             var out=[];var offset=0;
             while(true){
-              var r=await db.from('historial_envios').select('codigo_envio,estado,usuario,canal,nota,created_at').in('codigo_envio',lote).range(offset,offset+PAGINA-1);
+              var r=await db.from('historial_envios').select('codigo_envio,estado,usuario,canal,nota,created_at,gestion_verificada').in('codigo_envio',lote).range(offset,offset+PAGINA-1);
               if(r.error)throw r.error;
               var data=r.data||[];
               out=out.concat(data);
@@ -542,15 +558,50 @@ function Analitica(){
     return calcularKpiPorMensajero(enviosPeriodoKpi,historialKpi,mensajerosRoster,historialDisponible);
   },[subTab,enviosPeriodoKpi,historialKpi,mensajerosRoster,historialDisponible]);
 
+  // Tasa de Gestión (Fase 3) para el gráfico de tendencia de 14 días: se necesita saber, de los
+  // Reprogramados asignados en esos últimos 14 días, cuáles tienen evidencia geo-verificada (ver
+  // Fase 1) -- ese dato vive en historial_envios, no en 'envios', así que se pide aparte con una
+  // consulta acotada solo a esos códigos (nunca más de ~14 días de Reprogramados).
+  var _useGestionTrend14=useState(function(){return new Set();}), gestionVerifTrend14=_useGestionTrend14[0], setGestionVerifTrend14=_useGestionTrend14[1];
+  useEffect(function(){
+    if(subTab!=='kpi'){return;}
+    var hoyD0=new Date();var hace14=new Date(hoyD0);hace14.setDate(hace14.getDate()-13);hace14.setHours(0,0,0,0);
+    var codigosRepro14=envios.filter(function(e){
+      if(e.estado!=='reprogramado')return false;
+      var f=new Date((e.fecha||'')+'T12:00:00');
+      return !isNaN(f.getTime())&&f>=hace14;
+    }).map(function(e){return e.codigo;});
+    if(codigosRepro14.length===0){setGestionVerifTrend14(new Set());return;}
+    var cancelado14=false;
+    (async function(){
+      try{
+        var BLOQUE14=250;var lotes14=[];
+        for(var i=0;i<codigosRepro14.length;i+=BLOQUE14)lotes14.push(codigosRepro14.slice(i,i+BLOQUE14));
+        var resultados14=await Promise.all(lotes14.map(function(lote){return db.from('historial_envios').select('codigo_envio').eq('gestion_verificada',true).in('codigo_envio',lote).then(function(r){return r.data||[];}).catch(function(){return[];});}));
+        if(cancelado14)return;
+        var set14=new Set();
+        resultados14.forEach(function(rows){rows.forEach(function(r){set14.add(r.codigo_envio);});});
+        setGestionVerifTrend14(set14);
+      }catch(e14){}
+    })();
+    return function(){cancelado14=true;};
+  },[envios,subTab]);
+
   // Tendencia de flota — últimos 14 días, independiente del filtro elegido arriba
   var tendencia14=useMemo(function(){
     if(subTab!=='kpi')return [];
     var hoyD=new Date();var dias=[];
     for(var i=13;i>=0;i--){var d=new Date(hoyD);d.setDate(d.getDate()-i);dias.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));}
-    var porDia={};dias.forEach(function(d){porDia[d]={total:0,entregados:0};});
-    envios.forEach(function(e){var f=(e.fecha||'').slice(0,10);if(porDia[f]){porDia[f].total++;if(e.estado==='entregado')porDia[f].entregados++;}});
-    return dias.map(function(d){var x=porDia[d];var dd=d.slice(8,10)+'-'+d.slice(5,7);return{fecha:d,label:dd,total:x.total,entregados:x.entregados,efectividad:x.total>0?Math.round(x.entregados/x.total*100):0};});
-  },[envios,subTab]);
+    var porDia={};dias.forEach(function(d){porDia[d]={total:0,entregados:0,gestionado:0};});
+    envios.forEach(function(e){
+      var f=(e.fecha||'').slice(0,10);
+      if(!porDia[f])return;
+      porDia[f].total++;
+      if(e.estado==='entregado'){porDia[f].entregados++;porDia[f].gestionado++;}
+      else if(e.estado==='reprogramado'&&gestionVerifTrend14.has(e.codigo)){porDia[f].gestionado++;}
+    });
+    return dias.map(function(d){var x=porDia[d];var dd=d.slice(8,10)+'-'+d.slice(5,7);return{fecha:d,label:dd,total:x.total,entregados:x.entregados,efectividad:x.total>0?Math.round(x.entregados/x.total*100):0,tasaGestion:x.total>0?Math.round(x.gestionado/x.total*100):0};});
+  },[envios,subTab,gestionVerifTrend14]);
 
   // Arma los "cajones" de tiempo (inicio/fin/etiqueta) para una granularidad dada, del mas
   // viejo al mas nuevo, terminando en hoy. Usado tanto por el grafico de tendencia por
@@ -615,6 +666,11 @@ function Analitica(){
   var fleetTotal=enviosPeriodoKpi.length;
   var fleetEntregados=enviosPeriodoKpi.filter(function(e){return e.estado==='entregado';}).length;
   var fleetEfectividad=fleetTotal>0?Math.round(fleetEntregados/fleetTotal*100):0;
+  // Tasa de Gestión de flota (Fase 3): suma de 'gestionado' de cada mensajero (ya excluye
+  // Cancelado, ver comentario en calcularKpiPorMensajero) sobre el total del período. Si el
+  // historial detallado no está disponible para este período, queda en null ('—').
+  var fleetGestionado=kpiPorMensajero.reduce(function(a,m){return a+(m.gestionado||0);},0);
+  var fleetTasaGestion=historialDisponible&&fleetTotal>0?Math.round(fleetGestionado/fleetTotal*100):null;
   var fleetMonto=enviosPeriodoKpi.filter(function(e){return e.estado==='entregado';}).reduce(function(a,e){return a+(e.monto||0);},0);
   var fleetAtrasados=enviosPeriodoKpi.filter(function(e){return esEnvioAtrasado(e);}).length;
   var fleetPiezasAtraso=kpiPorMensajero.reduce(function(a,m){return a+(m.entregasConAtraso?m.entregasConAtraso.length:0);},0);
@@ -721,6 +777,12 @@ function Analitica(){
     mensajerosPerfectos.slice(0,LIMITE_CHIPS_PERFECTOS).forEach(function(m){
       destacadosChips.push(chipPersona(m.nombre,m.efectividad+'% · '+m.entregados+' entregas','good'));
     });
+    // Reprogramados con visita geo-verificada (Fase 1) que igual llegaron al 100% de Tasa de
+    // Gestión aunque su Efectividad no fuera perfecta -- reconoce al mensajero que SÍ visitó todos
+    // sus puntos, distinto del 100% de Efectividad (que exige entrega física de todos).
+    conActividad.filter(function(m){return m.total>=3&&m.efectividad<100&&m.tasaGestion===100;}).slice(0,LIMITE_CHIPS_PERFECTOS).forEach(function(m){
+      destacadosChips.push(chipPersona(m.nombre,'Gestión 100% · Efect. '+m.efectividad+'%','good'));
+    });
     if(mensajerosPerfectos.length>LIMITE_CHIPS_PERFECTOS){
       destacadosChips.push(chipPersona('+'+(mensajerosPerfectos.length-LIMITE_CHIPS_PERFECTOS)+' más con 100%',null,'good'));
     }
@@ -735,7 +797,12 @@ function Analitica(){
   // Los chips de mensajero (no las cifras sueltas de flota) son clickeables: clic despliega su
   // detalle de pendientes en el panel compartido mas abajo (chipDetallePanel).
   var urgentesChips=[];
-  necesitanAtencion.forEach(function(m){urgentesChips.push(chipMensajeroPendiente(m,m.efectividad+'%','bad'));});
+  necesitanAtencion.forEach(function(m){
+    // Si tiene Tasa de Gestión bien por encima de la Efectividad, se nota junto al chip -- señal de
+    // que buena parte de su "falla" es reprogramados YA visitados (con GPS), no ausencias reales.
+    var detalle=m.efectividad+'%'+(m.tasaGestion!=null&&m.tasaGestion>=m.efectividad+15?' (Gestión '+m.tasaGestion+'%)':'');
+    urgentesChips.push(chipMensajeroPendiente(m,detalle,'bad'));
+  });
   if(fleetAtrasados>0)urgentesChips.push(chipPersona('Envíos atrasados en ruta',String(fleetAtrasados),'bad'));
   if(fleetPendientesAtrasados.length>0)urgentesChips.push(chipPersona('Pendientes sin entregar 2+ días',String(fleetPendientesAtrasados.length),'bad'));
 
@@ -836,10 +903,10 @@ function Analitica(){
   }
 
   function exportarKpiExcel(){
-    var headers=['Mensajero','Total','Entregados','En Ruta','Reprogramados','Cancelados','Retorno','En Bodega Cancelado','Efectividad %','Tasa Falla %','$ Cobrado','$ Pendiente','Comunas','Atrasados','% Con Foto','% Con Nota','Reintentos','Correcciones Admin','Ritmo (entregas/h)','Duración Prom. Reparto (min)','Piezas c/Atraso en Entrega'];
+    var headers=['Mensajero','Total','Entregados','En Ruta','Reprogramados','Cancelados','Retorno','En Bodega Cancelado','Efectividad %','Tasa de Gestión %','Tasa Falla %','$ Cobrado','$ Pendiente','Comunas','Atrasados','% Con Foto','% Con Nota','Reintentos','Correcciones Admin','Ritmo (entregas/h)','Duración Prom. Reparto (min)','Piezas c/Atraso en Entrega'];
     var rows=kpiPorMensajero.map(function(m){
       return[m.nombre,m.total,m.entregados,m.porEstado.en_ruta||0,m.porEstado.reprogramado||0,m.porEstado.cancelado||0,m.porEstado.retorno||0,m.porEstado.en_bodega_cancelado||0,
-        m.efectividad,m.tasaFalla,m.montoCobrado,m.montoPendiente,m.comunas,m.atrasados,
+        m.efectividad,m.tasaGestion==null?'—':m.tasaGestion,m.tasaFalla,m.montoCobrado,m.montoPendiente,m.comunas,m.atrasados,
         m.pctFoto==null?'—':m.pctFoto,m.pctNota==null?'—':m.pctNota,
         m.reintentos==null?'—':m.reintentos,m.correccionesAdmin==null?'—':m.correccionesAdmin,
         m.ritmo==null?'—':m.ritmo.toFixed(2),m.duracionRepartoProm==null?'—':Math.round(m.duracionRepartoProm),
@@ -1016,7 +1083,7 @@ function Analitica(){
           briefCard('⚠','Requiere atención','bad',urgentesChips,React.createElement(React.Fragment,null,corte8pmBlock,chipDetallePanel))
         ),
         React.createElement('div',{className:'stats-grid'},
-          [{label:'Gestionados',val:fleetTotal,cls:''},{label:'Entregados',val:fleetEntregados,cls:'green'},{label:'Restante Pendiente',val:fleetPendiente,cls:fleetPendiente>0?'gold':''},{label:'Efectividad Flota',val:fleetEfectividad+'%',cls:fleetEfectividad>=95?'green':'red'},{label:'$ Cobrado',val:fmt(fleetMonto),cls:'green'},{label:'Atrasados',val:fleetAtrasados,cls:fleetAtrasados>0?'red':''},{label:'Mensajeros Activos',val:conActividad.length+'/'+kpiPorMensajero.length,cls:''},{label:'Piezas c/Atraso en Entrega',val:historialDisponible?fleetPiezasAtraso:'—',cls:historialDisponible&&fleetPiezasAtraso>0?'red':''}].map(function(s){return statTile(s.label,s.val,s.cls);})
+          [{label:'Gestionados',val:fleetTotal,cls:''},{label:'Entregados',val:fleetEntregados,cls:'green'},{label:'Restante Pendiente',val:fleetPendiente,cls:fleetPendiente>0?'gold':''},{label:'Efectividad Flota',val:fleetEfectividad+'%',cls:fleetEfectividad>=95?'green':'red'},{label:'Tasa de Gestión Flota',val:fleetTasaGestion==null?'—':fleetTasaGestion+'%',cls:fleetTasaGestion==null?'':fleetTasaGestion>=95?'green':'red'},{label:'$ Cobrado',val:fmt(fleetMonto),cls:'green'},{label:'Atrasados',val:fleetAtrasados,cls:fleetAtrasados>0?'red':''},{label:'Mensajeros Activos',val:conActividad.length+'/'+kpiPorMensajero.length,cls:''},{label:'Piezas c/Atraso en Entrega',val:historialDisponible?fleetPiezasAtraso:'—',cls:historialDisponible&&fleetPiezasAtraso>0?'red':''}].map(function(s){return statTile(s.label,s.val,s.cls);})
         )
       ),
 
@@ -1054,7 +1121,7 @@ function Analitica(){
       ),
 
       // ---- Tendencia 14 días ----
-      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,marginBottom:20}},
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))',gap:20,marginBottom:20}},
         React.createElement('div',{className:'panel'},
           React.createElement('div',{className:'panel-title'},'Envíos gestionados por día (últimos 14 días)'),
           React.createElement(MiniLineChart,{data:tendencia14.map(function(d){return{x:d.fecha,label:d.label,y:d.total};}),color:'#2e7d4f',valueFmt:function(v){return v+' envíos';}})
@@ -1062,6 +1129,10 @@ function Analitica(){
         React.createElement('div',{className:'panel'},
           React.createElement('div',{className:'panel-title'},'Efectividad de la flota por día (últimos 14 días)'),
           React.createElement(MiniLineChart,{data:tendencia14.map(function(d){return{x:d.fecha,label:d.label,y:d.efectividad};}),color:'#C8A84B',valueFmt:function(v){return v+'%';}})
+        ),
+        React.createElement('div',{className:'panel'},
+          React.createElement('div',{className:'panel-title'},'Tasa de Gestión de la flota por día (últimos 14 días)'),
+          React.createElement(MiniLineChart,{data:tendencia14.map(function(d){return{x:d.fecha,label:d.label,y:d.tasaGestion};}),color:'#1B3A6B',valueFmt:function(v){return v+'%';}})
         )
       ),
 
@@ -1073,7 +1144,7 @@ function Analitica(){
           React.createElement('thead',null,React.createElement('tr',null,
             React.createElement('th',null,'#'),React.createElement('th',null,'Mensajero'),
             React.createElement('th',{style:{textAlign:'center'}},'Total'),React.createElement('th',{style:{textAlign:'center'}},'Entregados'),
-            React.createElement('th',{style:{textAlign:'center'}},'Efectividad'),React.createElement('th',{style:{textAlign:'center'}},'Falla %'),
+            React.createElement('th',{style:{textAlign:'center'}},'Efectividad'),React.createElement('th',{style:{textAlign:'center'}},'Tasa Gestión'),React.createElement('th',{style:{textAlign:'center'}},'Falla %'),
             React.createElement('th',{style:{textAlign:'center'}},'Atrasados'),React.createElement('th',{style:{textAlign:'center'}},'$ Cobrado'),
             React.createElement('th',{style:{textAlign:'center'}},'Comunas'),React.createElement('th',null)
           )),
@@ -1086,6 +1157,7 @@ function Analitica(){
               React.createElement('td',{className:'mono',style:{textAlign:'center'}},m.total),
               React.createElement('td',{className:'mono',style:{textAlign:'center',color:'var(--success)'}},m.entregados),
               React.createElement('td',{style:{minWidth:110}},m.total>0?React.createElement(KpiBar,{value:m.efectividad/100}):React.createElement('span',{style:{fontSize:11,color:'var(--text-soft)'}},'—')),
+              React.createElement('td',{className:'mono',style:{textAlign:'center',color:m.tasaGestion==null?'var(--text-soft)':badgeColor(m.tasaGestion)}},m.tasaGestion==null?'—':m.tasaGestion+'%'),
               React.createElement('td',{className:'mono',style:{textAlign:'center',color:m.tasaFalla>20?'var(--danger)':'var(--text-soft)'}},m.total>0?m.tasaFalla+'%':'—'),
               React.createElement('td',{className:'mono',style:{textAlign:'center',color:m.atrasados>0?'var(--danger)':'var(--text-soft)',fontWeight:m.atrasados>0?700:400}},m.atrasados),
               React.createElement('td',{className:'mono',style:{textAlign:'center'}},fmt(m.montoCobrado)),
@@ -1094,10 +1166,11 @@ function Analitica(){
             )];
             if(isExp){
               var tendM=tendenciaDeMensajero(m.norm,tendGranularidad);
-              filas.push(React.createElement('tr',{key:m.norm+'_det'},React.createElement('td',{colSpan:10,style:{padding:0}},
+              filas.push(React.createElement('tr',{key:m.norm+'_det'},React.createElement('td',{colSpan:11,style:{padding:0}},
                 React.createElement('div',{style:{padding:'18px 20px',background:'var(--cream)',borderTop:'1px solid var(--border)',borderBottom:'2px solid var(--gold)'}},
                   React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:12,marginBottom:16}},
-                    [{label:'Reintentos',val:m.reintentos==null?'—':m.reintentos},
+                    [{label:'Tasa de Gestión',val:m.tasaGestion==null?'—':m.tasaGestion+'%'},
+                     {label:'Reintentos',val:m.reintentos==null?'—':m.reintentos},
                      {label:'Correcciones de admin',val:m.correccionesAdmin==null?'—':m.correccionesAdmin,warn:m.correccionesAdmin>0},
                      {label:'% Con foto evidencia',val:m.pctFoto==null?'—':m.pctFoto+'%',warn:m.pctFoto!=null&&m.pctFoto<80},
                      {label:'% Con nota',val:m.pctNota==null?'—':m.pctNota+'%'},
