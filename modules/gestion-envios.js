@@ -314,7 +314,11 @@ useEffect(()=>{
 function cargarHistorialReal(codigo){
   if(!codigo){setHistorialReal([]);return;}
   setCargandoHistorial(true);
-  db.from('historial_envios').select('id,estado,nota,usuario,canal,created_at').eq('codigo_envio',codigo).order('created_at',{ascending:false}).then(function(res){
+  // gestion_lat/gestion_lng/gestion_precision_m/gestion_distancia_m/gestion_verificada (Fase 1):
+  // evidencia geo-verificada de Reprogramado -- se pide acá para poder mostrar, junto a cada
+  // entrada del historial, qué tan lejos quedó el mensajero del domicilio real y un link a Maps
+  // (Luis pidió poder auditar esto visualmente, no solo confiar en el booleano).
+  db.from('historial_envios').select('id,estado,nota,usuario,canal,created_at,gestion_lat,gestion_lng,gestion_precision_m,gestion_distancia_m,gestion_verificada').eq('codigo_envio',codigo).order('created_at',{ascending:false}).then(function(res){
     setHistorialReal((res&&res.data)||[]);
     setCargandoHistorial(false);
   }).catch(function(){setHistorialReal([]);setCargandoHistorial(false);});
@@ -1347,7 +1351,20 @@ asignarModal&&/*#__PURE__*/React.createElement(Modal,{title:'Asignar '+selected.
           /*#__PURE__*/React.createElement("span",{style:{fontSize:9,fontWeight:700,padding:'1px 7px',borderRadius:10,background:canalInfo(h.canal).bg,color:canalInfo(h.canal).color}},canalInfo(h.canal).label)
         ),
         /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-mid)',marginTop:3,fontWeight:600}},h.usuario||'Sistema'),
-        h.nota&&/*#__PURE__*/React.createElement("div",{style:{fontSize:11,color:'var(--text-soft)',marginTop:2,fontStyle:'italic'}},h.nota)
+        h.nota&&/*#__PURE__*/React.createElement("div",{style:{fontSize:11,color:'var(--text-soft)',marginTop:2,fontStyle:'italic'}},h.nota),
+        // Evidencia geo-verificada (Fase 1/Tasa de Gestión): solo existe en entradas Reprogramado
+        // con la verificación GPS activa. gestion_verificada true = quedó dentro del radio
+        // configurado (verde); false = el mensajero SÍ mandó GPS pero quedó fuera del radio (rojo,
+        // para que salte a la vista si algo no corresponde); null con lat/lng presente = no se pudo
+        // comparar contra el domicilio (ej. el envío todavía no tenía coordenadas geocodificadas en
+        // ese momento) -- ninguno de los dos casos es un error de carga, así que se muestra neutro.
+        h.gestion_lat!=null&&h.gestion_lng!=null&&/*#__PURE__*/React.createElement("div",{style:{marginTop:5,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}},
+          /*#__PURE__*/React.createElement("span",{style:{fontSize:10,fontWeight:800,padding:'2px 8px',borderRadius:10,whiteSpace:'nowrap',background:h.gestion_verificada===true?'rgba(46,125,79,0.12)':h.gestion_verificada===false?'rgba(176,48,48,0.14)':'rgba(122,125,106,0.12)',color:h.gestion_verificada===true?'#2e7d4f':h.gestion_verificada===false?'#b03030':'#7a7d6a',border:'1px solid '+(h.gestion_verificada===true?'rgba(46,125,79,0.4)':h.gestion_verificada===false?'rgba(176,48,48,0.5)':'rgba(122,125,106,0.3)')}},
+            h.gestion_verificada===true?'✓ Dentro del radio':h.gestion_verificada===false?'⚠ FUERA DEL RADIO':'○ Sin comparar',
+            h.gestion_distancia_m!=null?(' · '+Math.round(h.gestion_distancia_m)+' m del domicilio'):''
+          ),
+          /*#__PURE__*/React.createElement("a",{href:'https://www.google.com/maps?q='+h.gestion_lat+','+h.gestion_lng,target:'_blank',rel:'noopener noreferrer',onClick:function(ev){ev.stopPropagation();},style:{fontSize:10,fontWeight:700,color:'var(--gold)',textDecoration:'underline'}},'📍 Ver ubicación en Maps')
+        )
       ),
       /*#__PURE__*/React.createElement("div",{style:{fontSize:10,color:'var(--text-soft)',fontFamily:'JetBrains Mono',whiteSpace:'nowrap',textAlign:'right'}},new Date(h.created_at).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})),
       (esAdmin||esSuperAdmin)&&React.createElement("button",{onClick:async()=>{
