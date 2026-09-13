@@ -625,7 +625,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1789338741;
+window.__MODULES_VERSION=1789339361;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8003,7 +8003,7 @@ function CalendarioEntregasRider(_ref_cal){
   // en fechaEntregaReal más abajo. Mapa codigo -> created_at (string ISO) del último paso a
   // 'entregado'.
   const _sc7=useState({}),mapaEntregaReal=_sc7[0],setMapaEntregaReal=_sc7[1];
-  // Tasa de Gestión (Fase 2): códigos actualmente Reprogramado/Cancelado que SÍ tienen al menos
+  // Tasa de Gestión (Fase 2): códigos actualmente Reprogramado que SÍ tienen al menos
   // un intento con evidencia geo-verificada (ver historial_envios.gestion_verificada, Fase 1).
   // Estos cuentan como "gestionados" (el mensajero visitó el punto) aunque no se hayan entregado
   // -- separado de la Tasa de Entrega de siempre, que no se toca.
@@ -8065,11 +8065,14 @@ function CalendarioEntregasRider(_ref_cal){
           });
         }catch(eHist){}
         if(!cancelado)setMapaEntregaReal(mapaReal);
-        // Tasa de Gestión (Fase 2): de lo que HOY sigue Reprogramado/Cancelado, ¿cuáles tienen
+        // Tasa de Gestión (Fase 2): de lo que HOY sigue Reprogramado, ¿cuáles tienen
         // al menos un intento con evidencia geo-verificada? Solo se consulta para esos códigos
         // (no para entregados, que ya cuentan igual en la Tasa de Entrega de siempre).
         try{
-          const codigosGestion=propio.filter(e=>e.estado==='reprogramado'||e.estado==='cancelado').map(e=>e.codigo);
+          // Solo Reprogramado -- Cancelado casi siempre se gestiona en bodega antes de salir o en
+          // la casa del mensajero al llegar (no en el punto del cliente), así que exigir/contar
+          // GPS ahí no tendría sentido como evidencia de visita. Pedido explícito de Luis.
+          const codigosGestion=propio.filter(e=>e.estado==='reprogramado').map(e=>e.codigo);
           const setGestion=new Set();
           const LOTE_G=250;
           const lotesGestion=[];
@@ -8117,7 +8120,7 @@ function CalendarioEntregasRider(_ref_cal){
         if(!mapa[keyEnt])mapa[keyEnt]={total:0,entregado:0,gestionado:0};
         mapa[keyEnt].entregado++;
         mapa[keyEnt].gestionado++; // entregado siempre cuenta como "gestionado" también
-      }else if((e.estado==='reprogramado'||e.estado==='cancelado')&&gestionVerificadaSet.has(e.codigo)){
+      }else if(e.estado==='reprogramado'&&gestionVerificadaSet.has(e.codigo)){
         // No se entregó, pero SÍ hay evidencia de que el mensajero visitó el punto -- cuenta
         // para la Tasa de Gestión (no para la Tasa de Entrega), en el día que se asignó/intentó.
         mapa[keyAsig].gestionado++;
@@ -8272,10 +8275,10 @@ function CalendarioEntregasRider(_ref_cal){
         React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:24,color:barColor(totalMes.efectividad),lineHeight:1}},pct(totalMes.efectividad)),
         React.createElement('div',{style:{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:1,marginTop:4,textTransform:'uppercase'}},'Efectividad')
       ),
-      // Tasa de Gestión (Fase 2): entregado + reprogramado/cancelado con visita geo-verificada,
+      // Tasa de Gestión (Fase 2): entregado + reprogramado con visita geo-verificada,
       // sobre el total asignado -- premia al mensajero que SÍ visitó el punto aunque no haya
       // podido entregar (cliente ausente, rechazo, etc.), separado de la Efectividad de siempre.
-      React.createElement('div',{title:'Entregados + reprogramados/cancelados con foto y GPS verificado, sobre el total asignado',style:{minWidth:70}},
+      React.createElement('div',{title:'Entregados + reprogramados con foto y GPS verificado, sobre el total asignado',style:{minWidth:70}},
         React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:24,color:barColor(totalMes.tasaGestion),lineHeight:1}},pct(totalMes.tasaGestion)),
         React.createElement('div',{style:{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:1,marginTop:4,textTransform:'uppercase'}},'Tasa de Gestión')
       ),
@@ -8366,7 +8369,7 @@ function DiaDetalleModal(_ref_dd){
           React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:22,color:barColor(efectividadDia),lineHeight:1}},pct(efectividadDia)),
           React.createElement('div',{style:{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:1,marginTop:3,textTransform:'uppercase'}},'Efectividad del día')
         ),
-        React.createElement('div',{title:'Entregados + reprogramados/cancelados con foto y GPS verificado, sobre lo asignado este día'},
+        React.createElement('div',{title:'Entregados + reprogramados con foto y GPS verificado, sobre lo asignado este día'},
           React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:22,color:barColor(tasaGestionDia),lineHeight:1}},pct(tasaGestionDia)),
           React.createElement('div',{style:{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:1,marginTop:3,textTransform:'uppercase'}},'Tasa de Gestión')
         )
@@ -10541,14 +10544,18 @@ const _useMotivosRepro=useState([]),motivosReprogramacion=_useMotivosRepro[0],se
 useEffect(()=>{(async()=>{try{const{data}=await db.from('configuracion').select('valor').eq('clave','motivos_reprogramacion').maybeSingle();if(data&&Array.isArray(data.valor))setMotivosReprogramacion(data.valor.filter(function(m){return m&&m.activo!==false;}));}catch(e){}})();},[]);
 const usaMotivoDesplegable=estadoSel==='reprogramado'&&motivosReprogramacion.length>0;
 // Tasa de Gestión (Fase 1 - fundación): si el admin activó la verificación por geolocalización
-// para Reprogramado/Cancelado ('gestion_verificada_geo' en 'configuracion'), al confirmar esos
+// para Reprogramado ('gestion_verificada_geo' en 'configuracion'), al confirmar ese
 // estados se pide 1 foto (ya lo hacen igual) y se intenta capturar el GPS del celular para dejar
 // registrado que el mensajero SÍ visitó el punto -- sin bloquear nunca el guardado si el GPS
 // falla, está apagado, o el mensajero está lejos: eso solo queda marcado como "no verificado"
 // para la futura métrica, nunca le complica el trabajo en el momento.
 const _useGestionCfg=useState({activo:false,radio_metros:150,estados:[]}),gestionConfig=_useGestionCfg[0],setGestionConfig=_useGestionCfg[1];
 useEffect(()=>{(async()=>{try{const{data}=await db.from('configuracion').select('valor').eq('clave','gestion_verificada_geo').maybeSingle();if(data&&data.valor&&typeof data.valor==='object')setGestionConfig({activo:!!data.valor.activo,radio_metros:data.valor.radio_metros||150,estados:Array.isArray(data.valor.estados)?data.valor.estados:[]});}catch(e){}})();},[]);
-function requiereGestionVerificada(estadoFinal){return(estadoFinal==='reprogramado'||estadoFinal==='cancelado')&&gestionConfig.activo&&gestionConfig.estados.includes(estadoFinal);}
+// Solo Reprogramado exige/cuenta verificación por GPS. Cancelado se excluye a propósito: muchas
+// veces se decide en la bodega antes de salir a ruta, o en la casa del mensajero al llegar --
+// nunca implica una visita real al punto del cliente, así que pedir o contar GPS ahí no tiene
+// sentido como evidencia (pedido explícito de Luis tras ver el caso en la práctica).
+function requiereGestionVerificada(estadoFinal){return estadoFinal==='reprogramado'&&gestionConfig.activo&&gestionConfig.estados.includes(estadoFinal);}
 function obtenerGeoGestion(){
   return new Promise(function(resolve){
     if(!navigator.geolocation){resolve(null);return;}
@@ -10828,7 +10835,7 @@ async function guardarConEstado(estadoFinal){
       }catch(e){return null;}
     },4);
     const fotosB64=fotosB64Raw.filter(function(b){return!!b;});
-    // Si corresponde (Reprogramado/Cancelado con la verificación por geolocalización activa),
+    // Si corresponde (Reprogramado con la verificación por geolocalización activa),
     // se intenta capturar el GPS ANTES de armar el payload -- pero esto nunca demora más de ~7s
     // ni bloquea el guardado si falla: si no hay GPS o no hay señal, se guarda igual y solo
     // queda "no verificado" para la futura métrica de Tasa de Gestión.
