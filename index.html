@@ -625,7 +625,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1789337746;
+window.__MODULES_VERSION=1789338741;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -8003,6 +8003,11 @@ function CalendarioEntregasRider(_ref_cal){
   // en fechaEntregaReal más abajo. Mapa codigo -> created_at (string ISO) del último paso a
   // 'entregado'.
   const _sc7=useState({}),mapaEntregaReal=_sc7[0],setMapaEntregaReal=_sc7[1];
+  // Tasa de Gestión (Fase 2): códigos actualmente Reprogramado/Cancelado que SÍ tienen al menos
+  // un intento con evidencia geo-verificada (ver historial_envios.gestion_verificada, Fase 1).
+  // Estos cuentan como "gestionados" (el mensajero visitó el punto) aunque no se hayan entregado
+  // -- separado de la Tasa de Entrega de siempre, que no se toca.
+  const _sc8=useState(()=>new Set()),gestionVerificadaSet=_sc8[0],setGestionVerificadaSet=_sc8[1];
 
   useEffect(()=>{
     let cancelado=false;
@@ -8060,6 +8065,20 @@ function CalendarioEntregasRider(_ref_cal){
           });
         }catch(eHist){}
         if(!cancelado)setMapaEntregaReal(mapaReal);
+        // Tasa de Gestión (Fase 2): de lo que HOY sigue Reprogramado/Cancelado, ¿cuáles tienen
+        // al menos un intento con evidencia geo-verificada? Solo se consulta para esos códigos
+        // (no para entregados, que ya cuentan igual en la Tasa de Entrega de siempre).
+        try{
+          const codigosGestion=propio.filter(e=>e.estado==='reprogramado'||e.estado==='cancelado').map(e=>e.codigo);
+          const setGestion=new Set();
+          const LOTE_G=250;
+          const lotesGestion=[];
+          for(let i=0;i<codigosGestion.length;i+=LOTE_G)lotesGestion.push(codigosGestion.slice(i,i+LOTE_G));
+          const resultadosGestion=await Promise.all(lotesGestion.map(lote=>db.from('historial_envios').select('codigo_envio').eq('gestion_verificada',true).in('codigo_envio',lote)));
+          if(cancelado)return;
+          resultadosGestion.forEach(({data:gData})=>{(gData||[]).forEach(g=>setGestion.add(g.codigo_envio));});
+          if(!cancelado)setGestionVerificadaSet(setGestion);
+        }catch(eGes){}
       }catch(e){console.warn('Error cargando calendario de entregas:',e.message);}
       if(!cancelado)setCargando(false);
     }
@@ -8091,16 +8110,21 @@ function CalendarioEntregasRider(_ref_cal){
     const mapa={};
     entregas.forEach(e=>{
       const keyAsig=fechaAsignacion(e);
-      if(!mapa[keyAsig])mapa[keyAsig]={total:0,entregado:0};
+      if(!mapa[keyAsig])mapa[keyAsig]={total:0,entregado:0,gestionado:0};
       mapa[keyAsig].total++;
       if(e.estado==='entregado'){
         const keyEnt=fechaEntregaReal(e);
-        if(!mapa[keyEnt])mapa[keyEnt]={total:0,entregado:0};
+        if(!mapa[keyEnt])mapa[keyEnt]={total:0,entregado:0,gestionado:0};
         mapa[keyEnt].entregado++;
+        mapa[keyEnt].gestionado++; // entregado siempre cuenta como "gestionado" también
+      }else if((e.estado==='reprogramado'||e.estado==='cancelado')&&gestionVerificadaSet.has(e.codigo)){
+        // No se entregó, pero SÍ hay evidencia de que el mensajero visitó el punto -- cuenta
+        // para la Tasa de Gestión (no para la Tasa de Entrega), en el día que se asignó/intentó.
+        mapa[keyAsig].gestionado++;
       }
     });
     return mapa;
-  },[entregas,mapaEntregaReal]);
+  },[entregas,mapaEntregaReal,gestionVerificadaSet]);
 
   const codigosPorDia=useMemo(()=>{
     const mapa={};
@@ -8202,19 +8226,20 @@ function CalendarioEntregasRider(_ref_cal){
   const totalMes=useMemo(()=>{
     const anio=mesVisible.getFullYear();
     const mes=mesVisible.getMonth();
-    let total=0,entregado=0,dias=0;
+    let total=0,entregado=0,dias=0,gestionado=0;
     Object.keys(conteoPorDia).forEach(k=>{
       const d=new Date(k+'T00:00:00');
       if(d.getFullYear()===anio&&d.getMonth()===mes){
         total+=conteoPorDia[k].total;
         entregado+=conteoPorDia[k].entregado;
+        gestionado+=conteoPorDia[k].gestionado||0;
         if(conteoPorDia[k].total>0)dias++;
       }
     });
     // Tope en 100% -- ver comentario junto a "efSemana" más abajo: un mes con varios cruces de
     // fecha (entregado > asignado en algún día suelto) podía terminar mostrando "104.3%" de
     // efectividad, lo cual no tiene sentido como métrica.
-    return{total,entregado,dias,efectividad:total>0?Math.min(entregado/total,1):0};
+    return{total,entregado,dias,gestionado,efectividad:total>0?Math.min(entregado/total,1):0,tasaGestion:total>0?Math.min(gestionado/total,1):0};
   },[conteoPorDia,mesVisible]);
 
   function colorEfectividad(total,entregado){
@@ -8238,18 +8263,25 @@ function CalendarioEntregasRider(_ref_cal){
       React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1.5,color:'#fff'}},nombresMes[mesVisible.getMonth()]+' '+mesVisible.getFullYear()),
       React.createElement('button',{onClick:()=>setMesVisible(m=>{const n=new Date(m);n.setMonth(n.getMonth()+1);return n;}),disabled:esMesActual,style:{background:'rgba(255,255,255,0.08)',border:'none',color:esMesActual?'rgba(200,168,75,0.25)':'var(--gold)',fontSize:18,width:38,height:38,borderRadius:10,cursor:esMesActual?'default':'pointer'}},'›')
     ),
-    React.createElement('div',{style:{margin:'0 14px 16px',background:'linear-gradient(135deg,rgba(200,168,75,0.15),rgba(200,168,75,0.05))',border:'2px solid rgba(200,168,75,0.4)',borderRadius:14,padding:'16px 20px',display:'flex',justifyContent:'space-around',textAlign:'center'}},
-      React.createElement('div',null,
-        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:28,color:'var(--gold)',lineHeight:1}},totalMes.entregado+'/'+totalMes.total),
-        React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.5)',letterSpacing:1,marginTop:4,textTransform:'uppercase'}},'Entregadas / mes')
+    React.createElement('div',{style:{margin:'0 14px 16px',background:'linear-gradient(135deg,rgba(200,168,75,0.15),rgba(200,168,75,0.05))',border:'2px solid rgba(200,168,75,0.4)',borderRadius:14,padding:'16px 12px',display:'flex',flexWrap:'wrap',rowGap:14,justifyContent:'space-around',textAlign:'center'}},
+      React.createElement('div',{style:{minWidth:70}},
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:24,color:'var(--gold)',lineHeight:1}},totalMes.entregado+'/'+totalMes.total),
+        React.createElement('div',{style:{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:1,marginTop:4,textTransform:'uppercase'}},'Entregadas / mes')
       ),
-      React.createElement('div',null,
-        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:28,color:barColor(totalMes.efectividad),lineHeight:1}},pct(totalMes.efectividad)),
-        React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.5)',letterSpacing:1,marginTop:4,textTransform:'uppercase'}},'Efectividad')
+      React.createElement('div',{style:{minWidth:70}},
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:24,color:barColor(totalMes.efectividad),lineHeight:1}},pct(totalMes.efectividad)),
+        React.createElement('div',{style:{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:1,marginTop:4,textTransform:'uppercase'}},'Efectividad')
       ),
-      React.createElement('div',null,
-        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:28,color:'#fff',lineHeight:1}},totalMes.dias),
-        React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.5)',letterSpacing:1,marginTop:4,textTransform:'uppercase'}},'Días trabajados')
+      // Tasa de Gestión (Fase 2): entregado + reprogramado/cancelado con visita geo-verificada,
+      // sobre el total asignado -- premia al mensajero que SÍ visitó el punto aunque no haya
+      // podido entregar (cliente ausente, rechazo, etc.), separado de la Efectividad de siempre.
+      React.createElement('div',{title:'Entregados + reprogramados/cancelados con foto y GPS verificado, sobre el total asignado',style:{minWidth:70}},
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:24,color:barColor(totalMes.tasaGestion),lineHeight:1}},pct(totalMes.tasaGestion)),
+        React.createElement('div',{style:{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:1,marginTop:4,textTransform:'uppercase'}},'Tasa de Gestión')
+      ),
+      React.createElement('div',{style:{minWidth:70}},
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:24,color:'#fff',lineHeight:1}},totalMes.dias),
+        React.createElement('div',{style:{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:1,marginTop:4,textTransform:'uppercase'}},'Días trabajados')
       )
     ),
     React.createElement('div',{style:{padding:'0 10px'}},
@@ -8303,13 +8335,14 @@ function CalendarioEntregasRider(_ref_cal){
       // mensajero tocó para abrirlo, sin recalcularlo aparte.
       totalDia:(conteoPorDia[diaSeleccionado]||{total:0}).total,
       entregadoDia:(conteoPorDia[diaSeleccionado]||{entregado:0}).entregado,
+      gestionadoDia:(conteoPorDia[diaSeleccionado]||{gestionado:0}).gestionado,
       onClose:()=>setDiaSeleccionado(null)
     })
   );
 }
 
 function DiaDetalleModal(_ref_dd){
-  let fecha=_ref_dd.fecha,entregas=_ref_dd.entregas,cargando=_ref_dd.cargando,onClose=_ref_dd.onClose,fechasPorCodigo=_ref_dd.fechasPorCodigo||{},totalDia=_ref_dd.totalDia||0,entregadoDia=_ref_dd.entregadoDia||0;
+  let fecha=_ref_dd.fecha,entregas=_ref_dd.entregas,cargando=_ref_dd.cargando,onClose=_ref_dd.onClose,fechasPorCodigo=_ref_dd.fechasPorCodigo||{},totalDia=_ref_dd.totalDia||0,entregadoDia=_ref_dd.entregadoDia||0,gestionadoDia=_ref_dd.gestionadoDia||0;
   const _ex=useState(null),expandido=_ex[0],setExpandido=_ex[1];
   const fechaFmt=new Date(fecha+'T12:00:00').toLocaleDateString('es-CL',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   function fmtCorta(f){return f?new Date(f+'T12:00:00').toLocaleDateString('es-CL',{weekday:'short',day:'numeric',month:'short'}):'';}
@@ -8318,6 +8351,7 @@ function DiaDetalleModal(_ref_dd){
   // tocó para abrir el modal. Antes el modal solo listaba los envíos uno por uno y había que
   // contarlos a mano para saber cuántos se entregaron ese día.
   const efectividadDia=totalDia>0?Math.min(entregadoDia/totalDia,1):0;
+  const tasaGestionDia=totalDia>0?Math.min(gestionadoDia/totalDia,1):0;
   return React.createElement('div',{onClick:onClose,style:{position:'fixed',inset:0,background:'rgba(10,12,6,0.8)',zIndex:600,display:'flex',alignItems:'flex-end',WebkitBackdropFilter:'blur(4px)',backdropFilter:'blur(4px)'}},
     React.createElement('div',{onClick:e=>e.stopPropagation(),style:{width:'100%',maxHeight:'85vh',overflowY:'auto',background:'linear-gradient(180deg,#232619,#14150e)',borderTop:'1px solid rgba(200,168,75,0.4)',borderRadius:'20px 20px 0 0',padding:'20px 16px calc(20px + env(safe-area-inset-bottom,0px))',boxShadow:'0 -10px 40px rgba(200,168,75,0.15)'}},
       React.createElement('div',{style:{width:40,height:4,background:'rgba(200,168,75,0.3)',borderRadius:2,margin:'0 auto 16px'}}),
@@ -8331,6 +8365,10 @@ function DiaDetalleModal(_ref_dd){
         React.createElement('div',null,
           React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:22,color:barColor(efectividadDia),lineHeight:1}},pct(efectividadDia)),
           React.createElement('div',{style:{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:1,marginTop:3,textTransform:'uppercase'}},'Efectividad del día')
+        ),
+        React.createElement('div',{title:'Entregados + reprogramados/cancelados con foto y GPS verificado, sobre lo asignado este día'},
+          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:22,color:barColor(tasaGestionDia),lineHeight:1}},pct(tasaGestionDia)),
+          React.createElement('div',{style:{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:1,marginTop:3,textTransform:'uppercase'}},'Tasa de Gestión')
         )
       ),
       cargando&&React.createElement('div',{style:{textAlign:'center',padding:20,color:'rgba(255,255,255,0.4)',fontSize:12}},'Cargando detalle...'),
