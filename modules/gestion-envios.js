@@ -109,7 +109,7 @@ const _uPerGE=useState('hoy'),periodo=_uPerGE[0],setPeriodo=_uPerGE[1];
 const _uMesGE=useState(new Date().toISOString().slice(0,7)),mesFiltro=_uMesGE[0],setMesFiltro=_uMesGE[1];
 const _uD1GE=useState(''),desde=_uD1GE[0],setDesde=_uD1GE[1];
 const _uD2GE=useState(''),hasta=_uD2GE[0],setHasta=_uD2GE[1];
-const pdfRef=useRef();const _usePS=useState(50),PAGE_SIZE=_usePS[0],setPageSize=_usePS[1];const fileRef=useRef();const edicionesRecientesRef=useRef({});useEffect(()=>{lsSave('gestion_envios',envios);},[envios]);
+const pdfRef=useRef();const _usePS=useState(50),PAGE_SIZE=_usePS[0],setPageSize=_usePS[1];const edicionesRecientesRef=useRef({});useEffect(()=>{lsSave('gestion_envios',envios);},[envios]);
 // ── Confirmación de cambios críticos ────────────────────────────────
 // Antes, cambiar mensajero/cliente/comuna/estado (en la tabla o en el detalle) se aplicaba
 // al toque -- ni bien se elegía la opción, la fila se iba de inmediato a otro filtro/estado --
@@ -351,61 +351,7 @@ function canalInfo(canal){
   if(canal==='cliente')return{label:'🌐 Cliente',bg:'rgba(200,168,75,0.15)',color:'#a0842a'};
   return{label:'⚙ Sistema',bg:'rgba(122,125,106,0.12)',color:'#7a7d6a'};
 }
-const mensajerosActivos=mensajeros.filter(m=>m.activo);const clientesActivos=clientes.filter(c=>c.activo);function importarExcelSistema(file){const reader=new FileReader();reader.onload=e=>{try{let wb;try{wb=XLSX.read(e.target.result,{type:'array',cellDates:true});}catch(e1){wb=XLSX.read(e.target.result,{type:'array'});}const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});if(!rows.length){toast('⚠ Archivo vacío');return;}const nuevos=rows.map((r,i)=>{const codigo=String(r['Envio']||r['Código']||r['codigo']||'').replace(/^'/,'').trim();const est=parseEstadoSistema(r['Estatus de Envio']||r['Estado']||'');return{id:Date.now()+i,codigo:codigo||'IMP-'+String(i+1).padStart(6,'0'),cliente:(r['Cliente']||'').toString().trim().toUpperCase(),despachador:(r['Despachador']||'').toString().trim(),destinatario:(r['Destinatario']||'').toString().trim(),telefono:(r['Telefono']||r['Teléfono']||'').toString().trim(),direccion:(r['Direccion']||r['Dirección']||'').toString().trim(),comuna:matchComuna(r['Comuna'])||(r['Comuna']||'').toString().trim().toUpperCase(),fecha:fechaHoyCL(),estado:est,mensajero:normalizarNombre(r['Despachador']||''),monto:parseFloat(String(r['Cobrar/Monto']||0).replace(/[^0-9.]/g,''))||0,nota:(r['Nota']||'').toString().trim(),fuente:'sistema',historial:[{fecha:new Date().toISOString(),estado:est,nota:'Importado desde sistema'}]};}).filter(e=>e.codigo);const syncToSupabase=async enviosNuevos=>{const BATCH=50;const mapear=e=>({codigo:e.codigo,cliente:e.cliente||'',destinatario:e.destinatario||'',telefono:e.telefono||'',direccion:e.direccion||'',comuna:e.comuna||'',referencia:e.referencia||'',fecha:fechaHoyCL(),estado:e.estado||'en_bodega',mensajero:e.mensajero||'',monto:e.monto||0,en_un_cambio:e.enUnCambio||false,nota:e.nota||'',fuente:e.fuente||'sistema'});for(let i=0;i<enviosNuevos.length;i+=BATCH){const lote=enviosNuevos.slice(i,i+BATCH).map(mapear);try{await db.from('envios').upsert(lote,{onConflict:'codigo'});sbRegistrarHistorialLote(lote.map(x=>x.codigo),'en_bodega','Importado por Excel del sistema (admin)',usuario?.nombre||'Admin','panel_admin');}catch(err){console.warn('Sync lote error:',err.message);}}};setEnvios(prev=>{
-  const mapaExist={};
-  prev.forEach(e=>{mapaExist[e.codigo]=e;});
-  // Para cada envío del Excel: si existe → actualizar solo estado/datos; si no → crear
-  const actualizados=nuevos.map(n=>{
-    if(mapaExist[n.codigo]){
-      const exist=mapaExist[n.codigo];
-      const cambios={};
-      // Solo actualizar campos que vengan del Excel y sean mejores
-      if(n.estado&&n.estado!==exist.estado)cambios.estado=n.estado;
-      if(n.mensajero&&!exist.mensajero)cambios.mensajero=n.mensajero;
-      if(n.destinatario&&!exist.destinatario)cambios.destinatario=n.destinatario;
-      if(n.direccion&&!exist.direccion)cambios.direccion=n.direccion;
-      if(n.comuna&&!exist.comuna)cambios.comuna=n.comuna;
-      if(n.cliente&&!exist.cliente)cambios.cliente=n.cliente;
-      if(n.telefono&&!exist.telefono)cambios.telefono=n.telefono;
-      const tieneCambios=Object.keys(cambios).length>0;
-      if(!tieneCambios)return exist;
-      const historialExtra=cambios.estado?[{fecha:new Date().toISOString(),estado:cambios.estado,nota:'Actualizado desde Excel del sistema',usuario:'Sistema'}]:[];
-      return{...exist,...cambios,historial:[...exist.historial,...historialExtra]};
-    }
-    return n; // nuevo
-  });
-  // Códigos ya procesados (existentes + nuevos del Excel)
-  const codigosExcel=new Set(nuevos.map(n=>n.codigo));
-  // Envíos locales que NO están en el Excel (otros días, otros clientes)
-  const soloLocales=prev.filter(e=>!codigosExcel.has(e.codigo));
-  syncToSupabase(actualizados);
-  return[...soloLocales,...actualizados];
-});const nuevosCount=nuevos.filter(n=>{const local=lsLoad('gestion_envios',[]);return!local.find(e=>e.codigo===n.codigo);}).length;const actualizadosCount=nuevos.length-nuevosCount;toast(`✓ ${nuevos.length} envíos procesados · ${actualizadosCount} actualizados · ${nuevosCount} nuevos`);}catch(err){toast('⚠ Error: '+err.message);}};reader.readAsArrayBuffer(file);}function importarExcelPropio(file){const reader=new FileReader();reader.onload=e=>{try{let wb;try{wb=XLSX.read(e.target.result,{type:'array',cellDates:true});}catch(e1){wb=XLSX.read(e.target.result,{type:'array'});}const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{defval:''});if(!rows.length){toast('⚠ Archivo vacío');return;}const nuevos=rows.map((r,i)=>{const codigoExcel=String(r['Codigo']||r['Código']||r['codigo']||r['N° Envío']||r['Envio']||r['Número de Envío']||r['numero_envio']||r['tracking']||r['Tracking']||'').replace(/^'/,'').trim();const codigo=codigoExcel||confirmarCodigo();const fuente=codigoExcel?'externo':'propio';return{id:Date.now()+i,codigo,cliente:(r['Cliente']||r['cliente']||r['Remitente']||'').toString().trim().toUpperCase(),despachador:'',destinatario:(r['Destinatario']||r['destinatario']||r['Nombre']||r['nombre']||'').toString().trim(),telefono:(r['Telefono']||r['Teléfono']||r['telefono']||r['Celular']||'').toString().trim(),direccion:(r['Direccion']||r['Dirección']||r['direccion']||r['Calle']||'').toString().trim(),comuna:matchComuna(r['Comuna']||r['comuna'])||(r['Comuna']||r['comuna']||'').toString().trim().toUpperCase(),fecha:fechaHoyCL(),estado:'en_bodega',mensajero:'',monto:parseFloat(String(r['Monto']||r['monto']||r['Cobrar']||0).replace(/[^0-9.]/g,''))||0,nota:(r['Nota']||r['nota']||r['Referencia']||r['referencia']||'').toString().trim(),fuente,historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:codigoExcel?`Importado con código externo ${codigoExcel}`:'Importado desde Excel propio — código PGSO asignado'}]};}).filter(e=>e.destinatario||e.direccion||e.codigo);setEnvios(prev=>{
-  const mapaExist={};
-  prev.forEach(e=>{mapaExist[e.codigo]=e;});
-  // Upsert: actualizar si ya existe, agregar si es nuevo
-  const procesados=nuevos.map(n=>{
-    if(mapaExist[n.codigo]){
-      const exist=mapaExist[n.codigo];
-      return{...exist,
-        destinatario:n.destinatario||exist.destinatario,
-        telefono:n.telefono||exist.telefono,
-        direccion:n.direccion||exist.direccion,
-        comuna:n.comuna||exist.comuna,
-        cliente:n.cliente||exist.cliente,
-        monto:n.monto||exist.monto,
-        nota:n.nota||exist.nota,
-      };
-    }
-    return n;
-  });
-  const codigosExcel=new Set(nuevos.map(n=>n.codigo));
-  const soloLocales=prev.filter(e=>!codigosExcel.has(e.codigo));
-  return[...soloLocales,...procesados];
-});
-const conCodigo=nuevos.filter(e=>e.fuente==='externo').length;
-const sinCodigo=nuevos.filter(e=>e.fuente==='propio').length;
-const msg=conCodigo>0&&sinCodigo>0?`✓ ${nuevos.length} envíos cargados · ${conCodigo} con código externo · ${sinCodigo} con código PGSO`:conCodigo>0?`✓ ${nuevos.length} envíos cargados con códigos externos (ML/Falabella/Shopify)`:`✓ ${nuevos.length} envíos cargados con códigos PGSO`;toast(msg);}catch(err){toast('⚠ Error: '+err.message);}};reader.readAsArrayBuffer(file);}function importarPDF(file,cliente){
+const mensajerosActivos=mensajeros.filter(m=>m.activo);const clientesActivos=clientes.filter(c=>c.activo);function importarPDF(file,cliente){
   if(!cliente){toast('⚠ Selecciona un cliente primero');return;}
   setProcesandoPDF(true);
   setProgresoPDF('📄 Leyendo PDF...');
@@ -1059,10 +1005,7 @@ function renderCampoLargo(campo,label,tipo,candado){
   );
 }
 return/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{className:"section-head",style:{flexWrap:'wrap',gap:10}},/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:12}},/*#__PURE__*/React.createElement("div",{className:"section-title"},"Gesti\xF3n de ",/*#__PURE__*/React.createElement("span",null,"Env\xEDos")),/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:6,background:'rgba(46,125,79,0.1)',border:'1px solid rgba(46,125,79,0.2)',borderRadius:20,padding:'4px 10px'}},/*#__PURE__*/React.createElement("div",{style:{width:8,height:8,borderRadius:'50%',background:'#2e7d4f',animation:'pulse 2s infinite'}}),/*#__PURE__*/React.createElement("span",{style:{fontSize:10,color:'#2e7d4f',fontWeight:700,letterSpacing:1}},"TIEMPO REAL"))),/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:8,flexWrap:'wrap'}},/*#__PURE__*/React.createElement("button",{onClick:sincronizarDesdeSupabase,disabled:sincronizando,className:'btn-futurista btn-f-dark',style:{display:'flex',alignItems:'center',gap:6,opacity:sincronizando?0.7:1}},sincronizando?'↺ Sincronizando...':'↺ Sincronizar Riders'),
-  (()=>{const listaNegraCount=lsLoad('envios_eliminados',[]).length;return/*#__PURE__*/React.createElement("button",{onClick:()=>setShowListaNegra(v=>!v),style:{padding:'8px 14px',borderRadius:8,border:'1px solid '+(listaNegraCount>0?'rgba(176,48,48,0.8)':'rgba(100,100,100,0.4)'),background:showListaNegra?'rgba(176,48,48,0.25)':(listaNegraCount>0?'rgba(176,48,48,0.15)':'rgba(80,80,80,0.12)'),color:'#ffffff',cursor:'pointer',fontWeight:700,fontSize:12,display:'flex',alignItems:'center',gap:6}},"⊘ Lista negra",(listaNegraCount>0&&/*#__PURE__*/React.createElement("span",{style:{background:'rgba(176,48,48,0.3)',borderRadius:10,padding:'1px 7px',fontSize:11}},listaNegraCount)));})(),/*#__PURE__*/React.createElement("button",{onClick:()=>fileRef.current.click(),className:'btn-futurista btn-f-dark',title:'Sube los envíos de un cliente (o el manifiesto diario si el archivo se llama con \'carga_pgso\')',style:{display:'flex',alignItems:'center',gap:6}},"\uD83D\uDCCA Importar Excel"),
-/*#__PURE__*/React.createElement("button",{onClick:()=>{const headers=['Codigo','Cliente','Destinatario','Telefono','Direccion','Comuna','Monto','Referencia'];const ejemplos=[['','MR SHENG','Juan Pérez','912345678','Av. Providencia 1234, Depto 5','PROVIDENCIA','0','Depto 5B — timbre no funciona'],['','DMT','María González','987654321','Los Leones 567','LAS CONDES','15000','Torre A, piso 8 — cobro contra entrega']];exportToExcel('Plantilla_Envios_Cliente_TransPgso',[{name:'Envios',headers,rows:ejemplos}]);},style:{padding:'8px 14px',borderRadius:8,border:'1px solid rgba(200,168,75,0.4)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',cursor:'pointer',fontWeight:700,fontSize:12,display:'flex',alignItems:'center',gap:6}},"\uD83D\uDCE5 Plantilla"),
-/*#__PURE__*/React.createElement("input",{ref:fileRef,type:"file",accept:".xlsx,.xls,.htm,.html",style:{display:'none'},onChange:e=>{const f=e.target.files[0];if(!f)return;const name=f.name.toLowerCase();if(name.includes('carga_pgso')||name.includes('carga_p'))importarExcelSistema(f);else importarExcelPropio(f);e.target.value='';}}),
-/*#__PURE__*/React.createElement("input",{id:"gestion-pdf-inp",ref:pdfRef,type:"file",accept:"application/pdf",style:{display:'none'},onChange:e=>{const f=e.target.files[0];if(!f)return;importarPDF(f,window._colecta_pdf_cliente||clientePDF);e.target.value='';}})  ,/*#__PURE__*/React.createElement("button",{onClick:()=>setSubTab('nuevo'),className:'btn-futurista btn-f-gold'},"+ Nuevo Env\xEDo"))),/*#__PURE__*/React.createElement("div",{className:"info-banner",style:{marginBottom:12}},"\uD83D\uDCCA Importar Excel sube los env\xEDos de UN CLIENTE. Columnas: Cliente, Destinatario, Telefono, Direccion, Comuna, Monto, Referencia \u2014 Codigo es opcional, si se deja vac\xEDo se asigna el correlativo PGSO autom\xE1ticamente. Si el nombre del archivo contiene \u2018carga_pgso\u2019 se interpreta en cambio como el manifiesto operativo diario."),showPDFModal&&/*#__PURE__*/React.createElement(Modal,{title:'📄 Importar PDF Flex',onClose:()=>{setShowPDFModal(false);setPdfPreview(null);setClientePDF('');}},
+  (()=>{const listaNegraCount=lsLoad('envios_eliminados',[]).length;return/*#__PURE__*/React.createElement("button",{onClick:()=>setShowListaNegra(v=>!v),style:{padding:'8px 14px',borderRadius:8,border:'1px solid '+(listaNegraCount>0?'rgba(176,48,48,0.8)':'rgba(100,100,100,0.4)'),background:showListaNegra?'rgba(176,48,48,0.25)':(listaNegraCount>0?'rgba(176,48,48,0.15)':'rgba(80,80,80,0.12)'),color:'#ffffff',cursor:'pointer',fontWeight:700,fontSize:12,display:'flex',alignItems:'center',gap:6}},"⊘ Lista negra",(listaNegraCount>0&&/*#__PURE__*/React.createElement("span",{style:{background:'rgba(176,48,48,0.3)',borderRadius:10,padding:'1px 7px',fontSize:11}},listaNegraCount)));})(),/*#__PURE__*/React.createElement("input",{id:"gestion-pdf-inp",ref:pdfRef,type:"file",accept:"application/pdf",style:{display:'none'},onChange:e=>{const f=e.target.files[0];if(!f)return;importarPDF(f,window._colecta_pdf_cliente||clientePDF);e.target.value='';}})  ,/*#__PURE__*/React.createElement("button",{onClick:()=>setSubTab('nuevo'),className:'btn-futurista btn-f-gold'},"+ Nuevo Env\xEDo"))),showPDFModal&&/*#__PURE__*/React.createElement(Modal,{title:'📄 Importar PDF Flex',onClose:()=>{setShowPDFModal(false);setPdfPreview(null);setClientePDF('');}},
   !pdfPreview&&/*#__PURE__*/React.createElement('div',null,
     /*#__PURE__*/React.createElement('div',{className:'form-group'},
       /*#__PURE__*/React.createElement('label',{className:'form-label'},'1. Selecciona el cliente al que corresponde este PDF'),
