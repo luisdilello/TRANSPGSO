@@ -1,7 +1,18 @@
 (function(){
 var useEffect=React.useEffect, useMemo=React.useMemo, useRef=React.useRef, useState=React.useState;
 var AdminEditarEnvio=window.__app.AdminEditarEnvio, abrirVentanaEtiquetas=window.__app.abrirVentanaEtiquetas, COMUNAS_CHILE=window.__app.COMUNAS_CHILE, ESTADOS_ENVIO=window.__app.ESTADOS_ENVIO, EnvioDetalleCard=window.__app.EnvioDetalleCard, EtiquetaPreview=window.__app.EtiquetaPreview, ExportBtn=window.__app.ExportBtn, FotosEntregaConRecarga=window.__app.FotosEntregaConRecarga, Modal=window.__app.Modal, matchComuna=window.__app.matchComuna, esComunaValida=window.__app.esComunaValida, confirmarCodigo=window.__app.confirmarCodigo, crearEntradaHistorial=window.__app.crearEntradaHistorial, db=window.__app.db, diasDesdeFecha=window.__app.diasDesdeFecha, esEnvioAtrasado=window.__app.esEnvioAtrasado, UMBRAL_ATRASO_DIAS=window.__app.UMBRAL_ATRASO_DIAS, calcularBaseTardio=window.__app.calcularBaseTardio, esEnvioTardio=window.__app.esEnvioTardio, horasTardanza=window.__app.horasTardanza, UMBRAL_TARDIO_HORAS=window.__app.UMBRAL_TARDIO_HORAS, estadoBadge=window.__app.estadoBadge, estadoInfo=window.__app.estadoInfo, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, imprimirFotoEtiqueta=window.__app.imprimirFotoEtiqueta, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, normalizarNombre=window.__app.normalizarNombre, perfil=window.__app.perfil, playSound=window.__app.playSound, subirFotoStorage=window.__app.subirFotoStorage, sbRegistrarHistorial=window.__app.sbRegistrarHistorial, sbRegistrarHistorialLote=window.__app.sbRegistrarHistorialLote, fetchPaginadoParalelo=window.__app.fetchPaginadoParalelo, fetchPorDiasParalelo=window.__app.fetchPorDiasParalelo, fetchEntregadosPorFechaReal=window.__app.fetchEntregadosPorFechaReal, fetchPorFechaRealDeEstado=window.__app.fetchPorFechaRealDeEstado, calcularEstadoEfectivo=window.__app.calcularEstadoEfectivo, limiteDiaChileUTC=window.__app.limiteDiaChileUTC;
-function GestionEnvios(_ref26){var _detalleEnvio$mensaje;let mensajeros=_ref26.mensajeros,clientes=_ref26.clientes,toast=_ref26.toast,esSuperAdmin=_ref26.esSuperAdmin,esAdmin=_ref26.esAdmin,usuario=_ref26.usuario,codigoInicial=_ref26.codigoInicial,onCodigoInicialConsumido=_ref26.onCodigoInicialConsumido;const _useState60=useState(()=>lsLoad('gestion_envios',[])),envios=_useState60[0],setEnvios=_useState60[1];const _useState61=useState('lista'),subTab=_useState61[0],setSubTab=_useState61[1];const _useState62=useState(''),search=_useState62[0],setSearch=_useState62[1];const _useState63=useState('todos'),filtroEst=_useState63[0],setFiltroEst=_useState63[1];const _useState64=useState('todos'),filtroCli=_useState64[0],setFiltroCli=_useState64[1];const _useState65=useState('todos'),filtroMen=_useState65[0],setFiltroMen=_useState65[1];const _useState65b=useState('todos'),filtroFuente=_useState65b[0],setFiltroFuente=_useState65b[1];// Antes "⚠ Atrasados" era un simple interruptor on/off que solo miraba envíos 'en_ruta' con
+function GestionEnvios(_ref26){var _detalleEnvio$mensaje;let mensajeros=_ref26.mensajeros,clientes=_ref26.clientes,toast=_ref26.toast,esSuperAdmin=_ref26.esSuperAdmin,esAdmin=_ref26.esAdmin,usuario=_ref26.usuario,codigoInicial=_ref26.codigoInicial,onCodigoInicialConsumido=_ref26.onCodigoInicialConsumido;const _useState60=useState(()=>lsLoad('gestion_envios',[])),envios=_useState60[0],setEnvios=_useState60[1];const _useState61=useState('lista'),subTab=_useState61[0],setSubTab=_useState61[1];const _useState62=useState(''),search=_useState62[0],setSearch=_useState62[1];const _useState63=useState('todos'),filtroEst=_useState63[0],setFiltroEst=_useState63[1];const _useState64=useState('todos'),filtroCli=_useState64[0],setFiltroCli=_useState64[1];const _useState65=useState('todos'),filtroMen=_useState65[0],setFiltroMen=_useState65[1];const _useState65b=useState('todos'),filtroFuente=_useState65b[0],setFiltroFuente=_useState65b[1];
+// Vista de las tarjetas de estado (y de la tabla al filtrar por una de ellas): 'cierre' (default,
+// como siempre funcionó) muestra el estado que tenía cada código AL CIERRE del período elegido
+// (Entregado/Retorno por su fecha real de evento, el resto congelado al último día del rango).
+// 'actual' es la vista nueva que pidió Luis: para los mismos códigos DESPACHADOS en el rango,
+// muestra su estado EN VIVO tal cual está ahora mismo, sin congelar nada -- por eso en este modo
+// Entregado/Retorno también se calculan igual que el resto (contra enviosPeriodo/e.estado en vivo)
+// en vez de usar sus listas de fecha real. Se guarda en localStorage para que no se resetee cada
+// vez que se abre la pantalla.
+const _useVistaEst=useState(()=>lsLoad('ge_vista_estado','cierre')),vistaEstado=_useVistaEst[0],setVistaEstado=_useVistaEst[1];
+useEffect(function(){lsSave('ge_vista_estado',vistaEstado);},[vistaEstado]);
+// Antes "⚠ Atrasados" era un simple interruptor on/off que solo miraba envíos 'en_ruta' con
 // UMBRAL_ATRASO_DIAS+ días sin entregar. Luis pidió que también se puedan ver ahí los envíos que
 // llevan 2 o más veces en estado Reprogramado (sin importar hace cuántos días fue la última
 // reagenda) -- así que ahora es un desplegable de 3 modos: 'combinado' (junta ambos grupos,
@@ -757,6 +768,10 @@ const _uEnvPerEfec=useState([]),enviosPeriodoEfectivo=_uEnvPerEfec[0],setEnviosP
 const efectivoGenRef=useRef(0);
 async function cargarEnviosPeriodoEfectivo(){
   const miGen=++efectivoGenRef.current;
+  // En vista 'actual' (estado en vivo) este cálculo no se usa para nada (stats/filtrados miran
+  // directo enviosPeriodo) -- nos ahorramos la paginación completa de historial_envios que hace
+  // calcularEstadoEfectivo (justo la que en el pasado saturó la base, ver comentario de abajo).
+  if(vistaEstado==='actual'){if(miGen===efectivoGenRef.current)setEnviosPeriodoEfectivo(enviosPeriodo);return;}
   const{hasta:hastaQ}=limitesPeriodoGE();
   if(!hastaQ||!enviosPeriodo.length){if(miGen===efectivoGenRef.current)setEnviosPeriodoEfectivo(enviosPeriodo);return;}
   try{
@@ -784,7 +799,7 @@ useEffect(()=>{
   const espera=transcurrido>5000?0:5000-transcurrido;
   const t=setTimeout(()=>{efectivoUltimaCorridaRef.current=Date.now();cargarEnviosPeriodoEfectivo();},espera);
   return()=>clearTimeout(t);
-},[enviosPeriodo,periodo,mesFiltro,desde,hasta]);
+},[enviosPeriodo,periodo,mesFiltro,desde,hasta,vistaEstado]);
 const baseTardioMap=useMemo(()=>calcularBaseTardio(envios),[envios]);
 const tardiosPendientes=useMemo(()=>enviosPeriodo.filter(e=>esEnvioTardio(e,baseTardioMap)&&!e.aviso_tardio),[enviosPeriodo,baseTardioMap]);
 async function marcarAvisoTardio(id,codigo,valor){
@@ -819,12 +834,15 @@ const filtrados=useMemo(()=>{const q=search.trim().toLowerCase();
   // periodo elegido: si no, un envio despachado dias antes pero entregado/retornado justo hoy se
   // sumaba igual al total de "Hoy", inflando el conteo real de piezas recibidas (caso real
   // reportado por el equipo: 189 despachados hoy pero 218 mostrados en 'Todos'+'Hoy').
-  const baseLista=filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?(q?todosPeriodoReal:enviosPeriodoEfectivo):enviosPeriodoEfectivo;
+  // Vista 'actual': todo sale de enviosPeriodo (despachados en el rango) mirando el estado EN
+  // VIVO de cada uno (e.estado) -- Entregado/Retorno dejan de tener lista propia por fecha real,
+  // se tratan como cualquier otro estado. Vista 'cierre': se mantiene tal cual funcionaba antes.
+  const baseLista=vistaEstado==='actual'?enviosPeriodo:(filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?(q?todosPeriodoReal:enviosPeriodoEfectivo):enviosPeriodoEfectivo);
   return baseLista.filter(e=>{const qTerms=q.split(/[\n,;\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
       const esMultiple=qTerms.length>1;
       const matchQ=!q||(esMultiple
         ?qTerms.some(t=>e.codigo.toLowerCase()===t||e.codigo.toLowerCase().includes(t))
-        :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e._estadoEfectivo||e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));const matchEst=filtroEst==='todos'||filtroEst==='entregado'||filtroEst==='retorno'||(e._estadoEfectivo||e.estado)===filtroEst;const matchCli=filtroCli==='todos'||e.cliente===filtroCli;const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;const matchAtraso=filtroAtrasoModo==='off'?true:filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoRepetido(e):(esEnvioAtrasado(e)||esReprogramadoRepetido(e));return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente&&matchAtraso;});},[envios,entregadosPeriodoReal,retornadosPeriodoReal,todosPeriodoReal,enviosPeriodoEfectivo,search,filtroEst,filtroCli,filtroMen,filtroFuente,filtroAtrasoModo,reprogCount]);
+        :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e._estadoEfectivo||e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));const matchEst=filtroEst==='todos'?true:(vistaEstado==='actual'?e.estado===filtroEst:(filtroEst==='entregado'||filtroEst==='retorno'||(e._estadoEfectivo||e.estado)===filtroEst));const matchCli=filtroCli==='todos'||e.cliente===filtroCli;const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;const matchAtraso=filtroAtrasoModo==='off'?true:filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoRepetido(e):(esEnvioAtrasado(e)||esReprogramadoRepetido(e));return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente&&matchAtraso;});},[envios,entregadosPeriodoReal,retornadosPeriodoReal,todosPeriodoReal,enviosPeriodoEfectivo,enviosPeriodo,vistaEstado,search,filtroEst,filtroCli,filtroMen,filtroFuente,filtroAtrasoModo,reprogCount]);
 // Cantidad de envíos atrasados en el período actual (antes del filtro de "solo atrasados"),
 // para mostrar el contador en el botón de filtro sin que el usuario tenga que activarlo primero.
 const atrasadosCount=useMemo(()=>enviosPeriodo.filter(esEnvioAtrasado).length,[enviosPeriodo]);
@@ -847,20 +865,20 @@ const filtradosOrdenados=useMemo(()=>{if(!sortCol)return filtrados;const copia=f
 // principal, y este modal ahora debe mostrar también los reprogramados de una sola vez.
 const atrasadosDetalleFiltrados=useMemo(()=>{
   const q=search.trim().toLowerCase();
-  const baseLista=filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:enviosPeriodoEfectivo;
+  const baseLista=vistaEstado==='actual'?enviosPeriodo:(filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:enviosPeriodoEfectivo);
   return baseLista.filter(e=>{
     const qTerms=q.split(/[\n,;\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
     const esMultiple=qTerms.length>1;
     const matchQ=!q||(esMultiple
       ?qTerms.some(t=>e.codigo.toLowerCase()===t||e.codigo.toLowerCase().includes(t))
       :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e._estadoEfectivo||e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));
-    const matchEst=filtroEst==='todos'||filtroEst==='entregado'||filtroEst==='retorno'||(e._estadoEfectivo||e.estado)===filtroEst;
+    const matchEst=filtroEst==='todos'?true:(vistaEstado==='actual'?e.estado===filtroEst:(filtroEst==='entregado'||filtroEst==='retorno'||(e._estadoEfectivo||e.estado)===filtroEst));
     const matchCli=filtroCli==='todos'||e.cliente===filtroCli;
     const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;
     const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;
     return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente;
   });
-},[enviosPeriodo,entregadosPeriodoReal,retornadosPeriodoReal,enviosPeriodoEfectivo,filtroEst,search,filtroCli,filtroMen,filtroFuente]);
+},[enviosPeriodo,entregadosPeriodoReal,retornadosPeriodoReal,enviosPeriodoEfectivo,vistaEstado,filtroEst,search,filtroCli,filtroMen,filtroFuente]);
 const atrasadosDetalleBase=useMemo(()=>atrasadosDetalleFiltrados.filter(e=>filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoAlMenos1Vez(e):(esEnvioAtrasado(e)||esReprogramadoAlMenos1Vez(e))),[atrasadosDetalleFiltrados,filtroAtrasoModo,reprogCount]);
 // Conteos de las pestañas del modal (Todos/Atrasados en ruta/Reprogramados) -- a diferencia de
 // atrasadosCount/reprogramadosRepetidosCount (que solo miran el período, para el botón/dropdown
@@ -872,7 +890,13 @@ const reprogramadosCountModal=useMemo(()=>atrasadosDetalleFiltrados.filter(esRep
 const combinadoAtrasoCountModal=atrasadosCountModal+reprogramadosCountModal;
 function toggleSort(col){if(sortCol===col)setSortDir(d=>d==='asc'?'desc':'asc');else{setSortCol(col);setSortDir('asc');}setPage(1);}
 function iconoSort(col){if(sortCol!==col)return'';return sortDir==='asc'?' ▲':' ▼';}
-const totalPags=Math.max(1,Math.ceil(filtradosOrdenados.length/PAGE_SIZE));const paginado=filtradosOrdenados.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);const stats=useMemo(()=>{const s={};ESTADOS_ENVIO.forEach(est=>{s[est.val]=est.val==='entregado'?entregadosPeriodoReal.length:est.val==='retorno'?retornadosPeriodoReal.length:enviosPeriodoEfectivo.filter(e=>(e._estadoEfectivo||e.estado)===est.val).length;});return s;},[enviosPeriodo,enviosPeriodoEfectivo,entregadosPeriodoReal,retornadosPeriodoReal]);function toggleSelect(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function toggleAll(){const todosIds=new Set(filtrados.map(e=>e.id));if(selected.size===filtrados.length&&filtrados.every(e=>selected.has(e.id)))setSelected(new Set());else setSelected(todosIds);}async function imprimirEtiquetasSeleccionadas(){
+const totalPags=Math.max(1,Math.ceil(filtradosOrdenados.length/PAGE_SIZE));const paginado=filtradosOrdenados.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);const stats=useMemo(()=>{const s={};if(vistaEstado==='actual'){
+  // Vista 'estado actual': Entregado/Retorno YA NO usan su lista de fecha real -- se cuentan
+  // igual que cualquier otro estado, en vivo, sobre los mismos códigos despachados en el rango.
+  ESTADOS_ENVIO.forEach(est=>{s[est.val]=enviosPeriodo.filter(e=>e.estado===est.val).length;});
+}else{
+  ESTADOS_ENVIO.forEach(est=>{s[est.val]=est.val==='entregado'?entregadosPeriodoReal.length:est.val==='retorno'?retornadosPeriodoReal.length:enviosPeriodoEfectivo.filter(e=>(e._estadoEfectivo||e.estado)===est.val).length;});
+}return s;},[vistaEstado,enviosPeriodo,enviosPeriodoEfectivo,entregadosPeriodoReal,retornadosPeriodoReal]);function toggleSelect(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function toggleAll(){const todosIds=new Set(filtrados.map(e=>e.id));if(selected.size===filtrados.length&&filtrados.every(e=>selected.has(e.id)))setSelected(new Set());else setSelected(todosIds);}async function imprimirEtiquetasSeleccionadas(){
   const seleccionados=envios.filter(e=>selected.has(e.id));
   if(seleccionados.length===0)return;
   toast('Buscando etiquetas...');
@@ -1117,8 +1141,14 @@ showListaNegra&&(()=>{const lista=lsLoad('envios_eliminados',[]);return/*#__PURE
     )
   )
 ),
+/*#__PURE__*/React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',marginBottom:14,flexWrap:'wrap'}},
+  /*#__PURE__*/React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:2,color:'var(--text-soft)',marginRight:4}},'VISTA:'),
+  [{val:'cierre',label:'Estado al cierre del período',title:'Para cada código despachado en el período, muestra el estado que tenía justo al CERRAR ese período (Entregado/Retorno según su fecha real de evento). Si después cambió de estado, no se refleja acá.'},
+   {val:'actual',label:'Estado actual (en vivo)',title:'Para los mismos códigos despachados en el período, muestra el estado en el que están AHORA MISMO, sin importar cuándo cambiaron.'}
+  ].map(function(v){return/*#__PURE__*/React.createElement('button',{key:v.val,title:v.title,onClick:function(){setVistaEstado(v.val);setPage(1);},style:{padding:'6px 16px',borderRadius:20,border:'1px solid '+(vistaEstado===v.val?'var(--gold)':'var(--border)'),background:vistaEstado===v.val?'rgba(200,168,75,0.12)':'#fff',color:vistaEstado===v.val?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer',transition:'all 0.15s'}},v.label);})
+),
 sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'20px',color:'var(--text-soft)',fontSize:13,marginBottom:20}},'⏳ Sincronizando historial completo desde la nube...'):
-/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:20,paddingTop:14,overflowX:'auto'}},[{val:'todos',label:'Todos',color:'var(--gold)'},...ESTADOS_ENVIO].map(est=>{const count=est.val==='todos'?todosPeriodoReal.length:stats[est.val]||0;const active=filtroEst===est.val;const accentColor=est.color||'var(--gold)';return/*#__PURE__*/React.createElement("div",{key:est.val,onClick:()=>{setFiltroEst(est.val);setPage(1);},style:{
+/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:20,paddingTop:14,overflowX:'auto'}},[{val:'todos',label:'Todos',color:'var(--gold)'},...ESTADOS_ENVIO].map(est=>{const count=est.val==='todos'?(vistaEstado==='actual'?enviosPeriodo.length:todosPeriodoReal.length):stats[est.val]||0;const active=filtroEst===est.val;const accentColor=est.color||'var(--gold)';return/*#__PURE__*/React.createElement("div",{key:est.val,onClick:()=>{setFiltroEst(est.val);setPage(1);},style:{
   padding:'16px 18px',borderRadius:14,cursor:'pointer',minWidth:100,textAlign:'center',
   background:active?'linear-gradient(145deg,#ffffff,#f0e8d0)':'linear-gradient(145deg,#fff,#faf3e0)',
   border:'2px solid '+(active?accentColor:'rgba(200,168,75,0.12)'),
@@ -1135,7 +1165,7 @@ sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',
     // 'Entregado' se calcula con la fecha REAL de entrega (igual que Pagos Mensajeros), no con
     // la fecha de despacho como el resto de las tarjetas -- por eso puede no calzar exactamente
     // con 'Todos' menos la suma del resto. Se avisa aca mismo para no repetir la confusion.
-    est.val==='entregado'&&/*#__PURE__*/React.createElement("div",{style:{fontSize:7,fontWeight:600,letterSpacing:0.5,textTransform:'none',color:active?accentColor:'#b0b3a0',opacity:0.75,marginTop:2}},cargandoEntregadosReal?'actualizando…':'fecha real de entrega')));})),selected.size>0&&/*#__PURE__*/React.createElement("div",{style:{background:'linear-gradient(145deg,#ffffff,#f5eedc)',border:'1px solid rgba(200,168,75,0.3)',borderTop:'3px solid var(--gold)',borderRadius:14,padding:'16px 20px',marginBottom:16,boxShadow:'6px 6px 16px rgba(43,46,32,0.12),-2px -2px 8px rgba(255,255,255,0.9)'}},
+    est.val==='entregado'&&vistaEstado==='cierre'&&/*#__PURE__*/React.createElement("div",{style:{fontSize:7,fontWeight:600,letterSpacing:0.5,textTransform:'none',color:active?accentColor:'#b0b3a0',opacity:0.75,marginTop:2}},cargandoEntregadosReal?'actualizando…':'fecha real de entrega')));})),selected.size>0&&/*#__PURE__*/React.createElement("div",{style:{background:'linear-gradient(145deg,#ffffff,#f5eedc)',border:'1px solid rgba(200,168,75,0.3)',borderTop:'3px solid var(--gold)',borderRadius:14,padding:'16px 20px',marginBottom:16,boxShadow:'6px 6px 16px rgba(43,46,32,0.12),-2px -2px 8px rgba(255,255,255,0.9)'}},
   // Encabezado
   React.createElement("div",{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}},
     React.createElement("div",{style:{display:'flex',alignItems:'center',gap:8}},
