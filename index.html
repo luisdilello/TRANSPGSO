@@ -625,7 +625,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1789391444;
+window.__MODULES_VERSION=1789397782;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -9653,7 +9653,14 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,toast=_ref_or.toast|
     const origen=origenRef.current;
     let map=mapObjRef.current;
     if(!map){
-      map=new google.maps.Map(mapRef.current,{zoom:12,center:origen,disableDefaultUI:true,zoomControl:true});
+      // gestureHandling:'greedy' -- SIN esto Google Maps usa 'auto' por default, que en celular
+      // exige DOS DEDOS para mover/acercar el mapa (para no competir con el scroll de la
+      // página) y encima muestra un cartel de "usá dos dedos" la primera vez que se toca con
+      // uno solo. Eso es justo lo que se sentía como "se pone lento" al ampliar/hacer zoom: el
+      // primer gesto con un dedo no hacía nada. El resto de los mapas de la app (Mapa Cliente,
+      // Mapa de Rutas admin) ya usan 'greedy' -- acá faltaba en la creación inicial (antes solo
+      // se ponía 'greedy' al SALIR del modo "Dibujar orden", nunca al abrir la pantalla).
+      map=new google.maps.Map(mapRef.current,{zoom:12,center:origen,disableDefaultUI:true,zoomControl:true,gestureHandling:'greedy'});
       mapObjRef.current=map;
       infoWindowRef.current=new google.maps.InfoWindow();
       // OverlayView "fantasma" (nunca dibuja nada) solo para poder convertir pixeles del
