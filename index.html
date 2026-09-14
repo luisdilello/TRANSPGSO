@@ -625,7 +625,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1789346151;
+window.__MODULES_VERSION=1789391444;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -5793,7 +5793,7 @@ function RetiroMasivoRider(_ref_rm){
     // la vieja — si el reintento tampoco lee nada, el paquete sigue marcado como vacío y el
     // mensajero puede completar los datos a mano, que es la salida de emergencia que ya existía.
     setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{foto:foto,analizandoIA:true,datosIA:null,editando:false,editDest:undefined,editDir:undefined,editComuna:undefined}):p;});});
-    try{ db.from('envios').update({foto_etiqueta:foto}).eq('codigo',codigo).then(function(){}).catch(function(){}); }catch(e){}
+    intentarConColaOffline('actualizar_envio',{codigo:codigo,campos:{foto_etiqueta:foto}},usuario&&usuario.nombre).catch(function(){});
     var b64=foto.split(',')[1];
     rotarImagenSiVertical(b64).then(function(b64r){
       return analizarConFallback180(b64r,'image/jpeg');
@@ -5810,7 +5810,9 @@ function RetiroMasivoRider(_ref_rm){
         if(datos.comuna) upd.comuna=matchComuna(datos.comuna)||String(datos.comuna).trim().toUpperCase();
         if(datos.referencia) upd.referencia=datos.referencia;
         if(Object.keys(upd).length>0){
-          db.from('envios').update(upd).eq('codigo',codigo).then(function(){}).catch(function(){});
+          intentarConColaOffline('actualizar_envio',{codigo:codigo,campos:upd},usuario&&usuario.nombre).catch(function(){
+            toast('⚠ No se pudo guardar la dirección detectada de '+codigo+' — revísalo a mano');
+          });
         }
       }
     }).catch(function(){
@@ -5895,9 +5897,11 @@ function RetiroMasivoRider(_ref_rm){
           if(datos.comuna) upd.comuna=matchComuna(datos.comuna)||String(datos.comuna).trim().toUpperCase();
           if(datos.referencia) upd.referencia=datos.referencia;
           if(Object.keys(upd).length>0){
-            db.from('envios').update(upd).eq('codigo',codigo).then(function(r2){
-              if(!r2.error) setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{syncEstado:'guardado'}):p;});});
-            }).catch(function(){});
+            intentarConColaOffline('actualizar_envio',{codigo:codigo,campos:upd},usuario&&usuario.nombre).then(function(){
+              setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{syncEstado:'guardado'}):p;});});
+            }).catch(function(){
+              toast('⚠ No se pudo guardar la dirección detectada de '+codigo+' — revísalo a mano');
+            });
           }
         }
       }).catch(function(){
@@ -6680,12 +6684,17 @@ function ColectaRider(_ref_cr){
           // El registro base ya se guardó al escanear — completar con los datos de dirección
           // que detectó la IA (si no está protegido por PDF, en cuyo caso no se tocan).
           if(!esPDFRefCol.current.has(codigoFinalIA)){
-            db.from('envios').update({destinatario:datos.destinatario||'',direccion:datos.direccion||'',telefono:datos.telefono||'',comuna:datos.comuna?(matchComuna(datos.comuna)||String(datos.comuna).trim().toUpperCase()):'',
-              // Limpiar coords cacheadas: cambió dirección/comuna, así que el pin del Mapa de
-              // Rutas (que reusa lat/lng guardado en vez de re-geocodificar) debe recalcularse.
-              lat:null,lng:null}).eq('codigo',codigoFinalIA).then(function(r2){
-              if(!r2.error) setPaquetes(prev=>prev.map(p=>p.codigo===codigoFinalIA?{...p,syncEstado:'guardado'}:p));
-            }).catch(function(){});
+            // Limpiar coords cacheadas: cambió dirección/comuna, así que el pin del Mapa de
+            // Rutas (que reusa lat/lng guardado en vez de re-geocodificar) debe recalcularse.
+            const camposDirIA={destinatario:datos.destinatario||'',direccion:datos.direccion||'',telefono:datos.telefono||'',comuna:datos.comuna?(matchComuna(datos.comuna)||String(datos.comuna).trim().toUpperCase()):'',lat:null,lng:null};
+            // Antes: .catch(function(){}) -- el paquete ya estaba guardado en bodega, esto solo
+            // completa la dirección/destinatario que detectó la IA; si fallaba por un corte de
+            // señal en este segundo guardado, esos datos se perdían para siempre sin aviso.
+            intentarConColaOffline('actualizar_envio',{codigo:codigoFinalIA,campos:camposDirIA},usuario&&usuario.nombre).then(function(){
+              setPaquetes(prev=>prev.map(p=>p.codigo===codigoFinalIA?{...p,syncEstado:'guardado'}:p));
+            }).catch(function(){
+              toast('⚠ No se pudo guardar la dirección detectada de '+codigoFinalIA+' — revísalo a mano');
+            });
           }
           toast('✓ '+(datos.destinatario||datos.direccion||'Datos extraídos')+(datos.codigo&&datos.codigo!==codigo?' · Código: '+datos.codigo:''));
         } else {
@@ -8821,6 +8830,13 @@ var ColectaErrorBoundary = (function(_React$Component) {
 function RetirosRider(_ref_rr){
   var usuario=_ref_rr.usuario;
   var onColectaRetiro=_ref_rr.onColectaRetiro||function(){};
+  // "toast" faltaba en las props: confirmarRespaldos()/actualizarRetiro() ya llamaban a
+  // toast(...) mas abajo, pero como nunca se pasaba desde RiderApp, esa llamada tiraba
+  // "toast is not defined" -- lo que en la práctica dejaba la pantalla de "Enviar Respaldos"
+  // colgada para siempre (el guardado en la base SI se hacía, pero la app nunca llegaba a
+  // avisar ni a volver a la lista, porque el error no capturado cortaba la función a mitad de
+  // camino). Se agrega acá y en el React.createElement(RetirosRider,...) que la renderiza.
+  var toast=_ref_rr.toast||function(){};
   var hoy=fechaHoyCL();
   var _sf=React.useState(hoy),fechaVer=_sf[0],setFechaVer=_sf[1];
   var _sr=React.useState([]),retiros=_sr[0],setRetiros=_sr[1];
@@ -8905,8 +8921,17 @@ function RetirosRider(_ref_rr){
       if(campo==='piezas')updateData.piezas=parseInt(valor)||0;
       if(campo==='retirado'&&valor===true){updateData.retirado=true;updateData.en_bodega=true;}
       if(campo==='respaldos'&&valor===true)updateData.respaldos=true;
-      db.from('retiros').update(updateData).eq('id',retiroActual.id)
-        .then(function(){cargarRetiros(fechaVer);}).catch(function(){});
+      // Antes esto se guardaba con .catch(function(){}) -- si fallaba por falta de señal, la
+      // tarjeta quedaba marcada "✓" en el celular pero el servidor nunca se enteraba, y el
+      // check "desaparecía solo" (sin ningún aviso) la próxima vez que se recargaba desde el
+      // servidor. Ahora, si falla por corte de señal, queda en la cola offline y se reintenta
+      // solo; si falla por un error real, se avisa y se revierte al estado real del servidor.
+      intentarConColaOffline('actualizar_retiro',{id:retiroActual.id,campos:updateData},usuario&&usuario.nombre)
+        .then(function(res){if(!res.offline)cargarRetiros(fechaVer);})
+        .catch(function(e){
+          toast('⚠ No se pudo actualizar el retiro: '+(e&&e.message?e.message:'error desconocido'));
+          cargarRetiros(fechaVer);
+        });
     }
     if(campo==='retirado'&&valor===true&&retiroActual){
       try{
@@ -9034,17 +9059,41 @@ function RetirosRider(_ref_rr){
     if(!retiroSelRespaldo||!retiroSelRespaldo.id){return;}
     setProcesandoRespaldo(true);
     try{
-      // Convertir fotos a base64 para guardar
+      // Convertir cada foto a base64 real -- antes se guardaba f.preview (un blob: URL) tal
+      // cual, que solo es válido en esta misma pestaña del navegador: apenas quedaba guardado
+      // en la base de datos, nadie más podía verlo (ni un Admin, ni el mismo mensajero después
+      // de recargar la app) -- las fotos de respaldo quedaban ahí pero eran, en la práctica,
+      // inservibles. Ahora se dibuja cada foto en un canvas y se exporta a base64 real, igual
+      // que hace el resto de la app con las fotos de etiqueta/entrega.
       var fotosBase64=[];
       for(var f of fotosRespaldo){
-        if(f.preview) fotosBase64.push(f.preview);
+        var b64=await new Promise(function(res){
+          var img=new Image();
+          img.onload=function(){
+            var MAX=1000;
+            var scale=Math.min(1,MAX/Math.max(img.width,img.height));
+            var canvas=document.createElement('canvas');
+            canvas.width=Math.round(img.width*scale);
+            canvas.height=Math.round(img.height*scale);
+            canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+            res(canvas.toDataURL('image/jpeg',0.72));
+          };
+          img.onerror=function(){res(null);};
+          img.src=f.preview;
+        });
+        if(b64)fotosBase64.push(b64);
+      }
+      if(!fotosBase64.length){
+        toast('⚠ No se pudo procesar ninguna foto, intenta de nuevo');
+        setProcesandoRespaldo(false);
+        return;
       }
       var fotosJson=JSON.stringify(fotosBase64);
-      await db.from('retiros').update({
-        respaldos:true,
-        fotos_respaldo:fotosJson
-      }).eq('id',retiroSelRespaldo.id);
-      // Notificar admin
+      // Antes esto se guardaba directo (await db.from(...).update(...)) sin ningún manejo de
+      // corte de señal -- si fallaba, las fotos de respaldo se perdían del todo. Ahora, si falla
+      // por falta de señal, queda en la cola offline y se reintenta solo.
+      var resSync=await intentarConColaOffline('actualizar_retiro',{id:retiroSelRespaldo.id,campos:{respaldos:true,fotos_respaldo:fotosJson}},usuario&&usuario.nombre);
+      // Notificar admin (solo un aviso local, no crítico si se pierde)
       try{
         var notifs=JSON.parse(localStorage.getItem('transpgso_v2_notificaciones')||'[]');
         notifs.unshift({id:Date.now(),tipo:'respaldos_retiro',
@@ -9053,10 +9102,10 @@ function RetirosRider(_ref_rr){
           fecha:new Date().toISOString(),leida:false});
         localStorage.setItem('transpgso_v2_notificaciones',JSON.stringify(notifs.slice(0,100)));
       }catch(ex){}
-      toast('✓ Respaldos enviados');
+      toast(resSync.offline?'📴 Sin señal — respaldos guardados, se enviarán solos apenas vuelva la conexión':'✓ Respaldos enviados');
       setFaseRetiro('ver');
       setFotosRespaldo([]);
-      cargarRetiros(fechaVer);
+      if(!resSync.offline)cargarRetiros(fechaVer);
     }catch(e){
       toast('⚠ Error: '+e.message);
     }
@@ -9349,7 +9398,7 @@ function aplicarOrdenPorZonas(stopsBase,zonas){
   idxPendientes.forEach((idx,k)=>{nuevo[idx]=grupos[k].p;});
   return nuevo;
 }
-function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.mensajeros||[],envios=_ref_or.envios,enviosTodos=_ref_or.enviosTodos||[],onClose=_ref_or.onClose,onDividido=_ref_or.onDividido||function(){};
+function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,toast=_ref_or.toast||function(){},mensajeros=_ref_or.mensajeros||[],envios=_ref_or.envios,enviosTodos=_ref_or.enviosTodos||[],onClose=_ref_or.onClose,onDividido=_ref_or.onDividido||function(){};
   const mapRef=React.useRef(null);
   const mapObjRef=React.useRef(null);
   const markersRef=React.useRef([]);
@@ -10010,23 +10059,48 @@ function OptimizarRuta(_ref_or){let usuario=_ref_or.usuario,mensajeros=_ref_or.m
     if(!colegaElegido||seleccionados.size===0)return;
     setDividiendo(true);
     const codigos=Array.from(seleccionados);
+    // Antes: cada update tenía su propio try/catch vacío y, pasara lo que pasara (incluso sin
+    // señal), las paradas se sacaban igual de la ruta local -- el mensajero creía haberle
+    // pasado los paquetes al colega, pero si no había señal el servidor nunca se enteraba: el
+    // paquete quedaba sin dueño real, desaparecido de la ruta visible de ambos mensajeros, sin
+    // ningún aviso. Ahora, si falla por corte de señal, se encola para reintentar solo (y SÍ se
+    // saca de la ruta local, porque el traspaso va a terminar de completarse apenas vuelva la
+    // señal); si falla por un error real, no se saca de la ruta y se avisa.
+    const codigosOk=[];
+    let fallidos=0;
     try{
       // En paralelo (8 a la vez) en vez de uno por uno.
       await procesarConcurrencia(codigos,async function(codigo){
-        try{await db.from('envios').update({mensajero:colegaElegido}).eq('codigo',codigo);}catch(e){}
+        try{
+          const r=await db.from('envios').update({mensajero:colegaElegido}).eq('codigo',codigo);
+          if(r.error)throw r.error;
+          codigosOk.push(codigo);
+        }catch(e){
+          if(esErrorDeRed(e)){
+            await encolarAccionOffline('actualizar_envio',{codigo:codigo,campos:{mensajero:colegaElegido}},usuario&&usuario.nombre);
+            codigosOk.push(codigo);
+          }else{
+            fallidos++;
+          }
+        }
       },8);
-      setStopsOrdenados(prev=>{
-        const nuevo=prev.filter(p=>!seleccionados.has(p.envio.codigo));
-        // Guardamos ya mismo el guardado local con la lista reducida -- si no se hacía esto, la
-        // ruta seguía mostrando (y usando para el mapa/distancia) las paradas ya cedidas al
-        // compañero hasta que alguna otra acción no relacionada (mover una parada, aplicar un
-        // trazo) volviera a guardar la cache por su cuenta. La distancia/duración quedan como
-        // estimación aproximada (no se vuelve a pedir la ruta real a Directions acá) -- si se
-        // quiere el número exacto después de dividir, está "🔄 Recalcular".
-        guardarCacheRuta(claveRutaCache(usuario),nuevo,geometriaRef.current,(distTotal?parseFloat(distTotal)*1000:0),(durTotal?durTotal*60:0),origenRef.current);
-        return nuevo;
-      });
-      onDividido(codigos);
+      if(codigosOk.length>0){
+        setStopsOrdenados(prev=>{
+          const nuevo=prev.filter(p=>!codigosOk.includes(p.envio.codigo));
+          // Guardamos ya mismo el guardado local con la lista reducida -- si no se hacía esto, la
+          // ruta seguía mostrando (y usando para el mapa/distancia) las paradas ya cedidas al
+          // compañero hasta que alguna otra acción no relacionada (mover una parada, aplicar un
+          // trazo) volviera a guardar la cache por su cuenta. La distancia/duración quedan como
+          // estimación aproximada (no se vuelve a pedir la ruta real a Directions acá) -- si se
+          // quiere el número exacto después de dividir, está "🔄 Recalcular".
+          guardarCacheRuta(claveRutaCache(usuario),nuevo,geometriaRef.current,(distTotal?parseFloat(distTotal)*1000:0),(durTotal?durTotal*60:0),origenRef.current);
+          return nuevo;
+        });
+        onDividido(codigosOk);
+      }
+      if(fallidos>0){
+        toast('⚠ No se pudo pasar '+fallidos+' paquete'+(fallidos!==1?'s':'')+' — sigue'+(fallidos!==1?'n':'')+' en tu ruta');
+      }
       setSeleccionados(new Set());
       setMostrarPicker(false);
       setColegaElegido('');
@@ -10402,6 +10476,7 @@ const ESTADOS_RIDER=[{val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#C8A84B',
       const comunas=(asigs||[]).map(a=>a.comuna);
       if(comunas.length===0){
         toast('⚠ No tenés comunas asignadas en el Mapa todavía.');
+        setCargandoMiRuta(false);
         return;
       }
       const{data:tomados,error:errUpd}=await db.from('envios')
@@ -10420,7 +10495,16 @@ const ESTADOS_RIDER=[{val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#C8A84B',
       }
       await cargarEnvios();
     }catch(e){
-      toast('⚠ Error cargando tu ruta: '+e.message);
+      // Antes esto fallaba sin más ante un corte de señal y había que reintentar a mano. No
+      // pierde datos escritos por el mensajero (es "agarrar lo que haya", no algo que él haya
+      // tecleado), pero si es un corte de señal ahora se encola para completarse sola apenas
+      // vuelva la conexión, igual que "Asignación por escaneo".
+      if(esErrorDeRed(e)){
+        await encolarAccionOffline('mi_ruta',{mensajeroId:usuario.mensajero_id,mensajero:usuario.nombre},usuario.nombre);
+        toast('📴 Sin señal — apenas vuelva la conexión se cargarán solos los paquetes de tu zona');
+      }else{
+        toast('⚠ Error cargando tu ruta: '+e.message);
+      }
     }
     setCargandoMiRuta(false);
   }
@@ -10468,11 +10552,11 @@ const ESTADOS_RIDER=[{val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#C8A84B',
         )
       );
   });
-})())),riderTab==='retiros'&&/*#__PURE__*/React.createElement(RetirosRider,{usuario:usuario,onColectaRetiro:function(){if(!colectaHabilitada){toast('⚠ La función Colecta no está habilitada para tu cuenta. Pide al administrador que la active.');return;}setShowColecta(true);}}),riderTab==='ganancias'&&verGanancias&&/*#__PURE__*/React.createElement(GananciasRider,{usuario:usuario,envios:envios,colectasKey:'colecta_rider_'+usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase()}),riderTab==='calendario'&&/*#__PURE__*/React.createElement(CalendarioEntregasRider,{usuario:usuario}),riderTab==='comunas'&&/*#__PURE__*/React.createElement(ComunasRider,{envios:envios}),showColecta&&/*#__PURE__*/React.createElement(ColectaErrorBoundary,null,React.createElement(ColectaRider,{key:'colecta-fixed',usuario:usuario,clientes:clientesRider,toast:toast,clientePresel:clienteRetiroPresel,onClose:function(){
+})())),riderTab==='retiros'&&/*#__PURE__*/React.createElement(RetirosRider,{usuario:usuario,toast:toast,onColectaRetiro:function(){if(!colectaHabilitada){toast('⚠ La función Colecta no está habilitada para tu cuenta. Pide al administrador que la active.');return;}setShowColecta(true);}}),riderTab==='ganancias'&&verGanancias&&/*#__PURE__*/React.createElement(GananciasRider,{usuario:usuario,envios:envios,colectasKey:'colecta_rider_'+usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase()}),riderTab==='calendario'&&/*#__PURE__*/React.createElement(CalendarioEntregasRider,{usuario:usuario}),riderTab==='comunas'&&/*#__PURE__*/React.createElement(ComunasRider,{envios:envios}),showColecta&&/*#__PURE__*/React.createElement(ColectaErrorBoundary,null,React.createElement(ColectaRider,{key:'colecta-fixed',usuario:usuario,clientes:clientesRider,toast:toast,clientePresel:clienteRetiroPresel,onClose:function(){
           setShowColecta(false);
           setClienteRetiroPresel(null);
           if(riderTab==='colecta') setRiderTab('retiros');
-        }})),showRutaIA&&/*#__PURE__*/React.createElement(OptimizarRuta,{usuario:usuario,mensajeros:mensajeros,envios:envios.filter(e=>e.estado==='en_ruta'||e.estado==='reprogramado'),enviosTodos:envios,onClose:()=>setShowRutaIA(false),onDividido:(codigos)=>{setEnvios(prev=>prev.filter(e=>!codigos.includes(e.codigo)));}}),showAvisos&&/*#__PURE__*/React.createElement(AvisosRider,{usuario:usuario,onClose:()=>setShowAvisos(false)}),showAsignacion&&/*#__PURE__*/React.createElement(AsignacionRider,{usuario:usuario,toast:toast,onClose:()=>setShowAsignacion(false),onEnviosUpdate:envioNuevo=>{setEnvios(prev=>{const nuevos=prev.find(e=>e.codigo===envioNuevo.codigo)?prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e):[envioNuevo,...prev];const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,nuevos);return nuevos;});}}),showAjustes&&/*#__PURE__*/React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:9999,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},
+        }})),showRutaIA&&/*#__PURE__*/React.createElement(OptimizarRuta,{usuario:usuario,toast:toast,mensajeros:mensajeros,envios:envios.filter(e=>e.estado==='en_ruta'||e.estado==='reprogramado'),enviosTodos:envios,onClose:()=>setShowRutaIA(false),onDividido:(codigos)=>{setEnvios(prev=>prev.filter(e=>!codigos.includes(e.codigo)));}}),showAvisos&&/*#__PURE__*/React.createElement(AvisosRider,{usuario:usuario,onClose:()=>setShowAvisos(false)}),showAsignacion&&/*#__PURE__*/React.createElement(AsignacionRider,{usuario:usuario,toast:toast,onClose:()=>setShowAsignacion(false),onEnviosUpdate:envioNuevo=>{setEnvios(prev=>{const nuevos=prev.find(e=>e.codigo===envioNuevo.codigo)?prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e):[envioNuevo,...prev];const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,nuevos);return nuevos;});}}),showAjustes&&/*#__PURE__*/React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:9999,display:'flex',flexDirection:'column',justifyContent:'flex-end'}},
   React.createElement('div',{style:{background:T.panelBg,borderRadius:'20px 20px 0 0',padding:24,border:'1px solid rgba(200,168,75,0.2)',maxHeight:'80vh',overflowY:'auto'}},
     React.createElement('div',{style:{width:40,height:4,background:T.tint(0.2),borderRadius:2,margin:'0 auto 20px'}},null),
     React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:2,color:'var(--gold)',marginBottom:20}},"⚙ AJUSTES"),
@@ -10532,7 +10616,19 @@ showMas&&/*#__PURE__*/React.createElement('div',{onClick:()=>setShowMas(false),s
       )
     )
   )
-),riderToast&&React.createElement('div',{style:{position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',background:'#3A3D2E',color:'var(--gold)',padding:'12px 24px',borderRadius:10,fontWeight:700,fontSize:14,zIndex:99999,boxShadow:'0 4px 20px rgba(0,0,0,0.4)',whiteSpace:'nowrap'}},riderToast),envioActivo&&/*#__PURE__*/React.createElement(EnvioAccion,{envio:envioActivo,usuario:usuario,estados:ESTADOS_RIDER,onClose:()=>{setEnvioActivo(null);setBusquedaEnvio('');setFiltro('pendientes');},onUpdate:(codigo,nuevoEstado,nota,foto,operador,offline)=>{if(estadoEsTerminal(envioActivo?.estado||'')){toast('⚠ Estado terminal. Contacta al admin.');return;}setEnvios(prev=>{const updated=prev.map(e=>e.codigo===codigo?{...e,estado:nuevoEstado,nota:nota||e.nota,_pendienteSync:!!offline,historial:[...(e.historial||[]),crearEntradaHistorial(nuevoEstado,nota,operador||usuario.nombre)]}:e);const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,updated);return updated;});setEnvioActivo(prev=>({...prev,estado:nuevoEstado}));if(offline){toast('📴 Sin conexión — se guardó en el celular, se sincroniza solo cuando vuelva la señal');}else{toast('✓ Entrega registrada');}},onComunaUpdate:(codigo,comuna)=>{setEnvios(prev=>{const updated=prev.map(e=>e.codigo===codigo?{...e,comuna}:e);const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,updated);return updated;});setEnvioActivo(prev=>prev?{...prev,comuna}:prev);},onDireccionUpdate:(codigo,direccion)=>{setEnvios(prev=>{const updated=prev.map(e=>e.codigo===codigo?{...e,direccion}:e);const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,updated);return updated;});setEnvioActivo(prev=>prev?{...prev,direccion}:prev);}}));}function EnvioAccion(_ref33){var _estados$find;let envio=_ref33.envio,usuario=_ref33.usuario,estados=_ref33.estados,onClose=_ref33.onClose,onUpdate=_ref33.onUpdate,onComunaUpdate=_ref33.onComunaUpdate,onDireccionUpdate=_ref33.onDireccionUpdate;const _useState88=useState(''),nota=_useState88[0],setNota=_useState88[1];const _useState89=useState([]),fotos=_useState89[0],setFotos=_useState89[1];const _useState90=useState(false),guardando=_useState90[0],setGuardando=_useState90[1];const _useState91=useState(null),estadoSel=_useState91[0],setEstadoSel=_useState91[1];
+),riderToast&&React.createElement('div',{style:{position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',background:'#3A3D2E',color:'var(--gold)',padding:'12px 24px',borderRadius:10,fontWeight:700,fontSize:14,zIndex:99999,boxShadow:'0 4px 20px rgba(0,0,0,0.4)',whiteSpace:'nowrap'}},riderToast),envioActivo&&/*#__PURE__*/React.createElement(EnvioAccion,{envio:envioActivo,usuario:usuario,toast:toast,estados:ESTADOS_RIDER,onClose:()=>{setEnvioActivo(null);setBusquedaEnvio('');setFiltro('pendientes');},onUpdate:(codigo,nuevoEstado,nota,foto,operador,offline)=>{if(estadoEsTerminal(envioActivo?.estado||'')){toast('⚠ Estado terminal. Contacta al admin.');return;}setEnvios(prev=>{const updated=prev.map(e=>e.codigo===codigo?{...e,estado:nuevoEstado,nota:nota||e.nota,_pendienteSync:!!offline,historial:[...(e.historial||[]),crearEntradaHistorial(nuevoEstado,nota,operador||usuario.nombre)]}:e);const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,updated);return updated;});setEnvioActivo(prev=>({...prev,estado:nuevoEstado}));if(offline){toast('📴 Sin conexión — se guardó en el celular, se sincroniza solo cuando vuelva la señal');}else{toast('✓ Entrega registrada');}},onUpdateItem:(codigo,nuevoEstado)=>{
+  // A diferencia de onUpdate (pensado para el envío que abrió el modal), esto lo usa el botón
+  // rápido "Entregado" de la vista de grupo -- ahí "codigo" puede ser el de un HERMANO del
+  // grupo, distinto al que abrió el modal, así que no debe tocar envioActivo (eso pisaría el
+  // estado del envío equivocado) ni el chequeo de estadoEsTerminal (que mira envioActivo, no
+  // el paquete puntual que se está entregando).
+  setEnvios(prev=>{const updated=prev.map(e=>e.codigo===codigo?{...e,estado:nuevoEstado}:e);const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,updated);return updated;});
+},onComunaUpdate:(codigo,comuna)=>{setEnvios(prev=>{const updated=prev.map(e=>e.codigo===codigo?{...e,comuna}:e);const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,updated);return updated;});setEnvioActivo(prev=>prev?{...prev,comuna}:prev);},onDireccionUpdate:(codigo,direccion)=>{setEnvios(prev=>{const updated=prev.map(e=>e.codigo===codigo?{...e,direccion}:e);const primerN=usuario.nombre.split(' ')[0].split(',')[0].trim().toLowerCase();lsSave('rider_envios_'+primerN,updated);return updated;});setEnvioActivo(prev=>prev?{...prev,direccion}:prev);}}));}function EnvioAccion(_ref33){var _estados$find;let envio=_ref33.envio,usuario=_ref33.usuario,
+  // "toast" faltaba en las props -- las dos llamadas a toast(...) que ya existían acá abajo
+  // (transición de estado no permitida, y el botón rápido "Entregado" de la vista de grupo)
+  // tiraban "toast is not defined" apenas se ejecutaban, cortando el evento a mitad de camino
+  // sin ningún aviso visible para el mensajero.
+  toast=_ref33.toast||function(){},estados=_ref33.estados,onClose=_ref33.onClose,onUpdate=_ref33.onUpdate,onUpdateItem=_ref33.onUpdateItem||function(){},onComunaUpdate=_ref33.onComunaUpdate,onDireccionUpdate=_ref33.onDireccionUpdate;const _useState88=useState(''),nota=_useState88[0],setNota=_useState88[1];const _useState89=useState([]),fotos=_useState89[0],setFotos=_useState89[1];const _useState90=useState(false),guardando=_useState90[0],setGuardando=_useState90[1];const _useState91=useState(null),estadoSel=_useState91[0],setEstadoSel=_useState91[1];
 // Motivos de reagenda: antes al reprogramar el mensajero escribía la nota a mano, texto libre
 // sin ningún control -- esto hacía perder tiempo y dejaba notas muy variadas/informales que
 // después eran difíciles de mostrarle a un cliente. Ahora, si el admin ya cargó motivos desde
@@ -10934,13 +11030,34 @@ if(envio._grupo&&envio._grupo.length>1){
           ge.monto>0&&React.createElement('div',{style:{fontSize:11,color:'#e88',marginBottom:6}},'💵 COD $'+ge.monto.toLocaleString('es-CL')),
           ge.estado!=='entregado'&&ge.estado!=='cancelado'&&React.createElement('div',{style:{display:'flex',gap:8,marginTop:8}},
             React.createElement('button',{onClick:async()=>{
-              const ts=new Date().toISOString();
-              await db.from('envios').update({estado:'entregado',updated_at:ts}).eq('codigo',ge.codigo);
-              sbUpdateEstado(ge.codigo,'entregado','Entrega desde grupo',usuario.nombre,'app_mensajero');
-              setEnvios(prev=>prev.map(e=>e.codigo===ge.codigo?{...e,estado:'entregado'}:e));
-              playSound('success');
-              toast('✅ '+ge.codigo+' entregado');
-              if(grupo.every(g=>g.estado==='entregado'||g.codigo===ge.codigo))onClose();
+              // Antes: esto hacía un update directo + sbUpdateEstado (que hace OTRO update
+              // redundante e inserta en historial_envios) + setEnvios/toast, ninguno de los
+              // cuales existe realmente en este scope (EnvioAccion nunca recibía "setEnvios" ni
+              // "toast" como props) -- ambas llamadas tiraban ReferenceError. Como pasaba DESPUÉS
+              // del guardado, la entrega SÍ podía quedar registrada en el servidor, pero la app
+              // se colgaba sin avisar nada (ni el ✓, ni el cierre del modal si correspondía) y,
+              // sin conexión, la entrega directamente se perdía porque no había cola offline.
+              // Ahora se reusa el mismo mecanismo a prueba de cortes de señal que usa el resto
+              // de la pantalla (intentarConColaOffline + onUpdate, que sí están garantizados).
+              const payload={
+                codigo:ge.codigo,
+                estadoFinal:'entregado',
+                estadoPrevio:ge.estado,
+                nota:'Entrega desde grupo',
+                mensajero:usuario.nombre,
+                fotosB64:[],
+                videoBlob:null,
+                gestionLat:null,gestionLng:null,gestionPrecision:null,gestionDistancia:null,gestionVerificada:null
+              };
+              try{
+                const resultado=await intentarConColaOffline('entrega',payload,usuario.nombre);
+                playSound('success');
+                onUpdateItem(ge.codigo,'entregado');
+                toast(resultado.offline?'📴 '+ge.codigo+' — sin señal, se enviará solo':'✅ '+ge.codigo+' entregado');
+                if(grupo.every(g=>g.estado==='entregado'||g.codigo===ge.codigo))onClose();
+              }catch(errReal){
+                toast('⚠ No se pudo guardar '+ge.codigo+': '+(errReal&&errReal.message?errReal.message:'error desconocido'));
+              }
             },style:{flex:1,padding:'8px',borderRadius:8,border:'none',background:'linear-gradient(135deg,#2e7d4f,#1a5c38)',color:'#fff',fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1,cursor:'pointer'}},'✅ Entregado'),
             React.createElement('button',{onClick:()=>setEnvioActivo({...ge}),style:{padding:'8px 12px',borderRadius:8,border:'1px solid rgba(255,255,255,0.15)',background:'transparent',color:'rgba(255,255,255,0.5)',fontSize:12,cursor:'pointer'}},'Ver detalle')
           )
@@ -11215,6 +11332,43 @@ async function sincronizarAsignacionOffline(payload){
   }
 }
 registrarHandlerOffline('asignacion',sincronizarAsignacionOffline);
+// ── Handlers offline-safe genéricos para actualizaciones sueltas ── No todo flujo del
+// mensajero es un "lote" como colecta/retiro/asignación/entrega: hay varias acciones que son
+// simplemente "actualizá este registro con estos campos" (marcar una pieza retirada, mandar
+// las fotos de respaldo de un retiro, completar la dirección que sacó la IA de una etiqueta,
+// pasarle un paquete a un colega). Antes cada una de estas se guardaba con un .catch(function(){})
+// silencioso -- si fallaba por falta de señal, el trabajo del mensajero se perdía sin aviso.
+// Con un handler genérico por tabla alcanza para las cuatro.
+async function sincronizarActualizarEnvioOffline(payload){
+  const r=await db.from('envios').update(payload.campos).eq('codigo',payload.codigo);
+  if(r.error)throw r.error;
+}
+registrarHandlerOffline('actualizar_envio',sincronizarActualizarEnvioOffline);
+async function sincronizarActualizarRetiroOffline(payload){
+  const r=await db.from('retiros').update(payload.campos).eq('id',payload.id);
+  if(r.error)throw r.error;
+}
+registrarHandlerOffline('actualizar_retiro',sincronizarActualizarRetiroOffline);
+// ── Handler offline-safe para "Mi Ruta" (autoasignación por zona/comuna) ── A diferencia de
+// los anteriores necesita LEER primero (qué comunas tiene asignadas el mensajero en el Mapa)
+// antes de escribir, así que no alcanza con guardar un payload fijo -- se vuelve a hacer la
+// consulta completa recién cuando llegue el momento de reprocesar, con los datos de ESE
+// momento (es una operación de "agarrar lo que haya disponible ahora", no algo que el
+// mensajero haya tecleado y deba preservarse tal cual).
+async function sincronizarMiRutaOffline(payload){
+  const{data:asigs,error:errAsig}=await db.from('asignaciones_mapa').select('comuna').eq('mensajero_id',String(payload.mensajeroId));
+  if(errAsig)throw errAsig;
+  const comunas=(asigs||[]).map(function(a){return a.comuna;});
+  if(comunas.length===0)return;
+  const{data:tomados,error:errUpd}=await db.from('envios')
+    .update({estado:'en_ruta',mensajero:payload.mensajero})
+    .in('comuna',comunas)
+    .eq('estado','en_bodega')
+    .select('codigo');
+  if(errUpd)throw errUpd;
+  if(tomados&&tomados.length>0)sbRegistrarHistorialLote(tomados.map(function(t){return t.codigo;}),'en_ruta','Tomado con "Mi Ruta" (auto-asignación por zona, sincronizado, se hizo sin señal)',payload.mensajero,'app_mensajero');
+}
+registrarHandlerOffline('mi_ruta',sincronizarMiRutaOffline);
 // Intenta hacer la accion de una (con señal), y si falla por falta de red la deja guardada
 // para reintentar sola despues -- en vez de mostrarle un error al mensajero y que la entrega
 // se pierda. Devuelve {offline:true} si quedo pendiente de sincronizar, {offline:false} si se
