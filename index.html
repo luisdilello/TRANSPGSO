@@ -625,7 +625,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1789491184;
+window.__MODULES_VERSION=1789493107;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3370,15 +3370,32 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
   var borradosRef=React.useRef({});
   React.useEffect(function(){borradosRef.current={};},[retiroFecha]);
 
-  // Sube TODAS las filas con cliente asignado a Supabase -- antes solo se subían las que ya
-  // estaban "Confirmado", por eso lo que Yohana cargaba en su dispositivo nunca aparecía en el
-  // de otro admin hasta confirmar, y como confirmar exigía tener el Pago Mensajero puesto a
-  // mano, muchas filas se quedaban sin subir nunca. Con debounce para no pegarle a Supabase en
-  // cada tecla escrita.
+  // Marca qué filas (por id) el admin realmente TOCÓ en este navegador -- ver el comentario del
+  // bug real más abajo. Se resetea junto con la lista negra al cambiar de fecha.
+  var dirtyRef=React.useRef({});
+  React.useEffect(function(){dirtyRef.current={};},[retiroFecha]);
+
+  // Sube a Supabase SOLO las filas que este navegador tocó de verdad (dirtyRef) -- antes se
+  // resubían TODAS las filas con cliente cada vez que CUALQUIER campo de CUALQUIER fila cambiaba
+  // acá. Eso causaba un bug real reportado por Luis/Yohana: "se me borra la información que pongo
+  // en mensajero y la cantidad de piezas se pone en 0, no guarda info". La causa era una condición
+  // de carrera de varios admins editando la MISMA fecha a la vez (o el mismo admin recargando la
+  // página): el estado local `filas` de un navegador puede tener, para una fila que otro admin
+  // recién editó desde otro dispositivo, una copia VIEJA (o directamente en blanco, recién creada
+  // por "Cargar todos los clientes" o cargada de un localStorage desactualizado antes de que
+  // terminara de llegar la sincronización inicial desde Supabase). Como el "upsert" sube la FILA
+  // COMPLETA (mensajero, piezas, pago, etc.), resubir esa copia vieja pisaba silenciosamente lo
+  // que el otro admin (o el mismo, en otra pestaña) acababa de guardar. Antes esto pasaba incluso
+  // apenas se abría la pantalla (el `filas` inicial viene del localStorage de este navegador, así
+  // que el debounce de 700ms podía disparar la resubida ANTES de que terminara de llegar la
+  // sincronización real desde Supabase). Ahora solo se resube lo que este navegador cambió con sus
+  // propias manos (actualizarFila/agregarFila/cargarTodosClientes marcan la fila), nunca una fila
+  // que solo llegó por sincronización o que estaba en el localStorage sin tocar.
   React.useEffect(function(){
     var t=setTimeout(function(){
       filas.forEach(function(r){
         if(!r.cliente)return;
+        if(!dirtyRef.current[r.id])return; // esta fila no se tocó en este navegador -- no resubir
         if(borradosRef.current[r.cliente])return; // se borró explícitamente -- no revivirlo
         var clienteAntes=clienteSincronizadoRef.current[r.id];
         var previo=(clienteAntes&&clienteAntes!==r.cliente)
@@ -3386,7 +3403,7 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
           :Promise.resolve();
         previo.then(function(){
           db.from('retiros').upsert(filaARow(retiroFecha,r),{onConflict:'fecha,cliente'}).then(function(res){
-            if(!res.error)clienteSincronizadoRef.current[r.id]=r.cliente;
+            if(!res.error){clienteSincronizadoRef.current[r.id]=r.cliente;delete dirtyRef.current[r.id];}
           }).catch(function(){});
         });
       });
@@ -3490,6 +3507,7 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
         if(!actualEsAuto||fila.confirmado)return fila; // no pisar un valor corregido a mano, ni tocar retiros ya confirmados
         if((parseInt(fila.piezas)||0)===real)return fila;
         cambio=true;
+        dirtyRef.current[fila.id]=true; // auto-actualizado desde la colecta -- sí hay que subirlo
         piezasAutoRef.current[fila.id]=real;
         var actualizado=Object.assign({},fila,{piezas:real});
         actualizado.cobro=real>0&&real<MIN_PIEZAS?TARIFA_MIN:0;
@@ -3509,6 +3527,7 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
     setFilas(function(prev){
       var nueva=prev.map(function(r,i){
         if(i!==idx)return r;
+        dirtyRef.current[r.id]=true; // esta fila se tocó a mano en este navegador -- sí hay que resubirla
         var actualizado=Object.assign({},r,{[campo]:valor});
         // Calcular cobro automático
         if(campo==='confirmado'&&valor===true&&actualizado.mensajero){
@@ -3554,7 +3573,9 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
   }
 
   function agregarFila(){
-    var nueva=filas.concat([{id:Date.now(),cliente:'',direccion:'',mensajero:'',confirmado:false,piezas:'',pagoMensajero:'',retirado:false,enBodega:false,respaldos:false,cobro:0}]);
+    var idNueva=Date.now();
+    dirtyRef.current[idNueva]=true;
+    var nueva=filas.concat([{id:idNueva,cliente:'',direccion:'',mensajero:'',confirmado:false,piezas:'',pagoMensajero:'',retirado:false,enBodega:false,respaldos:false,cobro:0}]);
     setFilas(nueva);
     guardarRetirosDia(retiroFecha,nueva);
   }
@@ -3592,7 +3613,9 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
     var clientesYaEnLista={};
     filas.forEach(function(f){if(f.cliente)clientesYaEnLista[f.cliente]=true;});
     var nuevasFilas=clientesOpts.filter(function(c){return!clientesYaEnLista[c.nombre];}).map(function(c,i){
-      return{id:Date.now()+i,cliente:c.nombre,direccion:c.direccion||'',mensajero:'',confirmado:false,piezas:'',pagoMensajero:'',retirado:false,enBodega:false,respaldos:false,cobro:0};
+      var idNueva=Date.now()+i;
+      dirtyRef.current[idNueva]=true;
+      return{id:idNueva,cliente:c.nombre,direccion:c.direccion||'',mensajero:'',confirmado:false,piezas:'',pagoMensajero:'',retirado:false,enBodega:false,respaldos:false,cobro:0};
     });
     if(nuevasFilas.length===0){toast('Ya están todos los clientes activos en la lista de hoy.');return;}
     var nueva=filas.concat(nuevasFilas);
