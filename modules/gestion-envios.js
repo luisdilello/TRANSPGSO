@@ -226,6 +226,51 @@ async function cargarRetornadosPeriodoReal(){
   setCargandoRetornadosReal(false);
 }
 useEffect(()=>{cargarRetornadosPeriodoReal();const _ivRetReal=setInterval(cargarRetornadosPeriodoReal,180000);return()=>clearInterval(_ivRetReal);},[periodo,mesFiltro,desde,hasta]);// Antes cada 60s: se sube a 3 min por la misma razón que las otras dos.
+// Luis (16-09-2026), cruzando Gestión de Envíos contra el Drive de un cliente: "para mí, al
+// colocar rango de fechas busco es todo lo gestionado dentro de ese rango" -- es decir, el mismo
+// criterio de "fecha real del evento" que ya usan Entregado/Retorno arriba, pero para TODOS los
+// demás estados (En Bodega, En Ruta, Reprogramado, Cancelado, Siniestro, En Bodega Cancelado, En
+// Bodega por Fecha de Entrega). Antes esos usaban 'enviosPeriodoEfectivo' (estado CONGELADO al
+// cierre, solo para lo DESPACHADO en el rango -- ver comentario mas abajo), que responde una
+// pregunta distinta ("¿cómo quedó lo que salió en este rango?" en vez de "¿qué se gestionó en
+// este rango?"). fetchPorFechaRealDeEstado ya estaba escrita para aceptar cualquier estado (fue
+// generalizada justo para esto la primera vez que se agregó 'retorno', ver su comentario en
+// index.html) así que se reusa tal cual, en paralelo, para el resto.
+const ESTADOS_OTROS_REAL=ESTADOS_ENVIO.filter(function(est){return est.val!=='entregado'&&est.val!=='retorno';}).map(function(est){return est.val;});
+const _uOtrosPerReal=useState({}),otrosPeriodoReal=_uOtrosPerReal[0],setOtrosPeriodoReal=_uOtrosPerReal[1];
+const _uCargOtrosReal=useState(false),cargandoOtrosReal=_uCargOtrosReal[0],setCargandoOtrosReal=_uCargOtrosReal[1];
+async function cargarOtrosPeriodoReal(){
+  const{desde:desdeQ,hasta:hastaQ}=limitesPeriodoGE();
+  if(!desdeQ||!hastaQ){setOtrosPeriodoReal({});return;}
+  // Solo hace falta en vista 'cierre' -- en 'actual' estos estados se miran directo contra
+  // enviosPeriodo/e.estado en vivo (igual que Entregado/Retorno en ese modo). Nos ahorramos
+  // disparar 7 consultas paralelas a historial_envios cuando no se van a usar para nada; mismo
+  // espíritu de precaución que el guard de 'actual' en cargarEnviosPeriodoEfectivo más abajo
+  // (URGENTE fix incidente 07-09) -- acá con más razón, porque esto son 7 estados a la vez en
+  // vez de 1, y 'En Ruta'/'En Bodega' pueden tener mucho volumen de eventos.
+  if(vistaEstado==='actual')return;
+  setCargandoOtrosReal(true);
+  try{
+    const COLS_OTROS='id,codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,nota_admin,fuente,peso,valor_siniestro,tuvo_siniestro,updated_at,created_at,aviso_tardio';
+    const resultados=await Promise.all(ESTADOS_OTROS_REAL.map(function(est){return fetchPorFechaRealDeEstado(est,desdeQ,hastaQ,COLS_OTROS).then(function(rows){return{est:est,rows:rows};});}));
+    const mapa={};
+    resultados.forEach(function(r){
+      mapa[r.est]=r.rows.map(function(sb){
+        return{id:sb.id,codigo:sb.codigo,cliente:sb.cliente||'',destinatario:sb.destinatario||'',telefono:sb.telefono||'',
+          direccion:sb.direccion||'',comuna:sb.comuna||'',referencia:sb.referencia||'',fecha:sb.fecha||'',
+          estado:sb.estado||r.est,mensajero:sb.mensajero||'',monto:sb.monto||0,enUnCambio:sb.en_un_cambio||false,
+          nota:sb.nota||'',nota_admin:sb.nota_admin||'',fuente:sb.fuente||'propio',peso:sb.peso||null,
+          valor_siniestro:sb.valor_siniestro||null,tuvo_siniestro:sb.tuvo_siniestro||false,created_at:sb.created_at||null,
+          updated_at:sb.updated_at||null,aviso_tardio:sb.aviso_tardio||false,
+          historial:[{fecha:sb.created_at,estado:sb.estado,nota:'Desde Supabase'}],_synced:true,
+          _fechaRealEstado:sb._fechaRealEstado,_fechaRealEstadoISO:sb._fechaRealEstadoISO};
+      });
+    });
+    setOtrosPeriodoReal(mapa);
+  }catch(eOtros){console.warn('Error cargando otros estados por fecha real:',eOtros.message);}
+  setCargandoOtrosReal(false);
+}
+useEffect(()=>{cargarOtrosPeriodoReal();const _ivOtrosReal=setInterval(cargarOtrosPeriodoReal,180000);return()=>clearInterval(_ivOtrosReal);},[periodo,mesFiltro,desde,hasta,vistaEstado]);
 async function sincronizarDesdeSupabase(){setSincronizando(true);try{
   // Solo trae el periodo activo (Hoy por defecto), no la tabla completa. Se pagina en bloques
   // de 1000 igual que antes por si un periodo amplio (Mes/Rango grande) supera esa cantidad,
@@ -748,18 +793,20 @@ function enPeriodoGE(e){
   return true;
 }
 const enviosPeriodo=useMemo(()=>envios.filter(enPeriodoGE),[envios,periodo,mesFiltro,desde,hasta]);
-// enviosPeriodoEfectivo: para el resto de los estados (En Bodega, En Ruta, Reprogramado,
-// Cancelado, Siniestro, En Bodega Cancelado) -- los que NO tienen su propia lista "fecha real"
-// como Entregado/Retorno de arriba -- calcula el ESTADO AL CIERRE del rango elegido, no el
-// estado en vivo de hoy. Luis reporto el mismo problema mirando 'Todos'/una quincena cerrada:
-// un envio despachado en agosto podia mostrar 'Retorno' (su estado de HOY) aunque ese retorno
-// se haya gestionado recien en septiembre, DESPUES de que la quincena de agosto ya habia
-// cerrado -- "el punto clave de contar con un filtro de rango es que me de lo gestionado en
-// ese rango de fechas... me tiene que dar todo con el estado final de esas fechas, no
-// diferente". calcularEstadoEfectivo (index.html) detecta solo los envios con algun evento de
-// historial POSTERIOR al cierre (el "drift", se espera chico) y unicamente para esos recalcula
-// cual era su estado real al cierre -- el resto conserva su estado en vivo tal cual (ya es
-// correcto, porque nada cambio despues del cierre).
+// enviosPeriodoEfectivo: YA NO se usa para filtrar por un estado puntual (En Bodega, En Ruta,
+// Reprogramado, Cancelado, Siniestro, En Bodega Cancelado, En Bodega por Fecha de Entrega) --
+// desde el 16-09-2026 esos usan 'otrosPeriodoReal' (ver más arriba, mismo mecanismo de "fecha
+// real" que Entregado/Retorno). Esta lista (estado CONGELADO al cierre, solo para lo DESPACHADO
+// en el rango) sigue viva únicamente para la tarjeta/tabla "Todos" SIN búsqueda -- ver
+// 'filtrados' y 'atrasadosDetalleFiltrados' más abajo -- porque esa vista responde una pregunta
+// distinta a propósito ("¿cuánto se despachó en este rango?", no "¿qué se gestionó?"). Luis
+// reporto originalmente el mismo problema mirando 'Todos'/una quincena cerrada: un envio
+// despachado en agosto podia mostrar 'Retorno' (su estado de HOY) aunque ese retorno se haya
+// gestionado recien en septiembre, DESPUES de que la quincena de agosto ya habia cerrado.
+// calcularEstadoEfectivo (index.html) detecta solo los envios con algun evento de historial
+// POSTERIOR al cierre (el "drift", se espera chico) y unicamente para esos recalcula cual era
+// su estado real al cierre -- el resto conserva su estado en vivo tal cual (ya es correcto,
+// porque nada cambio despues del cierre).
 const _uEnvPerEfec=useState([]),enviosPeriodoEfectivo=_uEnvPerEfec[0],setEnviosPeriodoEfectivo=_uEnvPerEfec[1];
 // Guard contra ejecuciones superpuestas: 'envios' se actualiza en tiempo real (ver "TIEMPO
 // REAL" en el header), así que enviosPeriodo puede recalcularse (nueva referencia) mientras
@@ -819,9 +866,10 @@ const clientesUnicos=[...new Set(envios.map(e=>e.cliente).filter(Boolean))].sort
 // superset de ambas, no solo lo que calza por fecha de despacho.
 const todosPeriodoReal=useMemo(()=>{
   const vistos=new Set();const out=[];
-  [...enviosPeriodoEfectivo,...entregadosPeriodoReal,...retornadosPeriodoReal].forEach(e=>{if(!vistos.has(e.codigo)){vistos.add(e.codigo);out.push(e);}});
+  const otrosFlat=ESTADOS_OTROS_REAL.reduce(function(acc,est){return acc.concat(otrosPeriodoReal[est]||[]);},[]);
+  [...otrosFlat,...entregadosPeriodoReal,...retornadosPeriodoReal].forEach(e=>{if(!vistos.has(e.codigo)){vistos.add(e.codigo);out.push(e);}});
   return out;
-},[enviosPeriodoEfectivo,entregadosPeriodoReal,retornadosPeriodoReal]);
+},[otrosPeriodoReal,entregadosPeriodoReal,retornadosPeriodoReal]);
 const filtrados=useMemo(()=>{const q=search.trim().toLowerCase();
   // El bucket 'Entregado' se arma con la fecha REAL de entrega (ver entregadosPeriodoReal mas
   // arriba), no filtrando enviosPeriodo (que esta acotado por fecha de despacho) -- por eso usa
@@ -836,13 +884,16 @@ const filtrados=useMemo(()=>{const q=search.trim().toLowerCase();
   // reportado por el equipo: 189 despachados hoy pero 218 mostrados en 'Todos'+'Hoy').
   // Vista 'actual': todo sale de enviosPeriodo (despachados en el rango) mirando el estado EN
   // VIVO de cada uno (e.estado) -- Entregado/Retorno dejan de tener lista propia por fecha real,
-  // se tratan como cualquier otro estado. Vista 'cierre': se mantiene tal cual funcionaba antes.
-  const baseLista=vistaEstado==='actual'?enviosPeriodo:(filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?(q?todosPeriodoReal:enviosPeriodoEfectivo):enviosPeriodoEfectivo);
+  // se tratan como cualquier otro estado. Vista 'cierre': un estado puntual (ni Entregado/Retorno
+  // ni 'Todos') usa 'otrosPeriodoReal[filtroEst]' -- mismo criterio de "fecha real" que
+  // Entregado/Retorno, ver comentario junto a su declaración. 'Todos' SIN búsqueda sigue usando
+  // 'enviosPeriodoEfectivo' (despachado en el rango) a propósito -- ver comentario ahí.
+  const baseLista=vistaEstado==='actual'?enviosPeriodo:(filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?(q?todosPeriodoReal:enviosPeriodoEfectivo):(otrosPeriodoReal[filtroEst]||[]));
   return baseLista.filter(e=>{const qTerms=q.split(/[\n,;\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
       const esMultiple=qTerms.length>1;
       const matchQ=!q||(esMultiple
         ?qTerms.some(t=>e.codigo.toLowerCase()===t||e.codigo.toLowerCase().includes(t))
-        :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e._estadoEfectivo||e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));const matchEst=filtroEst==='todos'?true:(vistaEstado==='actual'?e.estado===filtroEst:(filtroEst==='entregado'||filtroEst==='retorno'||(e._estadoEfectivo||e.estado)===filtroEst));const matchCli=filtroCli==='todos'||e.cliente===filtroCli;const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;const matchAtraso=filtroAtrasoModo==='off'?true:filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoRepetido(e):(esEnvioAtrasado(e)||esReprogramadoRepetido(e));return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente&&matchAtraso;});},[envios,entregadosPeriodoReal,retornadosPeriodoReal,todosPeriodoReal,enviosPeriodoEfectivo,enviosPeriodo,vistaEstado,search,filtroEst,filtroCli,filtroMen,filtroFuente,filtroAtrasoModo,reprogCount]);
+        :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e._estadoEfectivo||e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));const matchEst=filtroEst==='todos'?true:(vistaEstado==='actual'?e.estado===filtroEst:(filtroEst==='entregado'||filtroEst==='retorno'||(e._estadoEfectivo||e.estado)===filtroEst));const matchCli=filtroCli==='todos'||e.cliente===filtroCli;const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;const matchAtraso=filtroAtrasoModo==='off'?true:filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoRepetido(e):(esEnvioAtrasado(e)||esReprogramadoRepetido(e));return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente&&matchAtraso;});},[envios,entregadosPeriodoReal,retornadosPeriodoReal,todosPeriodoReal,enviosPeriodoEfectivo,otrosPeriodoReal,enviosPeriodo,vistaEstado,search,filtroEst,filtroCli,filtroMen,filtroFuente,filtroAtrasoModo,reprogCount]);
 // Cantidad de envíos atrasados en el período actual (antes del filtro de "solo atrasados"),
 // para mostrar el contador en el botón de filtro sin que el usuario tenga que activarlo primero.
 const atrasadosCount=useMemo(()=>enviosPeriodo.filter(esEnvioAtrasado).length,[enviosPeriodo]);
@@ -865,7 +916,7 @@ const filtradosOrdenados=useMemo(()=>{if(!sortCol)return filtrados;const copia=f
 // principal, y este modal ahora debe mostrar también los reprogramados de una sola vez.
 const atrasadosDetalleFiltrados=useMemo(()=>{
   const q=search.trim().toLowerCase();
-  const baseLista=vistaEstado==='actual'?enviosPeriodo:(filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:enviosPeriodoEfectivo);
+  const baseLista=vistaEstado==='actual'?enviosPeriodo:(filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?enviosPeriodoEfectivo:(otrosPeriodoReal[filtroEst]||[]));
   return baseLista.filter(e=>{
     const qTerms=q.split(/[\n,;\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
     const esMultiple=qTerms.length>1;
@@ -878,7 +929,7 @@ const atrasadosDetalleFiltrados=useMemo(()=>{
     const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;
     return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente;
   });
-},[enviosPeriodo,entregadosPeriodoReal,retornadosPeriodoReal,enviosPeriodoEfectivo,vistaEstado,filtroEst,search,filtroCli,filtroMen,filtroFuente]);
+},[enviosPeriodo,entregadosPeriodoReal,retornadosPeriodoReal,enviosPeriodoEfectivo,otrosPeriodoReal,vistaEstado,filtroEst,search,filtroCli,filtroMen,filtroFuente]);
 const atrasadosDetalleBase=useMemo(()=>atrasadosDetalleFiltrados.filter(e=>filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoAlMenos1Vez(e):(esEnvioAtrasado(e)||esReprogramadoAlMenos1Vez(e))),[atrasadosDetalleFiltrados,filtroAtrasoModo,reprogCount]);
 // Conteos de las pestañas del modal (Todos/Atrasados en ruta/Reprogramados) -- a diferencia de
 // atrasadosCount/reprogramadosRepetidosCount (que solo miran el período, para el botón/dropdown
@@ -895,8 +946,8 @@ const totalPags=Math.max(1,Math.ceil(filtradosOrdenados.length/PAGE_SIZE));const
   // igual que cualquier otro estado, en vivo, sobre los mismos códigos despachados en el rango.
   ESTADOS_ENVIO.forEach(est=>{s[est.val]=enviosPeriodo.filter(e=>e.estado===est.val).length;});
 }else{
-  ESTADOS_ENVIO.forEach(est=>{s[est.val]=est.val==='entregado'?entregadosPeriodoReal.length:est.val==='retorno'?retornadosPeriodoReal.length:enviosPeriodoEfectivo.filter(e=>(e._estadoEfectivo||e.estado)===est.val).length;});
-}return s;},[vistaEstado,enviosPeriodo,enviosPeriodoEfectivo,entregadosPeriodoReal,retornadosPeriodoReal]);function toggleSelect(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function toggleAll(){const todosIds=new Set(filtrados.map(e=>e.id));if(selected.size===filtrados.length&&filtrados.every(e=>selected.has(e.id)))setSelected(new Set());else setSelected(todosIds);}async function imprimirEtiquetasSeleccionadas(){
+  ESTADOS_ENVIO.forEach(est=>{s[est.val]=est.val==='entregado'?entregadosPeriodoReal.length:est.val==='retorno'?retornadosPeriodoReal.length:(otrosPeriodoReal[est.val]||[]).length;});
+}return s;},[vistaEstado,enviosPeriodo,otrosPeriodoReal,entregadosPeriodoReal,retornadosPeriodoReal]);function toggleSelect(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function toggleAll(){const todosIds=new Set(filtrados.map(e=>e.id));if(selected.size===filtrados.length&&filtrados.every(e=>selected.has(e.id)))setSelected(new Set());else setSelected(todosIds);}async function imprimirEtiquetasSeleccionadas(){
   const seleccionados=envios.filter(e=>selected.has(e.id));
   if(seleccionados.length===0)return;
   toast('Buscando etiquetas...');
@@ -1143,8 +1194,8 @@ showListaNegra&&(()=>{const lista=lsLoad('envios_eliminados',[]);return/*#__PURE
 ),
 /*#__PURE__*/React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',marginBottom:14,flexWrap:'wrap'}},
   /*#__PURE__*/React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:2,color:'var(--text-soft)',marginRight:4}},'VISTA:'),
-  [{val:'cierre',label:'Estado al cierre del período',title:'Para cada código despachado en el período, muestra el estado que tenía justo al CERRAR ese período (Entregado/Retorno según su fecha real de evento). Si después cambió de estado, no se refleja acá.'},
-   {val:'actual',label:'Estado actual (en vivo)',title:'Para los mismos códigos despachados en el período, muestra el estado en el que están AHORA MISMO, sin importar cuándo cambiaron.'}
+  [{val:'cierre',label:'Gestionado en el período',title:'Para cada estado (Entregado, Retorno, Reprogramado, Cancelado, etc.), muestra los códigos cuyo ÚLTIMO movimiento a ese estado ocurrió DENTRO de las fechas elegidas -- sin importar cuándo se despachó el envío. Es la vista para cruzar información con un reporte externo (ej. el Drive de un cliente) o para saber "qué se gestionó en este rango".'},
+   {val:'actual',label:'Estado actual (en vivo)',title:'Solo para los envíos DESPACHADOS dentro del rango elegido, muestra el estado en el que están AHORA MISMO. Un envío despachado ANTES del rango, aunque se haya gestionado dentro de él, no aparece acá -- para eso usa "Gestionado en el período".'}
   ].map(function(v){return/*#__PURE__*/React.createElement('button',{key:v.val,title:v.title,onClick:function(){setVistaEstado(v.val);setPage(1);},style:{padding:'6px 16px',borderRadius:20,border:'1px solid '+(vistaEstado===v.val?'var(--gold)':'var(--border)'),background:vistaEstado===v.val?'rgba(200,168,75,0.12)':'#fff',color:vistaEstado===v.val?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer',transition:'all 0.15s'}},v.label);})
 ),
 sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'20px',color:'var(--text-soft)',fontSize:13,marginBottom:20}},'⏳ Sincronizando historial completo desde la nube...'):
