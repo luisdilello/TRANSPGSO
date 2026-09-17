@@ -14654,6 +14654,45 @@ function MapaRutas(props){
     return'#'+h2(r)+h2(g)+h2(b);
   }
 
+  // ── Cumplimiento de zona — sub-sección nueva, de solo lectura ──────────
+  // No toca asig/zonas/RUTAS/TRACKING: solo lee lo que ya existe (ubicaciones
+  // GPS en vivo + asignación de comunas ya guardada, que ahora es un ARRAY de
+  // mensajero_id por comuna) y calcula si cada mensajero está hoy dentro de
+  // alguna de las comunas que le corresponden.
+  function cz_pointInRing(lon,lat,ring){
+    var inside=false;
+    for(var i=0,j=ring.length-1;i<ring.length;j=i++){
+      var xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
+      var intersect=((yi>lat)!==(yj>lat))&&(lon<(xj-xi)*(lat-yi)/(yj-yi)+xi);
+      if(intersect) inside=!inside;
+    }
+    return inside;
+  }
+  function cz_comunaEnPunto(lon,lat){
+    for(var k=0;k<RM_GJ.features.length;k++){
+      var f=RM_GJ.features[k];
+      if(cz_pointInRing(lon,lat,f.geometry.coordinates[0])) return f.properties.nombre;
+    }
+    return null;
+  }
+  function cz_comunasAsignadas(mensajeroId){
+    var out=[];
+    Object.keys(asig).forEach(function(nombreComuna){
+      var ids=(asig[nombreComuna]||[]).map(String);
+      if(ids.includes(String(mensajeroId))) out.push(nombreComuna);
+    });
+    return out;
+  }
+  function cz_estadoDe(m){
+    var asignadas=cz_comunasAsignadas(m.id);
+    if(asignadas.length===0) return {estado:'sin_asignar',asignadas:asignadas};
+    var u=ubicaciones.find(function(x){return x.mensajero===m.nombre;});
+    if(!u) return {estado:'sin_gps',asignadas:asignadas};
+    var comunaActual=cz_comunaEnPunto(parseFloat(u.lng),parseFloat(u.lat));
+    var enZona=!!comunaActual&&asignadas.indexOf(comunaActual)!==-1;
+    return {estado:enZona?'en_zona':'fuera_zona',comunaActual:comunaActual,asignadas:asignadas,u:u};
+  }
+
   function getStyle(nombre){
     var esNC=NC_M.includes(nombre);
     var mIds=asigRef.current[nombre]||[];
@@ -14878,14 +14917,19 @@ function MapaRutas(props){
   var activoM=mensajeros.find(function(m){return m.id===activoId;});
   var totalAsig=Object.keys(asig).length;
   var fichaModalEnvio=fichaModalCodigo?envios.find(function(e){return e.codigo===fichaModalCodigo;}):null;
+  var czConAsignacion=mensajeros.filter(function(m){return m.activo!==false&&cz_comunasAsignadas(m.id).length>0;});
+  var czFueraDeZona=czConAsignacion.filter(function(m){return cz_estadoDe(m).estado==='fuera_zona';}).length;
 
   return React.createElement('div',{style:{display:'flex',flexDirection:'column',height:'calc(100vh - 110px)',minHeight:500}},
-  // Tabs Rutas / Tracking
+  // Tabs Rutas / Tracking / Cumplimiento
   React.createElement('div',{style:{display:'flex',gap:6,padding:'10px 16px',background:'linear-gradient(135deg,#2b2e20,#1a1d13)',borderBottom:'2px solid rgba(200,168,75,0.3)',flexShrink:0,boxShadow:'0 2px 8px rgba(0,0,0,0.3)'}},
     React.createElement('button',{onClick:function(){setMapaTab('rutas');},style:{padding:'8px 20px',borderRadius:8,border:'1px solid '+(mapaTab==='rutas'?'var(--gold)':'rgba(255,255,255,0.08)'),background:mapaTab==='rutas'?'linear-gradient(145deg,#d4b050,#C8A84B,#a87d2a)':'rgba(255,255,255,0.04)',color:mapaTab==='rutas'?'#1a1d13':'rgba(255,255,255,0.4)',fontWeight:700,cursor:'pointer',fontSize:11,letterSpacing:1.5,fontFamily:'Bebas Neue',boxShadow:mapaTab==='rutas'?'3px 3px 8px rgba(200,168,75,0.3)':'none',transition:'all 0.2s'}},'RUTAS'),
     React.createElement('button',{onClick:function(){setMapaTab('tracking');},style:{padding:'8px 20px',borderRadius:8,border:'1px solid '+(mapaTab==='tracking'?'#2e7d4f':'rgba(255,255,255,0.08)'),background:mapaTab==='tracking'?'linear-gradient(145deg,#359960,#2e7d4f)':'rgba(255,255,255,0.04)',color:mapaTab==='tracking'?'#fff':'rgba(255,255,255,0.4)',fontWeight:700,cursor:'pointer',fontSize:11,letterSpacing:1.5,fontFamily:'Bebas Neue',display:'flex',alignItems:'center',gap:6,boxShadow:mapaTab==='tracking'?'3px 3px 8px rgba(46,125,79,0.3)':'none',transition:'all 0.2s'}},
       React.createElement('span',{style:{display:'inline-block',width:8,height:8,borderRadius:'50%',background:ubicaciones.length>0?'#4caf84':'rgba(255,255,255,0.3)',boxShadow:ubicaciones.length>0?'0 0 6px #4caf84':'none',animation:ubicaciones.length>0?'pulse 2s infinite':'none'}}),
-      'TRACKING ('+ubicaciones.length+')')
+      'TRACKING ('+ubicaciones.length+')'),
+    React.createElement('button',{onClick:function(){setMapaTab('cumplimiento');},style:{padding:'8px 20px',borderRadius:8,border:'1px solid '+(mapaTab==='cumplimiento'?(czFueraDeZona>0?'#e57373':'#1a6b8a'):'rgba(255,255,255,0.08)'),background:mapaTab==='cumplimiento'?(czFueraDeZona>0?'linear-gradient(145deg,#d9756f,#b03030)':'linear-gradient(145deg,#2a8bb0,#1a6b8a)'):'rgba(255,255,255,0.04)',color:mapaTab==='cumplimiento'?'#fff':'rgba(255,255,255,0.4)',fontWeight:700,cursor:'pointer',fontSize:11,letterSpacing:1.5,fontFamily:'Bebas Neue',display:'flex',alignItems:'center',gap:6,boxShadow:mapaTab==='cumplimiento'?'3px 3px 8px rgba(0,0,0,0.3)':'none',transition:'all 0.2s'}},
+      czFueraDeZona>0&&React.createElement('span',{style:{display:'inline-block',width:8,height:8,borderRadius:'50%',background:'#e57373',boxShadow:'0 0 6px #e57373',animation:'pulse 2s infinite'}}),
+      'CUMPLIMIENTO'+(czFueraDeZona>0?' ('+czFueraDeZona+')':''))
   ),
   React.createElement('div',{style:{flex:1,overflow:'auto',background:'#1a1d13',padding:16,display:mapaTab==='tracking'?'block':'none'}},
     ubicaciones.length===0
@@ -14917,6 +14961,36 @@ function MapaRutas(props){
           );
         })
       )
+  ),
+  // ── Panel Cumplimiento de zona (sub-sección nueva, solo lectura) ────────
+  React.createElement('div',{style:{flex:1,overflow:'auto',background:'#1a1d13',padding:16,display:mapaTab==='cumplimiento'?'block':'none'}},
+    React.createElement('div',{style:{fontSize:11,lineHeight:1.6,color:'rgba(255,255,255,0.35)',marginBottom:14,padding:'10px 12px',background:'rgba(200,168,75,0.06)',border:'1px dashed rgba(200,168,75,0.25)',borderRadius:10}},
+      '¿Está cada mensajero en alguna de las comunas que le tocan hoy? Verde = dentro de su zona asignada · Rojo = fuera de ella · Gris = sin GPS activo o sin comuna asignada todavía. Se calcula con la asignación de RUTAS y el GPS de TRACKING — no agrega datos nuevos.'
+    ),
+    czConAsignacion.length===0
+      ?React.createElement('div',{style:{textAlign:'center',color:'rgba(255,255,255,0.3)',marginTop:40,fontSize:14}},'Nadie tiene comunas asignadas todavía en la pestaña RUTAS.')
+      :(function(){
+        var filas=czConAsignacion.map(function(m){return {m:m,info:cz_estadoDe(m)};});
+        filas.sort(function(a,b){
+          var rank=function(x){return x.info.estado==='fuera_zona'?0:x.info.estado==='en_zona'?1:x.info.estado==='sin_gps'?2:3;};
+          return rank(a)-rank(b)||a.m.nombre.localeCompare(b.m.nombre,'es');
+        });
+        return React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8}},
+          filas.map(function(row){
+            var color=row.info.estado==='en_zona'?'#4caf84':row.info.estado==='fuera_zona'?'#e57373':'rgba(255,255,255,0.25)';
+            var subtext=row.info.estado==='en_zona'?('En su zona · '+row.info.comunaActual)
+              :row.info.estado==='fuera_zona'?('Fuera de zona · detectado en '+(row.info.comunaActual||'fuera de la cobertura')+' · debía estar en '+row.info.asignadas.join(', '))
+              :('Sin GPS activo hoy · debía estar en '+row.info.asignadas.join(', '));
+            return React.createElement('div',{key:row.m.id,style:{background:'linear-gradient(145deg,#252820,#1e2118)',border:'1px solid rgba(200,168,75,0.15)',borderRadius:12,padding:'14px 16px',display:'flex',alignItems:'center',gap:12,boxShadow:'3px 3px 8px rgba(0,0,0,0.3),-1px -1px 4px rgba(255,255,255,0.03)'}},
+              React.createElement('span',{style:{width:14,height:14,borderRadius:'50%',background:color,flexShrink:0,boxShadow:row.info.estado==='fuera_zona'?('0 0 10px '+color):'none',animation:row.info.estado==='fuera_zona'?'pulse 1.4s infinite':'none'}}),
+              React.createElement('div',{style:{flex:1}},
+                React.createElement('div',{style:{fontWeight:700,color:'#fff',fontSize:13}},row.m.nombre),
+                React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.45)',marginTop:2}},subtext)
+              )
+            );
+          })
+        );
+      })()
   ),
   React.createElement('div',{style:{display:'flex',flexDirection:'column',flex:1,overflow:'hidden',visibility:mapaTab==='rutas'?'visible':'hidden',position:mapaTab==='rutas'?'relative':'absolute',pointerEvents:mapaTab==='rutas'?'auto':'none'}},
     // Barra de filtros de pins
