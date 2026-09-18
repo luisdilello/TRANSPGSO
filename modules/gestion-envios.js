@@ -138,7 +138,12 @@ function aplicarConfirmCambio(){
   if(c&&typeof c.ejecutar==='function') c.ejecutar();
 }
 function cancelarConfirmCambio(){
+  // Antes esto quedaba mudo -- si un operador tocaba fuera del cuadro sin querer (muy fácil
+  // trabajando rápido, fila tras fila) el cambio se cancelaba sin ningún aviso: la fila se
+  // quedaba igual que antes y parecía que el sistema "no hizo caso", así que volvían a
+  // intentarlo varias veces. Ahora siempre se avisa qué pasó.
   setConfirmCambio(null);
+  toast('✕ Cambio cancelado — no se modificó nada');
 }
 // 'Retorno' solo lo puede colocar un admin o super admin (a pedido de Luis: hasta ahora el estado
 // terminal era 'Cancelado' y no habia forma de anotar/verificar el retorno fisico a bodega).
@@ -1317,7 +1322,7 @@ sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',
     }},"Confirmar cambio")
   )
 ),
-asignarModal&&/*#__PURE__*/React.createElement(Modal,{title:'Asignar '+selected.size+' envío'+(selected.size>1?'s':''),onClose:()=>setAsignarModal(false)},/*#__PURE__*/React.createElement("div",{className:"form-group"},/*#__PURE__*/React.createElement("label",{className:"form-label"},"Selecciona el mensajero"),/*#__PURE__*/React.createElement("select",{className:"form-input",value:mensajeroAsignar,onChange:e=>setMensajeroAsignar(e.target.value),autoFocus:true},/*#__PURE__*/React.createElement("option",{value:""},"Seleccionar..."),mensajerosActivos.map(m=>/*#__PURE__*/React.createElement("option",{key:m.id,value:m.nombre},m.nombre.replace(/,\s*/g,' '))))),/*#__PURE__*/React.createElement("div",{style:{padding:'10px 14px',background:'var(--gold-dim)',borderRadius:8,border:'1px solid var(--gold-border)',fontSize:12,color:'var(--text-mid)',marginBottom:16}},"Los env\xEDos pasar\xE1n autom\xE1ticamente a estado ",/*#__PURE__*/React.createElement("strong",null,"Asignado"),"."),/*#__PURE__*/React.createElement("div",{className:"modal-actions"},/*#__PURE__*/React.createElement("button",{className:"btn-secondary",onClick:()=>setAsignarModal(false)},"Cancelar"),/*#__PURE__*/React.createElement("button",{className:"btn-primary",onClick:asignarMensajero},"Asignar"))),confirmCambio&&/*#__PURE__*/React.createElement(Modal,{title:'¿Confirmas este cambio?',onClose:cancelarConfirmCambio},
+asignarModal&&/*#__PURE__*/React.createElement(Modal,{title:'Asignar '+selected.size+' envío'+(selected.size>1?'s':''),onClose:()=>setAsignarModal(false)},/*#__PURE__*/React.createElement("div",{className:"form-group"},/*#__PURE__*/React.createElement("label",{className:"form-label"},"Selecciona el mensajero"),/*#__PURE__*/React.createElement("select",{className:"form-input",value:mensajeroAsignar,onChange:e=>setMensajeroAsignar(e.target.value),autoFocus:true},/*#__PURE__*/React.createElement("option",{value:""},"Seleccionar..."),mensajerosActivos.map(m=>/*#__PURE__*/React.createElement("option",{key:m.id,value:m.nombre},m.nombre.replace(/,\s*/g,' '))))),/*#__PURE__*/React.createElement("div",{style:{padding:'10px 14px',background:'var(--gold-dim)',borderRadius:8,border:'1px solid var(--gold-border)',fontSize:12,color:'var(--text-mid)',marginBottom:16}},"Los env\xEDos pasar\xE1n autom\xE1ticamente a estado ",/*#__PURE__*/React.createElement("strong",null,"Asignado"),"."),/*#__PURE__*/React.createElement("div",{className:"modal-actions"},/*#__PURE__*/React.createElement("button",{className:"btn-secondary",onClick:()=>setAsignarModal(false)},"Cancelar"),/*#__PURE__*/React.createElement("button",{className:"btn-primary",onClick:asignarMensajero},"Asignar"))),confirmCambio&&/*#__PURE__*/React.createElement(Modal,{title:'¿Confirmas este cambio?',onClose:cancelarConfirmCambio,blockBackdropClose:true},
   React.createElement('div',{style:{padding:'4px 4px 18px'}},
     React.createElement('div',{style:{fontSize:11,color:'var(--text-mid)',marginBottom:10,fontWeight:700,textTransform:'uppercase',letterSpacing:1.5}},confirmCambio.campoLabel),
     React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',fontSize:15}},
@@ -1328,7 +1333,7 @@ asignarModal&&/*#__PURE__*/React.createElement(Modal,{title:'Asignar '+selected.
   ),
   React.createElement('div',{className:'modal-actions'},
     React.createElement('button',{className:'btn-secondary',onClick:cancelarConfirmCambio},'Cancelar'),
-    React.createElement('button',{className:'btn-primary',onClick:aplicarConfirmCambio},'✓ Confirmar')
+    React.createElement('button',{className:'btn-primary',onClick:aplicarConfirmCambio,autoFocus:true},'✓ Confirmar')
   )
 ),detalleEnvio&&/*#__PURE__*/React.createElement(Modal,{title:'Envío '+detalleEnvio.codigo,onClose:()=>setDetalleEnvio(null)},
   /*#__PURE__*/detalleEnvio.fuente==='etiqueta'&&React.createElement("div",{style:{display:'flex',justifyContent:'center',marginBottom:16}},/*#__PURE__*/React.createElement(EtiquetaPreview,{envio:detalleEnvio,logoSrc:(document.querySelector('.logo-img')||{}).src||''})),
