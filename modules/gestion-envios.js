@@ -397,7 +397,7 @@ useEffect(()=>{
     setDetalleEnvio(match);
     if(onCodigoInicialConsumido)onCodigoInicialConsumido();
   }
-},[codigoInicial,envios,filtrados]);
+},[codigoInicial,envios]);
 const _useSiniDet=useState([]),siniestroDetalle=_useSiniDet[0],setSiniestroDetalle=_useSiniDet[1];
 // Ficha del envío en Gestión de Envíos: antes mostraba los campos en tarjetas de solo lectura
 // arriba y, más abajo, un panel aparte 'Editar Campos del Envío' que repetía Código/Dirección/Comuna
