@@ -20,6 +20,21 @@ useEffect(function(){lsSave('ge_vista_estado',vistaEstado);},[vistaEstado]);
 // vistaEstado==='fusion' (en 'cierre'/'actual' sigue igual que siempre, sin este selector).
 const _useCriterioFusion=useState('recibido'),criterioFusion=_useCriterioFusion[0],setCriterioFusion=_useCriterioFusion[1];
 const usaRecibido=vistaEstado==='actual'||(vistaEstado==='fusion'&&criterioFusion==='recibido');
+// FIX 2026-09-22 (Retorno/Entregado no deben moverse con el selector Recibido/Resuelto): Luis
+// detectó que al elegir "Recibido" en la vista fusion, la tarjeta Retorno exportaba 16 en vez de
+// 25 -- porque el selector estaba aplicando el criterio "recibido" (fecha de despacho, estado EN
+// VIVO) también a Retorno y Entregado, cuando estos dos SIEMPRE se cuentan por su fecha REAL de
+// evento (ver comentario arriba de vistaEstado, y los fixes historicos "Retorno usa fecha real de
+// gestion, no fecha de despacho" / Entregado con fecha real de entrega -- así funcionó siempre en
+// 'cierre' y así se muestra en el badge superior "retorno resuelto en el período", que nunca
+// cambia con este selector). Un envío despachado el 29-08 pero retornado el 05-09 (dentro del
+// rango elegido) SIEMPRE debe contar como retorno de este período, se elija "Recibido" o
+// "Resuelto" -- si no, se pierde exactamente ese tipo de caso, que es el más importante para
+// Retorno. Por eso el selector de la vista fusion ahora solo afecta 'Todos' y el resto de los
+// estados (Reprogramado, Cancelado, Siniestro, En Bodega, En Ruta) -- Entregado y Retorno
+// mantienen siempre su criterio de fecha real, igual que en 'cierre'. La vista 'actual' (estado
+// en vivo) no se toca -- sigue exactamente igual que antes.
+const usaRecibidoEfectivo=(vistaEstado==='fusion'&&(filtroEst==='entregado'||filtroEst==='retorno'))?false:usaRecibido;
 // Antes "⚠ Atrasados" era un simple interruptor on/off que solo miraba envíos 'en_ruta' con
 // UMBRAL_ATRASO_DIAS+ días sin entregar. Luis pidió que también se puedan ver ahí los envíos que
 // llevan 2 o más veces en estado Reprogramado (sin importar hace cuántos días fue la última
@@ -926,12 +941,12 @@ const filtrados=useMemo(()=>{const q=search.trim().toLowerCase();
   // ni 'Todos') usa 'otrosPeriodoReal[filtroEst]' -- mismo criterio de "fecha real" que
   // Entregado/Retorno, ver comentario junto a su declaración. 'Todos' SIN búsqueda sigue usando
   // 'enviosPeriodoEfectivo' (despachado en el rango) a propósito -- ver comentario ahí.
-  const baseLista=usaRecibido?enviosPeriodo:(filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?todosPeriodoReal:(otrosPeriodoReal[filtroEst]||[]));
+  const baseLista=usaRecibidoEfectivo?enviosPeriodo:(filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?todosPeriodoReal:(otrosPeriodoReal[filtroEst]||[]));
   return baseLista.filter(e=>{const qTerms=q.split(/[\n,;\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
       const esMultiple=qTerms.length>1;
       const matchQ=!q||(esMultiple
         ?qTerms.some(t=>e.codigo.toLowerCase()===t||e.codigo.toLowerCase().includes(t))
-        :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e._estadoEfectivo||e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));const matchEst=filtroEst==='todos'?true:(usaRecibido?e.estado===filtroEst:(filtroEst==='entregado'||filtroEst==='retorno'||(e._estadoEfectivo||e.estado)===filtroEst));const matchCli=filtroCli==='todos'||e.cliente===filtroCli;const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;const matchAtraso=filtroAtrasoModo==='off'?true:filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoRepetido(e):(esEnvioAtrasado(e)||esReprogramadoRepetido(e));return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente&&matchAtraso;});},[envios,entregadosPeriodoReal,retornadosPeriodoReal,todosPeriodoReal,enviosPeriodoEfectivo,otrosPeriodoReal,enviosPeriodo,vistaEstado,criterioFusion,usaRecibido,search,filtroEst,filtroCli,filtroMen,filtroFuente,filtroAtrasoModo,reprogCount]);
+        :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e._estadoEfectivo||e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));const matchEst=filtroEst==='todos'?true:(usaRecibidoEfectivo?e.estado===filtroEst:(filtroEst==='entregado'||filtroEst==='retorno'||(e._estadoEfectivo||e.estado)===filtroEst));const matchCli=filtroCli==='todos'||e.cliente===filtroCli;const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;const matchAtraso=filtroAtrasoModo==='off'?true:filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoRepetido(e):(esEnvioAtrasado(e)||esReprogramadoRepetido(e));return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente&&matchAtraso;});},[envios,entregadosPeriodoReal,retornadosPeriodoReal,todosPeriodoReal,enviosPeriodoEfectivo,otrosPeriodoReal,enviosPeriodo,vistaEstado,criterioFusion,usaRecibido,usaRecibidoEfectivo,filtroEst,search,filtroCli,filtroMen,filtroFuente,filtroAtrasoModo,reprogCount]);
 // Cantidad de envíos atrasados en el período actual (antes del filtro de "solo atrasados"),
 // para mostrar el contador en el botón de filtro sin que el usuario tenga que activarlo primero.
 const atrasadosCount=useMemo(()=>enviosPeriodo.filter(esEnvioAtrasado).length,[enviosPeriodo]);
@@ -954,20 +969,20 @@ const filtradosOrdenados=useMemo(()=>{if(!sortCol)return filtrados;const copia=f
 // principal, y este modal ahora debe mostrar también los reprogramados de una sola vez.
 const atrasadosDetalleFiltrados=useMemo(()=>{
   const q=search.trim().toLowerCase();
-  const baseLista=usaRecibido?enviosPeriodo:(filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?todosPeriodoReal:(otrosPeriodoReal[filtroEst]||[]));
+  const baseLista=usaRecibidoEfectivo?enviosPeriodo:(filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?todosPeriodoReal:(otrosPeriodoReal[filtroEst]||[]));
   return baseLista.filter(e=>{
     const qTerms=q.split(/[\n,;\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
     const esMultiple=qTerms.length>1;
     const matchQ=!q||(esMultiple
       ?qTerms.some(t=>e.codigo.toLowerCase()===t||e.codigo.toLowerCase().includes(t))
       :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e._estadoEfectivo||e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));
-    const matchEst=filtroEst==='todos'?true:(usaRecibido?e.estado===filtroEst:(filtroEst==='entregado'||filtroEst==='retorno'||(e._estadoEfectivo||e.estado)===filtroEst));
+    const matchEst=filtroEst==='todos'?true:(usaRecibidoEfectivo?e.estado===filtroEst:(filtroEst==='entregado'||filtroEst==='retorno'||(e._estadoEfectivo||e.estado)===filtroEst));
     const matchCli=filtroCli==='todos'||e.cliente===filtroCli;
     const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;
     const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;
     return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente;
   });
-},[enviosPeriodo,entregadosPeriodoReal,retornadosPeriodoReal,todosPeriodoReal,enviosPeriodoEfectivo,otrosPeriodoReal,vistaEstado,criterioFusion,usaRecibido,filtroEst,search,filtroCli,filtroMen,filtroFuente]);
+},[enviosPeriodo,entregadosPeriodoReal,retornadosPeriodoReal,todosPeriodoReal,enviosPeriodoEfectivo,otrosPeriodoReal,vistaEstado,criterioFusion,usaRecibido,usaRecibidoEfectivo,filtroEst,search,filtroCli,filtroMen,filtroFuente]);
 const atrasadosDetalleBase=useMemo(()=>atrasadosDetalleFiltrados.filter(e=>filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoAlMenos1Vez(e):(esEnvioAtrasado(e)||esReprogramadoAlMenos1Vez(e))),[atrasadosDetalleFiltrados,filtroAtrasoModo,reprogCount]);
 // Conteos de las pestañas del modal (Todos/Atrasados en ruta/Reprogramados) -- a diferencia de
 // atrasadosCount/reprogramadosRepetidosCount (que solo miran el período, para el botón/dropdown
@@ -1298,8 +1313,8 @@ showListaNegra&&(()=>{const lista=lsLoad('envios_eliminados',[]);return/*#__PURE
   // y decide cuál de los dos arma la tabla/export. Por defecto queda en 'recibido'.
   vistaEstado==='fusion'&&/*#__PURE__*/React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,marginLeft:8,paddingLeft:12,borderLeft:'1px solid var(--border)'}},
     /*#__PURE__*/React.createElement('span',{style:{fontFamily:'Bebas Neue',fontSize:11,letterSpacing:1,color:'var(--text-soft)'}},'TABLA/EXPORT:'),
-    [{val:'recibido',label:'Recibido',title:'La tabla y el export de abajo usan el criterio "recibido" (despachado en el rango elegido) -- el mismo número que muestra la mitad izquierda de cada tarjeta.'},
-     {val:'resuelto',label:'Resuelto',title:'La tabla y el export de abajo usan el criterio "resuelto" (fecha real del último movimiento dentro del rango elegido) -- el mismo número que muestra la mitad derecha de cada tarjeta.'}]
+    [{val:'recibido',label:'Recibido',title:'Para "Todos" y el resto de los estados (Reprogramado, Cancelado, Siniestro, En Bodega, En Ruta), la tabla y el export usan el criterio "recibido" (despachado en el rango elegido). Entregado y Retorno NO cambian con este selector -- siempre usan su fecha real de evento (25 retornos, no 16), igual que el badge de arriba, porque un envío despachado antes del rango pero resuelto dentro de él debe contar igual.'},
+     {val:'resuelto',label:'Resuelto',title:'Para "Todos" y el resto de los estados, la tabla y el export usan el criterio "resuelto" (fecha real del último movimiento dentro del rango elegido). Entregado y Retorno no cambian con este selector -- ya usan siempre ese criterio.'}]
     .map(function(c){return/*#__PURE__*/React.createElement('button',{key:c.val,title:c.title,onClick:function(){setCriterioFusion(c.val);setPage(1);},style:{padding:'5px 14px',borderRadius:20,border:'1px solid '+(criterioFusion===c.val?'var(--gold)':'var(--border)'),background:criterioFusion===c.val?'rgba(200,168,75,0.12)':'#fff',color:criterioFusion===c.val?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:11,cursor:'pointer',transition:'all 0.15s'}},c.label);})
   )
 ),
