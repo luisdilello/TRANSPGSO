@@ -993,12 +993,26 @@ const mensajeroOptionsShared=useMemo(()=>mensajerosActivos.map(m=>React.createEl
 // red: enviosPeriodo/entregadosPeriodoReal/retornadosPeriodoReal ya se cargaban siempre, y
 // otrosPeriodoReal ya se cargaba en cualquier vista que no fuera 'actual' (ver el guard en
 // cargarOtrosPeriodoReal más arriba, que sigue sirviendo tal cual para la nueva vista 'fusion').
-const statsRecibido=useMemo(()=>{const s={};ESTADOS_ENVIO.forEach(est=>{s[est.val]=enviosPeriodo.filter(e=>e.estado===est.val).length;});return s;},[enviosPeriodo]);
-const statsResuelto=useMemo(()=>{const s={};ESTADOS_ENVIO.forEach(est=>{s[est.val]=est.val==='entregado'?entregadosPeriodoReal.length:est.val==='retorno'?retornadosPeriodoReal.length:(otrosPeriodoReal[est.val]||[]).length;});return s;},[otrosPeriodoReal,entregadosPeriodoReal,retornadosPeriodoReal]);
-// 'stats' se mantiene tal cual para las vistas 'actual'/'cierre' (mismo comportamiento de
-// siempre) -- la vista nueva 'fusion' no usa esta variable, lee statsRecibido/statsResuelto
-// directo (ver la grilla de tarjetas más abajo).
-const stats=vistaEstado==='actual'?statsRecibido:statsResuelto;function toggleSelect(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function toggleAll(){const todosIds=new Set(filtrados.map(e=>e.id));if(selected.size===filtrados.length&&filtrados.every(e=>selected.has(e.id)))setSelected(new Set());else setSelected(todosIds);}async function imprimirEtiquetasSeleccionadas(){
+// FIX 2026-09-22 (tarjetas no respetaban Cliente/Mensajero/Tipo): Luis armó su propio Excel de
+// SUPER XIYU (pivot por Fecha Recepción) y le dio 3.151 para el 01-15/09 -- pero con el filtro
+// CLIENTE en "SUPER XIYU" el panel seguía mostrando 13.953 en la tarjeta Todos, el mismo número
+// que con "Todos los clientes". Razón: 'stats' (y ahora 'statsRecibido'/'statsResuelto') SIEMPRE
+// contaron sobre TODA la empresa -- el filtro de Cliente/Mensajero/Tipo (filtroCli/filtroMen/
+// filtroFuente) solo se aplicaba a la TABLA de abajo ('filtrados'), nunca a las tarjetas de
+// arriba. Esto no lo causó el cambio de hoy: ya pasaba en las dos vistas de siempre, solo que con
+// menos clientes activos en el sistema hace semanas el total de la empresa por casualidad se
+// parecía al de un solo cliente grande y no se notaba. Con más clientes activos ahora sí se nota,
+// y es justo el número que Luis necesita para cobrar por cliente -- así que las tarjetas (y los
+// dos números de arriba: recibidos/retorno resuelto) ahora respetan los mismos tres filtros que
+// ya respeta la tabla.
+function matchFiltrosTarjeta(e){return(filtroCli==='todos'||e.cliente===filtroCli)&&(filtroMen==='todos'||e.mensajero===filtroMen)&&(filtroFuente==='todos'||e.fuente===filtroFuente);}
+const enviosPeriodoTarjetas=useMemo(()=>enviosPeriodo.filter(matchFiltrosTarjeta),[enviosPeriodo,filtroCli,filtroMen,filtroFuente]);
+const entregadosPeriodoRealTarjetas=useMemo(()=>entregadosPeriodoReal.filter(matchFiltrosTarjeta),[entregadosPeriodoReal,filtroCli,filtroMen,filtroFuente]);
+const retornadosPeriodoRealTarjetas=useMemo(()=>retornadosPeriodoReal.filter(matchFiltrosTarjeta),[retornadosPeriodoReal,filtroCli,filtroMen,filtroFuente]);
+const todosPeriodoRealTarjetas=useMemo(()=>todosPeriodoReal.filter(matchFiltrosTarjeta),[todosPeriodoReal,filtroCli,filtroMen,filtroFuente]);
+const statsRecibido=useMemo(()=>{const s={};ESTADOS_ENVIO.forEach(est=>{s[est.val]=enviosPeriodoTarjetas.filter(e=>e.estado===est.val).length;});return s;},[enviosPeriodoTarjetas]);
+const statsResuelto=useMemo(()=>{const s={};ESTADOS_ENVIO.forEach(est=>{s[est.val]=est.val==='entregado'?entregadosPeriodoRealTarjetas.length:est.val==='retorno'?retornadosPeriodoRealTarjetas.length:(otrosPeriodoReal[est.val]||[]).filter(matchFiltrosTarjeta).length;});return s;},[otrosPeriodoReal,entregadosPeriodoRealTarjetas,retornadosPeriodoRealTarjetas,filtroCli,filtroMen,filtroFuente]);
+function toggleSelect(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function toggleAll(){const todosIds=new Set(filtrados.map(e=>e.id));if(selected.size===filtrados.length&&filtrados.every(e=>selected.has(e.id)))setSelected(new Set());else setSelected(todosIds);}async function imprimirEtiquetasSeleccionadas(){
   const seleccionados=resolverEnviosPorId(selected);
   if(seleccionados.length===0)return;
   toast('Buscando etiquetas...');
@@ -1243,13 +1257,13 @@ showListaNegra&&(()=>{const lista=lsLoad('envios_eliminados',[]);return/*#__PURE
     // el mismo contador de siempre, solo con la etiqueta aclarada; el segundo es nuevo.
     /*#__PURE__*/React.createElement('span',{title:'Envíos DESPACHADOS dentro del rango elegido (columna Fecha), en cualquier estado que estén ahora -- es el "recibido" de la fórmula de cobro (recibido − retorno).',style:{display:'flex',alignItems:'center',gap:8,fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1,color:'var(--dark)',background:'linear-gradient(145deg,#fff,#f5eedc)',border:'1.5px solid var(--gold)',borderRadius:12,padding:'6px 16px',boxShadow:'3px 3px 8px rgba(43,46,32,0.1)'}},
       sincronizando?/*#__PURE__*/React.createElement('span',{style:{fontSize:13,fontFamily:'DM Sans',color:'var(--text-soft)'}},'Sincronizando...'):/*#__PURE__*/React.createElement(React.Fragment,null,
-        /*#__PURE__*/React.createElement('span',{style:{color:'var(--gold)',fontSize:22}},enviosPeriodo.length.toLocaleString('es-CL')),
+        /*#__PURE__*/React.createElement('span',{style:{color:'var(--gold)',fontSize:22}},enviosPeriodoTarjetas.length.toLocaleString('es-CL')),
         /*#__PURE__*/React.createElement('span',{style:{fontSize:11,fontFamily:'DM Sans',color:'var(--text-soft)',letterSpacing:0,textTransform:'none'}},'recibidos en el período')
       )
     ),
     /*#__PURE__*/React.createElement('span',{title:'Envíos cuyo ÚLTIMO movimiento a Retorno ocurrió dentro del rango elegido, sin importar cuándo se despacharon -- mismo criterio que la vista "Resuelto en el período". Es el "retorno" de la fórmula de cobro (recibido − retorno).',style:{display:'flex',alignItems:'center',gap:8,fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1,color:'var(--dark)',background:'linear-gradient(145deg,#fff,#fbe9e9)',border:'1.5px solid #c86a6a',borderRadius:12,padding:'6px 16px',boxShadow:'3px 3px 8px rgba(43,46,32,0.1)'}},
       cargandoRetornadosReal?/*#__PURE__*/React.createElement('span',{style:{fontSize:13,fontFamily:'DM Sans',color:'var(--text-soft)'}},'Actualizando...'):/*#__PURE__*/React.createElement(React.Fragment,null,
-        /*#__PURE__*/React.createElement('span',{style:{color:'#c86a6a',fontSize:22}},retornadosPeriodoReal.length.toLocaleString('es-CL')),
+        /*#__PURE__*/React.createElement('span',{style:{color:'#c86a6a',fontSize:22}},retornadosPeriodoRealTarjetas.length.toLocaleString('es-CL')),
         /*#__PURE__*/React.createElement('span',{style:{fontSize:11,fontFamily:'DM Sans',color:'var(--text-soft)',letterSpacing:0,textTransform:'none'}},'retorno resuelto en el período')
       )
     )
@@ -1275,8 +1289,8 @@ sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',
   // NUEVO 2026-09-22 (vista 'fusion'): 'countRecibido'/'countResuelto' se calculan SIEMPRE (no
   // solo en 'fusion') para no repetir la lógica -- en las otras dos vistas solo se usa 'count'
   // (el que corresponde a esa vista), igual que antes.
-  const countRecibido=est.val==='todos'?enviosPeriodo.length:statsRecibido[est.val]||0;
-  const countResuelto=est.val==='todos'?todosPeriodoReal.length:statsResuelto[est.val]||0;
+  const countRecibido=est.val==='todos'?enviosPeriodoTarjetas.length:statsRecibido[est.val]||0;
+  const countResuelto=est.val==='todos'?todosPeriodoRealTarjetas.length:statsResuelto[est.val]||0;
   const count=vistaEstado==='actual'?countRecibido:countResuelto;
   const active=filtroEst===est.val;const accentColor=est.color||'var(--gold)';return/*#__PURE__*/React.createElement("div",{key:est.val,onClick:()=>{setFiltroEst(est.val);setPage(1);},style:{
   padding:'16px 18px',borderRadius:14,cursor:'pointer',minWidth:vistaEstado==='fusion'?150:100,textAlign:'center',
