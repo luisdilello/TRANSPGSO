@@ -984,13 +984,21 @@ const totalPags=Math.max(1,Math.ceil(filtradosOrdenados.length/PAGE_SIZE));const
 const clienteOptionsShared=useMemo(()=>clientesActivos.map(c=>React.createElement("option",{key:c.id,value:c.nombre},c.nombre)),[clientesActivos]);
 const comunaOptionsShared=useMemo(()=>COMUNAS_CHILE.map(c=>React.createElement("option",{key:c,value:c},c)),[]);
 const mensajeroOptionsShared=useMemo(()=>mensajerosActivos.map(m=>React.createElement("option",{key:m.id,value:m.nombre},m.nombre.replace(/,\s*/g,' '))),[mensajerosActivos]);
-const stats=useMemo(()=>{const s={};if(vistaEstado==='actual'){
-  // Vista 'estado actual': Entregado/Retorno YA NO usan su lista de fecha real -- se cuentan
-  // igual que cualquier otro estado, en vivo, sobre los mismos códigos despachados en el rango.
-  ESTADOS_ENVIO.forEach(est=>{s[est.val]=enviosPeriodo.filter(e=>e.estado===est.val).length;});
-}else{
-  ESTADOS_ENVIO.forEach(est=>{s[est.val]=est.val==='entregado'?entregadosPeriodoReal.length:est.val==='retorno'?retornadosPeriodoReal.length:(otrosPeriodoReal[est.val]||[]).length;});
-}return s;},[vistaEstado,enviosPeriodo,otrosPeriodoReal,entregadosPeriodoReal,retornadosPeriodoReal]);function toggleSelect(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function toggleAll(){const todosIds=new Set(filtrados.map(e=>e.id));if(selected.size===filtrados.length&&filtrados.every(e=>selected.has(e.id)))setSelected(new Set());else setSelected(todosIds);}async function imprimirEtiquetasSeleccionadas(){
+// FIX 2026-09-22 (fusión "Recibido + Resuelto"): antes esto era UN solo 'stats', calculado
+// distinto según vistaEstado ('actual' contaba en vivo sobre enviosPeriodo, 'cierre' contaba con
+// las listas de fecha real). Luis pidió una 3ra vista que muestre AMBOS números a la vez por
+// estado (recibido en el rango vs. resuelto en el rango, sin restarlos -- eso lo hace él con su
+// propia fórmula de cobro), así que ahora se calculan los dos conjuntos siempre, sin importar qué
+// vista esté activa -- ninguno de los dos depende de vistaEstado, así que no hay costo extra de
+// red: enviosPeriodo/entregadosPeriodoReal/retornadosPeriodoReal ya se cargaban siempre, y
+// otrosPeriodoReal ya se cargaba en cualquier vista que no fuera 'actual' (ver el guard en
+// cargarOtrosPeriodoReal más arriba, que sigue sirviendo tal cual para la nueva vista 'fusion').
+const statsRecibido=useMemo(()=>{const s={};ESTADOS_ENVIO.forEach(est=>{s[est.val]=enviosPeriodo.filter(e=>e.estado===est.val).length;});return s;},[enviosPeriodo]);
+const statsResuelto=useMemo(()=>{const s={};ESTADOS_ENVIO.forEach(est=>{s[est.val]=est.val==='entregado'?entregadosPeriodoReal.length:est.val==='retorno'?retornadosPeriodoReal.length:(otrosPeriodoReal[est.val]||[]).length;});return s;},[otrosPeriodoReal,entregadosPeriodoReal,retornadosPeriodoReal]);
+// 'stats' se mantiene tal cual para las vistas 'actual'/'cierre' (mismo comportamiento de
+// siempre) -- la vista nueva 'fusion' no usa esta variable, lee statsRecibido/statsResuelto
+// directo (ver la grilla de tarjetas más abajo).
+const stats=vistaEstado==='actual'?statsRecibido:statsResuelto;function toggleSelect(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))s.delete(id);else s.add(id);return s;});}function toggleAll(){const todosIds=new Set(filtrados.map(e=>e.id));if(selected.size===filtrados.length&&filtrados.every(e=>selected.has(e.id)))setSelected(new Set());else setSelected(todosIds);}async function imprimirEtiquetasSeleccionadas(){
   const seleccionados=resolverEnviosPorId(selected);
   if(seleccionados.length===0)return;
   toast('Buscando etiquetas...');
@@ -1228,29 +1236,69 @@ showListaNegra&&(()=>{const lista=lsLoad('envios_eliminados',[]);return/*#__PURE
     /*#__PURE__*/React.createElement('span',{style:{color:'var(--text-soft)',fontSize:12}},'al'),
     /*#__PURE__*/React.createElement('input',{type:'date',value:hasta,onChange:function(e){setHasta(e.target.value);setPage(1);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12,outline:'none'}})
   ),
-  /*#__PURE__*/React.createElement('span',{style:{marginLeft:'auto',display:'flex',alignItems:'center',gap:8,fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1,color:'var(--dark)',background:'linear-gradient(145deg,#fff,#f5eedc)',border:'1.5px solid var(--gold)',borderRadius:12,padding:'6px 16px',boxShadow:'3px 3px 8px rgba(43,46,32,0.1)'}},
-    sincronizando?/*#__PURE__*/React.createElement('span',{style:{fontSize:13,fontFamily:'DM Sans',color:'var(--text-soft)'}},'Sincronizando...'):/*#__PURE__*/React.createElement(React.Fragment,null,
-      /*#__PURE__*/React.createElement('span',{style:{color:'var(--gold)',fontSize:22}},enviosPeriodo.length.toLocaleString('es-CL')),
-      /*#__PURE__*/React.createElement('span',{style:{fontSize:11,fontFamily:'DM Sans',color:'var(--text-soft)',letterSpacing:0,textTransform:'none'}},'envíos en período')
+  /*#__PURE__*/React.createElement('div',{style:{marginLeft:'auto',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}},
+    // NUEVO 2026-09-22: se agrega "retorno resuelto" al lado del contador de siempre -- Luis
+    // necesita los dos números (recibido y retorno resuelto) a simple vista, sin cambiar de
+    // vista, para armar su fórmula de cobro (recibido menos retorno). El primero (recibido) es
+    // el mismo contador de siempre, solo con la etiqueta aclarada; el segundo es nuevo.
+    /*#__PURE__*/React.createElement('span',{title:'Envíos DESPACHADOS dentro del rango elegido (columna Fecha), en cualquier estado que estén ahora -- es el "recibido" de la fórmula de cobro (recibido − retorno).',style:{display:'flex',alignItems:'center',gap:8,fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1,color:'var(--dark)',background:'linear-gradient(145deg,#fff,#f5eedc)',border:'1.5px solid var(--gold)',borderRadius:12,padding:'6px 16px',boxShadow:'3px 3px 8px rgba(43,46,32,0.1)'}},
+      sincronizando?/*#__PURE__*/React.createElement('span',{style:{fontSize:13,fontFamily:'DM Sans',color:'var(--text-soft)'}},'Sincronizando...'):/*#__PURE__*/React.createElement(React.Fragment,null,
+        /*#__PURE__*/React.createElement('span',{style:{color:'var(--gold)',fontSize:22}},enviosPeriodo.length.toLocaleString('es-CL')),
+        /*#__PURE__*/React.createElement('span',{style:{fontSize:11,fontFamily:'DM Sans',color:'var(--text-soft)',letterSpacing:0,textTransform:'none'}},'recibidos en el período')
+      )
+    ),
+    /*#__PURE__*/React.createElement('span',{title:'Envíos cuyo ÚLTIMO movimiento a Retorno ocurrió dentro del rango elegido, sin importar cuándo se despacharon -- mismo criterio que la vista "Resuelto en el período". Es el "retorno" de la fórmula de cobro (recibido − retorno).',style:{display:'flex',alignItems:'center',gap:8,fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1,color:'var(--dark)',background:'linear-gradient(145deg,#fff,#fbe9e9)',border:'1.5px solid #c86a6a',borderRadius:12,padding:'6px 16px',boxShadow:'3px 3px 8px rgba(43,46,32,0.1)'}},
+      cargandoRetornadosReal?/*#__PURE__*/React.createElement('span',{style:{fontSize:13,fontFamily:'DM Sans',color:'var(--text-soft)'}},'Actualizando...'):/*#__PURE__*/React.createElement(React.Fragment,null,
+        /*#__PURE__*/React.createElement('span',{style:{color:'#c86a6a',fontSize:22}},retornadosPeriodoReal.length.toLocaleString('es-CL')),
+        /*#__PURE__*/React.createElement('span',{style:{fontSize:11,fontFamily:'DM Sans',color:'var(--text-soft)',letterSpacing:0,textTransform:'none'}},'retorno resuelto en el período')
+      )
     )
   )
 ),
 /*#__PURE__*/React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',marginBottom:14,flexWrap:'wrap'}},
   /*#__PURE__*/React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:2,color:'var(--text-soft)',marginRight:4}},'VISTA:'),
-  [{val:'cierre',label:'Gestionado en el período',title:'Para cada estado (Entregado, Retorno, Reprogramado, Cancelado, etc.), muestra los códigos cuyo ÚLTIMO movimiento a ese estado ocurrió DENTRO de las fechas elegidas -- sin importar cuándo se despachó el envío. Es la vista para cruzar información con un reporte externo (ej. el Drive de un cliente) o para saber "qué se gestionó en este rango".'},
-   {val:'actual',label:'Estado actual (en vivo)',title:'Solo para los envíos DESPACHADOS dentro del rango elegido, muestra el estado en el que están AHORA MISMO. Un envío despachado ANTES del rango, aunque se haya gestionado dentro de él, no aparece acá -- para eso usa "Gestionado en el período".'}
+  [{val:'cierre',label:'Resuelto en el período',title:'Para cada estado (Entregado, Retorno, Reprogramado, Cancelado, etc.), muestra los códigos cuyo ÚLTIMO movimiento a ese estado ocurrió DENTRO de las fechas elegidas -- sin importar cuándo se despachó el envío. USA ESTA para pagar mensajeros y para cobrar a clientes: un envío cuenta en el período en que se RESOLVIÓ (se entregó, volvió, etc.), no en el que se despachó -- por ejemplo un envío reprogramado en la quincena 1 que termina como retorno en la quincena 2 cuenta como retorno de la quincena 2. También sirve para cruzar información con un reporte externo (ej. el Drive de un cliente).'},
+   {val:'actual',label:'Despachado en el período',title:'Solo para los envíos DESPACHADOS dentro del rango elegido, muestra el estado en el que están AHORA MISMO, sin importar si ya se resolvió o no. Es para seguimiento operativo (cuánto despachaste en el rango y cómo va esa tanda) -- NO la uses para pagar ni cobrar, para eso usa "Resuelto en el período". Un envío despachado ANTES del rango, aunque se haya resuelto dentro de él, no aparece acá.'},
+   // NUEVO 2026-09-22: Luis necesitaba los dos números a la vez para su fórmula de cobro
+   // (recibido menos retorno) sin tener que cambiar de vista y perder de vista el otro número.
+   // Esta 3ra vista muestra, por cada estado, "recibido" (despachado en el rango, igual que
+   // "Despachado en el período") Y "resuelto" (fecha real del último movimiento, igual que
+   // "Resuelto en el período") lado a lado en la misma tarjeta. El sistema NO resta uno del otro
+   // a propósito -- Luis pidió ver los dos números por separado y hacer la resta él mismo, por si
+   // aplica otros descuentos aparte. Al hacer clic en una tarjeta, la tabla de abajo se arma con
+   // el criterio "resuelto" (mismo criterio que "Resuelto en el período"), no con "recibido".
+   {val:'fusion',label:'Recibido + Resuelto',title:'Para cada estado, muestra DOS números lado a lado: cuántos códigos se DESPACHARON en el rango elegido ("recibido", igual que "Despachado en el período") y cuántos se RESOLVIERON en el rango elegido ("resuelto", igual que "Resuelto en el período" -- fecha real del último movimiento, sin importar cuándo se despachó). Pensada para armar el cálculo de cobro/pago cuando necesitas los dos números a la vez, sin cambiar de pestaña. El sistema no resta uno del otro -- muestra los dos por separado y la resta la haces tú. Al elegir una tarjeta, la tabla de abajo usa el criterio "resuelto".'}
   ].map(function(v){return/*#__PURE__*/React.createElement('button',{key:v.val,title:v.title,onClick:function(){setVistaEstado(v.val);setPage(1);},style:{padding:'6px 16px',borderRadius:20,border:'1px solid '+(vistaEstado===v.val?'var(--gold)':'var(--border)'),background:vistaEstado===v.val?'rgba(200,168,75,0.12)':'#fff',color:vistaEstado===v.val?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer',transition:'all 0.15s'}},v.label);})
 ),
 sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'20px',color:'var(--text-soft)',fontSize:13,marginBottom:20}},'⏳ Sincronizando historial completo desde la nube...'):
-/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:20,paddingTop:14,overflowX:'auto'}},[{val:'todos',label:'Todos',color:'var(--gold)'},...ESTADOS_ENVIO].map(est=>{const count=est.val==='todos'?(vistaEstado==='actual'?enviosPeriodo.length:todosPeriodoReal.length):stats[est.val]||0;const active=filtroEst===est.val;const accentColor=est.color||'var(--gold)';return/*#__PURE__*/React.createElement("div",{key:est.val,onClick:()=>{setFiltroEst(est.val);setPage(1);},style:{
-  padding:'16px 18px',borderRadius:14,cursor:'pointer',minWidth:100,textAlign:'center',
+/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:20,paddingTop:14,overflowX:'auto'}},[{val:'todos',label:'Todos',color:'var(--gold)'},...ESTADOS_ENVIO].map(est=>{
+  // NUEVO 2026-09-22 (vista 'fusion'): 'countRecibido'/'countResuelto' se calculan SIEMPRE (no
+  // solo en 'fusion') para no repetir la lógica -- en las otras dos vistas solo se usa 'count'
+  // (el que corresponde a esa vista), igual que antes.
+  const countRecibido=est.val==='todos'?enviosPeriodo.length:statsRecibido[est.val]||0;
+  const countResuelto=est.val==='todos'?todosPeriodoReal.length:statsResuelto[est.val]||0;
+  const count=vistaEstado==='actual'?countRecibido:countResuelto;
+  const active=filtroEst===est.val;const accentColor=est.color||'var(--gold)';return/*#__PURE__*/React.createElement("div",{key:est.val,onClick:()=>{setFiltroEst(est.val);setPage(1);},style:{
+  padding:'16px 18px',borderRadius:14,cursor:'pointer',minWidth:vistaEstado==='fusion'?150:100,textAlign:'center',
   background:active?'linear-gradient(145deg,#ffffff,#f0e8d0)':'linear-gradient(145deg,#fff,#faf3e0)',
   border:'2px solid '+(active?accentColor:'rgba(200,168,75,0.12)'),
   borderTop:'4px solid '+(active?accentColor:'rgba(200,168,75,0.08)'),
   boxShadow:active?'8px 8px 16px rgba(43,46,32,0.15),-3px -3px 8px rgba(255,255,255,0.95),0 0 20px '+accentColor+'33':'4px 4px 8px rgba(43,46,32,0.08),-2px -2px 6px rgba(255,255,255,0.9)',
   transform:active?'perspective(600px) rotateX(-2deg) translateY(-5px)':'perspective(600px) rotateX(0deg)',
   transition:'all 0.25s cubic-bezier(0.34,1.56,0.64,1)'}},
-  /*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:42,lineHeight:1,
+  vistaEstado==='fusion'
+    ?/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:8,justifyContent:'center',alignItems:'baseline'}},
+        /*#__PURE__*/React.createElement("div",null,
+          /*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:26,lineHeight:1,color:active?accentColor:'#9a9d8a',transition:'all 0.25s'}},countRecibido),
+          /*#__PURE__*/React.createElement("div",{style:{fontSize:7,fontWeight:600,letterSpacing:0.5,color:active?accentColor:'#b0b3a0',opacity:0.75,marginTop:1}},'recibido')
+        ),
+        /*#__PURE__*/React.createElement("div",{style:{width:1,alignSelf:'stretch',background:active?accentColor+'44':'rgba(0,0,0,0.1)'}}),
+        /*#__PURE__*/React.createElement("div",null,
+          /*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:26,lineHeight:1,color:active?accentColor:'#9a9d8a',transition:'all 0.25s'}},countResuelto),
+          /*#__PURE__*/React.createElement("div",{style:{fontSize:7,fontWeight:600,letterSpacing:0.5,color:active?accentColor:'#b0b3a0',opacity:0.75,marginTop:1}},'resuelto')
+        )
+      )
+    :/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:42,lineHeight:1,
     color:active?accentColor:'#9a9d8a',
     textShadow:active?'0 0 12px '+accentColor+'88':'none',
     filter:active?'drop-shadow(0 2px 2px rgba(43,46,32,0.2))':'none',
@@ -1259,7 +1307,7 @@ sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',
     // 'Entregado' se calcula con la fecha REAL de entrega (igual que Pagos Mensajeros), no con
     // la fecha de despacho como el resto de las tarjetas -- por eso puede no calzar exactamente
     // con 'Todos' menos la suma del resto. Se avisa aca mismo para no repetir la confusion.
-    est.val==='entregado'&&vistaEstado==='cierre'&&/*#__PURE__*/React.createElement("div",{style:{fontSize:7,fontWeight:600,letterSpacing:0.5,textTransform:'none',color:active?accentColor:'#b0b3a0',opacity:0.75,marginTop:2}},cargandoEntregadosReal?'actualizando…':'fecha real de entrega')));})),selected.size>0&&/*#__PURE__*/React.createElement("div",{style:{background:'linear-gradient(145deg,#ffffff,#f5eedc)',border:'1px solid rgba(200,168,75,0.3)',borderTop:'3px solid var(--gold)',borderRadius:14,padding:'16px 20px',marginBottom:16,boxShadow:'6px 6px 16px rgba(43,46,32,0.12),-2px -2px 8px rgba(255,255,255,0.9)'}},
+    est.val==='entregado'&&(vistaEstado==='cierre'||vistaEstado==='fusion')&&/*#__PURE__*/React.createElement("div",{style:{fontSize:7,fontWeight:600,letterSpacing:0.5,textTransform:'none',color:active?accentColor:'#b0b3a0',opacity:0.75,marginTop:2}},cargandoEntregadosReal?'actualizando…':'"resuelto" = fecha real de entrega')));})),selected.size>0&&/*#__PURE__*/React.createElement("div",{style:{background:'linear-gradient(145deg,#ffffff,#f5eedc)',border:'1px solid rgba(200,168,75,0.3)',borderTop:'3px solid var(--gold)',borderRadius:14,padding:'16px 20px',marginBottom:16,boxShadow:'6px 6px 16px rgba(43,46,32,0.12),-2px -2px 8px rgba(255,255,255,0.9)'}},
   // Encabezado
   React.createElement("div",{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}},
     React.createElement("div",{style:{display:'flex',alignItems:'center',gap:8}},
@@ -1315,7 +1363,7 @@ sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',
   // FIX 2026-09-22 (Excel exportado no coincidía con el panel): esta línea usaba
   // 'e._estadoEfectivo||e.estado' -- _estadoEfectivo es el estado que tenía el envío CONGELADO al
   // cierre del rango elegido (útil solo para el aviso "🕓 al cierre: X" que se ve en la tabla).
-  // Como resultado, exportar 'Todos' en 'Gestionado en el período' podía mostrar un código como
+  // Como resultado, exportar 'Todos' en 'Resuelto en el período' (antes 'Gestionado en el período') podía mostrar un código como
   // "Entregado" en la columna Estado aunque ahora mismo ESTÉ en Retorno en el sistema -- y el
   // conteo de "Retorno" del archivo exportado no coincidía con el número que muestra la tarjeta
   // Retorno en pantalla (que sí usa el estado en vivo). El selector de Estado en la fila de la
