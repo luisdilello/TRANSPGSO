@@ -918,7 +918,7 @@ const filtrados=useMemo(()=>{const q=search.trim().toLowerCase();
   // ni 'Todos') usa 'otrosPeriodoReal[filtroEst]' -- mismo criterio de "fecha real" que
   // Entregado/Retorno, ver comentario junto a su declaración. 'Todos' SIN búsqueda sigue usando
   // 'enviosPeriodoEfectivo' (despachado en el rango) a propósito -- ver comentario ahí.
-  const baseLista=vistaEstado==='actual'?enviosPeriodo:(filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?(q?todosPeriodoReal:enviosPeriodoEfectivo):(otrosPeriodoReal[filtroEst]||[]));
+  const baseLista=vistaEstado==='actual'?enviosPeriodo:(filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?todosPeriodoReal:(otrosPeriodoReal[filtroEst]||[]));
   return baseLista.filter(e=>{const qTerms=q.split(/[\n,;\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
       const esMultiple=qTerms.length>1;
       const matchQ=!q||(esMultiple
@@ -946,7 +946,7 @@ const filtradosOrdenados=useMemo(()=>{if(!sortCol)return filtrados;const copia=f
 // principal, y este modal ahora debe mostrar también los reprogramados de una sola vez.
 const atrasadosDetalleFiltrados=useMemo(()=>{
   const q=search.trim().toLowerCase();
-  const baseLista=vistaEstado==='actual'?enviosPeriodo:(filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?enviosPeriodoEfectivo:(otrosPeriodoReal[filtroEst]||[]));
+  const baseLista=vistaEstado==='actual'?enviosPeriodo:(filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?todosPeriodoReal:(otrosPeriodoReal[filtroEst]||[]));
   return baseLista.filter(e=>{
     const qTerms=q.split(/[\n,;\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
     const esMultiple=qTerms.length>1;
@@ -959,7 +959,7 @@ const atrasadosDetalleFiltrados=useMemo(()=>{
     const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;
     return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente;
   });
-},[enviosPeriodo,entregadosPeriodoReal,retornadosPeriodoReal,enviosPeriodoEfectivo,otrosPeriodoReal,vistaEstado,filtroEst,search,filtroCli,filtroMen,filtroFuente]);
+},[enviosPeriodo,entregadosPeriodoReal,retornadosPeriodoReal,todosPeriodoReal,enviosPeriodoEfectivo,otrosPeriodoReal,vistaEstado,filtroEst,search,filtroCli,filtroMen,filtroFuente]);
 const atrasadosDetalleBase=useMemo(()=>atrasadosDetalleFiltrados.filter(e=>filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoAlMenos1Vez(e):(esEnvioAtrasado(e)||esReprogramadoAlMenos1Vez(e))),[atrasadosDetalleFiltrados,filtroAtrasoModo,reprogCount]);
 // Conteos de las pestañas del modal (Todos/Atrasados en ruta/Reprogramados) -- a diferencia de
 // atrasadosCount/reprogramadosRepetidosCount (que solo miran el período, para el botón/dropdown
@@ -1286,7 +1286,7 @@ sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',
                   <td style="font-weight:700">${e.comuna}</td>
                   <td>${e.mensajero?e.mensajero.replace(/,\s*/g,' '):'—'}</td>
                   <td><span style="padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;
-                    background:${estadoInfo(e._estadoEfectivo||e.estado).bg};color:${estadoInfo(e._estadoEfectivo||e.estado).color}">${estadoInfo(e._estadoEfectivo||e.estado).label}</span></td>
+                    background:${estadoInfo(e.estado).bg};color:${estadoInfo(e.estado).color}">${estadoInfo(e.estado).label}</span></td>
                   <td style="text-align:right">${e.monto>0?'$'+e.monto.toLocaleString('es-CL'):'—'}</td>
                 </tr>`).join('');win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"/>
               <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet"/>
@@ -1312,7 +1312,16 @@ sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',
   // cerca de la medianoche de Chile, porque la fecha UTC no siempre es la misma fecha en Chile.
   // Ahora se busca la fecha real del ESTADO FINAL que tenga el envío (sea cual sea), y se
   // convierte esa fecha/hora al día calendario de Chile (fechaHoyCL) antes de formatear.
-  const estActual=e._estadoEfectivo||e.estado;
+  // FIX 2026-09-22 (Excel exportado no coincidía con el panel): esta línea usaba
+  // 'e._estadoEfectivo||e.estado' -- _estadoEfectivo es el estado que tenía el envío CONGELADO al
+  // cierre del rango elegido (útil solo para el aviso "🕓 al cierre: X" que se ve en la tabla).
+  // Como resultado, exportar 'Todos' en 'Gestionado en el período' podía mostrar un código como
+  // "Entregado" en la columna Estado aunque ahora mismo ESTÉ en Retorno en el sistema -- y el
+  // conteo de "Retorno" del archivo exportado no coincidía con el número que muestra la tarjeta
+  // Retorno en pantalla (que sí usa el estado en vivo). El selector de Estado en la fila de la
+  // tabla siempre usó 'e.estado' (en vivo) como valor principal -- este export ahora hace lo
+  // mismo, para que la columna Estado del Excel sea siempre la del sistema ahora mismo.
+  const estActual=e.estado;
   let feReal='';
   if(estActual==='entregado')feReal=fechaEntregaDe(e);
   else if(estActual==='retorno')feReal=e._fechaRealEstadoISO||'';
