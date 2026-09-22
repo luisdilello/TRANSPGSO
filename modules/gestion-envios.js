@@ -12,6 +12,14 @@ function GestionEnvios(_ref26){var _detalleEnvio$mensaje;let mensajeros=_ref26.m
 // vez que se abre la pantalla.
 const _useVistaEst=useState(()=>lsLoad('ge_vista_estado','cierre')),vistaEstado=_useVistaEst[0],setVistaEstado=_useVistaEst[1];
 useEffect(function(){lsSave('ge_vista_estado',vistaEstado);},[vistaEstado]);
+// NUEVO 2026-09-22: en la vista 'fusion' ("Recibido + Resuelto") las tarjetas muestran los dos
+// números a la vez, pero la TABLA/export de abajo solo puede mostrar uno de los dos criterios a
+// la vez -- Luis reportó que necesitaba exportar el número "recibido" (3.151, igual a su propio
+// pivot por Fecha Recepción) y el sistema le exportaba "resuelto" (3.168) sin que hubiera forma
+// de elegir. 'criterioFusion' controla cuál de los dos usa la tabla/export SOLO cuando
+// vistaEstado==='fusion' (en 'cierre'/'actual' sigue igual que siempre, sin este selector).
+const _useCriterioFusion=useState('recibido'),criterioFusion=_useCriterioFusion[0],setCriterioFusion=_useCriterioFusion[1];
+const usaRecibido=vistaEstado==='actual'||(vistaEstado==='fusion'&&criterioFusion==='recibido');
 // Antes "⚠ Atrasados" era un simple interruptor on/off que solo miraba envíos 'en_ruta' con
 // UMBRAL_ATRASO_DIAS+ días sin entregar. Luis pidió que también se puedan ver ahí los envíos que
 // llevan 2 o más veces en estado Reprogramado (sin importar hace cuántos días fue la última
@@ -918,12 +926,12 @@ const filtrados=useMemo(()=>{const q=search.trim().toLowerCase();
   // ni 'Todos') usa 'otrosPeriodoReal[filtroEst]' -- mismo criterio de "fecha real" que
   // Entregado/Retorno, ver comentario junto a su declaración. 'Todos' SIN búsqueda sigue usando
   // 'enviosPeriodoEfectivo' (despachado en el rango) a propósito -- ver comentario ahí.
-  const baseLista=vistaEstado==='actual'?enviosPeriodo:(filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?todosPeriodoReal:(otrosPeriodoReal[filtroEst]||[]));
+  const baseLista=usaRecibido?enviosPeriodo:(filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?todosPeriodoReal:(otrosPeriodoReal[filtroEst]||[]));
   return baseLista.filter(e=>{const qTerms=q.split(/[\n,;\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
       const esMultiple=qTerms.length>1;
       const matchQ=!q||(esMultiple
         ?qTerms.some(t=>e.codigo.toLowerCase()===t||e.codigo.toLowerCase().includes(t))
-        :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e._estadoEfectivo||e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));const matchEst=filtroEst==='todos'?true:(vistaEstado==='actual'?e.estado===filtroEst:(filtroEst==='entregado'||filtroEst==='retorno'||(e._estadoEfectivo||e.estado)===filtroEst));const matchCli=filtroCli==='todos'||e.cliente===filtroCli;const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;const matchAtraso=filtroAtrasoModo==='off'?true:filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoRepetido(e):(esEnvioAtrasado(e)||esReprogramadoRepetido(e));return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente&&matchAtraso;});},[envios,entregadosPeriodoReal,retornadosPeriodoReal,todosPeriodoReal,enviosPeriodoEfectivo,otrosPeriodoReal,enviosPeriodo,vistaEstado,search,filtroEst,filtroCli,filtroMen,filtroFuente,filtroAtrasoModo,reprogCount]);
+        :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e._estadoEfectivo||e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));const matchEst=filtroEst==='todos'?true:(usaRecibido?e.estado===filtroEst:(filtroEst==='entregado'||filtroEst==='retorno'||(e._estadoEfectivo||e.estado)===filtroEst));const matchCli=filtroCli==='todos'||e.cliente===filtroCli;const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;const matchAtraso=filtroAtrasoModo==='off'?true:filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoRepetido(e):(esEnvioAtrasado(e)||esReprogramadoRepetido(e));return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente&&matchAtraso;});},[envios,entregadosPeriodoReal,retornadosPeriodoReal,todosPeriodoReal,enviosPeriodoEfectivo,otrosPeriodoReal,enviosPeriodo,vistaEstado,criterioFusion,usaRecibido,search,filtroEst,filtroCli,filtroMen,filtroFuente,filtroAtrasoModo,reprogCount]);
 // Cantidad de envíos atrasados en el período actual (antes del filtro de "solo atrasados"),
 // para mostrar el contador en el botón de filtro sin que el usuario tenga que activarlo primero.
 const atrasadosCount=useMemo(()=>enviosPeriodo.filter(esEnvioAtrasado).length,[enviosPeriodo]);
@@ -946,20 +954,20 @@ const filtradosOrdenados=useMemo(()=>{if(!sortCol)return filtrados;const copia=f
 // principal, y este modal ahora debe mostrar también los reprogramados de una sola vez.
 const atrasadosDetalleFiltrados=useMemo(()=>{
   const q=search.trim().toLowerCase();
-  const baseLista=vistaEstado==='actual'?enviosPeriodo:(filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?todosPeriodoReal:(otrosPeriodoReal[filtroEst]||[]));
+  const baseLista=usaRecibido?enviosPeriodo:(filtroEst==='entregado'?entregadosPeriodoReal:filtroEst==='retorno'?retornadosPeriodoReal:filtroEst==='todos'?todosPeriodoReal:(otrosPeriodoReal[filtroEst]||[]));
   return baseLista.filter(e=>{
     const qTerms=q.split(/[\n,;\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
     const esMultiple=qTerms.length>1;
     const matchQ=!q||(esMultiple
       ?qTerms.some(t=>e.codigo.toLowerCase()===t||e.codigo.toLowerCase().includes(t))
       :e.codigo.toLowerCase().includes(q)||e.destinatario.toLowerCase().includes(q)||e.direccion.toLowerCase().includes(q)||e.comuna.toLowerCase().includes(q)||e.cliente.toLowerCase().includes(q)||(e.mensajero||'').toLowerCase().includes(q)||estadoInfo(e._estadoEfectivo||e.estado).label.toLowerCase().includes(q)||(e.fecha||'').toLowerCase().includes(q));
-    const matchEst=filtroEst==='todos'?true:(vistaEstado==='actual'?e.estado===filtroEst:(filtroEst==='entregado'||filtroEst==='retorno'||(e._estadoEfectivo||e.estado)===filtroEst));
+    const matchEst=filtroEst==='todos'?true:(usaRecibido?e.estado===filtroEst:(filtroEst==='entregado'||filtroEst==='retorno'||(e._estadoEfectivo||e.estado)===filtroEst));
     const matchCli=filtroCli==='todos'||e.cliente===filtroCli;
     const matchMen=filtroMen==='todos'||e.mensajero===filtroMen;
     const matchFuente=filtroFuente==='todos'||e.fuente===filtroFuente;
     return matchQ&&matchEst&&matchCli&&matchMen&&matchFuente;
   });
-},[enviosPeriodo,entregadosPeriodoReal,retornadosPeriodoReal,todosPeriodoReal,enviosPeriodoEfectivo,otrosPeriodoReal,vistaEstado,filtroEst,search,filtroCli,filtroMen,filtroFuente]);
+},[enviosPeriodo,entregadosPeriodoReal,retornadosPeriodoReal,todosPeriodoReal,enviosPeriodoEfectivo,otrosPeriodoReal,vistaEstado,criterioFusion,usaRecibido,filtroEst,search,filtroCli,filtroMen,filtroFuente]);
 const atrasadosDetalleBase=useMemo(()=>atrasadosDetalleFiltrados.filter(e=>filtroAtrasoModo==='atrasados'?esEnvioAtrasado(e):filtroAtrasoModo==='reprogramados'?esReprogramadoAlMenos1Vez(e):(esEnvioAtrasado(e)||esReprogramadoAlMenos1Vez(e))),[atrasadosDetalleFiltrados,filtroAtrasoModo,reprogCount]);
 // Conteos de las pestañas del modal (Todos/Atrasados en ruta/Reprogramados) -- a diferencia de
 // atrasadosCount/reprogramadosRepetidosCount (que solo miran el período, para el botón/dropdown
@@ -1282,7 +1290,18 @@ showListaNegra&&(()=>{const lista=lsLoad('envios_eliminados',[]);return/*#__PURE
    // aplica otros descuentos aparte. Al hacer clic en una tarjeta, la tabla de abajo se arma con
    // el criterio "resuelto" (mismo criterio que "Resuelto en el período"), no con "recibido".
    {val:'fusion',label:'Recibido + Resuelto',title:'Para cada estado, muestra DOS números lado a lado: cuántos códigos se DESPACHARON en el rango elegido ("recibido", igual que "Despachado en el período") y cuántos se RESOLVIERON en el rango elegido ("resuelto", igual que "Resuelto en el período" -- fecha real del último movimiento, sin importar cuándo se despachó). Pensada para armar el cálculo de cobro/pago cuando necesitas los dos números a la vez, sin cambiar de pestaña. El sistema no resta uno del otro -- muestra los dos por separado y la resta la haces tú. Al elegir una tarjeta, la tabla de abajo usa el criterio "resuelto".'}
-  ].map(function(v){return/*#__PURE__*/React.createElement('button',{key:v.val,title:v.title,onClick:function(){setVistaEstado(v.val);setPage(1);},style:{padding:'6px 16px',borderRadius:20,border:'1px solid '+(vistaEstado===v.val?'var(--gold)':'var(--border)'),background:vistaEstado===v.val?'rgba(200,168,75,0.12)':'#fff',color:vistaEstado===v.val?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer',transition:'all 0.15s'}},v.label);})
+  ].map(function(v){return/*#__PURE__*/React.createElement('button',{key:v.val,title:v.title,onClick:function(){setVistaEstado(v.val);setPage(1);},style:{padding:'6px 16px',borderRadius:20,border:'1px solid '+(vistaEstado===v.val?'var(--gold)':'var(--border)'),background:vistaEstado===v.val?'rgba(200,168,75,0.12)':'#fff',color:vistaEstado===v.val?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer',transition:'all 0.15s'}},v.label);}),
+  // NUEVO 2026-09-22: en la vista 'fusion' las tarjetas siempre muestran los dos números
+  // (recibido/resuelto), pero la TABLA/export de abajo solo puede usar uno de los dos a la vez --
+  // Luis reportó que necesitaba exportar "recibido" (3.151) y el sistema exportaba "resuelto"
+  // (3.168) sin poder elegir. Este selector (solo visible en 'fusion') controla 'criterioFusion'
+  // y decide cuál de los dos arma la tabla/export. Por defecto queda en 'recibido'.
+  vistaEstado==='fusion'&&/*#__PURE__*/React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,marginLeft:8,paddingLeft:12,borderLeft:'1px solid var(--border)'}},
+    /*#__PURE__*/React.createElement('span',{style:{fontFamily:'Bebas Neue',fontSize:11,letterSpacing:1,color:'var(--text-soft)'}},'TABLA/EXPORT:'),
+    [{val:'recibido',label:'Recibido',title:'La tabla y el export de abajo usan el criterio "recibido" (despachado en el rango elegido) -- el mismo número que muestra la mitad izquierda de cada tarjeta.'},
+     {val:'resuelto',label:'Resuelto',title:'La tabla y el export de abajo usan el criterio "resuelto" (fecha real del último movimiento dentro del rango elegido) -- el mismo número que muestra la mitad derecha de cada tarjeta.'}]
+    .map(function(c){return/*#__PURE__*/React.createElement('button',{key:c.val,title:c.title,onClick:function(){setCriterioFusion(c.val);setPage(1);},style:{padding:'5px 14px',borderRadius:20,border:'1px solid '+(criterioFusion===c.val?'var(--gold)':'var(--border)'),background:criterioFusion===c.val?'rgba(200,168,75,0.12)':'#fff',color:criterioFusion===c.val?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:11,cursor:'pointer',transition:'all 0.15s'}},c.label);})
+  )
 ),
 sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'20px',color:'var(--text-soft)',fontSize:13,marginBottom:20}},'⏳ Sincronizando historial completo desde la nube...'):
 /*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:20,paddingTop:14,overflowX:'auto'}},[{val:'todos',label:'Todos',color:'var(--gold)'},...ESTADOS_ENVIO].map(est=>{
