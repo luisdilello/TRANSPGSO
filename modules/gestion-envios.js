@@ -637,20 +637,49 @@ enviosSeleccionados.forEach(e=>{edicionesRecientesRef.current[e.codigo]={estado:
   if(enviosElim.length===0){console.error('eliminarSeleccionados: no se encontro ningun envio para los ids seleccionados (esto no deberia pasar)',Array.from(selected));return;}
 
   const codigosElim=enviosElim.map(e=>e.codigo).filter(Boolean);
-  
+  const enviosPorCodigo=new Map(enviosElim.map(e=>[e.codigo,e]));
+
   toast('⏳ Eliminando '+count+' envíos...');
-  
+
   try{
     /* Eliminar en lotes de 50 para no saturar Supabase. OJO: Supabase/PostgREST no tira error
        si el DELETE afecta 0 filas (ej. el codigo no matchea exactamente por espacios, comillas
        de Excel u otra causa) - "sin error" no es lo mismo que "borrado de verdad". Por eso,
        despues de cada lote, se vuelve a consultar cuales de esos codigos SIGUEN existiendo y
-       solo se consideran borrados los que realmente desaparecieron. */
+       solo se consideran borrados los que realmente desaparecieron.
+       FIX 2026-09-23 (caso PGSO000000504/505/506 -- ver hilo "quien modifico"): antes, un
+       "Eliminar permanente" borraba el envio Y su historial en el mismo paso, así que si algo
+       se borraba por error (o alguien necesitaba investigarlo despues) no quedaba NINGUN rastro
+       en ninguna tabla -- ni que existio, ni quien lo borro, ni cuando. Ahora, ANTES de borrar
+       cada lote, se guarda una copia completa de cada envio (con su historial tal cual estaba)
+       en envios_eliminados_log, junto con el nombre de quien esta eliminando y la fecha/hora.
+       Esa tabla no tiene politica de UPDATE ni DELETE para nadie -- es de solo lectura una vez
+       escrita, a proposito. Un envio que por algun motivo no se pudo dejar registrado en el log
+       NO se borra en esta pasada (mejor que quede pendiente de reintentar a que desaparezca sin
+       dejar rastro otra vez). */
     const BATCH=50;
     let erroresRed=0;
     const sobrevivientes=[];
+    const noLogueados=[];
     for(let i=0;i<codigosElim.length;i+=BATCH){
       const lote=codigosElim.slice(i,i+BATCH);
+
+      let historialLote=[];
+      try{
+        const hist=await db.from('historial_envios').select('*').in('codigo_envio',lote);
+        historialLote=hist.data||[];
+      }catch(histErr){console.warn('No se pudo leer historial antes de borrar (lote '+(i/BATCH+1)+'):',histErr.message);}
+      const historialPorCodigo=new Map();
+      historialLote.forEach(h=>{const arr=historialPorCodigo.get(h.codigo_envio)||[];arr.push(h);historialPorCodigo.set(h.codigo_envio,arr);});
+
+      const filasLog=lote.map(cod=>{const e=enviosPorCodigo.get(cod);return{codigo:cod,cliente:(e&&e.cliente)||null,snapshot:e||{},historial_snapshot:historialPorCodigo.get(cod)||[],usuario:usuario?.nombre||'Admin'};});
+      const logR=await db.from('envios_eliminados_log').insert(filasLog);
+      if(logR.error){
+        console.warn('No se pudo guardar el log de auditoria (lote '+(i/BATCH+1)+'), este lote NO se borra:',logR.error.message);
+        noLogueados.push(...lote);
+        continue;
+      }
+
       const r=await db.from('envios').delete().in('codigo',lote);
       if(r.error){
         erroresRed+=lote.length;
@@ -663,24 +692,26 @@ enviosSeleccionados.forEach(e=>{edicionesRecientesRef.current[e.codigo]={estado:
         lote.forEach(cod=>{if(codigosVivos.has(cod))sobrevivientes.push(cod);});
       }catch(chkErr){console.warn('No se pudo verificar el borrado:',chkErr.message);}
     }
-    const codigosBorradosOk=codigosElim.filter(cod=>!sobrevivientes.includes(cod));
-    // También borrar de historial_envios (solo lo que sí se confirmó borrado)
+    const codigosBorradosOk=codigosElim.filter(cod=>!sobrevivientes.includes(cod)&&!noLogueados.includes(cod));
+    // También borrar de historial_envios (solo lo que sí se confirmó borrado -- ya quedó a salvo en envios_eliminados_log)
     if(codigosBorradosOk.length>0){
       await db.from('historial_envios').delete().in('codigo_envio',codigosBorradosOk);
     }
     // Lista negra local (solo lo confirmado)
     const eliminadosPrev=lsLoad('envios_eliminados',[]);
     lsSave('envios_eliminados',[...new Set([...eliminadosPrev,...codigosBorradosOk])]);
-    // Borrar del estado local solo lo confirmado; lo que sobrevivió se deja visible
+    // Borrar del estado local solo lo confirmado; lo que sobrevivió o no se pudo loguear se deja visible
     const idsBorradosOk=enviosElim.filter(e=>codigosBorradosOk.includes(e.codigo)).map(e=>e.id);
     setEnvios(prev=>prev.filter(e=>!idsBorradosOk.includes(e.id)));
     setSelected(new Set());
-    if(sobrevivientes.length>0){
+    if(noLogueados.length>0){
+      toast('⚠ '+codigosBorradosOk.length+' eliminados · '+noLogueados.length+' NO se borraron porque no se pudo guardar su registro de auditoría (reintenta): '+noLogueados.join(', '));
+    }else if(sobrevivientes.length>0){
       toast('⚠ '+codigosBorradosOk.length+' eliminados · '+sobrevivientes.length+' NO se pudieron borrar en Supabase (sigue en la base): '+sobrevivientes.join(', '));
     }else if(erroresRed>0){
       toast('⚠ '+(count-erroresRed)+' eliminados · '+erroresRed+' con error de red');
     }else{
-      toast('🗑 '+count+' envío'+(count>1?'s':'')+' eliminado'+(count>1?'s':'')+' permanentemente');
+      toast('🗑 '+count+' envío'+(count>1?'s':'')+' eliminado'+(count>1?'s':'')+' permanentemente · queda registrado en el log de auditoría');
     }
   }catch(e){
     console.error('Error eliminando:',e);
