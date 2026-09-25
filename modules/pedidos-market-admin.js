@@ -196,7 +196,7 @@ function TabPedidos(props){
     React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}},
       [['todos','Todos'],['pendiente','Pendientes'],['confirmado','Confirmados'],['rechazado','Rechazados']].map(function(f){
         var n=f[0]==='todos'?pedidos.length:pedidos.filter(function(p){return p.estado_pago===f[0];}).length;
-        return React.createElement('button',{key:f[0],onClick:function(){setFiltro(f[0]);},style:{padding:'6px 14px',borderRadius:20,fontSize:11,fontWeight:700,cursor:'pointer',border:'1px solid '+(filtro===f[0]?'var(--gold)':'var(--border)'),background:filtro===f[0]?'rgba(200,168,75,0.15)':'#fff',color:filtro===f[0]?'var(--dark)':'var(--text-soft)'}},f[1]+' ('+n+')');
+        return React.createElement('button',{key:f[0],onClick:function(){setFiltro(f[0]);},style:{padding:'6px 14px',borderRadius:20,fontSize:11,fontWeight:700,cursor:'pointer',border:'1px solid '+(filtro===f[0]?'var(--gold)':'var(--border)'),background:filtro===f[0]?'rgba(200,168,75,0.15)':'var(--cream)',color:filtro===f[0]?'var(--dark)':'var(--text-mid)'}},f[1]+' ('+n+')');
       })
     ),
     pedidosFiltrados.length===0&&React.createElement('div',{className:'info-banner'},'No hay pedidos en esta categoría.'),
