@@ -128,15 +128,17 @@ function TabPedidos(props){
       fuente:'market'
     };
     function intentar(intentos){
-      return confirmarCodigo().then(function(codigo){
-        return db.from('envios').insert(Object.assign({codigo:codigo},base)).select().single().then(function(res){
+      // confirmarCodigo() es SÍNCRONA (lee/escribe localStorage, no devuelve Promise) --
+      // a diferencia de getSiguienteCodigo() en PortalCliente que la envuelve en async solo
+      // para poder usar await ahí. Acá se usa directo, sin .then().
+      var codigo=confirmarCodigo();
+      return db.from('envios').insert(Object.assign({codigo:codigo},base)).select().single().then(function(res){
           if(!res.error)return res.data;
           if(res.error.code==='23505'&&intentos<2){
             return resincronizarContadorPGSO().then(function(){return intentar(intentos+1);});
           }
           throw res.error;
         });
-      });
     }
     return intentar(0);
   }
