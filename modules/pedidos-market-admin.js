@@ -62,7 +62,7 @@ function PedidosMarketAdmin(props){
   return React.createElement('div',null,
     React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}},
       [['pedidos','📋 Pedidos'],['productos','🥬 Productos'],['rubros','🗂 Rubros'],['config','⚙ Configuración']].map(function(t){
-        return React.createElement('button',{key:t[0],className:'nav-btn'+(subTab===t[0]?' active':''),onClick:function(){setSubTab(t[0]);},style:{padding:'8px 18px'}},t[1]);
+        return React.createElement('button',{key:t[0],onClick:function(){setSubTab(t[0]);},style:{padding:'10px 18px',fontSize:12,fontWeight:700,letterSpacing:0.5,textTransform:'uppercase',background:'none',border:'none',borderBottom:'3px solid '+(subTab===t[0]?'var(--gold)':'transparent'),color:subTab===t[0]?'var(--gold)':'var(--text-mid)',cursor:'pointer'}},t[1]);
       })
     ),
     subTab==='pedidos'&&React.createElement(TabPedidos,{toast:toast,usuario:usuario}),
@@ -425,29 +425,32 @@ function TabProductos(props){
         React.createElement('button',{className:'btn-primary',disabled:guardando,onClick:guardar},guardando?'Guardando...':(form.id?'Guardar cambios':'Crear producto'))
       )
     ),
-    React.createElement('div',{className:'table-wrap'},
-      React.createElement('table',null,
-        React.createElement('thead',null,React.createElement('tr',null,
-          React.createElement('th',null,'Producto'),React.createElement('th',null,'Rubro'),React.createElement('th',null,'Precio'),
-          React.createElement('th',null,'Stock'),React.createElement('th',null,'Estado'),React.createElement('th',null)
-        )),
-        React.createElement('tbody',null,
-          productos.map(function(p){
-            var rubroNombre=(rubros.find(function(r){return r.id===p.rubro_id;})||{}).nombre||'—';
-            return React.createElement('tr',{key:p.id},
-              React.createElement('td',{style:{fontWeight:600}},p.nombre),
-              React.createElement('td',null,rubroNombre),
-              React.createElement('td',{className:'mono'},fmtCLP(p.precio)+' '+(p.unidad_venta==='kg'?'/kg':p.unidad_venta==='paquete'?'/paquete':'c/u')),
-              React.createElement('td',{className:'mono'},p.stock_disponible),
-              React.createElement('td',null,React.createElement('span',{className:'badge',style:{background:p.activo?'rgba(46,125,79,0.1)':'rgba(176,48,48,0.1)',color:p.activo?'var(--success)':'var(--danger)'}},p.activo?'Activo':'Oculto')),
-              React.createElement('td',{style:{display:'flex',gap:6}},
-                React.createElement('button',{className:'action-btn btn-edit',onClick:function(){editar(p);}},'Editar'),
-                React.createElement('button',{className:'action-btn',onClick:function(){toggleActivo(p);}},p.activo?'Ocultar':'Mostrar')
-              )
-            );
-          })
-        )
-      )
+    productos.length===0&&React.createElement('div',{className:'info-banner'},'Todavía no hay productos cargados.'),
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))',gap:16}},
+      productos.map(function(p){
+        var rubroNombre=(rubros.find(function(r){return r.id===p.rubro_id;})||{}).nombre||'—';
+        var unidadLbl=p.unidad_venta==='kg'?'/kg':p.unidad_venta==='paquete'?'/paquete':'c/u';
+        return React.createElement('div',{key:p.id,style:{background:'#fff',border:'1px solid var(--border)',borderRadius:12,overflow:'hidden',boxShadow:'0 2px 8px rgba(43,46,32,0.06)',display:'flex',flexDirection:'column',opacity:p.activo?1:0.6}},
+          p.foto_url?React.createElement('img',{src:p.foto_url,style:{width:'100%',height:140,objectFit:'cover',display:'block'}}):
+            React.createElement('div',{style:{width:'100%',height:140,background:'var(--cream)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:36}},'🥬'),
+          React.createElement('div',{style:{padding:'12px 14px',display:'flex',flexDirection:'column',gap:6,flex:1}},
+            React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}},
+              React.createElement('div',{style:{fontWeight:700,fontSize:14,color:'var(--dark)'}},p.nombre),
+              React.createElement('span',{className:'badge',style:{background:p.activo?'rgba(46,125,79,0.1)':'rgba(176,48,48,0.1)',color:p.activo?'var(--success)':'var(--danger)',flexShrink:0}},p.activo?'Activo':'Oculto')
+            ),
+            React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)'}},rubroNombre),
+            React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginTop:4}},
+              React.createElement('span',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:0.5,color:'var(--dark)'}},fmtCLP(p.precio)+' '),
+              React.createElement('span',{style:{fontSize:11,color:'var(--text-soft)'}},unidadLbl)
+            ),
+            React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)'}},'Stock: '+p.stock_disponible),
+            React.createElement('div',{style:{display:'flex',gap:6,marginTop:'auto',paddingTop:8}},
+              React.createElement('button',{className:'action-btn btn-edit',style:{flex:1},onClick:function(){editar(p);}},'Editar'),
+              React.createElement('button',{className:'action-btn',style:{flex:1},onClick:function(){toggleActivo(p);}},p.activo?'Ocultar':'Mostrar')
+            )
+          )
+        );
+      })
     )
   );
 }
