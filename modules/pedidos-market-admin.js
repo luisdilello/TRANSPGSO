@@ -256,6 +256,13 @@ function TabProductos(props){
   var _form=useState(vacio),form=_form[0],setForm=_form[1];
   var _guardando=useState(false),guardando=_guardando[0],setGuardando=_guardando[1];
   var _subiendoFoto=useState(false),subiendoFoto=_subiendoFoto[0],setSubiendoFoto=_subiendoFoto[1];
+  // Generador de foto de producto con IA (OpenAI gpt-image-1 vía Edge Function 'generar-imagen-producto').
+  // Requiere que el secreto OPENAI_API_KEY esté configurado en Supabase -- si falta, la función
+  // devuelve un error claro que se muestra en el toast, no rompe el resto del formulario.
+  var _iaAbierto=useState(false),iaAbierto=_iaAbierto[0],setIaAbierto=_iaAbierto[1];
+  var _iaPrompt=useState(''),iaPrompt=_iaPrompt[0],setIaPrompt=_iaPrompt[1];
+  var _iaGenerando=useState(false),iaGenerando=_iaGenerando[0],setIaGenerando=_iaGenerando[1];
+  var _iaPreview=useState(''),iaPreview=_iaPreview[0],setIaPreview=_iaPreview[1];
 
   useEffect(function(){cargar();},[]);
   function cargar(){
@@ -279,6 +286,43 @@ function TabProductos(props){
       var pub=db.storage.from('market-productos').getPublicUrl(nombreArchivo);
       setForm(function(f){return Object.assign({},f,{foto_url:(pub&&pub.data&&pub.data.publicUrl)||''});});
     });
+  }
+
+  function construirPromptIA(){
+    var rubroNombre=(rubros.find(function(r){return String(r.id)===String(form.rubro_id);})||{}).nombre||'';
+    var partes=['Fotografía de producto estilo catálogo de tienda online de productos frescos, fondo blanco liso, luz natural suave, alta resolución, sin texto ni marcas de agua ni manos ni personas.'];
+    partes.push('Producto: '+(form.nombre.trim()||'producto de la tienda')+(rubroNombre?' ('+rubroNombre+')':'')+'.');
+    if(form.descripcion.trim())partes.push(form.descripcion.trim()+'.');
+    return partes.join(' ');
+  }
+  function abrirGeneradorIA(){
+    if(!form.nombre.trim()){toast&&toast('⚠ Escribe primero el nombre del producto');return;}
+    setIaPrompt(construirPromptIA());
+    setIaPreview('');
+    setIaAbierto(true);
+  }
+  function generarImagenIA(){
+    if(!iaPrompt.trim()){toast&&toast('⚠ Escribe una descripción para generar la imagen');return;}
+    setIaGenerando(true);
+    setIaPreview('');
+    db.functions.invoke('generar-imagen-producto',{body:{prompt:iaPrompt.trim()}}).then(function(res){
+      setIaGenerando(false);
+      var data=res&&res.data;
+      var err=(res&&res.error)||(data&&data.error);
+      if(err||!data||!data.url){
+        toast&&toast('⚠ '+((data&&data.error)||(err&&err.message)||'No se pudo generar la imagen'));
+        return;
+      }
+      setIaPreview(data.url);
+    }).catch(function(e){
+      setIaGenerando(false);
+      toast&&toast('⚠ '+((e&&e.message)||'No se pudo generar la imagen'));
+    });
+  }
+  function usarImagenIA(){
+    setForm(function(f){return Object.assign({},f,{foto_url:iaPreview});});
+    setIaAbierto(false);
+    setIaPreview('');
   }
 
   function guardar(){
@@ -350,11 +394,26 @@ function TabProductos(props){
           React.createElement('label',{className:'form-label'},'Stock disponible'),
           React.createElement('input',{className:'form-input',type:'number',value:form.stock_disponible,onChange:function(e){setForm(Object.assign({},form,{stock_disponible:e.target.value}));}})
         ),
-        React.createElement('div',{className:'form-group'},
+        React.createElement('div',{className:'form-group',style:{gridColumn:'span 2'}},
           React.createElement('label',{className:'form-label'},'Foto'),
-          React.createElement('input',{type:'file',accept:'image/*',disabled:subiendoFoto,onChange:function(e){if(e.target.files&&e.target.files[0])subirFoto(e.target.files[0]);}}),
+          React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}},
+            React.createElement('input',{type:'file',accept:'image/*',disabled:subiendoFoto,onChange:function(e){if(e.target.files&&e.target.files[0])subirFoto(e.target.files[0]);}}),
+            React.createElement('button',{type:'button',className:'btn-secondary',style:{padding:'6px 14px',fontSize:12},onClick:abrirGeneradorIA},'✨ Generar con IA')
+          ),
           subiendoFoto&&React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)'}},'Subiendo...'),
-          form.foto_url&&React.createElement('img',{src:form.foto_url,style:{width:60,height:60,objectFit:'cover',borderRadius:8,marginTop:6}})
+          form.foto_url&&React.createElement('img',{src:form.foto_url,style:{width:60,height:60,objectFit:'cover',borderRadius:8,marginTop:6}}),
+          iaAbierto&&React.createElement('div',{style:{marginTop:10,padding:14,background:'var(--cream)',border:'1px solid var(--gold-border)',borderRadius:10}},
+            React.createElement('div',{style:{fontSize:11,fontWeight:700,color:'var(--dark)',marginBottom:8,letterSpacing:0.5}},'✨ Generador de imagen con IA'),
+            React.createElement('textarea',{className:'form-input',rows:3,value:iaPrompt,onChange:function(e){setIaPrompt(e.target.value);},style:{width:'100%',resize:'vertical',fontFamily:'inherit'},placeholder:'Describe la foto que querés generar...'}),
+            React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginTop:4}},'Podés editar la descripción antes de generar. Cada imagen generada tiene un costo pequeño en la cuenta de OpenAI conectada.'),
+            React.createElement('div',{style:{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}},
+              React.createElement('button',{type:'button',className:'btn-primary',disabled:iaGenerando,onClick:generarImagenIA,style:{padding:'7px 16px',fontSize:12}},iaGenerando?'Generando...':(iaPreview?'🔄 Generar otra':'Generar imagen')),
+              iaPreview&&React.createElement('button',{type:'button',className:'btn-primary',onClick:usarImagenIA,style:{padding:'7px 16px',fontSize:12,background:'var(--success)'}},'✓ Usar esta imagen'),
+              React.createElement('button',{type:'button',className:'btn-secondary',onClick:function(){setIaAbierto(false);setIaPreview('');},style:{padding:'7px 16px',fontSize:12}},'Cancelar')
+            ),
+            iaGenerando&&React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginTop:10}},'Generando imagen... puede tardar unos segundos.'),
+            iaPreview&&!iaGenerando&&React.createElement('img',{src:iaPreview,style:{width:140,height:140,objectFit:'cover',borderRadius:8,marginTop:10,border:'1px solid var(--border)'}})
+          )
         ),
         React.createElement('div',{className:'form-group',style:{display:'flex',alignItems:'center',gap:8}},
           React.createElement('input',{type:'checkbox',checked:form.activo,onChange:function(e){setForm(Object.assign({},form,{activo:e.target.checked}));},id:'prod-activo'}),
