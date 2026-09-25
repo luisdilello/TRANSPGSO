@@ -12,10 +12,35 @@
 // Solo visible para admin/superadmin (ver index.html, botón de nav 'market') -- no pasa por
 // el sistema de Permisos todavía.
 //
-// Corre como <script> global clásico. Usa identificadores globales de index.html: React,
-// useState, useEffect, db, confirmarCodigo, sincronizarContadorPGSO, sbRegistrarHistorial,
-// fechaHoyCL, COMUNAS_CHILE.
+// Corre como <script> global clásico. OJO: index.html envuelve TODO su código en
+// window.addEventListener('DOMContentLoaded',...), así que db/confirmarCodigo/fechaHoyCL/etc
+// NO son identificadores globales de verdad -- viven adentro de ese closure. Lo que SÍ es
+// global es window.__app (objeto que ese closure llena a propósito) y window.React. Mismo
+// patrón que ya usa modules/gestion-envios.js.
 (function(){
+var useState=React.useState,useEffect=React.useEffect;
+var db=window.__app.db;
+var confirmarCodigo=window.__app.confirmarCodigo;
+var sbRegistrarHistorial=window.__app.sbRegistrarHistorial;
+var fechaHoyCL=window.__app.fechaHoyCL;
+// sincronizarContadorPGSO NO está expuesto en window.__app (solo se usa en el bootstrap
+// inicial) -- se replica acá mismo el resync liviano contra la misma RPC que usa esa función,
+// para el caso raro de choque de código PGSO (ver insertarEnvioMarket más abajo).
+var PGSO_KEY='transpgso_v2_pgso_counter';
+function resincronizarContadorPGSO(){
+  return db.rpc('obtener_max_codigo_pgso').then(function(res){
+    try{
+      if(res&&res.data){
+        var m=/^PGSO(\d+)$/.exec(res.data);
+        if(m){
+          var maxDb=parseInt(m[1],10);
+          var actual=parseInt(localStorage.getItem(PGSO_KEY)||'0',10);
+          if(maxDb>actual)localStorage.setItem(PGSO_KEY,String(maxDb));
+        }
+      }
+    }catch(e){}
+  }).catch(function(){});
+}
 
 var ESTADOS_PAGO=[
   {val:'pendiente',label:'Pendiente',color:'#b07d10',bg:'rgba(176,125,16,0.12)'},
@@ -107,7 +132,7 @@ function TabPedidos(props){
         return db.from('envios').insert(Object.assign({codigo:codigo},base)).select().single().then(function(res){
           if(!res.error)return res.data;
           if(res.error.code==='23505'&&intentos<2){
-            return sincronizarContadorPGSO().then(function(){return intentar(intentos+1);});
+            return resincronizarContadorPGSO().then(function(){return intentar(intentos+1);});
           }
           throw res.error;
         });

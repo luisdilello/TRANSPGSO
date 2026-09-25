@@ -16,9 +16,15 @@
 // pedidos-market-admin.js, no acá. Este archivo SOLO es el catálogo/carrito/checkout público.
 //
 // Corre como <script> global clásico (sin módulos/bundler, igual que el resto del sistema).
-// Usa identificadores globales ya definidos en index.html: React, useState, useEffect,
-// useRef, db (cliente Supabase), COMUNAS_CHILE. No requiere sesión ni usuario.
+// OJO: index.html envuelve TODO su código en window.addEventListener('DOMContentLoaded',...),
+// así que db/confirmarCodigo/COMUNAS_CHILE/etc NO son identificadores globales de verdad --
+// viven adentro de ese closure. Lo que SÍ es global es window.__app (un objeto que ese
+// closure llena a propósito con lo que los módulos lazy-load necesitan) y window.React
+// (viene del <script src> de cdnjs). Mismo patrón que ya usa modules/gestion-envios.js.
 (function(){
+var useState=React.useState,useEffect=React.useEffect;
+var db=window.__app.db;
+var COMUNAS_CHILE=window.__app.COMUNAS_CHILE;
 
 var RUBRO_ICONOS={
   'Verduras':'🥦','Hortalizas':'🥬','Carnicería':'🥩','Pescadería':'🐟','Embutidos':'🌭'
