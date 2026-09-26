@@ -263,6 +263,7 @@ function TabProductos(props){
   var _iaPrompt=useState(''),iaPrompt=_iaPrompt[0],setIaPrompt=_iaPrompt[1];
   var _iaGenerando=useState(false),iaGenerando=_iaGenerando[0],setIaGenerando=_iaGenerando[1];
   var _iaPreview=useState(''),iaPreview=_iaPreview[0],setIaPreview=_iaPreview[1];
+  var _iaFotoPrevia=useState(''),iaFotoPrevia=_iaFotoPrevia[0],setIaFotoPrevia=_iaFotoPrevia[1];
 
   useEffect(function(){cargar();},[]);
   function cargar(){
@@ -297,6 +298,7 @@ function TabProductos(props){
   }
   function abrirGeneradorIA(){
     if(!form.nombre.trim()){toast&&toast('⚠ Escribe primero el nombre del producto');return;}
+    setIaFotoPrevia(form.foto_url||'');
     setIaPrompt(construirPromptIA());
     setIaPreview('');
     setIaAbierto(true);
@@ -313,14 +315,25 @@ function TabProductos(props){
         toast&&toast('⚠ '+((data&&data.error)||(err&&err.message)||'No se pudo generar la imagen'));
         return;
       }
+      // Se adjunta automáticamente al producto apenas se genera, para que no quede
+      // huérfana en el storage si el admin pasa directo a "Crear producto" sin
+      // apretar un botón de confirmación aparte.
       setIaPreview(data.url);
+      setForm(function(f){return Object.assign({},f,{foto_url:data.url});});
+      toast&&toast('✓ Imagen generada y asociada al producto');
     }).catch(function(e){
       setIaGenerando(false);
       toast&&toast('⚠ '+((e&&e.message)||'No se pudo generar la imagen'));
     });
   }
-  function usarImagenIA(){
-    setForm(function(f){return Object.assign({},f,{foto_url:iaPreview});});
+  function cerrarGeneradorIA(){
+    setIaAbierto(false);
+    setIaPreview('');
+  }
+  function cancelarGeneradorIA(){
+    // Revierte a la foto que estaba antes de abrir el generador (si el admin no quiere
+    // quedarse con la última imagen generada).
+    setForm(function(f){return Object.assign({},f,{foto_url:iaFotoPrevia});});
     setIaAbierto(false);
     setIaPreview('');
   }
@@ -408,11 +421,12 @@ function TabProductos(props){
             React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginTop:4}},'Podés editar la descripción antes de generar. Cada imagen generada tiene un costo pequeño en la cuenta de OpenAI conectada.'),
             React.createElement('div',{style:{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}},
               React.createElement('button',{type:'button',className:'btn-primary',disabled:iaGenerando,onClick:generarImagenIA,style:{padding:'7px 16px',fontSize:12}},iaGenerando?'Generando...':(iaPreview?'🔄 Generar otra':'Generar imagen')),
-              iaPreview&&React.createElement('button',{type:'button',className:'btn-primary',onClick:usarImagenIA,style:{padding:'7px 16px',fontSize:12,background:'var(--success)'}},'✓ Usar esta imagen'),
-              React.createElement('button',{type:'button',className:'btn-secondary',onClick:function(){setIaAbierto(false);setIaPreview('');},style:{padding:'7px 16px',fontSize:12}},'Cancelar')
+              iaPreview&&React.createElement('button',{type:'button',className:'btn-primary',onClick:cerrarGeneradorIA,style:{padding:'7px 16px',fontSize:12,background:'var(--success)'}},'✓ Listo'),
+              React.createElement('button',{type:'button',className:'btn-secondary',onClick:cancelarGeneradorIA,style:{padding:'7px 16px',fontSize:12}},'Cancelar')
             ),
             iaGenerando&&React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginTop:10}},'Generando imagen... puede tardar unos segundos.'),
-            iaPreview&&!iaGenerando&&React.createElement('img',{src:iaPreview,style:{width:140,height:140,objectFit:'cover',borderRadius:8,marginTop:10,border:'1px solid var(--border)'}})
+            iaPreview&&!iaGenerando&&React.createElement('img',{src:iaPreview,style:{width:140,height:140,objectFit:'cover',borderRadius:8,marginTop:10,border:'1px solid var(--border)'}}),
+            iaPreview&&!iaGenerando&&React.createElement('div',{style:{fontSize:10,color:'var(--success)',marginTop:6,fontWeight:700}},'✓ Ya quedó asociada a este producto — se guardará al hacer clic en Crear/Guardar producto.')
           )
         ),
         React.createElement('div',{className:'form-group',style:{display:'flex',alignItems:'center',gap:8}},
