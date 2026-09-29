@@ -1484,13 +1484,17 @@ const sumarAlDia=(dia,campo)=>{
   if(!diaResumenMap.has(dia))diaResumenMap.set(dia,{entFlex:0,entManual:0,retFlex:0,retManual:0});
   diaResumenMap.get(dia)[campo]++;
 };
-filtradosOrdenados.filter(e=>e.estado==='entregado').forEach(e=>{
-  let feReal=fechaEntregaDe(e);
-  if(!feReal&&e.historial&&e.historial.length>0){
-    const ent=[...e.historial].reverse().find(h=>h.estado==='entregado');
-    if(ent&&ent.fecha)feReal=ent.fecha;
-  }
-  if(!feReal&&e.updated_at)feReal=e.updated_at;
+// FIX 2026-09-29: esto usaba filtradosOrdenados (agenda por fecha de DESPACHO, mismo criterio
+// que la hoja "Envios") filtrado por estado==='entregado' -- eso traia entregas cuya fecha REAL
+// de entrega cae fuera del periodo elegido (un paquete despachado el ultimo dia del periodo
+// puede entregarse varios dias despues), haciendo que la tabla dia por dia mostrara fechas fuera
+// del rango filtrado (detectado por Luis: rango 16/09 al 16/09 mostraba filas hasta el 29/09).
+// entregadosPeriodoRealTarjetas es el mismo dataset que ya usa la tarjeta "Entregado" en pantalla
+// (fetchEntregadosPorFechaReal, acotado a la fecha REAL de entrega DENTRO del periodo elegido, ya
+// filtrado por cliente/mensajero/fuente) -- mismo criterio que retornadosPeriodoRealTarjetas justo
+// abajo, para que ninguna de las dos columnas se salga del rango que se ve en pantalla.
+entregadosPeriodoRealTarjetas.forEach(e=>{
+  const feReal=e._fechaRealEntregaISO||fechaEntregaDe(e);
   if(!feReal)return;
   sumarAlDia(fechaHoyCL(feReal),esManualPorCodigo(e.codigo)?'entManual':'entFlex');
 });
