@@ -7,6 +7,23 @@ var useEffect=React.useEffect, useMemo=React.useMemo, useRef=React.useRef, useSt
 // pantalla "Cuadre de Cierre" y el Excel exportado usen EXACTAMENTE la misma función y nunca puedan
 // quedar desincronizados.
 var esManualPorCodigo=function(cod){return/^PGSO/i.test(cod||'');};
+// NUEVO 2026-10-01: clasificación de "tipo" de envío para cobro (Colina/Padre Hurtado/10kg/18kg/
+// normal) y los grupos facturable/no facturable -- duplicados TEXTUALMENTE desde
+// modules/pagos-mensajeros.js (getTipoEnvioCobro / ESTADOS_FACTURABLE_RESUMEN), que a su vez los
+// duplica de generarReciboCobro en index.html -- mismo patrón que ya usa el proyecto (ver
+// comentario en pagos-mensajeros.js) para que el monto estimado del nuevo "Cuadre de Cierre" de
+// abajo NUNCA quede desalineado del que muestra "Cobros a Clientes" ni del Recibo de Cobro
+// oficial. Si alguna vez se ajusta la regla en esos archivos, hay que replicar el cambio acá.
+var getTipoEnvioCobroGE=function(e){
+  var kg=parseFloat(e.peso)||0;
+  var com=(e.comuna||'').toUpperCase();
+  if(com.includes('COLINA'))return'colina';
+  if(com.includes('PADRE HURTADO')||com.includes('HURTADO'))return'ph';
+  if(kg>18)return'18kg';
+  if(kg>10)return'10kg';
+  return'normal';
+};
+var ESTADOS_FACTURABLE_GE=['entregado','en_ruta','en_bodega','reprogramado','siniestro','en_bodega_fecha'];
 var AdminEditarEnvio=window.__app.AdminEditarEnvio, abrirVentanaEtiquetas=window.__app.abrirVentanaEtiquetas, COMUNAS_CHILE=window.__app.COMUNAS_CHILE, ESTADOS_ENVIO=window.__app.ESTADOS_ENVIO, EnvioDetalleCard=window.__app.EnvioDetalleCard, EtiquetaPreview=window.__app.EtiquetaPreview, ExportBtn=window.__app.ExportBtn, FotosEntregaConRecarga=window.__app.FotosEntregaConRecarga, Modal=window.__app.Modal, matchComuna=window.__app.matchComuna, esComunaValida=window.__app.esComunaValida, confirmarCodigo=window.__app.confirmarCodigo, crearEntradaHistorial=window.__app.crearEntradaHistorial, db=window.__app.db, diasDesdeFecha=window.__app.diasDesdeFecha, esEnvioAtrasado=window.__app.esEnvioAtrasado, UMBRAL_ATRASO_DIAS=window.__app.UMBRAL_ATRASO_DIAS, calcularBaseTardio=window.__app.calcularBaseTardio, esEnvioTardio=window.__app.esEnvioTardio, horasTardanza=window.__app.horasTardanza, UMBRAL_TARDIO_HORAS=window.__app.UMBRAL_TARDIO_HORAS, estadoBadge=window.__app.estadoBadge, estadoInfo=window.__app.estadoInfo, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, imprimirFotoEtiqueta=window.__app.imprimirFotoEtiqueta, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, normalizarNombre=window.__app.normalizarNombre, perfil=window.__app.perfil, playSound=window.__app.playSound, subirFotoStorage=window.__app.subirFotoStorage, sbRegistrarHistorial=window.__app.sbRegistrarHistorial, sbRegistrarHistorialLote=window.__app.sbRegistrarHistorialLote, fetchPaginadoParalelo=window.__app.fetchPaginadoParalelo, fetchPorDiasParalelo=window.__app.fetchPorDiasParalelo, fetchEntregadosPorFechaReal=window.__app.fetchEntregadosPorFechaReal, fetchPorFechaRealDeEstado=window.__app.fetchPorFechaRealDeEstado, calcularEstadoEfectivo=window.__app.calcularEstadoEfectivo, limiteDiaChileUTC=window.__app.limiteDiaChileUTC;
 function GestionEnvios(_ref26){var _detalleEnvio$mensaje;let mensajeros=_ref26.mensajeros,clientes=_ref26.clientes,toast=_ref26.toast,esSuperAdmin=_ref26.esSuperAdmin,esAdmin=_ref26.esAdmin,usuario=_ref26.usuario,codigoInicial=_ref26.codigoInicial,onCodigoInicialConsumido=_ref26.onCodigoInicialConsumido;const _useState60=useState(()=>lsLoad('gestion_envios',[])),envios=_useState60[0],setEnvios=_useState60[1];const _useState61=useState('lista'),subTab=_useState61[0],setSubTab=_useState61[1];const _useState62=useState(''),search=_useState62[0],setSearch=_useState62[1];const _useState63=useState('todos'),filtroEst=_useState63[0],setFiltroEst=_useState63[1];const _useState64=useState('todos'),filtroCli=_useState64[0],setFiltroCli=_useState64[1];const _useState65=useState('todos'),filtroMen=_useState65[0],setFiltroMen=_useState65[1];const _useState65b=useState('todos'),filtroFuente=_useState65b[0],setFiltroFuente=_useState65b[1];
 // Vista de las tarjetas de estado (y de la tabla al filtrar por una de ellas): 'cierre' (default,
@@ -143,6 +160,19 @@ const _uMesGE=useState(new Date().toISOString().slice(0,7)),mesFiltro=_uMesGE[0]
 const _uD1GE=useState(''),desde=_uD1GE[0],setDesde=_uD1GE[1];
 const _uD2GE=useState(''),hasta=_uD2GE[0],setHasta=_uD2GE[1];
 const _uCuadreOpen=useState(false),cuadreAbierto=_uCuadreOpen[0],setCuadreAbierto=_uCuadreOpen[1];
+const _uCuadreClienteOpen=useState(false),cuadreClienteAbierto=_uCuadreClienteOpen[0],setCuadreClienteAbierto=_uCuadreClienteOpen[1];
+// NUEVO 2026-10-01: números que el CLIENTE informa por día de despacho (Flex/Manual/Devolución +
+// nota), para la tabla "Cuadre vs Cliente" de más abajo -- TransPgso no tiene cómo saber estos
+// valores por sí solo (vienen de un reporte externo del cliente), así que Luis los escribe acá
+// mientras cuadra. Se guardan en localStorage (igual que el resto del módulo, ver lsLoad/lsSave
+// de 'gestion_envios' arriba) clave por cliente+día -- así sobreviven aunque cambie el rango de
+// fechas elegido o se recargue la página, y no se pierden si ajusta el filtro sin querer.
+const _uCuadreCli=useState(()=>lsLoad('cuadre_cliente_inputs',{})),cuadreClienteInputs=_uCuadreCli[0],setCuadreClienteInputs=_uCuadreCli[1];
+useEffect(()=>{lsSave('cuadre_cliente_inputs',cuadreClienteInputs);},[cuadreClienteInputs]);
+function setCuadreClienteCampo(dia,campo,valor){
+  const clave=filtroCli+'::'+dia;
+  setCuadreClienteInputs(prev=>({...prev,[clave]:{...(prev[clave]||{}),[campo]:valor}}));
+}
 const pdfRef=useRef();const _usePS=useState(50),PAGE_SIZE=_usePS[0],setPageSize=_usePS[1];const edicionesRecientesRef=useRef({});useEffect(()=>{lsSave('gestion_envios',envios);},[envios]);
 // ── Confirmación de cambios críticos ────────────────────────────────
 // Antes, cambiar mensajero/cliente/comuna/estado (en la tabla o en el detalle) se aplicaba
@@ -1124,6 +1154,63 @@ const resumenCuadreCierre=useMemo(()=>{
   const totalEntTotal=totalEntFlex+totalEntManual,totalRetTotal=totalRetFlex+totalRetManual;
   return{filas,totalEntFlex,totalEntManual,totalEntTotal,totalRetFlex,totalRetManual,totalRetTotal,neto:totalEntTotal-totalRetTotal};
 },[entregadosPeriodoRealTarjetas,retornadosPeriodoRealTarjetas,entregasReal]);
+// NUEVO 2026-10-01: monto ESTIMADO a cobrar al cliente filtrado, con la MISMA base que "Cobros a
+// Clientes" (Pagos y Cobros) y el Recibo de Cobro oficial -- envíos DESPACHADOS en el período
+// (enviosPeriodoTarjetas, fecha de despacho) + estado ACTUAL, NO la base "fecha real de entrega"
+// que usa el resto de este panel. Decisión tomada con Luis el 2026-10-01 después de detectar que
+// la base "fecha real" daba 2.554 paquetes netos para Super Xiyu 16-30/09, contra los 2.705 que
+// arroja Recibidos−Retorno (la base que de verdad se usa para facturar) -- 151 paquetes de
+// diferencia real, que se habrían cobrado de menos. Por eso el $ de acá usa a propósito OTRA base
+// de datos que el resto del panel (ver resumenCuadreCierre arriba): así el número siempre
+// coincide con lo que Cobros a Clientes/el Recibo real van a mostrar, en vez de inventar una
+// tercera cifra. Solo tiene sentido para UN cliente (la tarifa es por cliente): si el filtro de
+// cliente está en "todos" se devuelve null y la pantalla pide elegir un cliente.
+const cobroEstimadoCuadre=useMemo(()=>{
+  if(filtroCli==='todos')return null;
+  const cliData=(clientes||[]).find(c=>c.nombre===filtroCli)||{};
+  const grupos={normal:0,d10kg:0,d18kg:0,colina:0,ph:0};
+  let facturables=0;
+  enviosPeriodoTarjetas.forEach(e=>{
+    if(ESTADOS_FACTURABLE_GE.indexOf(e.estado)===-1)return;
+    facturables++;
+    const t=getTipoEnvioCobroGE(e);
+    if(t==='10kg')grupos.d10kg++;else if(t==='18kg')grupos.d18kg++;else if(t==='colina')grupos.colina++;else if(t==='ph')grupos.ph++;else grupos.normal++;
+  });
+  const tar={normal:cliData.tarifa||0,d10kg:cliData.tarifa10kg||0,d18kg:cliData.tarifa18kg||0,colina:cliData.tarifaColina||cliData.tarifa||0,ph:cliData.tarifaPH||cliData.tarifa||0};
+  const montoNeto=grupos.normal*tar.normal+grupos.d10kg*tar.d10kg+grupos.d18kg*tar.d18kg+grupos.colina*tar.colina+grupos.ph*tar.ph;
+  const iva=cliData.pagaIVA?Math.round(montoNeto*0.19):0;
+  return{facturables,grupos,tar,montoNeto,iva,montoTotal:montoNeto+iva,clienteExiste:!!cliData.nombre};
+},[filtroCli,clientes,enviosPeriodoTarjetas]);
+// NUEVO 2026-10-01: "Cuadre vs Cliente" -- Luis compara a mano, por día de RETIRO (despacho), lo
+// que el cliente le informa (Flex/Manual) contra lo que tiene TransPgso, para detectar diferencias
+// ANTES de cobrar (ver su planilla de ejemplo para Super Xiyu 16-30/09). A propósito agrupa por
+// FECHA DE DESPACHO (e.fecha) y no por fecha real de entrega como el resto de este panel -- así es
+// como el cliente lo reporta: lo que te retiré tal día, contando TODOS los códigos despachados ese
+// día sin importar su estado actual (verificado contra Supabase: coincide exacto con los días de
+// su planilla, ej. 17-09 → 286 Flex + 13 Manual = 299).
+// FIX 2026-10-01 (antes de mandarlo): la v1 de este memo restaba acá mismo, día por día, los
+// envíos en estado "retorno" como "Devolución" de ESE día de despacho -- pero cruzando con el
+// archivo real de Luis, el "Retorno resuelto" NO se adjudica al día en que se despachó: Luis lo
+// pone como un ÚNICO ajuste al final del período completo (ej. sus 10 retornos de Super Xiyu
+// 16-30/09 se despacharon en 8 días distintos, pero los 10 aparecen juntos en la fila del último
+// día) -- exactamente igual que la fórmula ya existente "TOTAL A PAGAR (recibido − retorno)" de
+// arriba. Por eso acá NO se resta nada por día: cada día muestra Flex/Manual/Total tal cual se
+// despachó, y el retorno se compara UNA sola vez más abajo contra retornadosPeriodoRealTarjetas
+// (la misma cifra que ya usa esa fórmula), para no inventar un criterio nuevo.
+const cuadreDespachoPorDia=useMemo(()=>{
+  const porDia=new Map();
+  enviosPeriodoTarjetas.forEach(e=>{
+    const dia=(e.fecha||'').slice(0,10);
+    if(!dia)return;
+    if(!porDia.has(dia))porDia.set(dia,{flex:0,manual:0});
+    const g=porDia.get(dia);
+    if(esManualPorCodigo(e.codigo))g.manual++;else g.flex++;
+  });
+  return[...porDia.keys()].sort().map(dia=>{
+    const g=porDia.get(dia);
+    return{dia,flex:g.flex,manual:g.manual,total:g.flex+g.manual};
+  });
+},[enviosPeriodoTarjetas]);
 // Guarda un campo de la ficha del envío (usado por la grilla unificada de abajo, que reemplaza
 // tanto las tarjetas de solo lectura como el panel separado "Editar Campos del Envío" que existían
 // antes -- ahora todo es un solo lugar y cada campo se edita ahí mismo con un click).
@@ -1382,6 +1469,22 @@ showListaNegra&&(()=>{const lista=lsLoad('envios_eliminados',[]);return/*#__PURE
     React.createElement('span',{style:{fontWeight:700,color:'#2e4632'}},resumenCuadreCierre.neto.toLocaleString('es-CL'),' neto'),
     React.createElement('span',{title:'Mismos números que exporta "Resumen" en el Excel. El Dashboard ("Resumen por Cliente") y el Recibo de Cobro usan a propósito fecha de DESPACHO + estado actual (regla fijada el 2026-09-07/08) -- no son comparables con este número directamente, y es esperado.',style:{cursor:'help',color:'var(--text-soft)'}},'ⓘ')
   ),
+  // NUEVO 2026-10-01: línea del $ a cobrar -- a propósito usa OTRA base de datos que la línea de
+  // arriba (ver cobroEstimadoCuadre más arriba: despacho + estado actual, igual que "Cobros a
+  // Clientes"), así el monto siempre coincide con lo que de verdad se va a facturar. Solo se
+  // calcula si hay un cliente puntual elegido (la tarifa es por cliente).
+  cobroEstimadoCuadre&&React.createElement('div',{style:{width:'100%',fontSize:12,color:'var(--text)',display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',marginTop:4,paddingTop:6,borderTop:'1px dashed rgba(200,168,75,0.35)'}},
+    React.createElement('span',{style:{fontWeight:700}},'💰 A cobrar (igual que Cobros a Clientes):'),
+    React.createElement('span',null,'$'+cobroEstimadoCuadre.montoNeto.toLocaleString('es-CL'),' neto'),
+    React.createElement('span',{style:{color:'var(--text-soft)'}},'+'),
+    React.createElement('span',null,'$'+cobroEstimadoCuadre.iva.toLocaleString('es-CL'),' IVA'),
+    React.createElement('span',{style:{color:'var(--text-soft)'}},'='),
+    React.createElement('span',{style:{fontWeight:700,color:'#8a6d1a'}},'$'+cobroEstimadoCuadre.montoTotal.toLocaleString('es-CL')),
+    React.createElement('span',{style:{color:'var(--text-soft)'}},'(',cobroEstimadoCuadre.facturables,' facturables)'),
+    React.createElement('span',{title:'Misma base que "Cobros a Clientes" (Pagos y Cobros) y el Recibo de Cobro oficial: envíos DESPACHADOS en el período + estado ACTUAL -- facturable = entregado + lo que sigue pendiente (en ruta/en bodega/reprogramado) + siniestro; no facturable = cancelado + en bodega cancelado + retorno. NO incluye ajustes manuales, descuentos por siniestro ya aplicados ni cobros de retiro -- para el Recibo de Cobro oficial con todo eso, usa Calendario de Cobros.',style:{cursor:'help',color:'var(--text-soft)'}},'ⓘ'),
+    !cobroEstimadoCuadre.clienteExiste&&React.createElement('span',{style:{color:'var(--danger)',fontWeight:700}},'⚠ "'+filtroCli+'" no tiene ficha de cliente/tarifa cargada')
+  ),
+  filtroCli==='todos'&&React.createElement('div',{style:{width:'100%',fontSize:11,color:'var(--text-soft)',fontStyle:'italic',marginTop:4}},'Selecciona un cliente arriba para ver cuánto se le cobraría.'),
   React.createElement('button',{type:'button',onClick:()=>setCuadreAbierto(v=>!v),className:'btn-secondary',style:{fontSize:11,whiteSpace:'nowrap',padding:'4px 10px'}},cuadreAbierto?'Ocultar día por día ▲':'Ver día por día ▼'),
   cuadreAbierto&&React.createElement('div',{style:{width:'100%',marginTop:10,overflowX:'auto'}},
     resumenCuadreCierre.filas.length===0?React.createElement('div',{style:{padding:'10px 0',fontSize:12,color:'var(--text-soft)'}},'No hay entregas ni retornos resueltos en este período/filtro.'):
@@ -1412,6 +1515,101 @@ showListaNegra&&(()=>{const lista=lsLoad('envios_eliminados',[]);return/*#__PURE
         )
       )
     )
+  )
+),
+// NUEVO 2026-10-01: "Cuadre vs Cliente" -- la segunda mitad de lo que Luis hacía a mano en su
+// planilla (ver Hoja1 del ejemplo que mandó para Super Xiyu): comparar, día de despacho por día
+// de despacho, lo que el cliente le informa (Flex/Manual) contra lo que tiene TransPgso
+// (cuadreDespachoPorDia más arriba), para pescar diferencias ANTES de cobrar. El retorno NO se
+// compara por día (ver el comentario en cuadreDespachoPorDia) -- se compara UNA sola vez, igual
+// que la fórmula ya existente "TOTAL A PAGAR (recibido − retorno)". El lado "CLIENTE DICE" es
+// texto que Luis escribe a mano porque viene de un reporte externo del cliente -- TransPgso no
+// tiene cómo saberlo solo -- y queda guardado en el navegador (cuadreClienteInputs) para que no
+// se pierda entre sesiones. Solo tiene sentido con UN cliente elegido.
+filtroCli!=='todos'&&React.createElement('div',{style:{background:'#fff',border:'1px solid var(--border)',borderRadius:10,padding:'10px 14px',marginBottom:16}},
+  React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8}},
+    React.createElement('div',{style:{fontSize:12,color:'var(--text)'}},
+      React.createElement('span',{style:{fontWeight:700}},'📋 Cuadre vs. Cliente'),
+      React.createElement('span',{style:{color:'var(--text-soft)',marginLeft:6}},'— lo que informa el cliente vs. lo que tiene TransPgso, por día de despacho.')
+    ),
+    React.createElement('button',{type:'button',onClick:()=>setCuadreClienteAbierto(v=>!v),className:'btn-secondary',style:{fontSize:11,whiteSpace:'nowrap',padding:'4px 10px'}},cuadreClienteAbierto?'Ocultar ▲':'Comparar con el cliente ▼')
+  ),
+  cuadreClienteAbierto&&React.createElement('div',{style:{marginTop:10,overflowX:'auto'}},
+    cuadreDespachoPorDia.length===0?React.createElement('div',{style:{padding:'10px 0',fontSize:12,color:'var(--text-soft)'}},'No hay envíos despachados en este período/filtro.'):
+    (()=>{
+      const claveRetorno=filtroCli+'::__RETORNO__';
+      const ciRet=cuadreClienteInputs[claveRetorno]||{};
+      const retornoTransPgso=retornadosPeriodoRealTarjetas.length;
+      const retornoCliente=(ciRet.valor===undefined||ciRet.valor==='')?null:(+ciRet.valor||0);
+      const sumaClienteFlexManual=cuadreDespachoPorDia.reduce((a,d)=>{
+        const ci=cuadreClienteInputs[filtroCli+'::'+d.dia]||{};
+        const f=(ci.flex===undefined||ci.flex==='')?0:(+ci.flex||0);
+        const m=(ci.manual===undefined||ci.manual==='')?0:(+ci.manual||0);
+        return a+f+m;
+      },0);
+      const algunDiaConDatos=cuadreDespachoPorDia.some(d=>{const ci=cuadreClienteInputs[filtroCli+'::'+d.dia]||{};return ci.flex!==undefined&&ci.flex!==''||ci.manual!==undefined&&ci.manual!=='';});
+      const totalPagarCliente=(algunDiaConDatos&&retornoCliente!==null)?sumaClienteFlexManual-retornoCliente:null;
+      const totalPagarTransPgso=enviosPeriodoTarjetas.length-retornoTransPgso;
+      const difFinal=totalPagarCliente!==null?totalPagarCliente-totalPagarTransPgso:null;
+      const inputStyle={width:48,padding:'2px 4px',fontSize:11,border:'1px solid var(--border)',borderRadius:4,textAlign:'right'};
+      return React.createElement(React.Fragment,null,
+        React.createElement('table',{style:{width:'100%',fontSize:11,borderCollapse:'collapse',minWidth:640}},
+          React.createElement('thead',null,
+            React.createElement('tr',null,
+              React.createElement('th',{rowSpan:2,style:{padding:'5px 8px',textAlign:'left',borderBottom:'2px solid var(--gold)',verticalAlign:'bottom'}},'Día (despacho)'),
+              React.createElement('th',{colSpan:3,style:{padding:'4px 6px',textAlign:'center',borderBottom:'1px solid var(--border)',color:'#1B3A6B'}},'CLIENTE DICE'),
+              React.createElement('th',{colSpan:3,style:{padding:'4px 6px',textAlign:'center',borderBottom:'1px solid var(--border)'}},'TRANSPGSO'),
+              React.createElement('th',{rowSpan:2,style:{padding:'5px 8px',textAlign:'right',borderBottom:'2px solid var(--gold)',verticalAlign:'bottom'}},'Dif.'),
+              React.createElement('th',{rowSpan:2,style:{padding:'5px 8px',textAlign:'left',borderBottom:'2px solid var(--gold)',verticalAlign:'bottom'}},'Nota')
+            ),
+            React.createElement('tr',null,
+              ['Flex','Manual','Total'].map((h,i)=>React.createElement('th',{key:'c'+i,style:{padding:'3px 6px',textAlign:'right',borderBottom:'2px solid var(--gold)',color:'#1B3A6B',fontWeight:600}},h)),
+              ['Flex','Manual','Total'].map((h,i)=>React.createElement('th',{key:'t'+i,style:{padding:'3px 6px',textAlign:'right',borderBottom:'2px solid var(--gold)',fontWeight:600}},h))
+            )
+          ),
+          React.createElement('tbody',null,
+            cuadreDespachoPorDia.map((d,i)=>{
+              const clave=filtroCli+'::'+d.dia;
+              const ci=cuadreClienteInputs[clave]||{};
+              const cFlex=(ci.flex===undefined||ci.flex==='')?null:(+ci.flex||0);
+              const cManual=(ci.manual===undefined||ci.manual==='')?null:(+ci.manual||0);
+              const tieneDatosCliente=cFlex!==null||cManual!==null;
+              const cTotal=tieneDatosCliente?(cFlex||0)+(cManual||0):null;
+              const dif=tieneDatosCliente?cTotal-d.total:null;
+              return React.createElement('tr',{key:d.dia,style:{background:i%2===0?'#fff':'rgba(27,58,107,0.03)'}},
+                React.createElement('td',{style:{padding:'4px 8px',fontFamily:'JetBrains Mono'}},fmtFecha(d.dia)),
+                React.createElement('td',{style:{padding:'3px 6px'}},React.createElement('input',{type:'number',value:ci.flex!==undefined?ci.flex:'',onChange:ev=>setCuadreClienteCampo(d.dia,'flex',ev.target.value),style:inputStyle})),
+                React.createElement('td',{style:{padding:'3px 6px'}},React.createElement('input',{type:'number',value:ci.manual!==undefined?ci.manual:'',onChange:ev=>setCuadreClienteCampo(d.dia,'manual',ev.target.value),style:inputStyle})),
+                React.createElement('td',{style:{padding:'4px 8px',textAlign:'right',fontWeight:700}},tieneDatosCliente?cTotal:'—'),
+                React.createElement('td',{style:{padding:'4px 8px',textAlign:'right'}},d.flex),
+                React.createElement('td',{style:{padding:'4px 8px',textAlign:'right'}},d.manual),
+                React.createElement('td',{style:{padding:'4px 8px',textAlign:'right',fontWeight:700}},d.total),
+                React.createElement('td',{style:{padding:'4px 8px',textAlign:'right',fontWeight:700,color:dif===null?'var(--text-soft)':dif===0?'var(--success)':'var(--danger)'}},dif===null?'—':(dif>0?'+':'')+dif),
+                React.createElement('td',{style:{padding:'3px 6px'}},React.createElement('input',{type:'text',value:ci.nota||'',placeholder:'—',onChange:ev=>setCuadreClienteCampo(d.dia,'nota',ev.target.value),style:{width:150,padding:'2px 4px',fontSize:11,border:'1px solid var(--border)',borderRadius:4}}))
+              );
+            })
+          )
+        ),
+        React.createElement('div',{style:{marginTop:12,paddingTop:10,borderTop:'2px solid var(--gold)',fontSize:12}},
+          React.createElement('div',{style:{color:'var(--text-soft)',fontSize:10,marginBottom:6,fontStyle:'italic'}},'El retorno no se adjudica a un día de despacho -- se compara una sola vez, igual que la fórmula "Recibido − Retorno".'),
+          React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:6}},
+            React.createElement('span',{style:{minWidth:170,fontWeight:700}},'Retorno resuelto en el período:'),
+            React.createElement('span',{style:{color:'#1B3A6B'}},'Cliente dice'),
+            React.createElement('input',{type:'number',value:ciRet.valor!==undefined?ciRet.valor:'',onChange:ev=>setCuadreClienteCampo('__RETORNO__','valor',ev.target.value),style:inputStyle}),
+            React.createElement('span',{style:{color:'var(--text-soft)'}},'vs. TransPgso'),
+            React.createElement('span',{style:{fontWeight:700,color:'#c86a6a'}},retornoTransPgso),
+            retornoCliente!==null&&React.createElement('span',{style:{fontWeight:700,color:retornoCliente-retornoTransPgso===0?'var(--success)':'var(--danger)'}},'Dif. ',(retornoCliente-retornoTransPgso>0?'+':''),retornoCliente-retornoTransPgso)
+          ),
+          React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}},
+            React.createElement('span',{style:{minWidth:170,fontWeight:700}},'TOTAL A PAGAR (Recibido − Retorno):'),
+            React.createElement('span',{style:{color:'#1B3A6B'}},'Cliente: ',React.createElement('strong',null,totalPagarCliente!==null?totalPagarCliente.toLocaleString('es-CL'):'— (faltan datos)')),
+            React.createElement('span',{style:{color:'var(--text-soft)'}},'vs.'),
+            React.createElement('span',null,'TransPgso: ',React.createElement('strong',null,totalPagarTransPgso.toLocaleString('es-CL'))),
+            difFinal!==null&&React.createElement('span',{style:{fontWeight:700,padding:'2px 10px',borderRadius:8,background:difFinal===0?'rgba(46,125,79,0.12)':'rgba(176,48,48,0.12)',color:difFinal===0?'var(--success)':'var(--danger)'}},difFinal===0?'✓ Cuadra':'Diferencia: '+(difFinal>0?'+':'')+difFinal)
+          )
+        )
+      );
+    })()
   )
 ),
 /*#__PURE__*/React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',marginBottom:14,flexWrap:'wrap'}},
