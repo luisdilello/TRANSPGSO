@@ -1,5 +1,12 @@
 (function(){
 var useEffect=React.useEffect, useMemo=React.useMemo, useRef=React.useRef, useState=React.useState;
+// Regla "manual vs Flex" (ver uso en onExcel y en resumenCuadreCierre más abajo): un código que
+// empieza con "PGSO" fue generado por el sistema porque el envío se ingresó sin código propio --
+// eso es lo que en la operación se llama "manual". Cualquier otro código (numérico, ML, etc.) es
+// Flex. Se saca a nivel de módulo (antes vivía solo dentro de onExcel) para que el nuevo panel en
+// pantalla "Cuadre de Cierre" y el Excel exportado usen EXACTAMENTE la misma función y nunca puedan
+// quedar desincronizados.
+var esManualPorCodigo=function(cod){return/^PGSO/i.test(cod||'');};
 var AdminEditarEnvio=window.__app.AdminEditarEnvio, abrirVentanaEtiquetas=window.__app.abrirVentanaEtiquetas, COMUNAS_CHILE=window.__app.COMUNAS_CHILE, ESTADOS_ENVIO=window.__app.ESTADOS_ENVIO, EnvioDetalleCard=window.__app.EnvioDetalleCard, EtiquetaPreview=window.__app.EtiquetaPreview, ExportBtn=window.__app.ExportBtn, FotosEntregaConRecarga=window.__app.FotosEntregaConRecarga, Modal=window.__app.Modal, matchComuna=window.__app.matchComuna, esComunaValida=window.__app.esComunaValida, confirmarCodigo=window.__app.confirmarCodigo, crearEntradaHistorial=window.__app.crearEntradaHistorial, db=window.__app.db, diasDesdeFecha=window.__app.diasDesdeFecha, esEnvioAtrasado=window.__app.esEnvioAtrasado, UMBRAL_ATRASO_DIAS=window.__app.UMBRAL_ATRASO_DIAS, calcularBaseTardio=window.__app.calcularBaseTardio, esEnvioTardio=window.__app.esEnvioTardio, horasTardanza=window.__app.horasTardanza, UMBRAL_TARDIO_HORAS=window.__app.UMBRAL_TARDIO_HORAS, estadoBadge=window.__app.estadoBadge, estadoInfo=window.__app.estadoInfo, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, imprimirFotoEtiqueta=window.__app.imprimirFotoEtiqueta, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, normalizarNombre=window.__app.normalizarNombre, perfil=window.__app.perfil, playSound=window.__app.playSound, subirFotoStorage=window.__app.subirFotoStorage, sbRegistrarHistorial=window.__app.sbRegistrarHistorial, sbRegistrarHistorialLote=window.__app.sbRegistrarHistorialLote, fetchPaginadoParalelo=window.__app.fetchPaginadoParalelo, fetchPorDiasParalelo=window.__app.fetchPorDiasParalelo, fetchEntregadosPorFechaReal=window.__app.fetchEntregadosPorFechaReal, fetchPorFechaRealDeEstado=window.__app.fetchPorFechaRealDeEstado, calcularEstadoEfectivo=window.__app.calcularEstadoEfectivo, limiteDiaChileUTC=window.__app.limiteDiaChileUTC;
 function GestionEnvios(_ref26){var _detalleEnvio$mensaje;let mensajeros=_ref26.mensajeros,clientes=_ref26.clientes,toast=_ref26.toast,esSuperAdmin=_ref26.esSuperAdmin,esAdmin=_ref26.esAdmin,usuario=_ref26.usuario,codigoInicial=_ref26.codigoInicial,onCodigoInicialConsumido=_ref26.onCodigoInicialConsumido;const _useState60=useState(()=>lsLoad('gestion_envios',[])),envios=_useState60[0],setEnvios=_useState60[1];const _useState61=useState('lista'),subTab=_useState61[0],setSubTab=_useState61[1];const _useState62=useState(''),search=_useState62[0],setSearch=_useState62[1];const _useState63=useState('todos'),filtroEst=_useState63[0],setFiltroEst=_useState63[1];const _useState64=useState('todos'),filtroCli=_useState64[0],setFiltroCli=_useState64[1];const _useState65=useState('todos'),filtroMen=_useState65[0],setFiltroMen=_useState65[1];const _useState65b=useState('todos'),filtroFuente=_useState65b[0],setFiltroFuente=_useState65b[1];
 // Vista de las tarjetas de estado (y de la tabla al filtrar por una de ellas): 'cierre' (default,
@@ -135,6 +142,7 @@ const _uPerGE=useState('hoy'),periodo=_uPerGE[0],setPeriodo=_uPerGE[1];
 const _uMesGE=useState(new Date().toISOString().slice(0,7)),mesFiltro=_uMesGE[0],setMesFiltro=_uMesGE[1];
 const _uD1GE=useState(''),desde=_uD1GE[0],setDesde=_uD1GE[1];
 const _uD2GE=useState(''),hasta=_uD2GE[0],setHasta=_uD2GE[1];
+const _uCuadreOpen=useState(false),cuadreAbierto=_uCuadreOpen[0],setCuadreAbierto=_uCuadreOpen[1];
 const pdfRef=useRef();const _usePS=useState(50),PAGE_SIZE=_usePS[0],setPageSize=_usePS[1];const edicionesRecientesRef=useRef({});useEffect(()=>{lsSave('gestion_envios',envios);},[envios]);
 // ── Confirmación de cambios críticos ────────────────────────────────
 // Antes, cambiar mensajero/cliente/comuna/estado (en la tabla o en el detalle) se aplicaba
@@ -1088,6 +1096,34 @@ function toggleSelect(id){setSelected(prev=>{const s=new Set(prev);if(s.has(id))
     else toast('✓ '+urls.length+' etiqueta'+(urls.length>1?'s':'')+' con foto escaneada');
   }catch(e){toast('⚠ Error buscando etiquetas: '+e.message);}
 }const fmtFecha=f=>{try{return new Date(f+'T12:00:00').toLocaleDateString('es-CL');}catch(e){return f;}};const fechaEntregaDe=e=>{if(entregasReal&&entregasReal[e.codigo])return entregasReal[e.codigo];if(e.historial&&e.historial.length>0){const ent=[...e.historial].reverse().find(h=>h.estado==='entregado');if(ent&&ent.fecha)return ent.fecha;}if(e.estado==='entregado'&&e.updated_at)return e.updated_at;return'';};const fmtFechaHora=iso=>{try{return new Date(iso).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return iso||'';}};
+// NUEVO 2026-10-01: "Cuadre de Cierre" -- Luis venía exportando a Excel y pivoteando a mano para
+// cuadrar un cliente/mes (ej. Super Xiyu), y esos números no calzaban con el Dashboard porque el
+// Dashboard usa otra base de cálculo a propósito (fecha de despacho + estado en vivo, fijado con
+// Luis el 2026-09-07/08 para la facturación real) -- ver hilo "necesito automatizar la cuadratura
+// de cierres de mes". Luis pidió explícitamente usar "la lógica que aplicamos en Gestión de
+// Envíos" (fecha REAL de entrega/resolución) como la verdad para este cuadre, y como herramienta
+// NUEVA y separada -- sin tocar el Dashboard ni el Recibo de Cobro. Este memo arma el mismo
+// desglose día por día (Flex vs Manual, Entregados vs Retornados) que ya calculaba onExcel para
+// la hoja "Resumen" del Excel exportado, para mostrarlo también directamente en pantalla -- misma
+// fuente de datos (entregadosPeriodoRealTarjetas/retornadosPeriodoRealTarjetas, ya acotada a la
+// fecha real DENTRO del período elegido y filtrada por cliente/mensajero/fuente) y misma función
+// esManualPorCodigo, para que el panel en pantalla y el Excel exportado NUNCA puedan mostrar
+// números distintos. onExcel más abajo fue refactorizado para reusar este mismo resultado.
+const resumenCuadreCierre=useMemo(()=>{
+  const diaMap=new Map();
+  const sumarAlDia=(dia,campo)=>{if(!dia)return;if(!diaMap.has(dia))diaMap.set(dia,{entFlex:0,entManual:0,retFlex:0,retManual:0});diaMap.get(dia)[campo]++;};
+  entregadosPeriodoRealTarjetas.forEach(e=>{const feReal=e._fechaRealEntregaISO||fechaEntregaDe(e);if(!feReal)return;sumarAlDia(fechaHoyCL(feReal),esManualPorCodigo(e.codigo)?'entManual':'entFlex');});
+  retornadosPeriodoRealTarjetas.forEach(e=>{const feReal=e._fechaRealEstadoISO||e.fecha;if(!feReal)return;sumarAlDia(fechaHoyCL(feReal),esManualPorCodigo(e.codigo)?'retManual':'retFlex');});
+  const diasOrdenados=[...diaMap.keys()].sort();
+  let totalEntFlex=0,totalEntManual=0,totalRetFlex=0,totalRetManual=0;
+  const filas=diasOrdenados.map(dia=>{
+    const d=diaMap.get(dia);const entTotal=d.entFlex+d.entManual;const retTotal=d.retFlex+d.retManual;
+    totalEntFlex+=d.entFlex;totalEntManual+=d.entManual;totalRetFlex+=d.retFlex;totalRetManual+=d.retManual;
+    return{dia,entFlex:d.entFlex,entManual:d.entManual,entTotal,retFlex:d.retFlex,retManual:d.retManual,retTotal,neto:entTotal-retTotal};
+  });
+  const totalEntTotal=totalEntFlex+totalEntManual,totalRetTotal=totalRetFlex+totalRetManual;
+  return{filas,totalEntFlex,totalEntManual,totalEntTotal,totalRetFlex,totalRetManual,totalRetTotal,neto:totalEntTotal-totalRetTotal};
+},[entregadosPeriodoRealTarjetas,retornadosPeriodoRealTarjetas,entregasReal]);
 // Guarda un campo de la ficha del envío (usado por la grilla unificada de abajo, que reemplaza
 // tanto las tarjetas de solo lectura como el panel separado "Editar Campos del Envío" que existían
 // antes -- ahora todo es un solo lugar y cada campo se edita ahí mismo con un click).
@@ -1325,6 +1361,67 @@ showListaNegra&&(()=>{const lista=lsLoad('envios_eliminados',[]);return/*#__PURE
     )
   )
 ),
+// NUEVO 2026-10-01: panel "Cuadre de Cierre" -- resuelve el pedido de Luis de "automatizar la
+// cuadratura de cierres de mes" sin tocar el Dashboard ni el Recibo de Cobro (herramienta nueva y
+// separada, decisión tomada con Luis el 2026-10-01). Muestra en pantalla, para el cliente/período
+// ya filtrados arriba, el MISMO número que calcula resumenCuadreCierre (y que exporta el botón
+// "Exportar" en la hoja "Resumen") -- siempre con fecha REAL de entrega/resolución, nunca fecha de
+// despacho -- para que Luis deje de tener que exportar a Excel y pivotear a mano para cuadrar un
+// cliente. Se avisa explícitamente que este número puede no calzar con el Dashboard a propósito
+// (bases de cálculo distintas, ambas correctas -- ver nota).
+(sincronizando||cargandoEntregadosReal||cargandoRetornadosReal)?/*#__PURE__*/React.createElement('div',{style:{textAlign:'center',padding:'14px',color:'var(--text-soft)',fontSize:12,marginBottom:16,background:'rgba(200,168,75,0.06)',borderRadius:10}},'⏳ Calculando cuadre de cierre...'):/*#__PURE__*/React.createElement('div',{style:{background:'linear-gradient(145deg,#ffffff,#f5eedc)',border:'1px solid rgba(200,168,75,0.3)',borderRadius:14,padding:'16px 20px',marginBottom:16,boxShadow:'6px 6px 16px rgba(43,46,32,0.1),-2px -2px 8px rgba(255,255,255,0.9)'}},
+  React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10,marginBottom:12}},
+    React.createElement('div',null,
+      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:16,letterSpacing:1.5,color:'var(--dark)'}},'🧾 CUADRE DE CIERRE'),
+      React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginTop:2}},'Fecha real de entrega/resolución — mismos números que exporta "Resumen" en el Excel. ',
+        React.createElement('span',{title:'El Dashboard ("Resumen por Cliente") y el Recibo de Cobro usan a propósito fecha de DESPACHO + estado actual (regla de facturación fijada el 2026-09-07/08) -- no son comparables con este número directamente.',style:{textDecoration:'underline dotted',cursor:'help'}},'puede no calzar con el Dashboard, y es esperado ⓘ'))
+    ),
+    React.createElement('button',{type:'button',onClick:()=>setCuadreAbierto(v=>!v),className:'btn-secondary',style:{fontSize:11,whiteSpace:'nowrap'}},cuadreAbierto?'Ocultar detalle día por día ▲':'Ver detalle día por día ▼')
+  ),
+  React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap'}},
+    [{label:'Entregados Flex',val:resumenCuadreCierre.totalEntFlex,color:'var(--gold)'},
+     {label:'Entregados Manual',val:resumenCuadreCierre.totalEntManual,color:'var(--gold)'},
+     {label:'Entregados Total',val:resumenCuadreCierre.totalEntTotal,color:'var(--gold)',fuerte:true},
+     {label:'Retornados Flex',val:resumenCuadreCierre.totalRetFlex,color:'#c86a6a'},
+     {label:'Retornados Manual',val:resumenCuadreCierre.totalRetManual,color:'#c86a6a'},
+     {label:'Retornados Total',val:resumenCuadreCierre.totalRetTotal,color:'#c86a6a',fuerte:true},
+     {label:'Neto (Entregados − Retornados)',val:resumenCuadreCierre.neto,color:'#fff',fondo:'linear-gradient(145deg,#3a5a40,#2e4632)',fuerte:true}
+    ].map((t,i)=>React.createElement('div',{key:i,style:{background:t.fondo||(t.fuerte?'rgba(200,168,75,0.08)':'#fff'),border:'1px solid '+(t.fondo?'transparent':'rgba(200,168,75,0.18)'),borderRadius:10,padding:'8px 14px',minWidth:100,textAlign:'center'}},
+      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:t.fuerte?24:20,lineHeight:1,color:t.fondo?'#fff':t.color}},t.val.toLocaleString('es-CL')),
+      React.createElement('div',{style:{fontSize:9,fontWeight:700,letterSpacing:0.5,color:t.fondo?'rgba(255,255,255,0.85)':'var(--text-soft)',marginTop:4,textTransform:'uppercase'}},t.label)
+    ))
+  ),
+  cuadreAbierto&&React.createElement('div',{style:{marginTop:14,overflowX:'auto'}},
+    resumenCuadreCierre.filas.length===0?React.createElement('div',{style:{padding:'10px 0',fontSize:12,color:'var(--text-soft)'}},'No hay entregas ni retornos resueltos en este período/filtro.'):
+    React.createElement('table',{style:{width:'100%',fontSize:11,borderCollapse:'collapse'}},
+      React.createElement('thead',null,React.createElement('tr',{style:{borderBottom:'2px solid var(--gold)'}},
+        ['Fecha','Ent. Flex','Ent. Manual','Ent. Total','Ret. Flex','Ret. Manual','Ret. Total','Neto'].map((h,i)=>React.createElement('th',{key:i,style:{padding:'5px 8px',textAlign:i===0?'left':'right',color:'var(--text-soft)',fontWeight:700}},h))
+      )),
+      React.createElement('tbody',null,
+        resumenCuadreCierre.filas.map((f,i)=>React.createElement('tr',{key:f.dia,style:{background:i%2===0?'#fff':'rgba(200,168,75,0.04)'}},
+          React.createElement('td',{style:{padding:'4px 8px',fontFamily:'JetBrains Mono'}},fmtFecha(f.dia)),
+          React.createElement('td',{style:{padding:'4px 8px',textAlign:'right'}},f.entFlex),
+          React.createElement('td',{style:{padding:'4px 8px',textAlign:'right'}},f.entManual),
+          React.createElement('td',{style:{padding:'4px 8px',textAlign:'right',fontWeight:700}},f.entTotal),
+          React.createElement('td',{style:{padding:'4px 8px',textAlign:'right',color:'#c86a6a'}},f.retFlex),
+          React.createElement('td',{style:{padding:'4px 8px',textAlign:'right',color:'#c86a6a'}},f.retManual),
+          React.createElement('td',{style:{padding:'4px 8px',textAlign:'right',fontWeight:700,color:'#c86a6a'}},f.retTotal),
+          React.createElement('td',{style:{padding:'4px 8px',textAlign:'right',fontWeight:700}},f.neto)
+        )),
+        React.createElement('tr',{style:{borderTop:'2px solid var(--gold)',fontWeight:700}},
+          React.createElement('td',{style:{padding:'5px 8px'}},'TOTAL'),
+          React.createElement('td',{style:{padding:'5px 8px',textAlign:'right'}},resumenCuadreCierre.totalEntFlex),
+          React.createElement('td',{style:{padding:'5px 8px',textAlign:'right'}},resumenCuadreCierre.totalEntManual),
+          React.createElement('td',{style:{padding:'5px 8px',textAlign:'right'}},resumenCuadreCierre.totalEntTotal),
+          React.createElement('td',{style:{padding:'5px 8px',textAlign:'right',color:'#c86a6a'}},resumenCuadreCierre.totalRetFlex),
+          React.createElement('td',{style:{padding:'5px 8px',textAlign:'right',color:'#c86a6a'}},resumenCuadreCierre.totalRetManual),
+          React.createElement('td',{style:{padding:'5px 8px',textAlign:'right',color:'#c86a6a'}},resumenCuadreCierre.totalRetTotal),
+          React.createElement('td',{style:{padding:'5px 8px',textAlign:'right'}},resumenCuadreCierre.neto)
+        )
+      )
+    )
+  )
+),
 /*#__PURE__*/React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',marginBottom:14,flexWrap:'wrap'}},
   /*#__PURE__*/React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:2,color:'var(--text-soft)',marginRight:4}},'VISTA:'),
   [{val:'cierre',label:'Resuelto en el período',title:'Para cada estado (Entregado, Retorno, Reprogramado, Cancelado, etc.), muestra los códigos cuyo ÚLTIMO movimiento a ese estado ocurrió DENTRO de las fechas elegidas -- sin importar cuándo se despachó el envío. USA ESTA para pagar mensajeros y para cobrar a clientes: un envío cuenta en el período en que se RESOLVIÓ (se entregó, volvió, etc.), no en el que se despachó -- por ejemplo un envío reprogramado en la quincena 1 que termina como retorno en la quincena 2 cuenta como retorno de la quincena 2. También sirve para cruzar información con un reporte externo (ej. el Drive de un cliente).'},
@@ -1473,48 +1570,12 @@ const rowsRetorno=retornadosPeriodoRealTarjetas.map((e,i)=>{
 sheets.push({name:'Retorno resuelto',headers,rows:rowsRetorno});
 // NUEVO 2026-09-29: hoja "Resumen" con tabla día por día (Entregados vs Retornados, separando
 // Flex/Manual) ya armada -- reemplaza el paso manual de tabla dinámica que hacía Luis en Excel.
-// Regla "manual vs Flex": un código que empieza con "PGSO" fue generado por el sistema porque el
-// envío se ingresó sin código propio (ver banner de Gestión de Envíos / resincronizarContadorPGSO)
-// -- eso es lo que en la operación se llama "manual". Cualquier otro código (numérico, ML, etc.)
-// es Flex.
-const esManualPorCodigo=cod=>/^PGSO/i.test(cod||'');
-const diaResumenMap=new Map();
-const sumarAlDia=(dia,campo)=>{
-  if(!dia)return;
-  if(!diaResumenMap.has(dia))diaResumenMap.set(dia,{entFlex:0,entManual:0,retFlex:0,retManual:0});
-  diaResumenMap.get(dia)[campo]++;
-};
-// FIX 2026-09-29: esto usaba filtradosOrdenados (agenda por fecha de DESPACHO, mismo criterio
-// que la hoja "Envios") filtrado por estado==='entregado' -- eso traia entregas cuya fecha REAL
-// de entrega cae fuera del periodo elegido (un paquete despachado el ultimo dia del periodo
-// puede entregarse varios dias despues), haciendo que la tabla dia por dia mostrara fechas fuera
-// del rango filtrado (detectado por Luis: rango 16/09 al 16/09 mostraba filas hasta el 29/09).
-// entregadosPeriodoRealTarjetas es el mismo dataset que ya usa la tarjeta "Entregado" en pantalla
-// (fetchEntregadosPorFechaReal, acotado a la fecha REAL de entrega DENTRO del periodo elegido, ya
-// filtrado por cliente/mensajero/fuente) -- mismo criterio que retornadosPeriodoRealTarjetas justo
-// abajo, para que ninguna de las dos columnas se salga del rango que se ve en pantalla.
-entregadosPeriodoRealTarjetas.forEach(e=>{
-  const feReal=e._fechaRealEntregaISO||fechaEntregaDe(e);
-  if(!feReal)return;
-  sumarAlDia(fechaHoyCL(feReal),esManualPorCodigo(e.codigo)?'entManual':'entFlex');
-});
-retornadosPeriodoRealTarjetas.forEach(e=>{
-  const feReal=e._fechaRealEstadoISO||e.fecha;
-  if(!feReal)return;
-  sumarAlDia(fechaHoyCL(feReal),esManualPorCodigo(e.codigo)?'retManual':'retFlex');
-});
-const diasOrdenados=[...diaResumenMap.keys()].sort();
-let totalEntFlex=0,totalEntManual=0,totalRetFlex=0,totalRetManual=0;
-const filasResumenDia=diasOrdenados.map(dia=>{
-  const d=diaResumenMap.get(dia);
-  const entTotal=d.entFlex+d.entManual;
-  const retTotal=d.retFlex+d.retManual;
-  totalEntFlex+=d.entFlex;totalEntManual+=d.entManual;totalRetFlex+=d.retFlex;totalRetManual+=d.retManual;
-  return[fmtFecha(dia),d.entFlex,d.entManual,entTotal,d.retFlex,d.retManual,retTotal,entTotal-retTotal];
-});
-const totalEntTotal=totalEntFlex+totalEntManual;
-const totalRetTotal=totalRetFlex+totalRetManual;
-const totalesDia=['TOTAL',totalEntFlex,totalEntManual,totalEntTotal,totalRetFlex,totalRetManual,totalRetTotal,totalEntTotal-totalRetTotal];
+// REFACTOR 2026-10-01: esta hoja antes recalculaba el desglose día por día acá mismo -- ahora
+// reusa resumenCuadreCierre (definido arriba, misma fuente de datos y misma regla Flex/Manual),
+// que es el MISMO cálculo que alimenta el nuevo panel "Cuadre de Cierre" en pantalla -- para que
+// el Excel exportado y lo que se ve en pantalla nunca puedan mostrar números distintos.
+const filasResumenDia=resumenCuadreCierre.filas.map(f=>[fmtFecha(f.dia),f.entFlex,f.entManual,f.entTotal,f.retFlex,f.retManual,f.retTotal,f.neto]);
+const totalesDia=['TOTAL',resumenCuadreCierre.totalEntFlex,resumenCuadreCierre.totalEntManual,resumenCuadreCierre.totalEntTotal,resumenCuadreCierre.totalRetFlex,resumenCuadreCierre.totalRetManual,resumenCuadreCierre.totalRetTotal,resumenCuadreCierre.neto];
 // Se conservan las 3 líneas de totales que ya existían (fórmula de cobro recibido − retorno),
 // ahora como columnas finales de la misma hoja, para no perder ese número que Luis ya usaba.
 const totalRecibidos=enviosPeriodoTarjetas.length;
