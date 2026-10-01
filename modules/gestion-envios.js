@@ -1363,35 +1363,27 @@ showListaNegra&&(()=>{const lista=lsLoad('envios_eliminados',[]);return/*#__PURE
 ),
 // NUEVO 2026-10-01: panel "Cuadre de Cierre" -- resuelve el pedido de Luis de "automatizar la
 // cuadratura de cierres de mes" sin tocar el Dashboard ni el Recibo de Cobro (herramienta nueva y
-// separada, decisión tomada con Luis el 2026-10-01). Muestra en pantalla, para el cliente/período
-// ya filtrados arriba, el MISMO número que calcula resumenCuadreCierre (y que exporta el botón
-// "Exportar" en la hoja "Resumen") -- siempre con fecha REAL de entrega/resolución, nunca fecha de
-// despacho -- para que Luis deje de tener que exportar a Excel y pivotear a mano para cuadrar un
-// cliente. Se avisa explícitamente que este número puede no calzar con el Dashboard a propósito
-// (bases de cálculo distintas, ambas correctas -- ver nota).
-(sincronizando||cargandoEntregadosReal||cargandoRetornadosReal)?/*#__PURE__*/React.createElement('div',{style:{textAlign:'center',padding:'14px',color:'var(--text-soft)',fontSize:12,marginBottom:16,background:'rgba(200,168,75,0.06)',borderRadius:10}},'⏳ Calculando cuadre de cierre...'):/*#__PURE__*/React.createElement('div',{style:{background:'linear-gradient(145deg,#ffffff,#f5eedc)',border:'1px solid rgba(200,168,75,0.3)',borderRadius:14,padding:'16px 20px',marginBottom:16,boxShadow:'6px 6px 16px rgba(43,46,32,0.1),-2px -2px 8px rgba(255,255,255,0.9)'}},
-  React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10,marginBottom:12}},
-    React.createElement('div',null,
-      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:16,letterSpacing:1.5,color:'var(--dark)'}},'🧾 CUADRE DE CIERRE'),
-      React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginTop:2}},'Fecha real de entrega/resolución — mismos números que exporta "Resumen" en el Excel. ',
-        React.createElement('span',{title:'El Dashboard ("Resumen por Cliente") y el Recibo de Cobro usan a propósito fecha de DESPACHO + estado actual (regla de facturación fijada el 2026-09-07/08) -- no son comparables con este número directamente.',style:{textDecoration:'underline dotted',cursor:'help'}},'puede no calzar con el Dashboard, y es esperado ⓘ'))
-    ),
-    React.createElement('button',{type:'button',onClick:()=>setCuadreAbierto(v=>!v),className:'btn-secondary',style:{fontSize:11,whiteSpace:'nowrap'}},cuadreAbierto?'Ocultar detalle día por día ▲':'Ver detalle día por día ▼')
+// separada, decisión tomada con Luis el 2026-10-01). Muestra, para el cliente/período ya filtrados
+// arriba, el MISMO número que calcula resumenCuadreCierre (y que exporta "Resumen" en el Excel) --
+// siempre con fecha REAL de entrega/resolución, nunca fecha de despacho.
+// FIX 2026-10-01 (v1 era "tan confuso" -- Luis lo marcó con flechas en captura): la v1 ponía una
+// grilla de 7 tarjetas grandes que repetían, con otra etiqueta, los MISMOS números que ya se ven
+// arriba (insignias "recibido/resuelto") y abajo (tarjetas de estado en vista "Recibido +
+// Resuelto") -- 3 lugares distintos mostrando casi lo mismo. Ahora es UNA sola línea compacta con
+// el número final y el desglose Flex/Manual en texto (lo único que no estaba en ningún otro lado);
+// el detalle día por día sigue existiendo pero oculto hasta que se pide.
+(sincronizando||cargandoEntregadosReal||cargandoRetornadosReal)?/*#__PURE__*/React.createElement('div',{style:{textAlign:'center',padding:'10px',color:'var(--text-soft)',fontSize:12,marginBottom:14,background:'rgba(200,168,75,0.06)',borderRadius:10}},'⏳ Calculando cuadre de cierre...'):/*#__PURE__*/React.createElement('div',{style:{background:'rgba(200,168,75,0.06)',border:'1px solid rgba(200,168,75,0.25)',borderRadius:10,padding:'8px 14px',marginBottom:14,display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8}},
+  React.createElement('div',{style:{fontSize:12,color:'var(--text)',display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}},
+    React.createElement('span',{style:{fontWeight:700}},'🧾 Cuadre de cierre (fecha real):'),
+    React.createElement('span',null,resumenCuadreCierre.totalEntTotal.toLocaleString('es-CL'),' entregados ',React.createElement('span',{style:{color:'var(--text-soft)'}},'(',resumenCuadreCierre.totalEntFlex,' Flex + ',resumenCuadreCierre.totalEntManual,' Manual)')),
+    React.createElement('span',{style:{color:'var(--text-soft)'}},'−'),
+    React.createElement('span',null,resumenCuadreCierre.totalRetTotal.toLocaleString('es-CL'),' retornados'),
+    React.createElement('span',{style:{color:'var(--text-soft)'}},'='),
+    React.createElement('span',{style:{fontWeight:700,color:'#2e4632'}},resumenCuadreCierre.neto.toLocaleString('es-CL'),' neto'),
+    React.createElement('span',{title:'Mismos números que exporta "Resumen" en el Excel. El Dashboard ("Resumen por Cliente") y el Recibo de Cobro usan a propósito fecha de DESPACHO + estado actual (regla fijada el 2026-09-07/08) -- no son comparables con este número directamente, y es esperado.',style:{cursor:'help',color:'var(--text-soft)'}},'ⓘ')
   ),
-  React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap'}},
-    [{label:'Entregados Flex',val:resumenCuadreCierre.totalEntFlex,color:'var(--gold)'},
-     {label:'Entregados Manual',val:resumenCuadreCierre.totalEntManual,color:'var(--gold)'},
-     {label:'Entregados Total',val:resumenCuadreCierre.totalEntTotal,color:'var(--gold)',fuerte:true},
-     {label:'Retornados Flex',val:resumenCuadreCierre.totalRetFlex,color:'#c86a6a'},
-     {label:'Retornados Manual',val:resumenCuadreCierre.totalRetManual,color:'#c86a6a'},
-     {label:'Retornados Total',val:resumenCuadreCierre.totalRetTotal,color:'#c86a6a',fuerte:true},
-     {label:'Neto (Entregados − Retornados)',val:resumenCuadreCierre.neto,color:'#fff',fondo:'linear-gradient(145deg,#3a5a40,#2e4632)',fuerte:true}
-    ].map((t,i)=>React.createElement('div',{key:i,style:{background:t.fondo||(t.fuerte?'rgba(200,168,75,0.08)':'#fff'),border:'1px solid '+(t.fondo?'transparent':'rgba(200,168,75,0.18)'),borderRadius:10,padding:'8px 14px',minWidth:100,textAlign:'center'}},
-      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:t.fuerte?24:20,lineHeight:1,color:t.fondo?'#fff':t.color}},t.val.toLocaleString('es-CL')),
-      React.createElement('div',{style:{fontSize:9,fontWeight:700,letterSpacing:0.5,color:t.fondo?'rgba(255,255,255,0.85)':'var(--text-soft)',marginTop:4,textTransform:'uppercase'}},t.label)
-    ))
-  ),
-  cuadreAbierto&&React.createElement('div',{style:{marginTop:14,overflowX:'auto'}},
+  React.createElement('button',{type:'button',onClick:()=>setCuadreAbierto(v=>!v),className:'btn-secondary',style:{fontSize:11,whiteSpace:'nowrap',padding:'4px 10px'}},cuadreAbierto?'Ocultar día por día ▲':'Ver día por día ▼'),
+  cuadreAbierto&&React.createElement('div',{style:{width:'100%',marginTop:10,overflowX:'auto'}},
     resumenCuadreCierre.filas.length===0?React.createElement('div',{style:{padding:'10px 0',fontSize:12,color:'var(--text-soft)'}},'No hay entregas ni retornos resueltos en este período/filtro.'):
     React.createElement('table',{style:{width:'100%',fontSize:11,borderCollapse:'collapse'}},
       React.createElement('thead',null,React.createElement('tr',{style:{borderBottom:'2px solid var(--gold)'}},
