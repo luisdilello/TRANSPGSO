@@ -24,6 +24,12 @@ var getTipoEnvioCobroGE=function(e){
   return'normal';
 };
 var ESTADOS_FACTURABLE_GE=['entregado','en_ruta','en_bodega','reprogramado','siniestro','en_bodega_fecha'];
+// Fix 2026-10-02: reset de las propiedades que el <thead th> global (fondo oscuro degradado,
+// texto dorado con text-shadow, mayúsculas, Bebas Neue) le impone a CUALQUIER tabla de la app.
+// La tabla chica y clara de "Cuadre vs. Cliente" lo heredaba sin querer y el texto (sobre todo
+// el azul de "CLIENTE DICE") quedaba ilegible encima del fondo oscuro. Se aplica a cada <th> de
+// esa tabla (el <tr> no alcanza a tapar el fondo si el <th> queda transparente encima).
+var THEAD_RESET={background:'transparent',color:'var(--text)',textShadow:'none',textTransform:'none',letterSpacing:'normal',fontFamily:'inherit',fontSize:'inherit',fontWeight:700};
 var AdminEditarEnvio=window.__app.AdminEditarEnvio, abrirVentanaEtiquetas=window.__app.abrirVentanaEtiquetas, COMUNAS_CHILE=window.__app.COMUNAS_CHILE, ESTADOS_ENVIO=window.__app.ESTADOS_ENVIO, EnvioDetalleCard=window.__app.EnvioDetalleCard, EtiquetaPreview=window.__app.EtiquetaPreview, ExportBtn=window.__app.ExportBtn, FotosEntregaConRecarga=window.__app.FotosEntregaConRecarga, Modal=window.__app.Modal, matchComuna=window.__app.matchComuna, esComunaValida=window.__app.esComunaValida, confirmarCodigo=window.__app.confirmarCodigo, crearEntradaHistorial=window.__app.crearEntradaHistorial, db=window.__app.db, diasDesdeFecha=window.__app.diasDesdeFecha, esEnvioAtrasado=window.__app.esEnvioAtrasado, UMBRAL_ATRASO_DIAS=window.__app.UMBRAL_ATRASO_DIAS, calcularBaseTardio=window.__app.calcularBaseTardio, esEnvioTardio=window.__app.esEnvioTardio, horasTardanza=window.__app.horasTardanza, UMBRAL_TARDIO_HORAS=window.__app.UMBRAL_TARDIO_HORAS, estadoBadge=window.__app.estadoBadge, estadoInfo=window.__app.estadoInfo, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, imprimirFotoEtiqueta=window.__app.imprimirFotoEtiqueta, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, normalizarNombre=window.__app.normalizarNombre, perfil=window.__app.perfil, playSound=window.__app.playSound, subirFotoStorage=window.__app.subirFotoStorage, sbRegistrarHistorial=window.__app.sbRegistrarHistorial, sbRegistrarHistorialLote=window.__app.sbRegistrarHistorialLote, fetchPaginadoParalelo=window.__app.fetchPaginadoParalelo, fetchPorDiasParalelo=window.__app.fetchPorDiasParalelo, fetchEntregadosPorFechaReal=window.__app.fetchEntregadosPorFechaReal, fetchPorFechaRealDeEstado=window.__app.fetchPorFechaRealDeEstado, calcularEstadoEfectivo=window.__app.calcularEstadoEfectivo, limiteDiaChileUTC=window.__app.limiteDiaChileUTC;
 function GestionEnvios(_ref26){var _detalleEnvio$mensaje;let mensajeros=_ref26.mensajeros,clientes=_ref26.clientes,toast=_ref26.toast,esSuperAdmin=_ref26.esSuperAdmin,esAdmin=_ref26.esAdmin,usuario=_ref26.usuario,codigoInicial=_ref26.codigoInicial,onCodigoInicialConsumido=_ref26.onCodigoInicialConsumido;const _useState60=useState(()=>lsLoad('gestion_envios',[])),envios=_useState60[0],setEnvios=_useState60[1];const _useState61=useState('lista'),subTab=_useState61[0],setSubTab=_useState61[1];const _useState62=useState(''),search=_useState62[0],setSearch=_useState62[1];const _useState63=useState('todos'),filtroEst=_useState63[0],setFiltroEst=_useState63[1];const _useState64=useState('todos'),filtroCli=_useState64[0],setFiltroCli=_useState64[1];const _useState65=useState('todos'),filtroMen=_useState65[0],setFiltroMen=_useState65[1];const _useState65b=useState('todos'),filtroFuente=_useState65b[0],setFiltroFuente=_useState65b[1];
 // Vista de las tarjetas de estado (y de la tabla al filtrar por una de ellas): 'cierre' (default,
@@ -1554,17 +1560,22 @@ filtroCli!=='todos'&&React.createElement('div',{style:{background:'#fff',border:
       const inputStyle={width:48,padding:'2px 4px',fontSize:11,border:'1px solid var(--border)',borderRadius:4,textAlign:'right'};
       return React.createElement(React.Fragment,null,
         React.createElement('table',{style:{width:'100%',fontSize:11,borderCollapse:'collapse',minWidth:640}},
+          // Fix 2026-10-02: el <thead> global de la app pinta fondo oscuro + texto dorado con
+          // text-shadow (pensado para la tabla grande de envíos). Esta tabla es chica/clara y
+          // heredaba ese fondo oscuro sin que el texto (sobre todo "CLIENTE DICE" en azul) se
+          // alcanzara a leer encima. Se fuerza un fondo claro y se resetean las propiedades de
+          // texto que vienen del estilo global, en cada <th> (el <tr> no alcanza a taparlas).
           React.createElement('thead',null,
-            React.createElement('tr',null,
-              React.createElement('th',{rowSpan:2,style:{padding:'5px 8px',textAlign:'left',borderBottom:'2px solid var(--gold)',verticalAlign:'bottom'}},'Día (despacho)'),
-              React.createElement('th',{colSpan:3,style:{padding:'4px 6px',textAlign:'center',borderBottom:'1px solid var(--border)',color:'#1B3A6B'}},'CLIENTE DICE'),
-              React.createElement('th',{colSpan:3,style:{padding:'4px 6px',textAlign:'center',borderBottom:'1px solid var(--border)'}},'TRANSPGSO'),
-              React.createElement('th',{rowSpan:2,style:{padding:'5px 8px',textAlign:'right',borderBottom:'2px solid var(--gold)',verticalAlign:'bottom'}},'Dif.'),
-              React.createElement('th',{rowSpan:2,style:{padding:'5px 8px',textAlign:'left',borderBottom:'2px solid var(--gold)',verticalAlign:'bottom'}},'Nota')
+            React.createElement('tr',{style:{background:'var(--gold-dim)'}},
+              React.createElement('th',{rowSpan:2,style:{...THEAD_RESET,padding:'5px 8px',textAlign:'left',borderBottom:'2px solid var(--gold)',verticalAlign:'bottom'}},'Día (despacho)'),
+              React.createElement('th',{colSpan:3,style:{...THEAD_RESET,padding:'4px 6px',textAlign:'center',borderBottom:'1px solid var(--border)',color:'#1B3A6B'}},'CLIENTE DICE'),
+              React.createElement('th',{colSpan:3,style:{...THEAD_RESET,padding:'4px 6px',textAlign:'center',borderBottom:'1px solid var(--border)'}},'TRANSPGSO'),
+              React.createElement('th',{rowSpan:2,style:{...THEAD_RESET,padding:'5px 8px',textAlign:'right',borderBottom:'2px solid var(--gold)',verticalAlign:'bottom'}},'Dif.'),
+              React.createElement('th',{rowSpan:2,style:{...THEAD_RESET,padding:'5px 8px',textAlign:'left',borderBottom:'2px solid var(--gold)',verticalAlign:'bottom'}},'Nota')
             ),
-            React.createElement('tr',null,
-              ['Flex','Manual','Total'].map((h,i)=>React.createElement('th',{key:'c'+i,style:{padding:'3px 6px',textAlign:'right',borderBottom:'2px solid var(--gold)',color:'#1B3A6B',fontWeight:600}},h)),
-              ['Flex','Manual','Total'].map((h,i)=>React.createElement('th',{key:'t'+i,style:{padding:'3px 6px',textAlign:'right',borderBottom:'2px solid var(--gold)',fontWeight:600}},h))
+            React.createElement('tr',{style:{background:'var(--gold-dim)'}},
+              ['Flex','Manual','Total'].map((h,i)=>React.createElement('th',{key:'c'+i,style:{...THEAD_RESET,padding:'3px 6px',textAlign:'right',borderBottom:'2px solid var(--gold)',color:'#1B3A6B',fontWeight:600}},h)),
+              ['Flex','Manual','Total'].map((h,i)=>React.createElement('th',{key:'t'+i,style:{...THEAD_RESET,padding:'3px 6px',textAlign:'right',borderBottom:'2px solid var(--gold)',fontWeight:600}},h))
             )
           ),
           React.createElement('tbody',null,
