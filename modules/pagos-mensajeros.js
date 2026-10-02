@@ -2,7 +2,7 @@
 
 var useEffect=React.useEffect, useRef=React.useRef, useState=React.useState;
 
-var ExportBtn=window.__app.ExportBtn, HistorialCierres=window.__app.HistorialCierres, PlanillaRetiros=window.__app.PlanillaRetiros, db=window.__app.db, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, fetchPorDiasParalelo=window.__app.fetchPorDiasParalelo, fetchPaginadoParalelo=window.__app.fetchPaginadoParalelo, matchComuna=window.__app.matchComuna, generarReciboCobro=window.__app.generarReciboCobro;
+var ExportBtn=window.__app.ExportBtn, HistorialCierres=window.__app.HistorialCierres, PlanillaRetiros=window.__app.PlanillaRetiros, db=window.__app.db, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, fetchPorDiasParalelo=window.__app.fetchPorDiasParalelo, fetchPaginadoParalelo=window.__app.fetchPaginadoParalelo, fetchPorFechaRealDeEstado=window.__app.fetchPorFechaRealDeEstado, matchComuna=window.__app.matchComuna, generarReciboCobro=window.__app.generarReciboCobro;
 
 // Registro de consumo local (colaciones, bebidas, etc.) por mensajero, ítem por ítem.
 // Cada entrada queda guardada en Supabase (tabla consumos_mensajeros) asociada a la
@@ -1133,6 +1133,18 @@ function CobrosClientesTab(_ref4){
   var _rHasta=React.useState(function(){return fechaHoyCL();}); var rangoHasta=_rHasta[0]; var setRangoHasta=_rHasta[1];
   var _env=React.useState([]); var envios=_env[0]; var setEnvios=_env[1];
   var _carg=React.useState(false); var cargando=_carg[0]; var setCargando=_carg[1];
+  // Verificación de piezas "Recibido vs. Retornado" -- Luis (02-10-2026): la lógica real de
+  // cobro es simple ("si el cliente envía 100 y se retornan 10, se cobran 90") y necesitaba
+  // tenerla disponible ACÁ, en Cobros a Clientes, en vez de tener que ir a buscarla entre las
+  // 3 vistas de Gestión de Envíos (que ya está sobrecargada). Recibido = despachado en el rango
+  // (fecha de recepción, igual que 'envios'/'resumen' de abajo). Retornado = NO por fecha de
+  // despacho, sino por la fecha en que ese código quedó en estado Retorno DENTRO del rango
+  // pedido (mismo mecanismo ya probado -- fetchPorFechaRealDeEstado -- que usa Gestión de
+  // Envíos para "Resuelto en el período"), que es exactamente el criterio que Luis describió.
+  // Esta tabla es solo un conteo de PIEZAS para cuadrar rápido a simple vista -- no reemplaza
+  // el cálculo de $ con tarifas de la tabla de abajo ni el Recibo de Cobro oficial.
+  var _ret=React.useState([]); var retornos=_ret[0]; var setRetornos=_ret[1];
+  var _cargRet=React.useState(false); var cargandoRetornos=_cargRet[0]; var setCargandoRetornos=_cargRet[1];
 
   function fmtCorta(f){return new Date(f+'T12:00:00').toLocaleDateString('es-CL');}
 
@@ -1169,7 +1181,45 @@ function CobrosClientesTab(_ref4){
     return function(){cancelado=true;};
   },[periodo.desde,periodo.hasta]);
 
+  React.useEffect(function(){
+    var cancelado=false;
+    setCargandoRetornos(true);
+    fetchPorFechaRealDeEstado('retorno',periodo.desde,periodo.hasta,'codigo,cliente,fecha')
+      .then(function(data){if(!cancelado){setRetornos(data||[]);setCargandoRetornos(false);}})
+      .catch(function(e){console.warn('Error cargando retornos (fecha real) para Cobros a Clientes:',e.message);if(!cancelado){setRetornos([]);setCargandoRetornos(false);}});
+    return function(){cancelado=true;};
+  },[periodo.desde,periodo.hasta]);
+
   var resumen=React.useMemo(function(){return calcularResumenCobrosClientes(envios,clientes);},[envios,clientes]);
+
+  // Recibido = r.total de 'resumen' (ya cuenta TODO envío de ese cliente despachado en el
+  // rango, sin importar su estado). Retornado = conteo de 'retornos' (fecha real, arriba).
+  // Un cliente puede tener retornos resueltos en el rango de códigos despachados ANTES del
+  // rango (o después) -- por eso esta lista no es necesariamente subconjunto de 'resumen', y se
+  // arma con la unión de ambos nombres de cliente para no perder ninguno.
+  var verificacionPiezas=React.useMemo(function(){
+    var retPorCliente={};
+    (retornos||[]).forEach(function(e){
+      var c=e.cliente||'Sin cliente';
+      retPorCliente[c]=(retPorCliente[c]||0)+1;
+    });
+    var nombres=new Set(resumen.map(function(r){return r.nombre;}));
+    Object.keys(retPorCliente).forEach(function(c){nombres.add(c);});
+    return Array.from(nombres).map(function(nombre){
+      var recibido=(resumen.find(function(r){return r.nombre===nombre;})||{}).total||0;
+      var retornado=retPorCliente[nombre]||0;
+      return{nombre:nombre,recibido:recibido,retornado:retornado,aCobrar:recibido-retornado};
+    }).sort(function(a,b){return b.recibido-a.recibido;});
+  },[resumen,retornos]);
+  var verificacionTotales=React.useMemo(function(){
+    return verificacionPiezas.reduce(function(a,r){return{recibido:a.recibido+r.recibido,retornado:a.retornado+r.retornado,aCobrar:a.aCobrar+r.aCobrar};},{recibido:0,retornado:0,aCobrar:0});
+  },[verificacionPiezas]);
+  function exportarVerificacionExcel(){
+    var headers=['Cliente','Recibido','Retornado (resuelto en el rango)','A cobrar (piezas)'];
+    var rows=verificacionPiezas.map(function(r){return[r.nombre,r.recibido,r.retornado,r.aCobrar];});
+    rows.push(['TOTALES',verificacionTotales.recibido,verificacionTotales.retornado,verificacionTotales.aCobrar]);
+    exportToExcel('Recibido_vs_Retornado_'+periodo.desde+'_a_'+periodo.hasta,[{name:'Recibido vs Retornado',headers:headers,rows:rows}]);
+  }
   var totales=React.useMemo(function(){
     return resumen.reduce(function(a,r){return{total:a.total+r.total,entregados:a.entregados+r.entregados,montoNeto:a.montoNeto+r.montoNeto,iva:a.iva+r.iva,montoTotal:a.montoTotal+r.montoTotal};},{total:0,entregados:0,montoNeto:0,iva:0,montoTotal:0});
   },[resumen]);
@@ -1230,6 +1280,41 @@ function CobrosClientesTab(_ref4){
         )
       ),
       /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginTop:8}},"Período: ",/*#__PURE__*/React.createElement("strong",{style:{color:'var(--dark)'}},periodo.label))
+    ),
+    // Verificación de piezas Recibido vs. Retornado (ver comentario junto a 'verificacionPiezas'
+    // más arriba): Recibido por fecha de recepción, Retornado por fecha real en que quedó ese
+    // estado -- la lógica de cobro tal como la describió Luis, visible de entrada acá en vez de
+    // tener que ir a buscarla en Gestión de Envíos.
+    /*#__PURE__*/React.createElement("div",{style:{background:'#fff',border:'1px solid var(--border)',borderTop:'3px solid #3a5a40',borderRadius:10,padding:20,marginBottom:20,boxShadow:'0 2px 10px rgba(43,46,32,0.07)'}},
+      /*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,flexWrap:'wrap',gap:8}},
+        /*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1.5,color:'var(--dark)'}},"✅ Recibido vs. Retornado"),
+        /*#__PURE__*/React.createElement("button",{className:'btn-futurista btn-f-ghost',onClick:exportarVerificacionExcel},"📊 Exportar Excel")
+      ),
+      /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginBottom:14,lineHeight:1.5}},"Recibido = envíos despachados en el rango (fecha de recepción). Retornado = envíos que quedaron en estado Retorno DENTRO de este mismo rango (fecha real en que tomaron ese estado, no la de despacho). A cobrar (piezas) = Recibido − Retornado. Es un conteo de piezas para cuadrar rápido -- el monto en $ con tarifas está en la tabla de abajo, y el Recibo de Cobro oficial sigue siendo el de Calendario de Cobros."),
+      cargandoRetornos?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:16,color:'var(--text-soft)',fontSize:13}},"Calculando retornos del período..."):
+      verificacionPiezas.length===0?/*#__PURE__*/React.createElement("div",{className:"info-banner"},"No hay envíos ni retornos en este período."):
+      /*#__PURE__*/React.createElement("div",{className:"table-wrap"},/*#__PURE__*/React.createElement("table",null,
+        /*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,
+          /*#__PURE__*/React.createElement("th",null,"Cliente"),
+          /*#__PURE__*/React.createElement("th",{style:{textAlign:'center'}},"Recibido"),
+          /*#__PURE__*/React.createElement("th",{style:{textAlign:'center'}},"Retornado"),
+          /*#__PURE__*/React.createElement("th",{style:{textAlign:'center'}},"A cobrar (piezas)")
+        )),
+        /*#__PURE__*/React.createElement("tbody",null,verificacionPiezas.map(function(r){
+          return /*#__PURE__*/React.createElement("tr",{key:r.nombre},
+            /*#__PURE__*/React.createElement("td",{style:{fontWeight:700}},r.nombre),
+            /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center'}},r.recibido),
+            /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',color:r.retornado>0?'#b03030':'var(--text-soft)'}},r.retornado),
+            /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',fontWeight:700,color:'#3a5a40'}},r.aCobrar)
+          );
+        })),
+        /*#__PURE__*/React.createElement("tfoot",null,/*#__PURE__*/React.createElement("tr",{className:"totales-row"},
+          /*#__PURE__*/React.createElement("td",null,"TOTALES"),
+          /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',fontWeight:700}},verificacionTotales.recibido),
+          /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',fontWeight:700}},verificacionTotales.retornado),
+          /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',fontWeight:900,color:'#3a5a40'}},verificacionTotales.aCobrar)
+        ))
+      ))
     ),
     cargando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:30,color:'var(--text-soft)'}},"Cargando envíos del período..."):
     resumen.length===0?/*#__PURE__*/React.createElement("div",{className:"info-banner"},"No hay envíos registrados en este período."):
