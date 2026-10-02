@@ -1258,6 +1258,60 @@ function CobrosClientesTab(_ref4){
     generarReciboCobro(r.nombre,enviosDeCliente(r),periodo.label,cliData,undefined,undefined,'descargar','Detalle de Cobro');
   }
 
+  // "Descargar todos" -- Luis (02-10-2026): "aquí debería poder descargar todos automáticamente
+  // en sus carpetas correspondientes". Antes solo existía "⬇ Descargar" por fila (una descarga
+  // HTML por cliente) -- bajar los ~20-30 clientes de a uno era tedioso, y además el navegador
+  // bloquea descargas múltiples disparadas en loop después de las primeras pocas. Esta función
+  // genera el MISMO documento que "📋 Detalle de Cobro" para CADA cliente del resumen (reutiliza
+  // generarReciboCobro con modo='html' -- no abre ventana ni dispara descarga individual, solo
+  // devuelve el HTML) y arma un único .zip con una CARPETA por cliente adentro, para que al
+  // descomprimirlo queden "en sus carpetas correspondientes" tal como lo pidió. Se generan de a
+  // uno, no en paralelo, porque generarReciboCobro hace varias consultas a Supabase por cliente
+  // (ajuste automático de períodos anteriores) y lanzarlas todas juntas de golpe sobrecargaría
+  // al servidor sin necesidad.
+  var _zipDesc=React.useState(false); var descargandoZip=_zipDesc[0]; var setDescargandoZip=_zipDesc[1];
+  var _zipProg=React.useState(''); var zipProgreso=_zipProg[0]; var setZipProgreso=_zipProg[1];
+  async function descargarTodosZip(){
+    if(typeof JSZip==='undefined'){
+      toast&&toast('⚠ No se pudo cargar el generador de ZIP. Recarga la página e intenta de nuevo.');
+      return;
+    }
+    var clientesConDatos=resumen.filter(function(r){return r.total>0;});
+    if(clientesConDatos.length===0){
+      toast&&toast('No hay clientes con envíos en este período.');
+      return;
+    }
+    setDescargandoZip(true);
+    try{
+      var zip=new JSZip();
+      for(var i=0;i<clientesConDatos.length;i++){
+        var r=clientesConDatos[i];
+        setZipProgreso((i+1)+' de '+clientesConDatos.length+': '+r.nombre);
+        var cliData=(clientes||[]).find(function(c){return c.nombre===r.nombre;})||{};
+        var res=await generarReciboCobro(r.nombre,enviosDeCliente(r),periodo.label,cliData,undefined,undefined,'html','Detalle de Cobro');
+        var html=res&&res.html;
+        if(!html)continue;
+        var carpeta=(r.nombre||'Sin_nombre').replace(/[^a-zA-Z0-9 ÁÉÍÓÚÑáéíóúñ]/g,'_').trim()||'Sin_nombre';
+        var archivo='Detalle_de_Cobro_'+carpeta.replace(/ /g,'_')+'_'+fechaHoyCL()+'.html';
+        zip.folder(carpeta).file(archivo,html);
+      }
+      setZipProgreso('Comprimiendo...');
+      var blob=await zip.generateAsync({type:'blob'});
+      var url=URL.createObjectURL(blob);
+      var a=document.createElement('a');
+      a.href=url;a.download='Cobros_Clientes_'+periodo.desde+'_a_'+periodo.hasta+'.zip';
+      document.body.appendChild(a);a.click();document.body.removeChild(a);
+      setTimeout(function(){URL.revokeObjectURL(url);},10000);
+      toast&&toast('✓ Descarga lista: '+clientesConDatos.length+' clientes en el .zip');
+    }catch(e){
+      console.error('Error generando ZIP de Cobros a Clientes:',e);
+      toast&&toast('⚠ Error generando el .zip: '+(e&&e.message?e.message:e));
+    }finally{
+      setDescargandoZip(false);
+      setZipProgreso('');
+    }
+  }
+
   var tiposPeriodo=[{val:'dia',label:'Día'},{val:'semana',label:'Semana'},{val:'mes',label:'Mes'},{val:'rango',label:'Rango'}];
 
   return /*#__PURE__*/React.createElement("div",{style:{padding:'0 20px 20px'}},
@@ -1315,6 +1369,10 @@ function CobrosClientesTab(_ref4){
           /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',fontWeight:900,color:'#3a5a40'}},verificacionTotales.aCobrar)
         ))
       ))
+    ),
+    !cargando&&resumen.length>0&&/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:10,marginBottom:10,flexWrap:'wrap'}},
+      descargandoZip&&/*#__PURE__*/React.createElement("span",{style:{fontSize:11,color:'var(--text-soft)'}},"Generando "+zipProgreso+"…"),
+      /*#__PURE__*/React.createElement("button",{className:'btn-futurista btn-f-ghost',disabled:descargandoZip,onClick:descargarTodosZip,style:descargandoZip?{opacity:0.6,cursor:'wait'}:undefined},descargandoZip?"⏳ Generando...":"🗂️ Descargar todos (ZIP)")
     ),
     cargando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:30,color:'var(--text-soft)'}},"Cargando envíos del período..."):
     resumen.length===0?/*#__PURE__*/React.createElement("div",{className:"info-banner"},"No hay envíos registrados en este período."):
