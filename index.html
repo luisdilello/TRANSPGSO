@@ -5629,7 +5629,7 @@ function RetiroMasivoRider(_ref_rm){
   var procesandoRef=useRef(false);
   var codigosRef=useRef(new Set());
   var linternaRef=useRef(false);
-  var esPDFRefRM=useRef(new Set()); // códigos detectados como protegidos por PDF, para no pisarlos en la fase 2
+  var esPDFRefRM=useRef(new Set()); // códigos "protegidos" (PDF o ya existían en el sistema antes de este escaneo) -- para no pisarlos con los datos de la IA en la fase 2 (ver sincronizarPaqueteRM)
   var clientesActivos=(clientes||[]).filter(function(c){return c.activo!==false;});
 
   // ── Sesión recuperable ──────────────────────────────────────────────
@@ -5891,6 +5891,11 @@ function RetiroMasivoRider(_ref_rm){
   // Lo que nunca debe pasar es confirmar un paquete con la etiqueta completa y cero información.
   function paqueteVacioTotal(p){
     if(p.analizandoIA) return false;
+    // Fix 2026-10-02: un paquete bloqueado (ya entregado/retorno/cancelado -- requiere admin, ver
+    // sincronizarPaqueteRM) no es "sin datos" -- es otro problema, con otro aviso. Antes, si no
+    // tenía OCR legible, caía igual en "vacío total" y el mensajero veía el mensaje equivocado
+    // ("reescanea la foto") en vez del real ("requiere admin").
+    if(p.syncEstado==='bloqueado') return false;
     var d=p.datosIA||{};
     var dest=(p.editDest!=null?p.editDest:(d.destinatario||'')).trim();
     var dir=(p.editDir!=null?p.editDir:(d.direccion||'')).trim();
@@ -5979,20 +5984,39 @@ function RetiroMasivoRider(_ref_rm){
 
   async function sincronizarPaqueteRM(codigo,fotoInicial){
     try{
-      var fuentes=await obtenerFuentesExistentes([codigo]);
-      var esPDF=fuentes.get(codigo)==='flex';
-      if(esPDF) esPDFRefRM.current.add(codigo);
+      // Fix 2026-10-02: Retiro Masivo no validaba el estado actual del paquete antes de volver
+      // a meterlo a bodega -- a diferencia de Colecta (sincronizarPaqueteCol), que SÍ exige que
+      // esté en un estado adquirible por escaneo (ESTADOS_ADQUIRIBLES_ESCANEO). Eso permitía que
+      // un paquete YA ENTREGADO, en RETORNO o CANCELADO EN BODEGA (estados terminales, igual que
+      // "entregado") se reingresara a bodega con solo volver a escanearlo, sin ningún aviso.
+      var existentes=await obtenerEnviosExistentes([codigo]);
+      var ex=existentes.get(codigo);
+      if(ex&&!ESTADOS_ADQUIRIBLES_ESCANEO.includes(ex.estado)){
+        setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{syncEstado:'bloqueado',estado:'error',motivo:'Requiere admin (no está en bodega/en ruta)'}):p;});});
+        playSound('error');
+        return;
+      }
+      var esPDF=ex&&ex.fuente==='flex';
+      // Reingreso: el código YA estaba en el sistema (ej. se reprogramó y ahora se vuelve a
+      // retirar) pero no es un caso PDF. Antes esto se trataba exactamente igual que un paquete
+      // nuevo: se pisaba fecha/destinatario/dirección/teléfono/comuna/monto/peso/nota con un
+      // upsert completo con la fecha de HOY. Así, un mismo paquete físico quedaba "recibido" dos
+      // veces en el sistema (una por cada reingreso) en vez de una sola vez, el día que de
+      // verdad entró por primera vez. Ahora, igual que ya hace Colecta, un reingreso SOLO
+      // confirma el hecho físico (estado + mensajero) y nunca toca los demás campos.
+      var yaExistia=!!ex;
+      if(yaExistia) esPDFRefRM.current.add(codigo); // tanto PDF como reingreso: no pisar con la IA de la fase 2 (ver comentario en la declaración del ref)
       var clienteNombre=clienteSel&&clienteSel.nombre?clienteSel.nombre:'Sin cliente';
       var r;
-      if(esPDF){
+      if(yaExistia){
         r=await db.from('envios').update({estado:'en_bodega',mensajero:normNombre(usuario.nombre)}).eq('codigo',codigo);
       }else{
         r=await db.from('envios').upsert({codigo:codigo,cliente:clienteNombre,estado:'en_bodega',mensajero:normNombre(usuario.nombre),fecha:fechaHoyCL(),fuente:'retiro_masivo',foto_etiqueta:fotoInicial||null,monto:0,en_un_cambio:false,peso:0,nota:'Retiro masivo - '+usuario.nombre},{onConflict:'codigo',ignoreDuplicates:false});
       }
       var ok=!(r&&r.error);
-      setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{syncEstado:ok?(esPDF?'guardado':'parcial'):'error',esPDF:esPDF}):p;});});
+      setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{syncEstado:ok?(yaExistia?'guardado':'parcial'):'error',esPDF:esPDF,reingreso:yaExistia&&!esPDF}):p;});});
       if(ok){
-        sbRegistrarHistorial(codigo,'en_bodega',esPDF?'Colecta / Retiro masivo (dato PDF preservado)':'Colecta / Retiro masivo',usuario.nombre,'app_mensajero');
+        sbRegistrarHistorial(codigo,'en_bodega',esPDF?'Colecta / Retiro masivo (dato PDF preservado)':(yaExistia?'Colecta / Retiro masivo (ya estaba en el sistema, no se cuenta como nuevo ingreso)':'Colecta / Retiro masivo'),usuario.nombre,'app_mensajero');
       }else{
         playSound('error');
       }
@@ -6054,14 +6078,22 @@ function RetiroMasivoRider(_ref_rm){
       toast('📴 Sin conexión — retiro guardado en el celular ('+totalOffline+' paquetes), se sincroniza solo');
       return;
     }
-    // El PDF siempre manda: si un código ya fue cargado por PDF (fuente:'flex'), el escaneo
-    // del mensajero en Retiro Masivo NO debe pisar destinatario/dirección/comuna/teléfono/
-    // referencia (a veces mal leídos por fotos movidas) — solo confirma el retiro físico.
-    var fuentesExistentesRM=await obtenerFuentesExistentes(paquetesValidos.map(function(p){return p.codigo;}));
+    // El PDF siempre manda, y además -- igual que ya hace Colecta -- cualquier código que YA
+    // exista en el sistema (PDF o no) solo confirma el retiro físico (estado+mensajero), nunca
+    // pisa destinatario/dirección/comuna/teléfono/referencia/fecha/monto/peso con lo leído en
+    // esta pasada. Antes acá solo se miraba 'fuente' (protección PDF): un reingreso normal (ej.
+    // se reprogramó y se vuelve a retirar) se guardaba como si fuera un paquete nuevo, con la
+    // fecha de HOY, dejándolo contabilizado como si hubiera llegado una segunda vez. Y un código
+    // que ya estuviera en un estado TERMINAL (entregado/retorno/en_bodega_cancelado) se podía
+    // reingresar a bodega sin ningún aviso -- ahora se bloquea igual que en Colecta.
+    var existentesRM=await obtenerEnviosExistentes(paquetesValidos.map(function(p){return p.codigo;}));
     var inserts=[];
-    var protegidosRM=[];
+    var protegidosRM=[]; // ya existían (PDF o reingreso) -- solo se confirma estado+mensajero
+    var bloqueadosRM=[]; // existen pero en estado terminal -- no se pueden reingresar por escaneo
     paquetesValidos.forEach(function(p){
-      if(fuentesExistentesRM.get(p.codigo)==='flex'){ protegidosRM.push(p); return; }
+      var ex=existentesRM.get(p.codigo);
+      if(ex&&!ESTADOS_ADQUIRIBLES_ESCANEO.includes(ex.estado)){ bloqueadosRM.push(p); return; }
+      if(ex){ protegidosRM.push(Object.assign({},p,{_esPDF:ex.fuente==='flex'})); return; }
       var d=p.datosIA||{};
       // Usar datos editados si existen, sino los de IA
       var destinatario=p.editDest!=null?p.editDest:(d.destinatario||'');
@@ -6109,8 +6141,9 @@ function RetiroMasivoRider(_ref_rm){
         }else{ err+=lote.length;codigosFallidosRM=codigosFallidosRM.concat(lote.map(function(x){return x.codigo;})); }
       }
     }
-    // Paquetes ya cargados por PDF: solo confirmar el retiro físico (estado), sin tocar los
-    // datos del PDF ni subir la foto del mensajero — el PDF ya es el mejor registro que hay.
+    // Paquetes que ya existían (PDF o reingreso): solo confirmar el retiro físico (estado), sin
+    // tocar los datos que ya tenían ni subir la foto del mensajero encima — ese dato ya es el
+    // mejor registro que hay, sea porque vino del PDF o porque ya se había capturado antes.
     if(protegidosRM.length>0){
       await procesarConcurrencia(protegidosRM,async function(p){
         try{
@@ -6125,15 +6158,25 @@ function RetiroMasivoRider(_ref_rm){
         }
       },8);
       var protegidosOkRM=protegidosRM.filter(function(p){return codigosFallidosRM.indexOf(p.codigo)===-1;});
-      if(protegidosOkRM.length>0) sbRegistrarHistorialLote(protegidosOkRM.map(function(p){return p.codigo;}),'en_bodega','Colecta / Retiro masivo (dato PDF preservado)',usuario.nombre,'app_mensajero');
+      var protegidosOkPDF=protegidosOkRM.filter(function(p){return p._esPDF;});
+      var protegidosOkReingreso=protegidosOkRM.filter(function(p){return!p._esPDF;});
+      if(protegidosOkPDF.length>0) sbRegistrarHistorialLote(protegidosOkPDF.map(function(p){return p.codigo;}),'en_bodega','Colecta / Retiro masivo (dato PDF preservado)',usuario.nombre,'app_mensajero');
+      if(protegidosOkReingreso.length>0) sbRegistrarHistorialLote(protegidosOkReingreso.map(function(p){return p.codigo;}),'en_bodega','Colecta / Retiro masivo (ya estaba en el sistema, no se cuenta como nuevo ingreso)',usuario.nombre,'app_mensajero');
+    }
+    // Bloqueados (estado terminal -- entregado/retorno/en_bodega_cancelado): no se tocan en la
+    // base (se descartan en silencio, igual que indica la regla de ESTADOS_ADQUIRIBLES_ESCANEO
+    // para la sincronización offline) pero SÍ se avisan en el toast final, igual que Colecta.
+    if(bloqueadosRM.length>0){
+      var bloqueadosRMSet=new Set(bloqueadosRM.map(function(p){return p.codigo;}));
+      setPaquetes(function(prev){return prev.map(function(p){return bloqueadosRMSet.has(p.codigo)?Object.assign({},p,{estado:'error',motivo:'Requiere admin (no está en bodega/en ruta)'}):p;});});
     }
     detenerScanner();
     window.__TRANSPGSO_GUARDANDO_CRITICO--;
     setGuardando(false);
     if(codigosFallidosRM.length===0){
       // Éxito total (o guardado a salvo en la cola offline): recién ahora borramos la sesión
-      // recuperable y subimos fotos en background (solo de los paquetes NO protegidos por PDF
-      // — esos no necesitan foto del mensajero).
+      // recuperable y subimos fotos en background (solo de los paquetes que NO ya existían
+      // — ni PDF ni reingreso: a esos no se les pisa su foto_etiqueta original).
       var codigosProtegidosSetRM=new Set(protegidosRM.map(function(p){return p.codigo;}));
       paquetes.forEach(function(p){
         if(p.foto&&!codigosProtegidosSetRM.has(p.codigo)){
@@ -6144,7 +6187,14 @@ function RetiroMasivoRider(_ref_rm){
       });
       try{localStorage.removeItem(claveSesionRM);}catch(e){}
       setFase('resumen');
-      toast('✓ '+ok+' paquetes registrados'+(protegidosRM.length>0?' · '+protegidosRM.length+' con dato PDF preservado':'')+(offline>0?' · '+offline+' guardados en el celular, se sincronizan solos':''));
+      var pdfOkCount=protegidosRM.filter(function(p){return p._esPDF;}).length;
+      var reingresoOkCount=protegidosRM.filter(function(p){return!p._esPDF;}).length;
+      playSound(bloqueadosRM.length>0?'error':'success');
+      toast((bloqueadosRM.length>0?'⚠ ':'✓ ')+ok+' paquetes registrados'
+        +(pdfOkCount>0?' · '+pdfOkCount+' con dato PDF preservado':'')
+        +(reingresoOkCount>0?' · '+reingresoOkCount+' ya estaban en el sistema (no se cuentan como nuevos)':'')
+        +(bloqueadosRM.length>0?' · '+bloqueadosRM.length+' requieren revisión de un admin (no estaban en bodega/en ruta)':'')
+        +(offline>0?' · '+offline+' guardados en el celular, se sincronizan solos':''));
     }else{
       // Falló total o parcialmente guardar en la base por un error REAL (no de red): NO
       // borramos la sesión recuperable y dejamos en pantalla solo lo que faltó guardar,
@@ -11370,16 +11420,27 @@ async function sincronizarColectaOffline(payload){
 }
 registrarHandlerOffline('colecta',sincronizarColectaOffline);
 // ── Handler offline-safe para Retiro Masivo ── Misma logica que confirmarRetiro (insertar
-// respetando el dato del PDF cuando corresponde, upsert en lotes).
+// respetando el dato del PDF o de un reingreso cuando corresponde, upsert en lotes).
+// Fix 2026-10-02: antes acá solo se miraba 'fuente' (protección PDF) y se ignoraba por
+// completo el estado actual del paquete -- un código ya existente, en CUALQUIER estado
+// (incluido uno terminal como entregado/retorno/en_bodega_cancelado), se upserteaba con la
+// fecha de HOY como si fuera nuevo. Eso corría la fecha de recepción real y dejaba el paquete
+// contabilizado como si hubiera llegado una segunda vez. Ahora se replica la misma regla que ya
+// usa sincronizarColectaOffline: si ya existe y está en estado terminal, la acción se descarta
+// en silencio (no se puede reingresar por escaneo, requiere admin); si ya existe pero sigue en
+// un estado adquirible (PDF o reingreso normal), solo se confirma estado+mensajero, sin pisar
+// fecha/destinatario/dirección/etc.
 async function sincronizarRetiroOffline(payload){
   const fecha=payload.fecha||fechaHoyCL();
-  const{data:fuentesData}=await db.from('envios').select('codigo,fuente').in('codigo',payload.paquetes.map(function(p){return p.codigo;}));
-  const fuentesExistentes=new Map();
-  if(fuentesData)fuentesData.forEach(function(r){fuentesExistentes.set(r.codigo,r.fuente);});
+  const{data:existentesData}=await db.from('envios').select('codigo,estado,fuente').in('codigo',payload.paquetes.map(function(p){return p.codigo;}));
+  const existentes=new Map();
+  if(existentesData)existentesData.forEach(function(r){existentes.set(r.codigo,r);});
   const inserts=[];
-  const protegidos=[];
+  const protegidos=[]; // ya existían (PDF o reingreso) -- solo se confirma estado+mensajero
   payload.paquetes.forEach(function(p){
-    if(fuentesExistentes.get(p.codigo)==='flex'){protegidos.push(p);return;}
+    const ex=existentes.get(p.codigo);
+    if(ex&&!ESTADOS_ADQUIRIBLES_ESCANEO.includes(ex.estado))return; // estado terminal: se descarta en silencio, requiere admin
+    if(ex){protegidos.push(Object.assign({},p,{_esPDF:ex.fuente==='flex'}));return;}
     const d=p.datosIA||{};
     inserts.push({codigo:p.codigo,cliente:payload.clienteNombre,destinatario:p.editDest!=null?p.editDest:(d.destinatario||''),direccion:p.editDir!=null?p.editDir:(d.direccion||''),telefono:d.telefono||'',comuna:p.editComuna!=null?p.editComuna:(d.comuna||''),referencia:d.referencia||'',fecha:fecha,estado:'en_bodega',mensajero:normNombre(payload.mensajero),monto:0,en_un_cambio:false,peso:parseFloat(p.peso)||0,nota:'Retiro masivo - '+payload.mensajero+' (sincronizado, se hizo sin señal)',fuente:'retiro_masivo',foto_etiqueta:p.foto||null});
   });
@@ -11390,9 +11451,15 @@ async function sincronizarRetiroOffline(payload){
     if(res.error)throw res.error;
     sbRegistrarHistorialLote(lote.map(function(e){return e.codigo;}),'en_bodega','Colecta / Retiro masivo (sincronizado, se hizo sin señal)',payload.mensajero,'app_mensajero');
   }
-  for(const p of protegidos){
-    const r=await db.from('envios').update({estado:'en_bodega',mensajero:normNombre(payload.mensajero)}).eq('codigo',p.codigo);
-    if(r.error)throw r.error;
+  if(protegidos.length>0){
+    const protegidosPDF=[],protegidosReingreso=[];
+    for(const p of protegidos){
+      const r=await db.from('envios').update({estado:'en_bodega',mensajero:normNombre(payload.mensajero)}).eq('codigo',p.codigo);
+      if(r.error)throw r.error;
+      (p._esPDF?protegidosPDF:protegidosReingreso).push(p.codigo);
+    }
+    if(protegidosPDF.length>0)sbRegistrarHistorialLote(protegidosPDF,'en_bodega','Colecta / Retiro masivo (dato PDF preservado, sincronizado sin señal)',payload.mensajero,'app_mensajero');
+    if(protegidosReingreso.length>0)sbRegistrarHistorialLote(protegidosReingreso,'en_bodega','Colecta / Retiro masivo (ya estaba en el sistema, sincronizado sin señal)',payload.mensajero,'app_mensajero');
   }
 }
 registrarHandlerOffline('retiro',sincronizarRetiroOffline);
