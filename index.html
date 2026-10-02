@@ -117,6 +117,7 @@ if('serviceWorker' in navigator){
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <!-- Google Fonts cargado sin bloquear el render: fonts.googleapis.com esta bloqueado por el
      Gran Cortafuegos en China continental. Antes esto era un <link rel="stylesheet"> normal, que
      el navegador espera a cargar (o a que falle) ANTES de pintar la pagina - para un cliente en
@@ -1828,6 +1829,14 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
                         a.click();
                         document.body.removeChild(a);
                         setTimeout(()=>URL.revokeObjectURL(url),10000);
+                      }else if(modo==='html'){
+                        // modo==='html': no abre ventana ni dispara descarga individual -- solo
+                        // devuelve 'htmlContent' (ver return al final de la función) para que quien
+                        // llama arme sus propios archivos. Usado por "Descargar todos (ZIP)" en
+                        // Cobros a Clientes (modules/pagos-mensajeros.js) para empaquetar el recibo
+                        // de CADA cliente dentro de un único .zip, con una carpeta por cliente,
+                        // en vez de disparar N descargas sueltas del navegador (que Chrome bloquea
+                        // después de pocas, y que igual caen todas en la misma carpeta de Descargas).
                       }else{
                         if(winRecibo){
                           winRecibo.document.open();
@@ -1842,7 +1851,7 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
                       // recibos_cobro -- así el próximo recibo sabe qué códigos ya fueron ajustados
                       // y no los vuelve a restar.
                       // Guardamos la lista UNIFICADA (períodos anteriores + cancelados de este mismo período) como 'ya vistos' -- así un futuro recibo no vuelve a tratar estos códigos como un retorno nuevo que haya que restar otra vez (evita un doble descuento). El monto que efectivamente afecta el total (ajusteAutoMonto) sigue siendo solo el de los códigos de períodos anteriores.
-                      return{ajusteAutoMonto,ajusteAutoDetalle:cancelacionesDetalle};
+                      return{ajusteAutoMonto,ajusteAutoDetalle:cancelacionesDetalle,html:htmlContent};
 }
 
 function CalendarioCobros(_ref_cc){
