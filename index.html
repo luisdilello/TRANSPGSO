@@ -13471,7 +13471,7 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
   puedeVer('operaciones')&&/*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='operaciones'?'active':''}`,onClick:()=>irA('operaciones')},'📋 Operaciones'),
   (puedeVer('mensajeros')||puedeVer('clientes')||puedeVer('usuarios')||puedeVer('mapa-rutas')||puedeVer('comunas')||puedeVer('comunicados')||(perfil!=null&&perfil.esSuperAdmin))&&/*#__PURE__*/React.createElement(NavDropdown,{
     label:'Administración',
-    active:tab==='mensajeros'||tab==='clientes'||tab==='usuarios'||tab==='mapa-rutas'||tab==='comunicados'||tab==='permisos'||tab==='calendario-cobros',
+    active:tab==='mensajeros'||tab==='clientes'||tab==='usuarios'||tab==='mapa-rutas'||tab==='comunicados'||tab==='permisos'||tab==='calendario-cobros'||tab==='secciones',
     items:[
       ...(puedeVer('mensajeros')?[{id:'mensajeros',label:'Mensajeros'}]:[]),
       ...(puedeVer('clientes')?[{id:'clientes',label:'Clientes'}]:[]),
@@ -13479,12 +13479,15 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
       ...(puedeVer('mapa-rutas')?[{id:'mapa-rutas',label:'Mapa Rutas'}]:[]),
       ...(puedeVer('comunas')?[{id:'comunas',label:'Comunas'}]:[]),
       ...(puedeVer('comunicados')?[{id:'comunicados',label:'Comunicados'}]:[]),
-      ...(perfil!=null&&perfil.esSuperAdmin?[{id:'permisos',label:'Permisos'},{id:'calendario-cobros',label:'📅 Calendario Cobros'}]:[])
+      // FIX 2026-10-03 (Secciones): pantalla nueva para que Luis administre él mismo el catálogo
+      // de Secciones (ej. "XXL") y sus tarifas de cobro/pago -- gateada igual que Permisos y
+      // Calendario de Cobros (solo superadmin), por tocar directamente montos de cobro y pago.
+      ...(perfil!=null&&perfil.esSuperAdmin?[{id:'permisos',label:'Permisos'},{id:'calendario-cobros',label:'📅 Calendario Cobros'},{id:'secciones',label:'🏷️ Secciones'}]:[])
     ],
     tab:tab,setTab:irA
   }),
   puedeVer('cierre')&&/*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='cierre'?'active':''}`,onClick:()=>irA('cierre')},'Cierre Mes')
-),/*#__PURE__*/React.createElement("div",{className:"main"},tab==='dashboard'&&/*#__PURE__*/React.createElement(Dashboard,{kpi:kpiVista,mensajerosDia:mensajerosDiaVista,db:db,enviosLocales:enviosGestion,clientes:clientes}),tab==='envios'&&(gestionEnviosReady?/*#__PURE__*/React.createElement(GestionEnvios,{mensajeros:mensajeros,clientes:clientes,toast:toast,usuario:usuarioActivo,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Envios...")),tab==='market'&&(pedidosMarketReady?/*#__PURE__*/React.createElement(PedidosMarketAdmin,{toast:toast,usuario:usuarioActivo,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Pgso Market...")),tab==='consulta-express'&&(consultaExpressReady?/*#__PURE__*/React.createElement(ConsultaExpress,{toast:toast}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Consulta Express...")),tab==='importar'&&/*#__PURE__*/React.createElement(ImportarExcel,{mensajeros:mensajeros,setMensajeros:setMensajeros,setMensajerosDia:setMensajerosDia,setKpi:setKpi,toast:toast}),tab==='kpi-men'&&/*#__PURE__*/React.createElement(KpiMensajeros,{mensajerosDia:mensajerosDiaVista,setMensajerosDia:setMensajerosDia}),tab==='analitica'&&(analiticaReady?/*#__PURE__*/React.createElement(Analitica,null):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Analitica...")),puedeVer('etiquetas')&&tab==='etiquetas'&&/*#__PURE__*/React.createElement(Etiquetas,{clientes:clientes}),puedeVer('pagos')&&tab==='pagos'&&(pagosMensajerosReady?/*#__PURE__*/React.createElement(PagosMensajeros,{mensajeros:mensajeros,mensajerosDia:mensajerosDiaVista,esAdmin:perfil==null?void 0:perfil.esAdmin,toast:toast,clientes:clientes,permisosPago:{pagos:puedeVerSub('pagos','pagos'),cobros:puedeVerSub('pagos','cobros'),retiros:puedeVerSub('pagos','retiros'),productos:puedeVerSub('pagos','productos'),/* consumo reusa el mismo permiso 'productos': en pantalla de Permisos es una sola fila "Productos / Consumo" -- antes leía una llave 'pagos.consumo' separada que la UI nunca escribía, así que deshabilitar esa fila no ocultaba Consumo Diario (quedaba huérfana heredando siempre el permiso general de Pagos y Cobros) */consumo:puedeVerSub('pagos','productos'),adelantos:puedeVerSub('pagos','adelantos'),historial:puedeVerSub('pagos','historial')}}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Pagos Mensajeros...")),puedeVer('siniestros')&&tab==='siniestros'&&(siniestrosReady?/*#__PURE__*/React.createElement(Siniestros,{mensajeros:mensajeros,clientes:clientes,toast:toast,usuario:usuarioActivo,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Siniestros...")),puedeVer('firmas')&&tab==='firmas'&&(firmasReady?/*#__PURE__*/React.createElement(Firmas,{mensajeros:mensajerosVista,toast:toast,usuario:usuarioActivo,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Firmas...")),puedeVer('operaciones')&&tab==='operaciones'&&(operacionesReady?/*#__PURE__*/React.createElement(Operaciones,{mensajeros:mensajerosVista,clientes:clientes,toast:toast,usuario:usuarioActivo,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin,puedeVerCierre:puedeVerSub('operaciones','cierre-diario'),puedeVerFirmasVivo:puedeVerSub('operaciones','firmas-vivo')}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Operaciones...")),puedeVer('colecta-admin')&&tab==='colecta-admin'&&(colectaAdminReady?React.createElement(ColectaAdmin,{clientes:clientes,mensajeros:mensajeros,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin,usuario:usuarioActivo}):React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Colecta Admin...")),puedeVer('cierre')&&tab==='cierre'&&(cierreMesReady?/*#__PURE__*/React.createElement(CierreMes,{clientes:clientes,mensajeros:mensajeros,esAdmin:perfil==null?void 0:perfil.esAdmin,toast:toast}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Cierre de Mes...")),puedeVer('usuarios')&&tab==='usuarios'&&(gestionUsuariosReady?/*#__PURE__*/React.createElement(GestionUsuarios,{toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Usuarios...")),puedeVer('clientes')&&tab==='clientes'&&(gestionClientesReady?/*#__PURE__*/React.createElement(GestionClientes,{clientes:clientes,setClientes:setClientes,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Clientes...")),puedeVer('mensajeros')&&tab==='mensajeros'&&(gestionMensajerosReady?/*#__PURE__*/React.createElement(GestionMensajeros,{mensajeros:mensajeros,setMensajeros:setMensajeros,mensajerosDia:mensajerosDiaVista,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Mensajeros...")),perfil!=null&&perfil.esSuperAdmin&&tab==='permisos'&&/*#__PURE__*/React.createElement(Permisos,{permisos:permisos,setPermisos:setPermisos,toast:toast}),perfil!=null&&perfil.esSuperAdmin&&tab==='calendario-cobros'&&/*#__PURE__*/React.createElement(CalendarioCobros,{clientes:clientes,usuario:usuarioActivo,toast:toast})),puedeVer('comunicados')&&tab==='comunicados'&&/*#__PURE__*/React.createElement(Comunicados,{mensajeros:mensajeros,toast:toast}),puedeVer('mapa-rutas')&&tab==='mapa-rutas'&&/*#__PURE__*/React.createElement(MapaRutas,{mensajeros:mensajeros,toast:toast,db:db,envios:enviosGestion||[]}),puedeVer('comunas')&&tab==='comunas'&&/*#__PURE__*/React.createElement(ComunasControl,{mensajeros:mensajeros,toast:toast,db:db,esAdmin:perfil==null?void 0:perfil.esAdmin}),toastMsg&&/*#__PURE__*/React.createElement(Toast,{msg:toastMsg,onClose:()=>setToastMsg(null)}),showManifiesto&&/*#__PURE__*/React.createElement(ManifiestoExport,{mensajerosDia:mensajerosDiaVista,clientes:clientes,kpi:kpiVista,esAdmin:perfil==null?void 0:perfil.esAdmin,onClose:()=>setShowManifiesto(false)}));}
+),/*#__PURE__*/React.createElement("div",{className:"main"},tab==='dashboard'&&/*#__PURE__*/React.createElement(Dashboard,{kpi:kpiVista,mensajerosDia:mensajerosDiaVista,db:db,enviosLocales:enviosGestion,clientes:clientes}),tab==='envios'&&(gestionEnviosReady?/*#__PURE__*/React.createElement(GestionEnvios,{mensajeros:mensajeros,clientes:clientes,toast:toast,usuario:usuarioActivo,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Envios...")),tab==='market'&&(pedidosMarketReady?/*#__PURE__*/React.createElement(PedidosMarketAdmin,{toast:toast,usuario:usuarioActivo,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Pgso Market...")),tab==='consulta-express'&&(consultaExpressReady?/*#__PURE__*/React.createElement(ConsultaExpress,{toast:toast}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Consulta Express...")),tab==='importar'&&/*#__PURE__*/React.createElement(ImportarExcel,{mensajeros:mensajeros,setMensajeros:setMensajeros,setMensajerosDia:setMensajerosDia,setKpi:setKpi,toast:toast}),tab==='kpi-men'&&/*#__PURE__*/React.createElement(KpiMensajeros,{mensajerosDia:mensajerosDiaVista,setMensajerosDia:setMensajerosDia}),tab==='analitica'&&(analiticaReady?/*#__PURE__*/React.createElement(Analitica,null):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Analitica...")),puedeVer('etiquetas')&&tab==='etiquetas'&&/*#__PURE__*/React.createElement(Etiquetas,{clientes:clientes}),puedeVer('pagos')&&tab==='pagos'&&(pagosMensajerosReady?/*#__PURE__*/React.createElement(PagosMensajeros,{mensajeros:mensajeros,mensajerosDia:mensajerosDiaVista,esAdmin:perfil==null?void 0:perfil.esAdmin,toast:toast,clientes:clientes,permisosPago:{pagos:puedeVerSub('pagos','pagos'),cobros:puedeVerSub('pagos','cobros'),retiros:puedeVerSub('pagos','retiros'),productos:puedeVerSub('pagos','productos'),/* consumo reusa el mismo permiso 'productos': en pantalla de Permisos es una sola fila "Productos / Consumo" -- antes leía una llave 'pagos.consumo' separada que la UI nunca escribía, así que deshabilitar esa fila no ocultaba Consumo Diario (quedaba huérfana heredando siempre el permiso general de Pagos y Cobros) */consumo:puedeVerSub('pagos','productos'),adelantos:puedeVerSub('pagos','adelantos'),historial:puedeVerSub('pagos','historial')}}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Pagos Mensajeros...")),puedeVer('siniestros')&&tab==='siniestros'&&(siniestrosReady?/*#__PURE__*/React.createElement(Siniestros,{mensajeros:mensajeros,clientes:clientes,toast:toast,usuario:usuarioActivo,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Siniestros...")),puedeVer('firmas')&&tab==='firmas'&&(firmasReady?/*#__PURE__*/React.createElement(Firmas,{mensajeros:mensajerosVista,toast:toast,usuario:usuarioActivo,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Firmas...")),puedeVer('operaciones')&&tab==='operaciones'&&(operacionesReady?/*#__PURE__*/React.createElement(Operaciones,{mensajeros:mensajerosVista,clientes:clientes,toast:toast,usuario:usuarioActivo,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin,puedeVerCierre:puedeVerSub('operaciones','cierre-diario'),puedeVerFirmasVivo:puedeVerSub('operaciones','firmas-vivo')}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Operaciones...")),puedeVer('colecta-admin')&&tab==='colecta-admin'&&(colectaAdminReady?React.createElement(ColectaAdmin,{clientes:clientes,mensajeros:mensajeros,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin,usuario:usuarioActivo}):React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Colecta Admin...")),puedeVer('cierre')&&tab==='cierre'&&(cierreMesReady?/*#__PURE__*/React.createElement(CierreMes,{clientes:clientes,mensajeros:mensajeros,esAdmin:perfil==null?void 0:perfil.esAdmin,toast:toast}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Cierre de Mes...")),puedeVer('usuarios')&&tab==='usuarios'&&(gestionUsuariosReady?/*#__PURE__*/React.createElement(GestionUsuarios,{toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Usuarios...")),puedeVer('clientes')&&tab==='clientes'&&(gestionClientesReady?/*#__PURE__*/React.createElement(GestionClientes,{clientes:clientes,setClientes:setClientes,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Clientes...")),puedeVer('mensajeros')&&tab==='mensajeros'&&(gestionMensajerosReady?/*#__PURE__*/React.createElement(GestionMensajeros,{mensajeros:mensajeros,setMensajeros:setMensajeros,mensajerosDia:mensajerosDiaVista,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Mensajeros...")),perfil!=null&&perfil.esSuperAdmin&&tab==='permisos'&&/*#__PURE__*/React.createElement(Permisos,{permisos:permisos,setPermisos:setPermisos,toast:toast}),perfil!=null&&perfil.esSuperAdmin&&tab==='calendario-cobros'&&/*#__PURE__*/React.createElement(CalendarioCobros,{clientes:clientes,usuario:usuarioActivo,toast:toast}),perfil!=null&&perfil.esSuperAdmin&&tab==='secciones'&&/*#__PURE__*/React.createElement(GestionSecciones,{clientes:clientes,mensajeros:mensajeros,toast:toast,db:db,esAdmin:perfil==null?void 0:perfil.esAdmin})),puedeVer('comunicados')&&tab==='comunicados'&&/*#__PURE__*/React.createElement(Comunicados,{mensajeros:mensajeros,toast:toast}),puedeVer('mapa-rutas')&&tab==='mapa-rutas'&&/*#__PURE__*/React.createElement(MapaRutas,{mensajeros:mensajeros,toast:toast,db:db,envios:enviosGestion||[]}),puedeVer('comunas')&&tab==='comunas'&&/*#__PURE__*/React.createElement(ComunasControl,{mensajeros:mensajeros,toast:toast,db:db,esAdmin:perfil==null?void 0:perfil.esAdmin}),toastMsg&&/*#__PURE__*/React.createElement(Toast,{msg:toastMsg,onClose:()=>setToastMsg(null)}),showManifiesto&&/*#__PURE__*/React.createElement(ManifiestoExport,{mensajerosDia:mensajerosDiaVista,clientes:clientes,kpi:kpiVista,esAdmin:perfil==null?void 0:perfil.esAdmin,onClose:()=>setShowManifiesto(false)}));}
 // ══════════════════════════════════════════════════════════
 // MapaRutas v3 — fixes: persistencia, panel, dibujo
 // ══════════════════════════════════════════════════════════
@@ -13763,6 +13766,150 @@ function PanelComunasSinValidar(props){
           );
         })
       )
+    )
+  );
+}
+// FIX 2026-10-03 (Secciones): pantalla nueva para que Luis administre él mismo el catálogo de
+// Secciones (ej. "XXL") y, por cada sección, la tarifa de cobro especial por cliente y la tarifa
+// de pago/bono especial por mensajero -- antes esto solo existía como tablas nuevas en Supabase
+// sin ninguna pantalla para tocarlas (mismo problema que ya tenía 'tarifas_comunas', que Luis
+// pidió explícitamente no repetir: "Yo las administro desde una pantalla nueva"). Gateada igual
+// que Permisos/Calendario de Cobros (solo superadmin) por tocar montos de cobro y pago directo.
+function GestionSecciones(props){
+  var clientes=props.clientes||[];
+  var mensajeros=props.mensajeros||[];
+  var toastFn=props.toast||function(){};
+  var db=props.db;
+  var _sec=React.useState([]);var secciones=_sec[0];var setSecciones=_sec[1];
+  var _carg=React.useState(true);var cargando=_carg[0];var setCargando=_carg[1];
+  var _nueva=React.useState('');var nuevaSeccion=_nueva[0];var setNuevaSeccion=_nueva[1];
+  var _abierta=React.useState(null);var seccionAbierta=_abierta[0];var setSeccionAbierta=_abierta[1];
+  // tarifasCliente/tarifasMensajero: {seccion_nombre:{cliente_o_mensajero_nombre:tarifa}}
+  var _tarCli=React.useState({});var tarifasCliente=_tarCli[0];var setTarifasCliente=_tarCli[1];
+  var _tarMen=React.useState({});var tarifasMensajero=_tarMen[0];var setTarifasMensajero=_tarMen[1];
+
+  function cargarTodo(){
+    setCargando(true);
+    Promise.all([
+      db.from('secciones_envio').select('*').order('nombre'),
+      db.from('secciones_tarifa_cliente').select('*'),
+      db.from('secciones_tarifa_mensajero').select('*')
+    ]).then(function(res){
+      setSecciones((res[0]&&res[0].data)||[]);
+      var mapaCli={};
+      ((res[1]&&res[1].data)||[]).forEach(function(r){
+        if(!mapaCli[r.seccion_nombre])mapaCli[r.seccion_nombre]={};
+        mapaCli[r.seccion_nombre][r.cliente_nombre]=r.tarifa;
+      });
+      setTarifasCliente(mapaCli);
+      var mapaMen={};
+      ((res[2]&&res[2].data)||[]).forEach(function(r){
+        if(!mapaMen[r.seccion_nombre])mapaMen[r.seccion_nombre]={};
+        mapaMen[r.seccion_nombre][r.mensajero_nombre]=r.tarifa;
+      });
+      setTarifasMensajero(mapaMen);
+      setCargando(false);
+    }).catch(function(e){console.warn('Error cargando secciones:',e.message);setCargando(false);});
+  }
+  React.useEffect(function(){cargarTodo();},[]);
+
+  function crearSeccion(){
+    var nombre=(nuevaSeccion||'').trim().toUpperCase();
+    if(!nombre)return;
+    if(secciones.some(function(s){return s.nombre===nombre;})){toastFn('⚠ Ya existe una sección con ese nombre');return;}
+    db.from('secciones_envio').insert({nombre:nombre,activo:true}).select().single().then(function(res){
+      if(res.error){toastFn('⚠ Error: '+res.error.message);return;}
+      setSecciones(function(prev){return prev.concat([res.data]).sort(function(a,b){return a.nombre.localeCompare(b.nombre);});});
+      setNuevaSeccion('');
+      toastFn('✓ Sección "'+nombre+'" creada');
+    });
+  }
+
+  function toggleActivo(s){
+    var nuevoValor=!s.activo;
+    db.from('secciones_envio').update({activo:nuevoValor}).eq('id',s.id).then(function(res){
+      if(res.error){toastFn('⚠ Error: '+res.error.message);return;}
+      setSecciones(function(prev){return prev.map(function(x){return x.id===s.id?Object.assign({},x,{activo:nuevoValor}):x;});});
+      toastFn(nuevoValor?'✓ Sección reactivada':'✓ Sección desactivada');
+    });
+  }
+
+  function guardarTarifaCliente(seccionNombre,clienteNombre,valor){
+    var tarifa=parseFloat(valor)||0;
+    db.from('secciones_tarifa_cliente').upsert({seccion_nombre:seccionNombre,cliente_nombre:clienteNombre,tarifa:tarifa,updated_at:new Date().toISOString()},{onConflict:'seccion_nombre,cliente_nombre'}).then(function(res){
+      if(res.error){toastFn('⚠ Error: '+res.error.message);return;}
+      setTarifasCliente(function(prev){
+        var next=Object.assign({},prev);
+        next[seccionNombre]=Object.assign({},next[seccionNombre]);
+        next[seccionNombre][clienteNombre]=tarifa;
+        return next;
+      });
+      toastFn('✓ Tarifa de cobro guardada');
+    });
+  }
+
+  function guardarTarifaMensajero(seccionNombre,mensajeroNombre,valor){
+    var tarifa=parseFloat(valor)||0;
+    db.from('secciones_tarifa_mensajero').upsert({seccion_nombre:seccionNombre,mensajero_nombre:mensajeroNombre,tarifa:tarifa,updated_at:new Date().toISOString()},{onConflict:'seccion_nombre,mensajero_nombre'}).then(function(res){
+      if(res.error){toastFn('⚠ Error: '+res.error.message);return;}
+      setTarifasMensajero(function(prev){
+        var next=Object.assign({},prev);
+        next[seccionNombre]=Object.assign({},next[seccionNombre]);
+        next[seccionNombre][mensajeroNombre]=tarifa;
+        return next;
+      });
+      toastFn('✓ Tarifa de pago guardada');
+    });
+  }
+
+  if(cargando)return React.createElement('div',{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},'Cargando Secciones...');
+
+  var clientesActivos=clientes.filter(function(c){return c.activo!==false;}).slice().sort(function(a,b){return a.nombre.localeCompare(b.nombre);});
+  var mensajerosActivos=mensajeros.filter(function(m){return m.activo!==false;}).slice().sort(function(a,b){return a.nombre.localeCompare(b.nombre);});
+
+  return React.createElement('div',{style:{padding:16,maxWidth:920,margin:'0 auto'}},
+    React.createElement('div',{className:'section-head'},React.createElement('div',{className:'section-title'},'Secciones ',React.createElement('span',null,'(cobro y pago especial)'))),
+    React.createElement('div',{className:'info-banner'},'🏷️ Una Sección es una etiqueta especial que se asigna a un envío puntual (ej. "XXL") desde su ficha en Gestión de Envíos. Si el cliente de ese envío y/o el mensajero asignado tienen una tarifa configurada para esa sección acá abajo, esa tarifa REEMPLAZA (no se suma) la tarifa normal de cobro y/o de pago para ESE paquete puntual. Si no hay tarifa configurada para alguno de los dos, ese lado sigue cobrándose/pagándose normal.'),
+    React.createElement('div',{style:{background:'#fff',border:'1px solid var(--border)',borderTop:'3px solid var(--gold)',borderRadius:10,padding:16,marginBottom:16}},
+      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16}},
+        React.createElement('input',{className:'form-input',style:{margin:0},placeholder:'Nombre de la nueva sección (ej. XXL)',value:nuevaSeccion,onChange:function(e){setNuevaSeccion(e.target.value);},onKeyDown:function(e){if(e.key==='Enter')crearSeccion();}}),
+        React.createElement('button',{className:'btn-primary',onClick:crearSeccion},'+ Crear Sección')
+      ),
+      secciones.length===0?React.createElement('div',{style:{color:'var(--text-soft)',fontSize:13,padding:'10px 0'}},'Todavía no hay secciones creadas.'):
+      secciones.map(function(s){
+        var abierta=seccionAbierta===s.id;
+        return React.createElement('div',{key:s.id,style:{border:'1px solid var(--border)',borderRadius:8,marginBottom:10,overflow:'hidden'}},
+          React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',background:s.activo?'var(--cream)':'#f5f5f0',cursor:'pointer'},onClick:function(){setSeccionAbierta(abierta?null:s.id);}},
+            React.createElement('span',{style:{fontFamily:'Bebas Neue',fontSize:16,letterSpacing:1.5,flex:1,opacity:s.activo?1:0.5}},s.nombre,!s.activo&&React.createElement('span',{style:{fontSize:10,marginLeft:8,fontWeight:700,color:'var(--text-soft)',letterSpacing:1}},'(inactiva)')),
+            React.createElement('button',{className:'btn-secondary',style:{padding:'4px 10px',fontSize:11},onClick:function(e){e.stopPropagation();toggleActivo(s);}},s.activo?'Desactivar':'Reactivar'),
+            React.createElement('span',{style:{fontSize:14,color:'var(--text-soft)'}},abierta?'▲':'▼')
+          ),
+          abierta&&React.createElement('div',{style:{padding:14,display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}},
+            React.createElement('div',null,
+              React.createElement('div',{style:{fontSize:11,fontWeight:700,color:'var(--gold)',letterSpacing:1,marginBottom:8,textTransform:'uppercase'}},'💰 Tarifa de cobro por cliente'),
+              clientesActivos.length===0?React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)'}},'No hay clientes activos'):
+              clientesActivos.map(function(c){
+                var val=(tarifasCliente[s.nombre]&&tarifasCliente[s.nombre][c.nombre])||0;
+                return React.createElement('div',{key:c.nombre,style:{display:'flex',alignItems:'center',gap:8,marginBottom:6}},
+                  React.createElement('span',{style:{flex:1,fontSize:12}},c.nombre),
+                  React.createElement('input',{className:'inline-input',type:'number',min:'0',style:{width:100},defaultValue:val||'',placeholder:'0',onBlur:function(e){var nv=e.target.value;if((+nv||0)!==val)guardarTarifaCliente(s.nombre,c.nombre,nv);}})
+                );
+              })
+            ),
+            React.createElement('div',null,
+              React.createElement('div',{style:{fontSize:11,fontWeight:700,color:'var(--gold)',letterSpacing:1,marginBottom:8,textTransform:'uppercase'}},'🚚 Tarifa de pago por mensajero (bono)'),
+              mensajerosActivos.length===0?React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)'}},'No hay mensajeros activos'):
+              mensajerosActivos.map(function(m){
+                var val=(tarifasMensajero[s.nombre]&&tarifasMensajero[s.nombre][m.nombre])||0;
+                return React.createElement('div',{key:m.nombre,style:{display:'flex',alignItems:'center',gap:8,marginBottom:6}},
+                  React.createElement('span',{style:{flex:1,fontSize:12}},m.nombre),
+                  React.createElement('input',{className:'inline-input',type:'number',min:'0',style:{width:100},defaultValue:val||'',placeholder:'0',onBlur:function(e){var nv=e.target.value;if((+nv||0)!==val)guardarTarifaMensajero(s.nombre,m.nombre,nv);}})
+                );
+              })
+            )
+          )
+        );
+      })
     )
   );
 }
