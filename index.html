@@ -1595,7 +1595,17 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
                       // (sin error visible) -- por eso el Recibo nunca se veía. Abrimos de inmediato con
                       // un mensaje de "generando" y más abajo solo escribimos el contenido final adentro.
                       let winRecibo=null;
-                      if(modo!=='descargar'){
+                      // FIX (03-10-2026): modo==='html' (usado por "Descargar todos (ZIP)" en
+                      // Cobros a Clientes, que llama esta funci\u00f3n una vez POR CLIENTE en un loop)
+                      // no debe abrir ventana -- antes la condici\u00f3n solo exclu\u00eda 'descargar', as\u00ed
+                      // que cada cliente del loop disparaba su propio window.open(), el navegador
+                      // bloqueaba todos menos el primero (quedaba una pesta\u00f1a en blanco
+                      // "Generando recibo\u2026" hu\u00e9rfana, sin cerrar nunca) y ese spam de pop-ups
+                      // hac\u00eda que Chrome tratara la pesta\u00f1a como abusiva y terminara bloqueando
+                      // tambi\u00e9n la descarga real del .zip al final -- por eso Luis report\u00f3 "esta
+                      // descarga no se realiza". modo==='html' no necesita ventana: solo devuelve
+                      // htmlContent (ver return al final) para que el llamador arme el .zip.
+                      if(modo!=='descargar'&&modo!=='html'){
                         winRecibo=window.open('','_blank','width=1050,height=850');
                         if(winRecibo){
                           winRecibo.document.write('<html><body style="font-family:sans-serif;padding:60px;text-align:center;color:#888">Generando recibo\u2026</body></html>');
