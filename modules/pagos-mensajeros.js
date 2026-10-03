@@ -1044,17 +1044,26 @@ function getTipoEnvioCobro(e){
 // entregado, ni cancelado, ni retorno).
 var ESTADOS_FACTURABLE_RESUMEN=['entregado','en_ruta','en_bodega','reprogramado','siniestro','en_bodega_fecha'];
 var ESTADOS_NO_FACTURABLE_RESUMEN=['cancelado','en_bodega_cancelado','retorno'];
-function calcularResumenCobrosClientes(envios,clientes){
+function calcularResumenCobrosClientes(envios,clientes,tarifasSeccionPorCliente){
+  tarifasSeccionPorCliente=tarifasSeccionPorCliente||{};
   var porCliente={};
   (envios||[]).forEach(function(e){
     var c=e.cliente||'Sin cliente';
-    if(!porCliente[c])porCliente[c]={nombre:c,total:0,entregados:0,cancelados:0,siniestros:0,grupos:{normal:0,d10kg:0,d18kg:0,colina:0,ph:0}};
+    if(!porCliente[c])porCliente[c]={nombre:c,total:0,entregados:0,cancelados:0,siniestros:0,grupos:{normal:0,d10kg:0,d18kg:0,colina:0,ph:0},gruposSeccion:{}};
     var g=porCliente[c];
     g.total++;
     if(e.estado==='entregado')g.entregados++;// KPI de efectividad real (entrega física), no de facturación
     if(ESTADOS_FACTURABLE_RESUMEN.indexOf(e.estado)!==-1){
-      var t=getTipoEnvioCobro(e);
-      if(t==='10kg')g.grupos.d10kg++;else if(t==='18kg')g.grupos.d18kg++;else if(t==='colina')g.grupos.colina++;else if(t==='ph')g.grupos.ph++;else g.grupos.normal++;
+      // FIX 2026-10-03 (Secciones): mismo criterio que generarReciboCobro (index.html) -- si el
+      // envío tiene sección asignada Y este cliente tiene tarifa configurada para ella, esa
+      // tarifa REEMPLAZA la clasificación normal por comuna/peso para ese envío puntual.
+      var tarsSecCli=tarifasSeccionPorCliente[c]||{};
+      if(e.seccion&&tarsSecCli[e.seccion]!==undefined){
+        g.gruposSeccion[e.seccion]=(g.gruposSeccion[e.seccion]||0)+1;
+      }else{
+        var t=getTipoEnvioCobro(e);
+        if(t==='10kg')g.grupos.d10kg++;else if(t==='18kg')g.grupos.d18kg++;else if(t==='colina')g.grupos.colina++;else if(t==='ph')g.grupos.ph++;else g.grupos.normal++;
+      }
     }
     if(ESTADOS_NO_FACTURABLE_RESUMEN.indexOf(e.estado)!==-1)g.cancelados++;
     if(e.estado==='siniestro'||e.tuvo_siniestro)g.siniestros++;
@@ -1067,6 +1076,10 @@ function calcularResumenCobrosClientes(envios,clientes){
     // antes quedaban en $0 en este resumen rápido.
     var tar={normal:cliData.tarifa||0,d10kg:cliData.tarifa10kg||0,d18kg:cliData.tarifa18kg||0,colina:cliData.tarifaColina||cliData.tarifa||0,ph:cliData.tarifaPH||cliData.tarifa||0};
     var montoNeto=g.grupos.normal*tar.normal+g.grupos.d10kg*tar.d10kg+g.grupos.d18kg*tar.d18kg+g.grupos.colina*tar.colina+g.grupos.ph*tar.ph;
+    // Secciones: se suman aparte, ya con su propia tarifa de cliente (ya reemplazaron la
+    // clasificación normal arriba, así que acá solo se agregan, nunca se duplican).
+    var tarsSecCli=tarifasSeccionPorCliente[nombre]||{};
+    montoNeto+=Object.keys(g.gruposSeccion).reduce(function(sum,sec){return sum+(g.gruposSeccion[sec]*(tarsSecCli[sec]||0));},0);
     var iva=cliData.pagaIVA?Math.round(montoNeto*0.19):0;
     return Object.assign({},g,{montoNeto:montoNeto,iva:iva,montoTotal:montoNeto+iva,efectividad:g.total>0?g.entregados/g.total:0});
   }).sort(function(a,b){return b.montoTotal-a.montoTotal;});
@@ -1174,12 +1187,31 @@ function CobrosClientesTab(_ref4){
     var cancelado=false;
     setCargando(true);
     fetchPorDiasParalelo(periodo.desde,periodo.hasta,function(fecha,cursor,limite){
-      return db.from('envios').select('id,codigo,cliente,fecha,estado,comuna,peso,tuvo_siniestro').neq('estado','eliminado').eq('fecha',fecha).gt('id',cursor).order('id',{ascending:true}).limit(limite);
+      return db.from('envios').select('id,codigo,cliente,fecha,estado,comuna,peso,tuvo_siniestro,seccion').neq('estado','eliminado').eq('fecha',fecha).gt('id',cursor).order('id',{ascending:true}).limit(limite);
     }).then(function(data){
       if(!cancelado){setEnvios(data||[]);setCargando(false);}
     }).catch(function(e){console.warn('Error cargando envíos para Cobros a Clientes:',e.message);if(!cancelado)setCargando(false);});
     return function(){cancelado=true;};
   },[periodo.desde,periodo.hasta]);
+
+  // FIX 2026-10-03 (Secciones): tarifas de sección configuradas por cliente (ver
+  // secciones_tarifa_cliente) -- se cargan una sola vez, no por período, porque son pocas filas y
+  // así este resumen queda alineado con generarReciboCobro (index.html) sin depender de volver a
+  // pedirlas cada vez que cambia el rango de fechas.
+  var _uSecCli=React.useState({}),tarifasSeccionPorCliente=_uSecCli[0],setTarifasSeccionPorCliente=_uSecCli[1];
+  React.useEffect(function(){
+    var cancelado=false;
+    db.from('secciones_tarifa_cliente').select('cliente_nombre,seccion_nombre,tarifa').then(function(res){
+      if(cancelado)return;
+      var mapa={};
+      (res.data||[]).forEach(function(s){
+        if(!mapa[s.cliente_nombre])mapa[s.cliente_nombre]={};
+        mapa[s.cliente_nombre][s.seccion_nombre]=s.tarifa;
+      });
+      setTarifasSeccionPorCliente(mapa);
+    }).catch(function(e){console.warn('Error cargando tarifas de sección por cliente:',e.message);});
+    return function(){cancelado=true;};
+  },[]);
 
   React.useEffect(function(){
     var cancelado=false;
@@ -1190,7 +1222,7 @@ function CobrosClientesTab(_ref4){
     return function(){cancelado=true;};
   },[periodo.desde,periodo.hasta]);
 
-  var resumen=React.useMemo(function(){return calcularResumenCobrosClientes(envios,clientes);},[envios,clientes]);
+  var resumen=React.useMemo(function(){return calcularResumenCobrosClientes(envios,clientes,tarifasSeccionPorCliente);},[envios,clientes,tarifasSeccionPorCliente]);
 
   // Recibido = r.total de 'resumen' (ya cuenta TODO envío de ese cliente despachado en el
   // rango, sin importar su estado). Retornado = conteo de 'retornos' (fecha real, arriba).
