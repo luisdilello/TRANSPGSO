@@ -1927,6 +1927,24 @@ const _useExpandido=useState({}),expandido=_useExpandido[0],setExpandido=_useExp
 
         }
 
+        // FIX 2026-10-03 (Secciones): sumar aparte el bruto de las secciones guardadas (ver
+
+        // calcularEnviosSemana) -- esa tarifa ya reemplazó la de comuna para esos envíos, así que
+
+        // acá solo se agrega, nunca se duplica.
+
+        if(p.enviosPorSeccion && Object.keys(p.enviosPorSeccion).length>0){
+
+          bruto+=Object.keys(p.enviosPorSeccion).reduce((sum,sec)=>{
+
+            const tar=(p.tarsSec&&p.tarsSec[sec]!==undefined)?p.tarsSec[sec]:0;
+
+            return sum+(p.enviosPorSeccion[sec]*tar);
+
+          },0);
+
+        }
+
         const totalBruto=bruto+(p.ajuste||0)-(p.iva||0);
 
         const totalPagar=totalBruto+(p.extra||0)+(p.bonoEfectividad||0)-(p.descuentoEfectividad||0)-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0)-(p.descSiniestro||0)-(p.penalizacion||0);
@@ -2369,7 +2387,7 @@ async function calcularEnviosSemana(){
 
     var todosEntregados=await fetchPaginadoParalelo(function(cursor,limite){
 
-      return db.from('envios').select('id,codigo,mensajero,estado,fecha,comuna')
+      return db.from('envios').select('id,codigo,mensajero,estado,fecha,comuna,seccion')
 
         .eq('estado','entregado').gt('id',cursor).order('id',{ascending:true}).limit(limite);
 
@@ -2486,13 +2504,70 @@ async function calcularEnviosSemana(){
 
     });
 
+    // FIX 2026-10-03 (Secciones): además de las tarifas por comuna, se cargan las tarifas por
+    // "sección" (bono especial, ej. "XXL") que cada mensajero pueda tener configuradas. Decisión
+    // tomada con Luis: si un envío tiene una sección asignada Y ese mensajero tiene una tarifa
+    // configurada para esa sección, esa tarifa REEMPLAZA por completo la tarifa de comuna para
+    // ese envío puntual (no se suman ambas) -- si el envío tiene sección pero ESE mensajero no
+    // tiene tarifa configurada para ella, el envío cae de vuelta en la clasificación normal por
+    // comuna, sin romper nada para quien no usa secciones.
+    var rTarSec=await db.from('secciones_tarifa_mensajero')
+
+      .select('mensajero_nombre,seccion_nombre,tarifa');
+
+    var tarifasSeccionMap={};
+
+    var tarifasSeccionMapPrimerNombre={};
+
+    (rTarSec.data||[]).forEach(function(t){
+
+      var key=normNombre(t.mensajero_nombre);
+
+      var primerN=key.split(' ')[0];
+
+      if(!tarifasSeccionMap[key])tarifasSeccionMap[key]={};
+
+      tarifasSeccionMap[key][t.seccion_nombre]=t.tarifa;
+
+      if(!tarifasSeccionMapPrimerNombre[primerN])tarifasSeccionMapPrimerNombre[primerN]={};
+
+      tarifasSeccionMapPrimerNombre[primerN][t.seccion_nombre]=t.tarifa;
+
+    });
+
     // Construir conteo detallado por mensajero y comuna
 
     var conteoDetalle={};
 
+    // FIX 2026-10-03 (Secciones): conteo PARALELO al de comuna, solo para los envíos que caen en
+    // una sección con tarifa configurada para ese mensajero (ver tarifasSeccionMap arriba) -- esos
+    // envíos NO entran a conteoDetalle (por eso el 'return' dentro del if de abajo), para que su
+    // tarifa de comuna no se cuente además de la de sección.
+    var conteoSeccionDetalle={};
+
     data.forEach(function(e){
 
       var n=normNombre(e.mensajero||'');
+
+      if(!n||n==='SIN ASIGNAR'||n==='')return;
+
+      if(e.seccion){
+
+        var tarsSecMensajero=tarifasSeccionMap[n]||tarifasSeccionMapPrimerNombre[n.split(' ')[0]]||{};
+
+        if(tarsSecMensajero[e.seccion]!==undefined){
+
+          if(!conteoSeccionDetalle[n])conteoSeccionDetalle[n]={};
+
+          if(!conteoSeccionDetalle[n][e.seccion])conteoSeccionDetalle[n][e.seccion]=0;
+
+          conteoSeccionDetalle[n][e.seccion]++;
+
+          return; // reemplaza la clasificación por comuna -- no se cuenta dos veces
+
+        }
+
+      }
 
       // Igual que con tarifasComunaMap: se agrupa por matchComuna para que variantes de acento
       ///mayúscula de una misma comuna real (MAIPU vs Maipú) caigan en el mismo casillero y no
@@ -2501,8 +2576,6 @@ async function calcularEnviosSemana(){
       // comprobante y el panel de Administración · Comunas van a mostrar ese valor como está,
       // sin disfrazarlo de comuna válida.
       var c=matchComuna(e.comuna)||(e.comuna||'').toUpperCase().trim();
-
-      if(!n||n==='SIN ASIGNAR'||n==='')return;
 
       if(!conteoDetalle[n])conteoDetalle[n]={};
 
@@ -2595,7 +2668,7 @@ async function calcularEnviosSemana(){
 
         var enviosPorComuna=conteoDetalle[key]||{};
 
-        var totalEnvios=Object.values(enviosPorComuna).reduce(function(a,b){return a+b;},0);
+        var totalEnviosComuna=Object.values(enviosPorComuna).reduce(function(a,b){return a+b;},0);
 
         var tarsCom=tarifasComunaMap[key]||tarifasComunaMapPrimerNombre[key.split(' ')[0]]||{};
 
@@ -2608,6 +2681,26 @@ async function calcularEnviosSemana(){
           return sum+(enviosPorComuna[com]*tar);
 
         },0);
+
+        // FIX 2026-10-03 (Secciones): se suma aparte el bruto de los envíos que quedaron en una
+        // sección con tarifa propia para este mensajero (ver conteoSeccionDetalle arriba) -- esta
+        // tarifa ya REEMPLAZÓ la de comuna para esos envíos (no entraron a enviosPorComuna), así
+        // que acá solo se agrega, nunca se duplica.
+        var enviosPorSeccion=conteoSeccionDetalle[key]||{};
+
+        var tarsSec=tarifasSeccionMap[key]||tarifasSeccionMapPrimerNombre[key.split(' ')[0]]||{};
+
+        var totalEnviosSeccion=Object.values(enviosPorSeccion).reduce(function(a,b){return a+b;},0);
+
+        bruto+=Object.keys(enviosPorSeccion).reduce(function(sum,sec){
+
+          var tar=tarsSec[sec]!==undefined?tarsSec[sec]:0;
+
+          return sum+(enviosPorSeccion[sec]*tar);
+
+        },0);
+
+        var totalEnvios=totalEnviosComuna+totalEnviosSeccion;
 
         if(totalEnvios===0){bruto=0;}
 
@@ -2683,7 +2776,7 @@ async function calcularEnviosSemana(){
 
         // aplicar una tarifa plana.
 
-        return Object.assign({},p,{envios:totalEnvios,bruto:bruto,totalBruto:totalBruto,totalPagar:totalPagar,enviosPorComuna:enviosPorComuna,tarsCom:tarsCom,asignados:asignados,efectividad:efectividad,bonoEfectividad:bonoEfectividad,descuentoEfectividad:descuentoEfectividad,diasBajoEfectividad:diasBajoEfectividad,paquetesNoEntregadosEfectividad:paquetesNoEntregadosEfectividad,detalleEfectividad:detalleEfectividad});
+        return Object.assign({},p,{envios:totalEnvios,bruto:bruto,totalBruto:totalBruto,totalPagar:totalPagar,enviosPorComuna:enviosPorComuna,tarsCom:tarsCom,enviosPorSeccion:enviosPorSeccion,tarsSec:tarsSec,asignados:asignados,efectividad:efectividad,bonoEfectividad:bonoEfectividad,descuentoEfectividad:descuentoEfectividad,diasBajoEfectividad:diasBajoEfectividad,paquetesNoEntregadosEfectividad:paquetesNoEntregadosEfectividad,detalleEfectividad:detalleEfectividad});
 
       });
 
@@ -2763,6 +2856,22 @@ function recalcAll(){
 
         }
 
+        // FIX 2026-10-03 (Secciones): ver la misma nota en buildPagos más arriba -- se agrega el
+
+        // bruto de secciones guardadas aparte, sin duplicar lo ya reemplazado en enviosPorComuna.
+
+        if(p.enviosPorSeccion && Object.keys(p.enviosPorSeccion).length>0){
+
+          bruto+=Object.keys(p.enviosPorSeccion).reduce((sum,sec)=>{
+
+            const tar=(p.tarsSec&&p.tarsSec[sec]!==undefined)?p.tarsSec[sec]:0;
+
+            return sum+(p.enviosPorSeccion[sec]*tar);
+
+          },0);
+
+        }
+
         const totalBruto=bruto+(p.ajuste||0)-(p.iva||0);
 
         const totalPagar=totalBruto+(p.extra||0)+(p.bonoEfectividad||0)-(p.descuentoEfectividad||0)-(p.adelanto||0)-(p.prestamo||0)-(p.consumo||0)-(p.descSiniestro||0)-(p.penalizacion||0);
@@ -2820,6 +2929,16 @@ const totales=pagos.filter(mensajeroActivo).reduce((a,p)=>{const m=montoPago(p);
           return{comuna:com||'SIN COMUNA',cant:cant,tarifa:tar,subtotal:cant*tar};
         })
       :[{comuna:'General',cant:p.envios,tarifa:p.tarifa,subtotal:p.bruto}];
+    // FIX 2026-10-03 (Secciones): un renglón aparte por cada sección con bono configurado para
+    // este mensajero (ver calcularEnviosSemana) -- marcado "· Sección" para que no se confunda con
+    // una comuna real; esa tarifa ya reemplazó la de comuna para esos envíos puntuales.
+    const filasSeccion=(p.enviosPorSeccion&&Object.keys(p.enviosPorSeccion).length>0)
+      ?Object.keys(p.enviosPorSeccion).sort().map(function(sec){
+          const cant=p.enviosPorSeccion[sec];
+          const tar=(p.tarsSec&&p.tarsSec[sec]!==undefined)?p.tarsSec[sec]:0;
+          return{comuna:sec+' · Sección',cant:cant,tarifa:tar,subtotal:cant*tar};
+        })
+      :[];
     // Descuento Efectividad y Descuento por Siniestro: en vez de una sola línea con el monto
     // agregado, se abre UN RENGLÓN POR CADA INCIDENTE -- Luis pidió que quede "bien detallado:
     // código, incidencia y explicación", no un total sin desglosar. Si el pago viene de un
@@ -2868,7 +2987,7 @@ const totales=pagos.filter(mensajeroActivo).reduce((a,p)=>{const m=montoPago(p);
         p.prestamo>0?{label:'Préstamo Descontado',val:-p.prestamo,positivo:false}:null
       ].filter(Boolean)
     );
-    const filasComunaHtml=filasComuna.map(function(f){
+    const filasComunaHtml=filasComuna.concat(filasSeccion).map(function(f){
       return`<tr><td>${f.comuna}</td><td class="c">${f.cant}</td><td class="r">${fmtCLP(f.tarifa)}</td><td class="r sub">${fmtCLP(f.subtotal)}</td></tr>`;
     }).join('');
     const filasDescuentoHtml=filasDescuento.length?filasDescuento.map(function(f){
@@ -2952,7 +3071,7 @@ const totales=pagos.filter(mensajeroActivo).reduce((a,p)=>{const m=montoPago(p);
 
         <div class="tiles">
           <div class="tile"><div class="tile-label">Paquetes Entregados</div><div class="tile-val">${p.envios}</div></div>
-          <div class="tile"><div class="tile-label">Comunas</div><div class="tile-val">${filasComuna.length}</div></div>
+          <div class="tile"><div class="tile-label">Comunas</div><div class="tile-val">${filasComuna.length+filasSeccion.length}</div></div>
           <div class="tile"><div class="tile-label">Pago Bruto</div><div class="tile-val">${fmtCLP(p.bruto)}</div></div>
         </div>
 
