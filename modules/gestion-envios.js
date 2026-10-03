@@ -32,16 +32,19 @@ var ESTADOS_FACTURABLE_GE=['entregado','en_ruta','en_bodega','reprogramado','sin
 var THEAD_RESET={background:'transparent',color:'var(--text)',textShadow:'none',textTransform:'none',letterSpacing:'normal',fontFamily:'inherit',fontSize:'inherit',fontWeight:700};
 var AdminEditarEnvio=window.__app.AdminEditarEnvio, abrirVentanaEtiquetas=window.__app.abrirVentanaEtiquetas, COMUNAS_CHILE=window.__app.COMUNAS_CHILE, ESTADOS_ENVIO=window.__app.ESTADOS_ENVIO, EnvioDetalleCard=window.__app.EnvioDetalleCard, EtiquetaPreview=window.__app.EtiquetaPreview, ExportBtn=window.__app.ExportBtn, FotosEntregaConRecarga=window.__app.FotosEntregaConRecarga, Modal=window.__app.Modal, matchComuna=window.__app.matchComuna, esComunaValida=window.__app.esComunaValida, confirmarCodigo=window.__app.confirmarCodigo, crearEntradaHistorial=window.__app.crearEntradaHistorial, db=window.__app.db, diasDesdeFecha=window.__app.diasDesdeFecha, esEnvioAtrasado=window.__app.esEnvioAtrasado, UMBRAL_ATRASO_DIAS=window.__app.UMBRAL_ATRASO_DIAS, calcularBaseTardio=window.__app.calcularBaseTardio, esEnvioTardio=window.__app.esEnvioTardio, horasTardanza=window.__app.horasTardanza, UMBRAL_TARDIO_HORAS=window.__app.UMBRAL_TARDIO_HORAS, estadoBadge=window.__app.estadoBadge, estadoInfo=window.__app.estadoInfo, exportToExcel=window.__app.exportToExcel, fechaHoyCL=window.__app.fechaHoyCL, imprimirFotoEtiqueta=window.__app.imprimirFotoEtiqueta, lsLoad=window.__app.lsLoad, lsSave=window.__app.lsSave, normalizarNombre=window.__app.normalizarNombre, perfil=window.__app.perfil, playSound=window.__app.playSound, subirFotoStorage=window.__app.subirFotoStorage, sbRegistrarHistorial=window.__app.sbRegistrarHistorial, sbRegistrarHistorialLote=window.__app.sbRegistrarHistorialLote, fetchPaginadoParalelo=window.__app.fetchPaginadoParalelo, fetchPorDiasParalelo=window.__app.fetchPorDiasParalelo, fetchEntregadosPorFechaReal=window.__app.fetchEntregadosPorFechaReal, fetchPorFechaRealDeEstado=window.__app.fetchPorFechaRealDeEstado, calcularEstadoEfectivo=window.__app.calcularEstadoEfectivo, limiteDiaChileUTC=window.__app.limiteDiaChileUTC;
 function GestionEnvios(_ref26){var _detalleEnvio$mensaje;let mensajeros=_ref26.mensajeros,clientes=_ref26.clientes,toast=_ref26.toast,esSuperAdmin=_ref26.esSuperAdmin,esAdmin=_ref26.esAdmin,usuario=_ref26.usuario,codigoInicial=_ref26.codigoInicial,onCodigoInicialConsumido=_ref26.onCodigoInicialConsumido;const _useState60=useState(()=>lsLoad('gestion_envios',[])),envios=_useState60[0],setEnvios=_useState60[1];const _useState61=useState('lista'),subTab=_useState61[0],setSubTab=_useState61[1];const _useState62=useState(''),search=_useState62[0],setSearch=_useState62[1];const _useState63=useState('todos'),filtroEst=_useState63[0],setFiltroEst=_useState63[1];const _useState64=useState('todos'),filtroCli=_useState64[0],setFiltroCli=_useState64[1];const _useState65=useState('todos'),filtroMen=_useState65[0],setFiltroMen=_useState65[1];const _useState65b=useState('todos'),filtroFuente=_useState65b[0],setFiltroFuente=_useState65b[1];
-// Vista de las tarjetas de estado (y de la tabla al filtrar por una de ellas): 'cierre' (default,
-// como siempre funcionó) muestra el estado que tenía cada código AL CIERRE del período elegido
-// (Entregado/Retorno por su fecha real de evento, el resto congelado al último día del rango).
-// 'actual' es la vista nueva que pidió Luis: para los mismos códigos DESPACHADOS en el rango,
-// muestra su estado EN VIVO tal cual está ahora mismo, sin congelar nada -- por eso en este modo
-// Entregado/Retorno también se calculan igual que el resto (contra enviosPeriodo/e.estado en vivo)
-// en vez de usar sus listas de fecha real. Se guarda en localStorage para que no se resetee cada
-// vez que se abre la pantalla.
-const _useVistaEst=useState(()=>lsLoad('ge_vista_estado','cierre')),vistaEstado=_useVistaEst[0],setVistaEstado=_useVistaEst[1];
-useEffect(function(){lsSave('ge_vista_estado',vistaEstado);},[vistaEstado]);
+// FIX 2026-10-03: antes esto era un selector de 3 botones ("VISTA:" -- 'cierre'/'actual'/'fusion')
+// que el admin podía cambiar a mano. Luis reportó que el selector lo confundía ("estos filtros me
+// vuelven un desastre") y que en Gestión de Envíos solo debería existir UNA vista -- y en los
+// hechos solo usaba 'fusion' (pedida el 22-09-2026 para ver "recibido" y "resuelto" a la vez sin
+// cambiar de botón). Las otras dos ya no aportaban nada que 'fusion' no mostrara: 'cierre' usa
+// SIEMPRE el criterio "resuelto" (fecha real del último movimiento) para Entregado/Retorno, que es
+// el único que importa para pagar mensajeros y cobrar clientes -- y 'fusion' hace EXACTAMENTE lo
+// mismo para esos dos estados, mostrando además el número "recibido" al lado sin costo extra.
+// 'actual' (estado en vivo) era solo para seguimiento operativo, nunca para pagar/cobrar. Por eso
+// ahora 'vistaEstado' queda fijo en 'fusion' (sin botones, sin localStorage) -- el resto del
+// archivo sigue intacto porque toda la lógica de abajo ya sabía tratar 'fusion' como el modo
+// correcto para pagar/cobrar.
+const vistaEstado='fusion';
 // NUEVO 2026-09-22 (vista 'fusion', "Recibido + Resuelto"): las tarjetas siempre muestran los dos
 // números a la vez (recibido y resuelto). Para la TABLA/export de abajo, en vez de pedirle a Luis
 // que elija manualmente entre los dos criterios (eso fue lo primero que se probó, pero generaba
@@ -1637,24 +1640,9 @@ filtroCli!=='todos'&&React.createElement('div',{style:{background:'#fff',border:
     })()
   )
 ),
-/*#__PURE__*/React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',marginBottom:14,flexWrap:'wrap'}},
-  /*#__PURE__*/React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:2,color:'var(--text-soft)',marginRight:4}},'VISTA:'),
-  [{val:'cierre',label:'Resuelto en el período',title:'Para cada estado (Entregado, Retorno, Reprogramado, Cancelado, etc.), muestra los códigos cuyo ÚLTIMO movimiento a ese estado ocurrió DENTRO de las fechas elegidas -- sin importar cuándo se despachó el envío. USA ESTA para pagar mensajeros y para cobrar a clientes: un envío cuenta en el período en que se RESOLVIÓ (se entregó, volvió, etc.), no en el que se despachó -- por ejemplo un envío reprogramado en la quincena 1 que termina como retorno en la quincena 2 cuenta como retorno de la quincena 2. También sirve para cruzar información con un reporte externo (ej. el Drive de un cliente).'},
-   {val:'actual',label:'Despachado en el período',title:'Solo para los envíos DESPACHADOS dentro del rango elegido, muestra el estado en el que están AHORA MISMO, sin importar si ya se resolvió o no. Es para seguimiento operativo (cuánto despachaste en el rango y cómo va esa tanda) -- NO la uses para pagar ni cobrar, para eso usa "Resuelto en el período". Un envío despachado ANTES del rango, aunque se haya resuelto dentro de él, no aparece acá.'},
-   // NUEVO 2026-09-22: Luis necesitaba los dos números a la vez para su fórmula de cobro
-   // (recibido menos retorno) sin tener que cambiar de vista y perder de vista el otro número.
-   // Esta 3ra vista muestra, por cada estado, "recibido" (despachado en el rango, igual que
-   // "Despachado en el período") Y "resuelto" (fecha real del último movimiento, igual que
-   // "Resuelto en el período") lado a lado en la misma tarjeta. El sistema NO resta uno del otro
-   // a propósito -- Luis pidió ver los dos números por separado y hacer la resta él mismo, por si
-   // aplica otros descuentos aparte. La tabla/export de abajo NO tiene selector manual (se probó y
-   // confundía más de lo que ayudaba -- ver "no entiendes o que?"): arma sola el criterio correcto
-   // por estado, igual que 'cierre' -- "Todos" y el resto de los estados usan "recibido" (para que
-   // calce con el pivot de Luis), Entregado y Retorno siempre usan "resuelto" (para que calce con
-   // el badge "retorno resuelto en el período", sin importar cuándo se despachó el envío).
-   {val:'fusion',label:'Recibido + Resuelto',title:'Para cada estado, muestra DOS números lado a lado: cuántos códigos se DESPACHARON en el rango elegido ("recibido", igual que "Despachado en el período") y cuántos se RESOLVIERON en el rango elegido ("resuelto", igual que "Resuelto en el período" -- fecha real del último movimiento, sin importar cuándo se despachó). Pensada para armar el cálculo de cobro/pago cuando necesitas los dos números a la vez, sin cambiar de pestaña. El sistema no resta uno del otro -- muestra los dos por separado y la resta la haces tú. La tabla/export de abajo arma sola el criterio correcto: "Todos" y el resto de los estados usan "recibido", Entregado y Retorno siempre usan "resuelto".'}
-  ].map(function(v){return/*#__PURE__*/React.createElement('button',{key:v.val,title:v.title,onClick:function(){setVistaEstado(v.val);setPage(1);},style:{padding:'6px 16px',borderRadius:20,border:'1px solid '+(vistaEstado===v.val?'var(--gold)':'var(--border)'),background:vistaEstado===v.val?'rgba(200,168,75,0.12)':'#fff',color:vistaEstado===v.val?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer',transition:'all 0.15s'}},v.label);})
-),
+// FIX 2026-10-03: se quitó por completo el selector de botones "VISTA:" (ver comentario junto a
+// la declaración de 'vistaEstado' más arriba) -- ya no hay nada que elegir, 'vistaEstado' queda
+// fijo en 'fusion' y las tarjetas de abajo siempre muestran "recibido"+"resuelto" juntas.
 sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'20px',color:'var(--text-soft)',fontSize:13,marginBottom:20}},'⏳ Sincronizando historial completo desde la nube...'):
 /*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:20,paddingTop:14,overflowX:'auto'}},[{val:'todos',label:'Todos',color:'var(--gold)'},...ESTADOS_ENVIO].map(est=>{
   // NUEVO 2026-09-22 (vista 'fusion'): 'countRecibido'/'countResuelto' se calculan SIEMPRE (no
