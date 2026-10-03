@@ -168,7 +168,6 @@ const _uPerGE=useState('hoy'),periodo=_uPerGE[0],setPeriodo=_uPerGE[1];
 const _uMesGE=useState(new Date().toISOString().slice(0,7)),mesFiltro=_uMesGE[0],setMesFiltro=_uMesGE[1];
 const _uD1GE=useState(''),desde=_uD1GE[0],setDesde=_uD1GE[1];
 const _uD2GE=useState(''),hasta=_uD2GE[0],setHasta=_uD2GE[1];
-const _uCuadreOpen=useState(false),cuadreAbierto=_uCuadreOpen[0],setCuadreAbierto=_uCuadreOpen[1];
 const _uCuadreClienteOpen=useState(false),cuadreClienteAbierto=_uCuadreClienteOpen[0],setCuadreClienteAbierto=_uCuadreClienteOpen[1];
 // NUEVO 2026-10-01: números que el CLIENTE informa por día de despacho (Flex/Manual/Devolución +
 // nota), para la tabla "Cuadre vs Cliente" de más abajo -- TransPgso no tiene cómo saber estos
@@ -1177,33 +1176,9 @@ const resumenCuadreCierre=useMemo(()=>{
   const totalEntTotal=totalEntFlex+totalEntManual,totalRetTotal=totalRetFlex+totalRetManual;
   return{filas,totalEntFlex,totalEntManual,totalEntTotal,totalRetFlex,totalRetManual,totalRetTotal,neto:totalEntTotal-totalRetTotal};
 },[entregadosPeriodoRealTarjetas,retornadosPeriodoRealTarjetas,entregasReal]);
-// NUEVO 2026-10-01: monto ESTIMADO a cobrar al cliente filtrado, con la MISMA base que "Cobros a
-// Clientes" (Pagos y Cobros) y el Recibo de Cobro oficial -- envíos DESPACHADOS en el período
-// (enviosPeriodoTarjetas, fecha de despacho) + estado ACTUAL, NO la base "fecha real de entrega"
-// que usa el resto de este panel. Decisión tomada con Luis el 2026-10-01 después de detectar que
-// la base "fecha real" daba 2.554 paquetes netos para Super Xiyu 16-30/09, contra los 2.705 que
-// arroja Recibidos−Retorno (la base que de verdad se usa para facturar) -- 151 paquetes de
-// diferencia real, que se habrían cobrado de menos. Por eso el $ de acá usa a propósito OTRA base
-// de datos que el resto del panel (ver resumenCuadreCierre arriba): así el número siempre
-// coincide con lo que Cobros a Clientes/el Recibo real van a mostrar, en vez de inventar una
-// tercera cifra. Solo tiene sentido para UN cliente (la tarifa es por cliente): si el filtro de
-// cliente está en "todos" se devuelve null y la pantalla pide elegir un cliente.
-const cobroEstimadoCuadre=useMemo(()=>{
-  if(filtroCli==='todos')return null;
-  const cliData=(clientes||[]).find(c=>c.nombre===filtroCli)||{};
-  const grupos={normal:0,d10kg:0,d18kg:0,colina:0,ph:0};
-  let facturables=0;
-  enviosPeriodoTarjetas.forEach(e=>{
-    if(ESTADOS_FACTURABLE_GE.indexOf(e.estado)===-1)return;
-    facturables++;
-    const t=getTipoEnvioCobroGE(e);
-    if(t==='10kg')grupos.d10kg++;else if(t==='18kg')grupos.d18kg++;else if(t==='colina')grupos.colina++;else if(t==='ph')grupos.ph++;else grupos.normal++;
-  });
-  const tar={normal:cliData.tarifa||0,d10kg:cliData.tarifa10kg||0,d18kg:cliData.tarifa18kg||0,colina:cliData.tarifaColina||cliData.tarifa||0,ph:cliData.tarifaPH||cliData.tarifa||0};
-  const montoNeto=grupos.normal*tar.normal+grupos.d10kg*tar.d10kg+grupos.d18kg*tar.d18kg+grupos.colina*tar.colina+grupos.ph*tar.ph;
-  const iva=cliData.pagaIVA?Math.round(montoNeto*0.19):0;
-  return{facturables,grupos,tar,montoNeto,iva,montoTotal:montoNeto+iva,clienteExiste:!!cliData.nombre};
-},[filtroCli,clientes,enviosPeriodoTarjetas]);
+// FIX 2026-10-03: se quitó el cálculo 'cobroEstimadoCuadre' (monto estimado en $ que mostraba el
+// panel "Cuadre de Cierre", ver comentario junto a ese panel más abajo) -- Luis confirmó que no lo
+// usa ("NO LO USO Y NO CREO QUE LO VAYA A USAR"). El panel que lo mostraba se eliminó también.
 // NUEVO 2026-10-01: "Cuadre vs Cliente" -- Luis compara a mano, por día de RETIRO (despacho), lo
 // que el cliente le informa (Flex/Manual) contra lo que tiene TransPgso, para detectar diferencias
 // ANTES de cobrar (ver su planilla de ejemplo para Super Xiyu 16-30/09). A propósito agrupa por
@@ -1471,75 +1446,11 @@ showListaNegra&&(()=>{const lista=lsLoad('envios_eliminados',[]);return/*#__PURE
     )
   )
 ),
-// NUEVO 2026-10-01: panel "Cuadre de Cierre" -- resuelve el pedido de Luis de "automatizar la
-// cuadratura de cierres de mes" sin tocar el Dashboard ni el Recibo de Cobro (herramienta nueva y
-// separada, decisión tomada con Luis el 2026-10-01). Muestra, para el cliente/período ya filtrados
-// arriba, el MISMO número que calcula resumenCuadreCierre (y que exporta "Resumen" en el Excel) --
-// siempre con fecha REAL de entrega/resolución, nunca fecha de despacho.
-// FIX 2026-10-01 (v1 era "tan confuso" -- Luis lo marcó con flechas en captura): la v1 ponía una
-// grilla de 7 tarjetas grandes que repetían, con otra etiqueta, los MISMOS números que ya se ven
-// arriba (insignias "recibido/resuelto") y abajo (tarjetas de estado en vista "Recibido +
-// Resuelto") -- 3 lugares distintos mostrando casi lo mismo. Ahora es UNA sola línea compacta con
-// el número final y el desglose Flex/Manual en texto (lo único que no estaba en ningún otro lado);
-// el detalle día por día sigue existiendo pero oculto hasta que se pide.
-(sincronizando||cargandoEntregadosReal||cargandoRetornadosReal)?/*#__PURE__*/React.createElement('div',{style:{textAlign:'center',padding:'10px',color:'var(--text-soft)',fontSize:12,marginBottom:14,background:'rgba(200,168,75,0.06)',borderRadius:10}},'⏳ Calculando cuadre de cierre...'):/*#__PURE__*/React.createElement('div',{style:{background:'rgba(200,168,75,0.06)',border:'1px solid rgba(200,168,75,0.25)',borderRadius:10,padding:'8px 14px',marginBottom:14,display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8}},
-  React.createElement('div',{style:{fontSize:12,color:'var(--text)',display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}},
-    React.createElement('span',{style:{fontWeight:700}},'🧾 Cuadre de cierre (fecha real):'),
-    React.createElement('span',null,resumenCuadreCierre.totalEntTotal.toLocaleString('es-CL'),' entregados ',React.createElement('span',{style:{color:'var(--text-soft)'}},'(',resumenCuadreCierre.totalEntFlex,' Flex + ',resumenCuadreCierre.totalEntManual,' Manual)')),
-    React.createElement('span',{style:{color:'var(--text-soft)'}},'−'),
-    React.createElement('span',null,resumenCuadreCierre.totalRetTotal.toLocaleString('es-CL'),' retornados'),
-    React.createElement('span',{style:{color:'var(--text-soft)'}},'='),
-    React.createElement('span',{style:{fontWeight:700,color:'#2e4632'}},resumenCuadreCierre.neto.toLocaleString('es-CL'),' neto'),
-    React.createElement('span',{title:'Mismos números que exporta "Resumen" en el Excel. El Dashboard ("Resumen por Cliente") y el Recibo de Cobro usan a propósito fecha de DESPACHO + estado actual (regla fijada el 2026-09-07/08) -- no son comparables con este número directamente, y es esperado.',style:{cursor:'help',color:'var(--text-soft)'}},'ⓘ')
-  ),
-  // NUEVO 2026-10-01: línea del $ a cobrar -- a propósito usa OTRA base de datos que la línea de
-  // arriba (ver cobroEstimadoCuadre más arriba: despacho + estado actual, igual que "Cobros a
-  // Clientes"), así el monto siempre coincide con lo que de verdad se va a facturar. Solo se
-  // calcula si hay un cliente puntual elegido (la tarifa es por cliente).
-  cobroEstimadoCuadre&&React.createElement('div',{style:{width:'100%',fontSize:12,color:'var(--text)',display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',marginTop:4,paddingTop:6,borderTop:'1px dashed rgba(200,168,75,0.35)'}},
-    React.createElement('span',{style:{fontWeight:700}},'💰 A cobrar (igual que Cobros a Clientes):'),
-    React.createElement('span',null,'$'+cobroEstimadoCuadre.montoNeto.toLocaleString('es-CL'),' neto'),
-    React.createElement('span',{style:{color:'var(--text-soft)'}},'+'),
-    React.createElement('span',null,'$'+cobroEstimadoCuadre.iva.toLocaleString('es-CL'),' IVA'),
-    React.createElement('span',{style:{color:'var(--text-soft)'}},'='),
-    React.createElement('span',{style:{fontWeight:700,color:'#8a6d1a'}},'$'+cobroEstimadoCuadre.montoTotal.toLocaleString('es-CL')),
-    React.createElement('span',{style:{color:'var(--text-soft)'}},'(',cobroEstimadoCuadre.facturables,' facturables)'),
-    React.createElement('span',{title:'Misma base que "Cobros a Clientes" (Pagos y Cobros) y el Recibo de Cobro oficial: envíos DESPACHADOS en el período + estado ACTUAL -- facturable = entregado + lo que sigue pendiente (en ruta/en bodega/reprogramado) + siniestro; no facturable = cancelado + en bodega cancelado + retorno. NO incluye ajustes manuales, descuentos por siniestro ya aplicados ni cobros de retiro -- para el Recibo de Cobro oficial con todo eso, usa Calendario de Cobros.',style:{cursor:'help',color:'var(--text-soft)'}},'ⓘ'),
-    !cobroEstimadoCuadre.clienteExiste&&React.createElement('span',{style:{color:'var(--danger)',fontWeight:700}},'⚠ "'+filtroCli+'" no tiene ficha de cliente/tarifa cargada')
-  ),
-  filtroCli==='todos'&&React.createElement('div',{style:{width:'100%',fontSize:11,color:'var(--text-soft)',fontStyle:'italic',marginTop:4}},'Selecciona un cliente arriba para ver cuánto se le cobraría.'),
-  React.createElement('button',{type:'button',onClick:()=>setCuadreAbierto(v=>!v),className:'btn-secondary',style:{fontSize:11,whiteSpace:'nowrap',padding:'4px 10px'}},cuadreAbierto?'Ocultar día por día ▲':'Ver día por día ▼'),
-  cuadreAbierto&&React.createElement('div',{style:{width:'100%',marginTop:10,overflowX:'auto'}},
-    resumenCuadreCierre.filas.length===0?React.createElement('div',{style:{padding:'10px 0',fontSize:12,color:'var(--text-soft)'}},'No hay entregas ni retornos resueltos en este período/filtro.'):
-    React.createElement('table',{style:{width:'100%',fontSize:11,borderCollapse:'collapse'}},
-      React.createElement('thead',null,React.createElement('tr',{style:{borderBottom:'2px solid var(--gold)'}},
-        ['Fecha','Ent. Flex','Ent. Manual','Ent. Total','Ret. Flex','Ret. Manual','Ret. Total','Neto'].map((h,i)=>React.createElement('th',{key:i,style:{padding:'5px 8px',textAlign:i===0?'left':'right',color:'var(--text-soft)',fontWeight:700}},h))
-      )),
-      React.createElement('tbody',null,
-        resumenCuadreCierre.filas.map((f,i)=>React.createElement('tr',{key:f.dia,style:{background:i%2===0?'#fff':'rgba(200,168,75,0.04)'}},
-          React.createElement('td',{style:{padding:'4px 8px',fontFamily:'JetBrains Mono'}},fmtFecha(f.dia)),
-          React.createElement('td',{style:{padding:'4px 8px',textAlign:'right'}},f.entFlex),
-          React.createElement('td',{style:{padding:'4px 8px',textAlign:'right'}},f.entManual),
-          React.createElement('td',{style:{padding:'4px 8px',textAlign:'right',fontWeight:700}},f.entTotal),
-          React.createElement('td',{style:{padding:'4px 8px',textAlign:'right',color:'#c86a6a'}},f.retFlex),
-          React.createElement('td',{style:{padding:'4px 8px',textAlign:'right',color:'#c86a6a'}},f.retManual),
-          React.createElement('td',{style:{padding:'4px 8px',textAlign:'right',fontWeight:700,color:'#c86a6a'}},f.retTotal),
-          React.createElement('td',{style:{padding:'4px 8px',textAlign:'right',fontWeight:700}},f.neto)
-        )),
-        React.createElement('tr',{style:{borderTop:'2px solid var(--gold)',fontWeight:700}},
-          React.createElement('td',{style:{padding:'5px 8px'}},'TOTAL'),
-          React.createElement('td',{style:{padding:'5px 8px',textAlign:'right'}},resumenCuadreCierre.totalEntFlex),
-          React.createElement('td',{style:{padding:'5px 8px',textAlign:'right'}},resumenCuadreCierre.totalEntManual),
-          React.createElement('td',{style:{padding:'5px 8px',textAlign:'right'}},resumenCuadreCierre.totalEntTotal),
-          React.createElement('td',{style:{padding:'5px 8px',textAlign:'right',color:'#c86a6a'}},resumenCuadreCierre.totalRetFlex),
-          React.createElement('td',{style:{padding:'5px 8px',textAlign:'right',color:'#c86a6a'}},resumenCuadreCierre.totalRetManual),
-          React.createElement('td',{style:{padding:'5px 8px',textAlign:'right',color:'#c86a6a'}},resumenCuadreCierre.totalRetTotal),
-          React.createElement('td',{style:{padding:'5px 8px',textAlign:'right'}},resumenCuadreCierre.neto)
-        )
-      )
-    )
-  )
-),
+// FIX 2026-10-03: se eliminó por completo el panel "Cuadre de Cierre" (la caja con "🧾 Cuadre de
+// cierre (fecha real): X entregados − Y retornados = Z neto", el monto "$ a cobrar" debajo y el
+// botón "Ver día por día") -- Luis confirmó que no lo usa y que no lo va a usar ("NO LO USO Y NO
+// CREO QUE LO VAYA A USAR"). 'resumenCuadreCierre' (la función que calculaba estos números) NO se
+// tocó -- sigue alimentando la hoja "Resumen" del Excel exportado más abajo, que sí se usa.
 // NUEVO 2026-10-01: "Cuadre vs Cliente" -- la segunda mitad de lo que Luis hacía a mano en su
 // planilla (ver Hoja1 del ejemplo que mandó para Super Xiyu): comparar, día de despacho por día
 // de despacho, lo que el cliente le informa (Flex/Manual) contra lo que tiene TransPgso
