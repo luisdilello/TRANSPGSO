@@ -2287,10 +2287,20 @@ function Dashboard(_ref7){
     })();
     return()=>{cancelado=true;};
   },[periodo,mesFiltro,desde,hasta,db,estiloEfectividad]);
-  // El sync global (App) solo trae últimos 8 días. Para ver más historial, traer todo una sola vez
-  // y filtrar siempre en el cliente (igual que 'todos', que es el único período confirmado funcionando).
+  // FIX (03-10-2026): el sync global (App, más abajo en este archivo) solo trae los envíos de los
+  // últimos 8 días, Y ADEMÁS tiene un tope de 8000 filas ordenadas por 'updated_at' DESCENDENTE
+  // -- si en esos 8 días hay más de 8000 envíos, los que no se volvieron a tocar recientemente
+  // (por ejemplo, entregas masivas de Flex marcadas hace rato y nunca más actualizadas) quedan
+  // FUERA del cache local ('enviosLocales') sin ningún aviso. Antes, 'Hoy' y 'Ayer' usaban
+  // directamente ese cache parcial (no tenían fetch propio), mientras que 'Rango' siempre hizo su
+  // propia consulta directa y paginada a Supabase por fecha exacta, sin ese tope -- por eso, para
+  // el MISMO día calendario, 'Rango' (01/10 al 01/10) daba 991 envíos y 'Ayer' daba 713: 'Ayer'
+  // no es que calculara mal la fecha, es que estaba mirando un cache incompleto. Reportado por
+  // Luis: "da 2 resultados diferentes para el mismo día". Ahora 'Hoy' y 'Ayer' también traen su
+  // propio fetch directo (igual que Semana/Mes/Rango), así los 5 filtros de período son
+  // igual de confiables entre sí.
   useEffect(()=>{
-    if(!db||(periodo!=='mes'&&periodo!=='semana'))return; // 'rango' ya tiene su propio fetch acotado mas abajo (antes se pedian los DOS a la vez)
+    if(!db||(periodo!=='mes'&&periodo!=='semana'&&periodo!=='hoy'&&periodo!=='ayer'))return; // 'rango' y 'todos' ya tienen su propio fetch acotado mas abajo
     let cancelado=false;
     async function fetchExtra(esRefresco){
       if(!esRefresco)setCargandoExtra(true);
@@ -2300,7 +2310,9 @@ function Dashboard(_ref7){
         // Dashboard cada vez que se abria o refrescaba cada 60s). Mismo criterio de fechas que enPeriodo().
         const hoyFE=fechaHoyCL();
         let desdeFE,hastaFE=hoyFE;
-        if(periodo==='semana'){const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));desdeFE=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+        if(periodo==='hoy'){desdeFE=hastaFE=hoyFE;}
+        else if(periodo==='ayer'){const d=new Date(hoyFE+'T12:00:00');d.setDate(d.getDate()-1);const ay=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');desdeFE=hastaFE=ay;}
+        else if(periodo==='semana'){const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));desdeFE=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
         else{const mes=mesFiltro||hoyFE.slice(0,7);const[y,m]=mes.split('-').map(Number);desdeFE=mes+'-01';hastaFE=mes+'-'+String(new Date(y,m,0).getDate()).padStart(2,'0');}
         const acumulado=await fetchPorDiasParalelo(desdeFE,hastaFE,(fecha,cursor,limite)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at,tuvo_siniestro').neq('estado','eliminado').eq('fecha',fecha).gt('id',cursor).order('id',{ascending:true}).limit(limite));
         if(!cancelado)setExtraEnvios(acumulado);
@@ -2381,10 +2393,13 @@ function Dashboard(_ref7){
   const todos=useMemo(()=>{
     const locales=enviosLocales||[];
     // 'extraEnvios' solo es relevante (y se sigue refrescando cada 60s) mientras el período
-    // activo es justo el que lo alimenta -- si el usuario ya cambió a 'hoy'/'ayer', lo que haya
-    // quedado en extraEnvios es un remanente viejo de una visita anterior a Semana/Mes que ya
-    // dejó de actualizarse, así que no debe pisar nada.
-    const periodoConFetchPropio=periodo==='semana'||periodo==='mes'||periodo==='rango'||periodo==='todos';
+    // activo es justo el que lo alimenta -- si el usuario ya cambió a otro período con fetch
+    // propio distinto, lo que haya quedado en extraEnvios es un remanente viejo de una visita
+    // anterior que ya dejó de actualizarse, así que no debe pisar nada (el useEffect de arriba
+    // ya se encarga de refrescar extraEnvios con los datos correctos en cuanto cambia 'periodo').
+    // FIX (03-10-2026): 'hoy'/'ayer' se agregan aquí también -- antes caían al cache local
+    // parcial (ver fix arriba), ahora usan el mismo fetch directo que Semana/Mes.
+    const periodoConFetchPropio=periodo==='semana'||periodo==='mes'||periodo==='rango'||periodo==='todos'||periodo==='hoy'||periodo==='ayer';
     const fuenteExtra=periodo==='rango'&&rangoEnvios.length?rangoEnvios:periodo==='todos'&&todosHistorico.length?todosHistorico:(periodoConFetchPropio?extraEnvios:[]);
     if(!fuenteExtra.length)return locales;
     // 'fuenteExtra' es una lectura directa y reciente a Supabase, acotada al período elegido --
