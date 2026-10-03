@@ -481,6 +481,12 @@ const _useSiniDet=useState([]),siniestroDetalle=_useSiniDet[0],setSiniestroDetal
 // borrador (la sola presencia de la clave en el objeto indica que ese campo está en modo edición).
 const _useEdicionesCampo=useState({}),edicionesCampo=_useEdicionesCampo[0],setEdicionesCampo=_useEdicionesCampo[1];
 useEffect(()=>{if(!detalleEnvio||!detalleEnvio.tuvo_siniestro){setSiniestroDetalle([]);return;}db.from('siniestros').select('*').eq('codigo',detalleEnvio.codigo).order('created_at',{ascending:false}).then(function(res){setSiniestroDetalle((res&&res.data)||[]);}).catch(function(){setSiniestroDetalle([]);});},[detalleEnvio&&detalleEnvio.codigo,detalleEnvio&&detalleEnvio.tuvo_siniestro]);
+// FIX 2026-10-03 (Secciones): catálogo de secciones activas (ej. "XXL") que Luis administra
+// desde Administración · Secciones -- se carga una sola vez al abrir Gestión de Envíos, no por
+// cada ficha, porque son pocas filas y cambian poco. Se usa para el selector "Sección" de la
+// ficha del envío (ver CAMPOS_ENVIO_DETALLE/renderCampoEditable más abajo).
+const _useSeccionesActivas=useState([]),seccionesActivas=_useSeccionesActivas[0],setSeccionesActivas=_useSeccionesActivas[1];
+useEffect(()=>{db.from('secciones_envio').select('nombre').eq('activo',true).order('nombre').then(function(res){setSeccionesActivas(((res&&res.data)||[]).map(function(s){return s.nombre;}));}).catch(function(){setSeccionesActivas([]);});},[]);
 function canalInfo(canal){
   if(canal==='app_mensajero')return{label:'📱 App Mensajero',bg:'rgba(46,125,79,0.12)',color:'#2e7d4f'};
   if(canal==='panel_admin')return{label:'🖥 Panel Admin',bg:'rgba(27,58,107,0.12)',color:'#1B3A6B'};
@@ -1239,12 +1245,19 @@ const CAMPOS_ENVIO_DETALLE=[
   {key:'comuna',label:'Comuna',tipo:'select',opciones:COMUNAS_CHILE},
   {key:'mensajero',label:'Mensajero',tipo:'text'},
   {key:'fecha',label:'Fecha',tipo:'date'},
-  {key:'monto',label:'Monto',tipo:'number'}
+  {key:'monto',label:'Monto',tipo:'number'},
+  // FIX 2026-10-03 (Secciones): 'seccion' no trae 'opciones' fijas acá -- a diferencia de Comuna
+  // (lista estática COMUNAS_CHILE), el catálogo de secciones lo administra Luis desde
+  // Administración · Secciones y puede cambiar en cualquier momento, así que renderCampoEditable
+  // arma el <select> en vivo con el estado 'seccionesActivas' (ver arriba) en vez de una lista
+  // fija acá.
+  {key:'seccion',label:'Sección',tipo:'seccion'}
 ];
 function valorMostradoCampo(campo,v){
   if(campo==='monto')return v>0?'$'+Number(v).toLocaleString('es-CL'):'—';
   if(campo==='fecha')return v?fmtFecha(v):'—';
   if(campo==='mensajero')return(v&&v.replace(/,\s*/g,' '))||'Sin asignar';
+  if(campo==='seccion')return v||'Sin sección';
   return(v!=null&&v!=='')?v:'—';
 }
 function iniciarEdicionCampo(campo,valorActual){
@@ -1256,14 +1269,19 @@ function cancelarEdicionCampo(campo){
 async function confirmarEdicionCampo(campo,tipo){
   const bruto=edicionesCampo[campo];
   const valor=tipo==='number'?(parseFloat(bruto)||0):bruto;
-  // Mensajero y Comuna son 2 de los 4 campos críticos -- aunque acá ya hay un paso de
+  // Mensajero y Comuna son 2 de los campos críticos -- aunque acá ya hay un paso de
   // "✎ Editar" antes de guardar, ese ✓ aplicaba directo sin mostrar valor anterior vs nuevo.
   // Ahora pasan por el mismo modal de confirmación que el resto de la tabla/detalle.
-  if(campo==='mensajero'||campo==='comuna'){
+  // FIX 2026-10-03 (Secciones): 'seccion' se suma a este grupo -- también afecta dinero (cambia
+  // la tarifa de cobro y de pago de este envío puntual), así que amerita el mismo paso de
+  // confirmación antes de aplicar el cambio.
+  if(campo==='mensajero'||campo==='comuna'||campo==='seccion'){
     const anterior=detalleEnvio[campo];
-    const etiquetaVacio=campo==='mensajero'?'Sin asignar':'Sin comuna';
-    if(String(valor)===String(anterior||'')){cancelarEdicionCampo(campo);return;}
-    pedirConfirmacionCambio(campo==='mensajero'?'Mensajero':'Comuna',anterior||etiquetaVacio,valor||etiquetaVacio,async()=>{await guardarCampoDetalle(campo,valor);});
+    const etiquetaVacio=campo==='mensajero'?'Sin asignar':campo==='comuna'?'Sin comuna':'Sin sección';
+    const valorFinal=campo==='seccion'?(valor||null):valor;
+    if(String(valorFinal||'')===String(anterior||'')){cancelarEdicionCampo(campo);return;}
+    const labelCampo=campo==='mensajero'?'Mensajero':campo==='comuna'?'Comuna':'Sección';
+    pedirConfirmacionCambio(labelCampo,anterior||etiquetaVacio,valorFinal||etiquetaVacio,async()=>{await guardarCampoDetalle(campo,valorFinal);});
     cancelarEdicionCampo(campo);
     return;
   }
@@ -1283,6 +1301,14 @@ function renderCampoEditable(campo){
           campo.tipo==='select'
             ?/*#__PURE__*/React.createElement("select",{className:'form-input',value:edicionesCampo[campo.key],onChange:e=>setEdicionesCampo(prev=>Object.assign({},prev,{[campo.key]:e.target.value})),autoFocus:true,style:{margin:0}},
                 campo.opciones.map(o=>/*#__PURE__*/React.createElement("option",{key:o,value:o},o))
+              )
+            // FIX 2026-10-03 (Secciones): mismo patrón que Comuna, pero con opciones dinámicas
+            // (seccionesActivas, cargadas desde Administración · Secciones) y una opción vacía
+            // para poder quitarle la sección a un envío.
+            :campo.tipo==='seccion'
+            ?/*#__PURE__*/React.createElement("select",{className:'form-input',value:edicionesCampo[campo.key],onChange:e=>setEdicionesCampo(prev=>Object.assign({},prev,{[campo.key]:e.target.value})),autoFocus:true,style:{margin:0}},
+                /*#__PURE__*/React.createElement("option",{value:''},"— Sin sección —"),
+                seccionesActivas.map(s=>/*#__PURE__*/React.createElement("option",{key:s,value:s},s))
               )
             :/*#__PURE__*/React.createElement("input",{className:'form-input',type:campo.tipo==='number'?'number':campo.tipo==='date'?'date':'text',value:edicionesCampo[campo.key],onChange:e=>setEdicionesCampo(prev=>Object.assign({},prev,{[campo.key]:e.target.value})),autoFocus:true,style:{margin:0,fontSize:14}}),
           /*#__PURE__*/React.createElement("button",{className:'btn-primary',style:{padding:'6px 10px'},onClick:()=>confirmarEdicionCampo(campo.key,campo.tipo)},"✓"),
