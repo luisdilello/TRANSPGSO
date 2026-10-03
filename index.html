@@ -1673,11 +1673,40 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
                           totalSiniestro=(descSinData||[]).reduce((a,s)=>a+(parseFloat(s.descontado_cliente_valor)||0),0);
                         }catch(e){console.warn('Error trayendo descuentos de siniestro para el recibo:',e.message);}
                       }
+                      // FIX 2026-10-03 (Secciones): se trae directo de Supabase el campo 'seccion' de
+                      // cada código de este recibo (en vez de depender de que 'seccion' venga en
+                      // enviosCli, que según la pantalla desde la que se generó el recibo puede venir
+                      // de distintos caches/fuentes que no siempre incluyen esta columna) -- así el
+                      // recibo detecta la sección sin importar desde dónde se llamó esta función.
+                      let seccionPorCodigo={};
+                      let tarifasSeccionCliente={};
+                      if(codigosCliRecibo.length>0){
+                        try{
+                          const{data:seccionData}=await db.from('envios').select('codigo,seccion').in('codigo',codigosCliRecibo).not('seccion','is',null);
+                          (seccionData||[]).forEach(s=>{if(s.seccion)seccionPorCodigo[s.codigo]=s.seccion;});
+                        }catch(e){console.warn('Error trayendo secciones del recibo:',e.message);}
+                        if(Object.keys(seccionPorCodigo).length>0){
+                          try{
+                            const{data:secCliData}=await db.from('secciones_tarifa_cliente').select('seccion_nombre,tarifa').eq('cliente_nombre',cli);
+                            (secCliData||[]).forEach(s=>{tarifasSeccionCliente[s.seccion_nombre]=s.tarifa;});
+                          }catch(e){console.warn('Error trayendo tarifas de sección del cliente:',e.message);}
+                        }
+                      }
+                      // Decisión tomada con Luis el 2026-10-03: si un envío tiene sección asignada Y el
+                      // cliente tiene tarifa configurada para ella, esa tarifa REEMPLAZA la clasificación
+                      // automática por comuna/peso para ese envío puntual -- si no hay tarifa configurada
+                      // para esa sección en este cliente, el envío sigue cayendo en su clasificación
+                      // normal, sin romper nada para quien no usa secciones.
                       const grupos={normal:[],d10kg:[],d18kg:[],colina:[],ph:[]};
-                      facturables.forEach(e=>{const t=getTipo(e);if(t==='10kg')grupos.d10kg.push(e);else if(t==='18kg')grupos.d18kg.push(e);else if(t==='colina')grupos.colina.push(e);else if(t==='ph')grupos.ph.push(e);else grupos.normal.push(e);});
+                      const gruposSeccion={};
+                      facturables.forEach(e=>{const sec=seccionPorCodigo[e.codigo];if(sec&&tarifasSeccionCliente[sec]!==undefined){if(!gruposSeccion[sec])gruposSeccion[sec]=[];gruposSeccion[sec].push(e);return;}const t=getTipo(e);if(t==='10kg')grupos.d10kg.push(e);else if(t==='18kg')grupos.d18kg.push(e);else if(t==='colina')grupos.colina.push(e);else if(t==='ph')grupos.ph.push(e);else grupos.normal.push(e);});
                       const tar={normal:cliData.tarifa||0,d10kg:cliData.tarifa10kg||0,d18kg:cliData.tarifa18kg||0,colina:cliData.tarifaColina||cliData.tarifa||0,ph:cliData.tarifaPH||cliData.tarifa||0};// Colina y Padre Hurtado: si el cliente no tiene tarifa especial cargada para esos tipos, se cobran igual que Flex normal (confirmado por Luis 2026-09-08) -- antes quedaban en $0.
                       const tipoLabel={normal:'Flex',d10kg:'Flex sobre 10kg',d18kg:'Flex sobre 18kg',colina:'Flex Colina',ph:'Flex Padre Hurtado'};
                       const servicios=[{tipo:'normal',label:tipoLabel.normal,cant:grupos.normal.length,tarifa:tar.normal},{tipo:'d10kg',label:tipoLabel.d10kg,cant:grupos.d10kg.length,tarifa:tar.d10kg},{tipo:'d18kg',label:tipoLabel.d18kg,cant:grupos.d18kg.length,tarifa:tar.d18kg},{tipo:'colina',label:tipoLabel.colina,cant:grupos.colina.length,tarifa:tar.colina},{tipo:'ph',label:tipoLabel.ph,cant:grupos.ph.length,tarifa:tar.ph}];
+                      // Un servicio más por cada sección efectivamente usada en este recibo (ver
+                      // gruposSeccion arriba) -- etiquetado con el nombre tal cual de la sección para que
+                      // el cliente vea exactamente qué se le está cobrando distinto (ej. "XXL").
+                      Object.keys(gruposSeccion).sort().forEach(sec=>{servicios.push({tipo:'seccion:'+sec,label:sec,cant:gruposSeccion[sec].length,tarifa:tarifasSeccionCliente[sec]});});
                       const totalNeto=servicios.reduce((a,s)=>a+(s.cant*s.tarifa),0);
                       const iva=cliData.pagaIVA?Math.round(totalNeto*0.19):0;
                       const fechasCli=enviosCli.map(e=>e.fecha).filter(Boolean).sort();
