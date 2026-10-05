@@ -1743,7 +1743,14 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
                         let candidatos=[];
                         if(diasYaFacturados.size>0){
                           const{data:enviosPrevios}=await db.from('envios').select('codigo,fecha,estado,comuna,peso').eq('cliente',cli).in('fecha',Array.from(diasYaFacturados)).in('estado',ESTADOS_NO_FACTURABLE);
-                          candidatos=(enviosPrevios||[]).filter(e=>!codigosYaAjustados.has(e.codigo));
+                          // FIX 05-10-2026: excluimos también los códigos que YA vienen en enviosCli
+                          // (p.ej. porque Calendario de Cobros ahora agrega acá los retornos resueltos
+                          // dentro del rango aunque su recepción haya sido en un día ya facturado --
+                          // ver generarRecibo en CalendarioCobros). Sin esto, ese código se restaría DOS
+                          // veces: una implícita (al quedar en noFacturables, no se cobra en este
+                          // recibo) y otra explícita acá vía ajusteAutoMonto.
+                          const codigosEnEsteRecibo=new Set(enviosCli.map(e=>e.codigo));
+                          candidatos=(enviosPrevios||[]).filter(e=>!codigosYaAjustados.has(e.codigo)&&!codigosEnEsteRecibo.has(e.codigo));
                         }
                         // Traemos en UNA sola consulta el historial de TODOS los códigos que van a
                         // aparecer en la tabla de "Cancelados de este Período" -- tanto los que se
@@ -2076,9 +2083,39 @@ function CalendarioCobros(_ref_cc){
     if(diasSeleccionados.size===0)return;
     setGenerando(true);
     try{
-      const enviosSel=envios.filter(e=>diasSeleccionados.has(fechaEnvio(e)));
-      const cliData=(clientes||[]).find(c=>c.nombre===clienteSel)||{};
       const diasOrdenados=Array.from(diasSeleccionados).sort();
+      // Base: envíos cuya fecha de RECEPCIÓN (fechaEnvio) cae en los días marcados.
+      const enviosSel=envios.filter(e=>diasSeleccionados.has(fechaEnvio(e)));
+      // FIX 05-10-2026 (root cause del cuadre que no daba en el cierre de septiembre): "Retornado"
+      // tiene que contarse por la fecha REAL en que el retorno quedó resuelto
+      // (historial_envios), no por la fecha de recepción del envío. Antes, un envío recibido en
+      // un mes pero cuyo retorno se resolvió recién en el mes siguiente (o en cualquier otro mes
+      // fuera de los días marcados aquí) quedaba totalmente afuera de `enviosSel` -- ni se contaba
+      // como retorno de ESTE recibo ni de ningún otro, porque los recibos futuros filtran por los
+      // SUYOS días (donde la fecha de recepción tampoco cae). Ese hueco es exactamente el reportado
+      // por Luis: "al descargar el archivo completo de septiembre no me dan las cuentas... faltan
+      // unos retornos". La regla pedida por Luis: se contabiliza todo lo recibido en el rango +
+      // todo lo RETORNADO cuya resolución (no su recepción) caiga en el rango. Reutilizamos el
+      // mismo mecanismo ya probado para esto mismo en Gestión de Envíos / Pagos a Mensajeros
+      // (fetchPorFechaRealDeEstado) en vez de reinventar la lógica de "fecha real".
+      try{
+        const retornosReales=await fetchPorFechaRealDeEstado(
+          'retorno',diasOrdenados[0],diasOrdenados[diasOrdenados.length-1],
+          'codigo,fecha,estado,cliente,comuna,peso,valor_siniestro,tuvo_siniestro,updated_at'
+        );
+        const codigosYaEnSel=new Set(enviosSel.map(e=>e.codigo));
+        retornosReales.forEach(r=>{
+          // fetchPorFechaRealDeEstado trae TODOS los clientes del rango -- acá filtramos al cliente
+          // de este recibo y, como diasSeleccionados puede ser una selección no contigua (días
+          // sueltos marcados a mano), exigimos que la fecha real del retorno (_fechaRealEstado)
+          // caiga exactamente en alguno de los días marcados, no solo dentro del rango desde/hasta.
+          if(r.cliente===clienteSel&&diasSeleccionados.has(r._fechaRealEstado)&&!codigosYaEnSel.has(r.codigo)){
+            enviosSel.push(r);
+            codigosYaEnSel.add(r.codigo);
+          }
+        });
+      }catch(e){console.warn('Error agregando retornos por fecha real al recibo:',e.message);}
+      const cliData=(clientes||[]).find(c=>c.nombre===clienteSel)||{};
       let periodoLabel;
       if(diasOrdenados.length===1){
         periodoLabel=diasOrdenados[0];
