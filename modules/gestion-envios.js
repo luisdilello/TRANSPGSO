@@ -1780,7 +1780,26 @@ sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',
               <div style="text-align:right;font-size:11px"><strong>${filtrados.length}</strong> envíos · ${new Date().toLocaleDateString('es-CL')}</div></div>
               <table><thead><tr><th>#</th><th>Código</th><th>Cliente</th><th>Destinatario</th><th>Dirección</th><th>Comuna</th><th>Mensajero</th><th>Estado</th><th>Monto</th></tr></thead>
               <tbody>${filas}</tbody></table>
-              <script>window.onload=()=>{window.print()}<\/script></body></html>`);win.document.close();},onExcel:()=>{const headers=['#','Código','Cliente','Destinatario','Teléfono','Dirección','Comuna','Mensajero','Estado','Monto','Fecha Recepción','Fecha Entrega','Colecta','Nota'];const rows=filtradosOrdenados.map((e,i)=>{
+              <script>window.onload=()=>{window.print()}<\/script></body></html>`);win.document.close();},onExcel:()=>{const headers=['#','Código','Cliente','Destinatario','Teléfono','Dirección','Comuna','Mensajero','Estado','Monto','Fecha Recepción','Fecha Entrega','Colecta','Nota'];
+// NUEVO 05-10-2026 (pedido de Luis: "no hay forma de que totalice todo en una hoja?"): antes,
+// para cuadrar un cierre había que cruzar a mano DOS hojas -- "Envíos" (lo recibido en el
+// período) y "Retorno resuelto" (los retornos del período) -- y no calzaban entre sí: de los 16
+// retornos de ANDES en septiembre solo 12 aparecían en "Envíos", porque los otros 4 eran envíos
+// recibidos en agosto cuyo retorno se resolvió en septiembre. Ahora la hoja "Envíos" trae TODO lo
+// que cuenta para el período en una sola lista: lo recibido + los retornos resueltos en el período
+// que no estaban en la lista (se agregan al final), con 3 columnas numéricas (1/0/−1) para que
+// Excel sume y filtre solo, una columna que explica cómo cuenta cada fila, y una fila TOTAL al
+// final (fórmula SUBTOTAL: si se filtra la hoja, el total se recalcula sobre lo visible).
+// Las filas extra solo se agregan con la tarjeta "Todos" y sin búsqueda ni filtro de atrasados
+// (si el admin filtró a mano la lista, se exporta exactamente lo que filtró).
+const headersCierre=headers.concat(['Recibido en el período','Retorno resuelto en el período','Se cobra (recibido − retorno)','Cómo cuenta']);
+const _codRecibidos=new Set(enviosPeriodoTarjetas.map(e=>e.codigo));
+const _mapaRetResuelto=new Map(retornadosPeriodoRealTarjetas.map(e=>[e.codigo,e]));
+const _vistaCompleta=filtroEst==='todos'&&!String(search||'').trim()&&filtroAtrasoModo==='off';
+const _yaEnLista=new Set(filtradosOrdenados.map(e=>e.codigo));
+const _extrasRetorno=_vistaCompleta?retornadosPeriodoRealTarjetas.filter(e=>!_yaEnLista.has(e.codigo)):[];
+const _listaExport=filtradosOrdenados.concat(_extrasRetorno);
+const rows=_listaExport.map((e,i)=>{
   // Antes esta columna solo se llenaba para 'entregado' (via fechaEntregaDe) y cortaba a mano
   // los primeros 10 caracteres del ISO que llega en UTC -- eso dejaba SIEMPRE vacíos los
   // retornos (que sí tienen su propia fecha real en '_fechaRealEstadoISO', igual que se ve en
@@ -1800,15 +1819,22 @@ sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',
   const estActual=e.estado;
   let feReal='';
   if(estActual==='entregado')feReal=fechaEntregaDe(e);
-  else if(estActual==='retorno')feReal=e._fechaRealEstadoISO||'';
+  else if(estActual==='retorno')feReal=e._fechaRealEstadoISO||((_mapaRetResuelto.get(e.codigo)||{})._fechaRealEstadoISO)||'';
   if(!feReal&&e.historial&&e.historial.length>0){
     const ent=[...e.historial].reverse().find(h=>h.estado===estActual);
     if(ent&&ent.fecha)feReal=ent.fecha;
   }
   if(!feReal&&e.updated_at)feReal=e.updated_at;
-  return[i+1,e.codigo,e.cliente,e.destinatario,e.telefono,e.direccion,e.comuna,e.mensajero.replace(/,\s*/g,' '),estadoInfo(estActual).label,e.monto,fmtFecha(e.fecha),feReal?fmtFecha(fechaHoyCL(feReal)):'—',e.nota||'',e.nota_admin||''];
+  const _rec=_codRecibidos.has(e.codigo)?1:0;
+  const _ret=_mapaRetResuelto.has(e.codigo)?1:0;
+  const _como=_rec&&_ret?'Recibido y retornado en el período':(_rec?(estActual==='retorno'?'Recibido en el período (su retorno se resolvió fuera del período)':'Recibido en el período'):(_ret?'Retorno de un envío recibido antes del período':''));
+  return[i+1,e.codigo,e.cliente,e.destinatario,e.telefono,e.direccion,e.comuna,(e.mensajero||'').replace(/,\s*/g,' '),estadoInfo(estActual).label,e.monto,fmtFecha(e.fecha),feReal?fmtFecha(fechaHoyCL(feReal)):'—',e.nota||'',e.nota_admin||'',_rec,_ret,_rec-_ret,_como];
 });
-const sheets=[{name:'Envíos',headers,rows}];
+const _nFilas=rows.length;
+const _sumaCol=(idx)=>rows.reduce((a,r)=>a+(Number(r[idx])||0),0);
+const _celdaTotal=(idx,letra)=>({t:'n',v:_sumaCol(idx),f:'SUBTOTAL(109,'+letra+'2:'+letra+(_nFilas+1)+')'});
+const totalsRowCierre=_nFilas>0?['','TOTAL','','','','','','','','','','','','',_celdaTotal(14,'O'),_celdaTotal(15,'P'),_celdaTotal(16,'Q'),'Recibidos − retornos resueltos = total a cobrar']:null;
+const sheets=[{name:'Envíos',headers:headersCierre,rows,totalsRow:totalsRowCierre}];
 // NUEVO 2026-09-22 (vista 'fusion', "Recibido + Resuelto"): se agrega una segunda hoja "Retorno
 // resuelto" con la lista EXACTA de retornos resueltos en el período (misma fuente que la tarjeta
 // "retorno resuelto en el período" -- retornadosPeriodoRealTarjetas, ya filtrada por
