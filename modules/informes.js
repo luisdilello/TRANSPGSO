@@ -12,7 +12,9 @@ var db=window.__app.db, fechaHoyCL=window.__app.fechaHoyCL, exportToExcel=window
 //     la función SQL public.informe_cierre_dia(p_dia) (ver su comentario en Supabase):
 //       - Carga que llegó   = envíos con fecha = día (por cliente).
 //       - Salió a ruta      = códigos con evento 'en_ruta' ese día (vale el último del día;
-//                             el mensajero se toma de ese evento).
+//                             el mensajero se toma de ese evento). NO cuenta FERNANDOCHECK
+//                             (usuario de Fernando Zúñiga donde se apartan piezas de otras
+//                             fechas o con tema de salida): va aparte como "retenidas".
 //       - Cortes 19-23h     = de lo que salió a ruta, cuántos quedaron ENTREGADOS hasta esa hora.
 //       - Final de ruta     = último estado registrado después de salir, hasta las 06:00 del día
 //                             siguiente (entregado / reprogramado / cancelado / pendiente / otro).
@@ -100,7 +102,7 @@ function cortePasado(dia,hora){
 // INFORME DE CIERRE — agregación (uno o varios días)
 // ══════════════════════════════════════════════════════════════════════════════════════
 function agregarDias(dias){
-  var t={llegada:0,manual:0,salida:0,salidaDia:0,salidaAnt:0,cortes:HORAS_CORTE.map(function(){return 0;}),ent:0,rep:0,can:0,pen:0,otr:0,tardias:0,diaEnCurso:false};
+  var t={llegada:0,manual:0,salida:0,salidaDia:0,salidaAnt:0,cortes:HORAS_CORTE.map(function(){return 0;}),ent:0,rep:0,can:0,pen:0,otr:0,tardias:0,diaEnCurso:false,retenidas:0,retenidasDia:0,retenidasEnt:0};
   var men={},cli={};
   dias.forEach(function(d){
     t.llegada+=+d.llegada.total||0;t.manual+=+d.llegada.manual||0;
@@ -108,6 +110,7 @@ function agregarDias(dias){
     (d.cortes||[]).forEach(function(c,i){t.cortes[i]+=+c.entregados||0;});
     var f=d.final||{};t.ent+=+f.entregados||0;t.rep+=+f.reprogramados||0;t.can+=+f.cancelados||0;t.pen+=+f.pendientes||0;t.otr+=+f.otros||0;t.tardias+=+f.tardias||0;
     if(!cortePasado(d.dia,23))t.diaEnCurso=true;
+    var rt=d.retenidas||{};t.retenidas+=+rt.total||0;t.retenidasDia+=+rt.del_dia||0;t.retenidasEnt+=+rt.entregados_despues||0;
     (d.mensajeros||[]).forEach(function(m){
       var x=men[m.mensajero]||(men[m.mensajero]={mensajero:m.mensajero,dias:0,salida:0,cortes:HORAS_CORTE.map(function(){return 0;}),ent:0,rep:0,can:0,pen:0,otr:0,primera:null});
       x.dias++;x.salida+=+m.salida||0;(m.cortes||[]).forEach(function(v,i){x.cortes[i]+=+v||0;});
@@ -176,14 +179,14 @@ function htmlInformeCierre(dias,t,notas,periodo,generadoPor){
       +'<div style="height:10px"></div>'
       +gridHTML(150,[infoBoxHTML('Carga que llegó',fmtN(t.llegada),true),infoBoxHTML('Salió a ruta',fmtN(t.salida),true),infoBoxHTML('Entregados (final de ruta)',fmtN(t.ent),true),infoBoxHTML('% de entrega final',pct(t.ent,t.salida),true),infoBoxHTML('% operacional total',oper(t.ent,t.rep,t.can),true)])
       +'<div style="height:10px"></div>'
-      +gridHTML(150,[infoBoxHTML('Salida: carga del día',fmtN(t.salidaDia)),infoBoxHTML('Salida: de días anteriores',fmtN(t.salidaAnt)),infoBoxHTML('Reprogramados',fmtN(t.rep)),infoBoxHTML('Cancelados',fmtN(t.can)),infoBoxHTML('Sin cierre (pendiente / otro)',fmtN(t.pen+t.otr)),infoBoxHTML('Entregados después de las 23:00',fmtN(t.tardias))]))
+      +gridHTML(150,[infoBoxHTML('Salida: carga del día',fmtN(t.salidaDia)),infoBoxHTML('Salida: de días anteriores',fmtN(t.salidaAnt)),infoBoxHTML('Reprogramados',fmtN(t.rep)),infoBoxHTML('Cancelados',fmtN(t.can)),infoBoxHTML('Sin cierre (pendiente / otro)',fmtN(t.pen+t.otr)),infoBoxHTML('Entregados después de las 23:00',fmtN(t.tardias)),infoBoxHTML('Retenidas por operación (FERNANDOCHECK)',fmtN(t.retenidas)+(t.retenidas?' · '+fmtN(t.retenidasDia)+' del día · '+fmtN(t.retenidasEnt)+' entregadas después':''))]))
     +tarjetaHTML('Cortes horarios — avance de entrega sobre lo que salió a ruta',tablaHTML(colsCortes,F.cortes))
     +tarjetaHTML('Carga por cliente',tablaHTML(colsCli,F.clientes,F.totCli))
     +tarjetaHTML('Mensajeros que salieron a ruta',tablaHTML(colsMen,F.mens,F.totMen,true))
     +(multi?tarjetaHTML('Detalle por día (% de entrega en cada corte)',tablaHTML(colsDia,F.porDia,null,true)):'')
     +tarjetaHTML('Notas del personal administrativo',notasHTML)
     +'</div>'
-    +piePaginaHTML('Informe generado automáticamente desde el sistema. Llegó = envíos recibidos con fecha del día. Salió a ruta = envíos asignados a un mensajero ese día (incluye carga de días anteriores). Cortes = entregados hasta esa hora. Final de ruta = último estado hasta las 06:00 del día siguiente. % operacional = entregados ÷ (entregados + reprogramados + cancelados).')
+    +piePaginaHTML('Informe generado automáticamente desde el sistema. Llegó = envíos recibidos con fecha del día. Salió a ruta = envíos asignados a un mensajero ese día (incluye carga de días anteriores; no incluye las piezas retenidas por operación en el usuario FERNANDOCHECK, que se informan aparte). Cortes = entregados hasta esa hora. Final de ruta = último estado hasta las 06:00 del día siguiente. % operacional = entregados ÷ (entregados + reprogramados + cancelados).')
     +'</body></html>';
 }
 
@@ -193,7 +196,7 @@ function exportarCierreExcel(dias,t,notas,periodo){
   var hojas=[];
   hojas.push({name:'Resumen',headers:['Indicador','Valor'],rows:[
     ['Período',periodo.label],['Días incluidos',dias.length],['Carga que llegó',t.llegada],['Salió a ruta',t.salida],['Salida: carga del día',t.salidaDia],['Salida: de días anteriores',t.salidaAnt],
-    ['Entregados (final de ruta)',t.ent],['Reprogramados',t.rep],['Cancelados',t.can],['Sin cierre (pendiente / otro)',t.pen+t.otr],['Entregados después de las 23:00',t.tardias],
+    ['Entregados (final de ruta)',t.ent],['Reprogramados',t.rep],['Cancelados',t.can],['Sin cierre (pendiente / otro)',t.pen+t.otr],['Entregados después de las 23:00',t.tardias],['Retenidas por operación (FERNANDOCHECK)',t.retenidas],['Retenidas: carga del día',t.retenidasDia],['Retenidas: entregadas después',t.retenidasEnt],
     ['% de entrega final',pct(t.ent,t.salida)],['% operacional total',oper(t.ent,t.rep,t.can)]]});
   hojas.push({name:'Cortes',headers:['Corte','Entregados acumulados','% sobre salida a ruta','Sin entregar'],rows:F.cortes.map(function(c){return[c.corte,c.entregados,c.pct,c.porEntregar];})});
   hojas.push({name:'Clientes',headers:['Cliente','Llegó','Salió a ruta','Entregados','Reprogramados','Cancelados','Pendientes','% entrega'],
