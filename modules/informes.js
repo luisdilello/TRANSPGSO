@@ -103,8 +103,9 @@ function cortePasado(dia,hora){
 // ══════════════════════════════════════════════════════════════════════════════════════
 function agregarDias(dias){
   var t={llegada:0,manual:0,salida:0,salidaDia:0,salidaAnt:0,cortes:HORAS_CORTE.map(function(){return 0;}),ent:0,rep:0,can:0,pen:0,otr:0,tardias:0,diaEnCurso:false,retenidas:0,retenidasDia:0,retenidasEnt:0};
-  var men={},cli={};
+  var men={},cli={},sin={};
   dias.forEach(function(d){
+    (d.sin_salida||[]).forEach(function(x){var y=sin[x.mensajero]||(sin[x.mensajero]={mensajero:x.mensajero,dias:0,entregas:0});y.dias++;y.entregas+=+x.entregas_del_dia||0;});
     t.llegada+=+d.llegada.total||0;t.manual+=+d.llegada.manual||0;
     t.salida+=+d.salida.total||0;t.salidaDia+=+d.salida.del_dia||0;t.salidaAnt+=+d.salida.anteriores||0;
     (d.cortes||[]).forEach(function(c,i){t.cortes[i]+=+c.entregados||0;});
@@ -123,6 +124,8 @@ function agregarDias(dias){
     });
   });
   t.mensajeros=Object.keys(men).map(function(k){return men[k];}).sort(function(a,b){return b.salida-a.salida||a.mensajero.localeCompare(b.mensajero);});
+  t.sinSalida=Object.keys(sin).map(function(k){return sin[k];}).sort(function(a,b){return b.dias-a.dias||a.mensajero.localeCompare(b.mensajero);});
+  t.nDias=dias.length;
   t.clientes=Object.keys(cli).map(function(k){return cli[k];}).sort(function(a,b){return b.llegada-a.llegada||b.salida-a.salida;});
   return t;
 }
@@ -151,7 +154,8 @@ function construirFilasCierre(dias,t){
     HORAS_CORTE.forEach(function(hh,i){o['c'+hh]=cortePasado(d.dia,hh)?pct((d.cortes[i]||{}).entregados||0,sal):'—';});
     return o;
   });
-  return{cortes:cortes,clientes:clientes,totCli:totCli,mens:mens,totMen:totMen,porDia:porDia};
+  var sinSalida=t.sinSalida.map(function(x){return{mensajero:x.mensajero,dias:x.dias+' de '+dias.length,entregas:x.entregas?fmtN(x.entregas):'—'};});
+  return{cortes:cortes,clientes:clientes,totCli:totCli,mens:mens,totMen:totMen,porDia:porDia,sinSalida:sinSalida};
 }
 
 function htmlInformeCierre(dias,t,notas,periodo,generadoPor){
@@ -183,6 +187,9 @@ function htmlInformeCierre(dias,t,notas,periodo,generadoPor){
     +tarjetaHTML('Cortes horarios — avance de entrega sobre lo que salió a ruta',tablaHTML(colsCortes,F.cortes))
     +tarjetaHTML('Carga por cliente',tablaHTML(colsCli,F.clientes,F.totCli))
     +tarjetaHTML('Mensajeros que salieron a ruta',tablaHTML(colsMen,F.mens,F.totMen,true))
+    +tarjetaHTML('Mensajeros activos que no salieron a ruta ('+F.sinSalida.length+')',
+       (F.sinSalida.length?'<div style="font-size:11px;color:#888;margin-bottom:8px">Mensajeros activos en el sistema sin ninguna salida a ruta registrada '+(multi?'en esos días':'ese día')+'. "Entregas registradas" = entregas marcadas con su usuario aunque no haya salido a ruta ese día.</div>':'')
+       +tablaHTML([{key:'mensajero',label:'Mensajero'}].concat(multi?[{key:'dias',label:'Días sin salir',num:true}]:[]).concat([{key:'entregas',label:'Entregas registradas',num:true}]),F.sinSalida,null,true))
     +(multi?tarjetaHTML('Detalle por día (% de entrega en cada corte)',tablaHTML(colsDia,F.porDia,null,true)):'')
     +tarjetaHTML('Notas del personal administrativo',notasHTML)
     +'</div>'
@@ -206,6 +213,7 @@ function exportarCierreExcel(dias,t,notas,periodo){
     totalsRow:['TOTAL','',t.salida].concat(t.cortes).concat([t.ent,t.rep,t.can,t.pen+t.otr,pct(t.ent,t.salida),oper(t.ent,t.rep,t.can)])});
   if(multi)hojas.push({name:'Por día',headers:['Día','Llegó','Salió a ruta'].concat(HORAS_CORTE.map(function(hh){return '% '+hh+':00';})).concat(['Entregados','% final','% operacional']),
     rows:F.porDia.map(function(d){return[d.fecha,d.llegada,d.salida].concat(HORAS_CORTE.map(function(hh){return d['c'+hh];})).concat([d.ent,d.pct,d.oper]);})});
+  hojas.push({name:'Sin salida',headers:['Mensajero','Días sin salir','Días del período','Entregas registradas'],rows:t.sinSalida.map(function(x){return[x.mensajero,x.dias,dias.length,x.entregas];})});
   hojas.push({name:'Notas',headers:['Día','Autor','Hora','Nota'],rows:notas.map(function(n){return[fmtDMY(n.fecha),n.autor||'',horaCL(n.created_at),n.texto];})});
   exportToExcel('Informe_Cierre_'+periodo.desde+(periodo.hasta!==periodo.desde?'_'+periodo.hasta:''),hojas);
 }
