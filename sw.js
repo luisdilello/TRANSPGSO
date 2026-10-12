@@ -1,4 +1,4 @@
-// TransPgso SW v1791820683
+// TransPgso SW v1791820693
 // Antes este service worker borraba TODO el cache al instalar y no guardaba nada -- eso
 // significaba que si el mensajero se quedaba sin señal, la app ni siquiera podía abrir
 // (pantalla en blanco). Ahora precachea lo minimo necesario para que la app y las librerias
@@ -13,7 +13,7 @@
 // que ya tiene la app (ver controllerchange en index.html). Si no se bumpea, un mensajero
 // que dejó la PWA abierta en segundo plano sigue corriendo el JS viejo indefinidamente,
 // aunque el index.html ya esté actualizado en GitHub Pages.
-const APP_VERSION = '1791820683';
+const APP_VERSION = '1791820693';
 const CACHE_NAME = 'transpgso-' + APP_VERSION;
 const LOGO_ICON = 'logo.jpg';
 
@@ -86,7 +86,7 @@ self.addEventListener('fetch', e => {
     e.respondWith(
       caches.match(e.request).then(cached => {
         const fetchPromise = fetch(e.request, { mode: 'no-cors' })
-          .then(res => { caches.open(CACHE_NAME).then(c => c.put(e.request, res)); return res; })
+          .then(res => { const copia = res.clone(); caches.open(CACHE_NAME).then(c => c.put(e.request, copia)); return res; })
           .catch(() => cached);
         return cached || fetchPromise;
       })
