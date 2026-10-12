@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1791829054;
+window.__MODULES_VERSION=1791829886;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3082,61 +3082,11 @@ function PestanasMensajero(_ref_pm){
   var _guar=React.useState(false);var guardando=_guar[0];var setGuardando=_guar[1];
   var _bus=React.useState('');var busqueda=_bus[0];var setBusqueda=_bus[1];
 
-  // Cargar tarifas al abrir modal de edición
-  React.useEffect(function(){
-    if(modal==='add'||!form.nombre)return;
-    setCargando(true);
-    db.from('tarifas_comunas')
-      .select('*')
-      // normNombre() para que la lectura calce con como se guarda en guardarTarifas() de abajo
-      .ilike('mensajero_nombre',normNombre(form.nombre))
-      .then(function(r){
-        var mapa={};
-        (r.data||[]).forEach(function(t){mapa[t.comuna]=t.tarifa;});
-        setTarifas(mapa);
-        setCargando(false);
-      });
-  },[form.nombre,modal]);
-
-  async function guardarTarifas(){
-    if(!form.nombre)return;
-    setGuardando(true);
-    var ops=Object.keys(tarifas).map(function(comuna){
-      return{mensajero_nombre:normNombre(form.nombre),
-        comuna:comuna,tarifa:+tarifas[comuna]||0,
-        updated_at:new Date().toISOString()};
-    });
-    if(ops.length>0){
-      await db.from('tarifas_comunas').upsert(ops,{onConflict:'mensajero_nombre,comuna'});
-    }
-    setGuardando(false);
-    toast('✓ Tarifas guardadas');
-    save();
-  }
-
-  var comunasFiltradas=comunasRM.filter(function(c){
-    return !busqueda||c.toLowerCase().includes(busqueda.toLowerCase());
-  });
-
+  // 12-10-2026: ya no hay tarifas por comuna -- la tarifa única y el extra de periferia del
+  // mensajero se editan aquí o en Pagos y Cobros > Tarifas de Pago (misma columna en mensajeros).
   var tarBase=+form.tarifa||1200;
 
   return React.createElement('div',null,
-    // Pestañas
-    React.createElement('div',{style:{display:'flex',gap:0,marginBottom:16,borderBottom:'2px solid var(--border)'}},
-      ['datos','tarifas'].map(function(t){
-        var labels={datos:'Datos',tarifas:'Tarifas por Comuna'};
-        return React.createElement('button',{
-          key:t,
-          onClick:function(){setTabActiva(t);},
-          style:{padding:'8px 18px',border:'none',background:'transparent',cursor:'pointer',
-            fontWeight:tabActiva===t?700:400,fontSize:13,
-            color:tabActiva===t?'var(--gold)':'var(--text-soft)',
-            borderBottom:tabActiva===t?'2px solid var(--gold)':'2px solid transparent',
-            marginBottom:-2}
-        },labels[t]);
-      })
-    ),
-
     // ── TAB DATOS ──
     tabActiva==='datos'&&React.createElement('div',null,
       React.createElement('div',{className:'form-group'},
@@ -3158,76 +3108,18 @@ function PestanasMensajero(_ref_pm){
           onChange:function(e){setForm(function(f){return Object.assign({},f,{tarifa:e.target.value});})}})
       ),
       esAdmin&&React.createElement('div',{className:'form-group'},
+        React.createElement('label',{className:'form-label'},'Extra por pieza de periferia ($)'),
+        React.createElement('input',{className:'form-input',type:'number',min:'0',value:form.extraPeriferia||0,
+          onChange:function(e){setForm(function(f){return Object.assign({},f,{extraPeriferia:e.target.value});})}})
+      ),
+      esAdmin&&React.createElement('div',{className:'form-group'},
         React.createElement('label',{className:'form-label'},'Tarifa por retiro ($)'),
         React.createElement('input',{className:'form-input',type:'number',min:'0',value:form.tarifaRetiro,
           onChange:function(e){setForm(function(f){return Object.assign({},f,{tarifaRetiro:e.target.value});})}})
       ),
       React.createElement('div',{className:'modal-actions'},
         React.createElement('button',{className:'btn-secondary',onClick:onClose},'Cancelar'),
-        React.createElement('button',{className:'btn-primary',onClick:modal==='add'?save:function(){setTabActiva('tarifas');}}
-          ,modal==='add'?'Agregar':'Siguiente →')
-      )
-    ),
-
-    // ── TAB TARIFAS ──
-    tabActiva==='tarifas'&&React.createElement('div',null,
-      React.createElement('div',{style:{marginBottom:12,display:'flex',gap:8,alignItems:'center'}},
-        React.createElement('input',{
-          className:'form-input',placeholder:'Buscar comuna...',value:busqueda,
-          onChange:function(e){setBusqueda(e.target.value);},
-          style:{flex:1,fontSize:12}
-        }),
-        React.createElement('span',{style:{fontSize:11,color:'var(--text-soft)',whiteSpace:'nowrap'}},
-          'Base: $'+tarBase.toLocaleString('es-CL')
-        )
-      ),
-      cargando&&React.createElement('div',{style:{textAlign:'center',padding:20,color:'var(--text-soft)'}},'Cargando...'),
-      !cargando&&React.createElement('div',{style:{maxHeight:380,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8}},
-        React.createElement('table',{style:{width:'100%',borderCollapse:'collapse'}},
-          React.createElement('thead',null,
-            React.createElement('tr',{style:{background:'var(--dark)',position:'sticky',top:0,zIndex:1}},
-              React.createElement('th',{style:{padding:'8px 12px',textAlign:'left',fontSize:11,color:'var(--gold)',fontFamily:'Bebas Neue',letterSpacing:1}},'COMUNA'),
-              React.createElement('th',{style:{padding:'8px 12px',textAlign:'center',fontSize:11,color:'var(--gold)',fontFamily:'Bebas Neue',letterSpacing:1}},'TARIFA ($)'),
-              React.createElement('th',{style:{padding:'8px 12px',textAlign:'center',fontSize:11,color:'var(--text-soft)',fontFamily:'Bebas Neue',letterSpacing:1}},'DIFERENCIA')
-            )
-          ),
-          React.createElement('tbody',null,
-            comunasFiltradas.map(function(comuna,i){
-              var tarComuna=tarifas[comuna]!==undefined?tarifas[comuna]:tarBase;
-              var diff=tarComuna-tarBase;
-              return React.createElement('tr',{key:comuna,
-                style:{background:i%2===0?'#fff':'var(--cream)',borderBottom:'1px solid var(--border)'}},
-                React.createElement('td',{style:{padding:'6px 12px',fontSize:12,fontWeight:500}},comuna),
-                React.createElement('td',{style:{padding:'4px 8px',textAlign:'center'}},
-                  React.createElement('input',{
-                    type:'number',min:'0',value:tarComuna,
-                    onChange:function(e){
-                      var v=+e.target.value;
-                      setTarifas(function(prev){var n=Object.assign({},prev);n[comuna]=v;return n;});
-                    },
-                    onFocus:function(e){e.target.select();},
-                    style:{width:90,padding:'4px 6px',border:'1px solid var(--border)',borderRadius:5,
-                      textAlign:'right',fontSize:12,fontFamily:'JetBrains Mono',
-                      background:diff>0?'rgba(46,125,79,0.06)':diff<0?'rgba(192,57,43,0.06)':'#fff',
-                      outline:'none'}
-                  })
-                ),
-                React.createElement('td',{style:{padding:'6px 8px',textAlign:'center',fontSize:11,
-                  color:diff>0?'var(--success)':diff<0?'var(--danger)':'var(--text-soft)',fontWeight:diff!==0?700:400}},
-                  diff>0?'+$'+diff.toLocaleString('es-CL'):diff<0?'-$'+Math.abs(diff).toLocaleString('es-CL'):'—'
-                )
-              );
-            })
-          )
-        )
-      ),
-      React.createElement('div',{className:'modal-actions',style:{marginTop:12}},
-        React.createElement('button',{className:'btn-secondary',onClick:function(){setTabActiva('datos');}},'← Datos'),
-        React.createElement('button',{className:'btn-secondary',onClick:onClose},'Cancelar'),
-        React.createElement('button',{
-          className:'btn-primary',onClick:guardarTarifas,
-          disabled:guardando,style:{opacity:guardando?0.7:1}
-        },guardando?'Guardando...':'💾 Guardar todo')
+        React.createElement('button',{className:'btn-primary',onClick:save},modal==='add'?'Agregar':'Guardar')
       )
     )
   );
@@ -8718,6 +8610,7 @@ function GananciasRider(_ref_gr){
   let usuario=_ref_gr.usuario,envios=_ref_gr.envios,colectasKey=_ref_gr.colectasKey;
   // Get tarifa from mensajeros via Supabase using mensajero_id
   const _sg1=useState(null),tarifa=_sg1[0],setTarifa=_sg1[1];
+  const _sgExPer=useState(0),extraPeriferiaRider=_sgExPer[0],setExtraPeriferiaRider=_sgExPer[1];
   const _sg2=useState('hoy'),periodo=_sg2[0],setPeriodo=_sg2[1];
   const _sg3=useState(''),fechaDesde=_sg3[0],setFechaDesde=_sg3[1];
   const _sg4=useState(''),fechaHasta=_sg4[0],setFechaHasta=_sg4[1];
@@ -8729,7 +8622,7 @@ function GananciasRider(_ref_gr){
       // por primer nombre traia la tarifa de OTRO mensajero cuando comparten primer nombre
       // (ej. MARCOS GIOVACCHINI / MARCOS FUENTEALBA) — afectaba directamente el calculo de
       // Ganancias del rider.
-      db.from('mensajeros').select('id,tarifa,nombre').then(({data})=>{
+      db.from('mensajeros').select('id,tarifa,nombre,extra_periferia,periferia_paga_a').then(({data})=>{
         if(data){
           const match=usuario.mensajero_id
             ? data.find(m=>String(m.id)===String(usuario.mensajero_id))
@@ -8738,6 +8631,8 @@ function GananciasRider(_ref_gr){
                 return mn===nombre;
               });
           if(match&&match.tarifa) setTarifa(match.tarifa);
+          // 12-10-2026: extra por pieza de periferia (solo si ese extra se le paga a él mismo)
+          if(match) setExtraPeriferiaRider(match.periferia_paga_a?0:(+match.extra_periferia||0));
         }
       }).catch(()=>{
         // Fallback localStorage solo si Supabase falla
@@ -8816,20 +8711,7 @@ function GananciasRider(_ref_gr){
           });
         }catch(eHist){}
         if(!cancelado)setMapaEntregaReal(mapaReal);
-        // Tarifas especiales por comuna para este mensajero (mismo criterio que Pagos y Cobros).
-        // Coincidencia EXACTA de nombre completo — el fallback por primer nombre traia tarifas
-        // de otro mensajero con el mismo primer nombre.
-        const{data:tarData}=await db.from('tarifas_comunas').select('mensajero_nombre,comuna,tarifa');
-        if(!cancelado&&tarData){
-          const mapa={};
-          tarData.forEach(t=>{
-            const tn=(t.mensajero_nombre||'').replace(/,\s*/g,' ').trim().toUpperCase();
-            if(tn===nombre){
-              mapa[(t.comuna||'').toUpperCase().trim()]=t.tarifa;
-            }
-          });
-          setTarifasComunaRider(mapa);
-        }
+        // 12-10-2026: ya no se usan tarifas por comuna -- tarifa única + extra de periferia (mismo criterio que Pagos y Cobros).
       }catch(e){console.warn('Error cargando entregas para ganancias:',e.message);}
       if(!cancelado)setCargandoEntregados(false);
     }
@@ -8876,7 +8758,7 @@ function GananciasRider(_ref_gr){
 
   const filtrados=filtrarEnvios();
   const tarifaVal=tarifa||0;
-  const montoEnvio=e=>{const c=(e.comuna||'').toUpperCase().trim();return tarifasComunaRider[c]!=null?tarifasComunaRider[c]:tarifaVal;};
+  const montoEnvio=e=>tarifaVal+(/PERIFERIA/i.test(e.comuna||'')?extraPeriferiaRider:0);
   const totalPesos=filtrados.reduce((a,e)=>a+montoEnvio(e),0);
   const hoy=localDateStr();
   const todosEntregados=enviosEntregados;
