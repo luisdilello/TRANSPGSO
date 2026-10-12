@@ -912,7 +912,7 @@ function AdelantosTab(_ref2){
 
   function esAdelantoNuevo(row){
     var n=row.nota||'';
-    return n.indexOf('Descuento ')!==0 && n!=='Ajuste manual del saldo';
+    return n.indexOf('Descuento ')!==0 && n.indexOf('Reversa descuento ')!==0 && n!=='Ajuste manual del saldo';
   }
 
   function cargarListaAdelantos(){
@@ -1706,25 +1706,11 @@ function SoporteFirmasTab(props){
             React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}},React.createElement('span',null,'Sueldo'),React.createElement('span',{className:'mono'},fmt(c.sueldo))),
             React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderTop:'1px solid var(--border)',marginTop:6}},
               React.createElement('span',{style:{fontSize:11,fontWeight:700,textTransform:'uppercase'}},'Total a pagar'),
-              React.createElement('span',{className:'mono',style:{fontSize:16,fontWeight:800,color:'var(--success)'}},fmt(c.total))),
-            React.createElement('button',{className:'btn-futurista btn-f-gold',style:{width:'100%'},onClick:function(){registrarPago(op);},disabled:!!dirty[op.id],title:dirty[op.id]?'Guarda los cambios primero':''},'Registrar pago del período')
+              React.createElement('span',{className:'mono',style:{fontSize:16,fontWeight:800,color:'var(--success)'}},fmt(c.total)))
           )
         );
       })
-    ),
-    React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'var(--dark)',marginBottom:10}},'Pagos registrados'),
-    hist.length===0?React.createElement('div',{className:'info-banner'},'Todavía no hay pagos registrados.'):
-    React.createElement('div',{className:'table-wrap'},React.createElement('table',null,
-      React.createElement('thead',null,React.createElement('tr',null,['Operadora','Período','Firmas','Monto firmas','Sueldo','Total','Registrado'].map(function(h){return React.createElement('th',{key:h},h);}))),
-      React.createElement('tbody',null,hist.map(function(h){return React.createElement('tr',{key:h.id},
-        React.createElement('td',{style:{fontWeight:700}},h.operador),
-        React.createElement('td',null,new Date(h.desde+'T12:00:00').toLocaleDateString('es-CL')+' al '+new Date(h.hasta+'T12:00:00').toLocaleDateString('es-CL')),
-        React.createElement('td',{className:'mono'},h.firmas),
-        React.createElement('td',{className:'mono'},fmt(h.monto_firmas)),
-        React.createElement('td',{className:'mono'},fmt(h.sueldo)),
-        React.createElement('td',{className:'mono',style:{fontWeight:700}},fmt(h.total)),
-        React.createElement('td',{style:{fontSize:11,color:'var(--text-soft)'}},new Date(h.created_at).toLocaleString('es-CL')));}))
-    ))
+    )
   );
 }
 
@@ -1995,6 +1981,29 @@ async function ajustarSaldoAdelanto(nombre,nuevoSaldo){
 async function marcarEstado(p,nuevoEstadoForzado){
   const nuevoEstado=nuevoEstadoForzado||(p.estado==='PAGADO'?'PENDIENTE':'PAGADO');
   updatePago(p.id,'estado',nuevoEstado);
+  // 12-10-2026: nada queda "cerrado". Si un pago marcado PAGADO vuelve a PENDIENTE (para corregir
+  // un error), se devuelve a la cuenta de deuda / préstamo lo que se había descontado, así se puede
+  // cambiar el monto y volver a marcar PAGADO sin que el saldo quede descontado dos veces.
+  if(nuevoEstado==='PENDIENTE'&&p.adelantoDescontado&&(+p.adelanto||0)>0){
+    const k=p.nombre.toUpperCase().trim();
+    const saldoAct=(adelantosDB[k]&&adelantosDB[k].saldo)||0;
+    const nuevoSaldo=saldoAct+(+p.adelanto);
+    try{
+      await db.from('adelantos_mensajeros').insert({mensajero_nombre:p.nombre,semana:semana,monto_adelanto:+p.adelanto,monto_descontado:0,saldo_pendiente:nuevoSaldo,tipo:'otro',nota:'Reversa descuento '+semana+' (pago vuelto a pendiente)'});
+      setAdelantosDB(function(prev){var n=Object.assign({},prev);n[k]={saldo:nuevoSaldo,updated_at:new Date().toISOString()};return n;});
+    }catch(e){console.warn(e);}
+    updatePago(p.id,'adelantoDescontado',false);
+  }
+  if(nuevoEstado==='PENDIENTE'&&p.prestamoDescontado&&(+p.prestamo||0)>0){
+    const k2=p.nombre.toUpperCase().trim();
+    const saldoAct2=(prestamosDB[k2]&&prestamosDB[k2].saldo)||0;
+    const nuevoSaldo2=saldoAct2+(+p.prestamo);
+    try{
+      await db.from('prestamos_mensajeros').insert({mensajero_nombre:p.nombre,semana:semana,monto_prestado:+p.prestamo,monto_descontado:0,saldo_pendiente:nuevoSaldo2,nota:'Reversa descuento '+semana+' (pago vuelto a pendiente)'});
+      setPrestamosDB(function(prev){var n=Object.assign({},prev);n[k2]={saldo:nuevoSaldo2,updated_at:new Date().toISOString()};return n;});
+    }catch(e){console.warn(e);}
+    updatePago(p.id,'prestamoDescontado',false);
+  }
   if(nuevoEstado==='PAGADO'&&p.prestamo>0&&!p.prestamoDescontado){
     const key=p.nombre.toUpperCase().trim();
     const saldoAnterior=(prestamosDB[key]&&prestamosDB[key].saldo)||p.prestamo;
@@ -3690,7 +3699,7 @@ const fmtCLP=n=>`$${Math.round(n).toLocaleString('es-CL')}`;function exportarCom
 
     )
 
-  ),pp.pagos&&pagosTab==='pagos'&&/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}},/*#__PURE__*/React.createElement("button",{className:'btn-futurista '+((criterioEf.bonoActivo||criterioEf.descuentoActivo)?'btn-f-gold':'btn-f-ghost'),onClick:()=>setCriterioModalAbierto(true),title:[criterioEf.bonoActivo?('Bono: \u2265'+criterioEf.umbralBonoPct+'% \u2192 +$'+Math.round(criterioEf.bono).toLocaleString('es-CL')):null,criterioEf.descuentoActivo?('Descuento: <'+criterioEf.umbralDescuentoPct+'% \u2192 -$'+Math.round(criterioEf.descuento).toLocaleString('es-CL')):null].filter(Boolean).join(' | ')||'Pago por efectividad desactivado -- clic para configurar'},"\uD83C\uDFAF Criterio Efectividad"),(criterioEf.bonoActivo||criterioEf.descuentoActivo)&&/*#__PURE__*/React.createElement("button",{className:'btn-futurista '+(vistaPreviaSinCriterio?'btn-f-danger':'btn-f-ghost'),onClick:()=>setVistaPreviaSinCriterio(v=>!v),title:vistaPreviaSinCriterio?'Viendo los montos SIN bono/descuento por efectividad (vista previa, no se guarda nada) -- clic para volver a lo real':'Ver c\u00F3mo quedar\u00EDan los montos SIN aplicar el bono/descuento por efectividad, sin tocar nada guardado'},vistaPreviaSinCriterio?"\uD83D\uDC41\uFE0F Viendo: SIN Efectividad":"\uD83D\uDC41\uFE0F Vista Previa"),/*#__PURE__*/React.createElement("button",{className:'btn-futurista btn-f-success',onClick:cerrarSemana},"\u2713 Cerrar Semana"),/*#__PURE__*/React.createElement(ExportBtn,{label:"Exportar",onPDF:exportarResumen,onExcel:exportarPlanillaExcel}))),pp.pagos&&/*#__PURE__*/React.createElement("div",{className:"pm-pagos-main"},/*#__PURE__*/React.createElement("div",{style:{background:'#fff',border:'1px solid var(--border)',borderTop:'3px solid var(--gold)',borderRadius:10,padding:20,marginBottom:20,boxShadow:'0 2px 10px rgba(43,46,32,0.07)'}},/*#__PURE__*/React.createElement("div",{className:"form-row"},/*#__PURE__*/React.createElement("div",{className:"form-group",style:{marginBottom:0}},/*#__PURE__*/React.createElement("label",{className:"form-label"},"Período / Semana"),
+  ),pp.pagos&&pagosTab==='pagos'&&/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}},/*#__PURE__*/React.createElement("button",{className:'btn-futurista '+((criterioEf.bonoActivo||criterioEf.descuentoActivo)?'btn-f-gold':'btn-f-ghost'),onClick:()=>setCriterioModalAbierto(true),title:[criterioEf.bonoActivo?('Bono: \u2265'+criterioEf.umbralBonoPct+'% \u2192 +$'+Math.round(criterioEf.bono).toLocaleString('es-CL')):null,criterioEf.descuentoActivo?('Descuento: <'+criterioEf.umbralDescuentoPct+'% \u2192 -$'+Math.round(criterioEf.descuento).toLocaleString('es-CL')):null].filter(Boolean).join(' | ')||'Pago por efectividad desactivado -- clic para configurar'},"\uD83C\uDFAF Criterio Efectividad"),(criterioEf.bonoActivo||criterioEf.descuentoActivo)&&/*#__PURE__*/React.createElement("button",{className:'btn-futurista '+(vistaPreviaSinCriterio?'btn-f-danger':'btn-f-ghost'),onClick:()=>setVistaPreviaSinCriterio(v=>!v),title:vistaPreviaSinCriterio?'Viendo los montos SIN bono/descuento por efectividad (vista previa, no se guarda nada) -- clic para volver a lo real':'Ver c\u00F3mo quedar\u00EDan los montos SIN aplicar el bono/descuento por efectividad, sin tocar nada guardado'},vistaPreviaSinCriterio?"\uD83D\uDC41\uFE0F Viendo: SIN Efectividad":"\uD83D\uDC41\uFE0F Vista Previa"),/*#__PURE__*/React.createElement(ExportBtn,{label:"Exportar",onPDF:exportarResumen,onExcel:exportarPlanillaExcel}))),pp.pagos&&/*#__PURE__*/React.createElement("div",{className:"pm-pagos-main"},/*#__PURE__*/React.createElement("div",{style:{background:'#fff',border:'1px solid var(--border)',borderTop:'3px solid var(--gold)',borderRadius:10,padding:20,marginBottom:20,boxShadow:'0 2px 10px rgba(43,46,32,0.07)'}},/*#__PURE__*/React.createElement("div",{className:"form-row"},/*#__PURE__*/React.createElement("div",{className:"form-group",style:{marginBottom:0}},/*#__PURE__*/React.createElement("label",{className:"form-label"},"Período / Semana"),
 
 /*#__PURE__*/React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center"}},
 
