@@ -588,14 +588,16 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 .pm-root.tab-productos .pm-pagos-main,
 .pm-root.tab-consumo .pm-pagos-main,
 .pm-root.tab-adelantos .pm-pagos-main,
-.pm-root.tab-historial .pm-pagos-main { display: none !important; }
-.pm-tab-cobros, .pm-tab-retiros, .pm-tab-productos, .pm-tab-consumo, .pm-tab-adelantos, .pm-tab-historial { display: none; }
+.pm-root.tab-historial .pm-pagos-main,
+.pm-root.tab-tarifas .pm-pagos-main { display: none !important; }
+.pm-tab-cobros, .pm-tab-retiros, .pm-tab-productos, .pm-tab-consumo, .pm-tab-adelantos, .pm-tab-historial, .pm-tab-tarifas { display: none; }
 .pm-root.tab-cobros .pm-tab-cobros,
 .pm-root.tab-retiros .pm-tab-retiros,
 .pm-root.tab-productos .pm-tab-productos,
 .pm-root.tab-consumo .pm-tab-consumo,
 .pm-root.tab-adelantos .pm-tab-adelantos,
-.pm-root.tab-historial .pm-tab-historial { display: block; }
+.pm-root.tab-historial .pm-tab-historial,
+.pm-root.tab-tarifas .pm-tab-tarifas { display: block; }
 </style>
 <script defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyACoppqoiPeeiXxpE2CBp7R3LYlWZuISd8&language=es&region=CL"></script>
 <script>
@@ -626,7 +628,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1791822497;
+window.__MODULES_VERSION=1791827577;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
