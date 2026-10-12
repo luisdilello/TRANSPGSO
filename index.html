@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1791844123;
+window.__MODULES_VERSION=1791844552;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -792,9 +792,9 @@ function Permisos(_ref_perm){let permisos=_ref_perm.permisos,setPermisos=_ref_pe
     {id:'mensajeros',label:'Administración · Mensajeros'},
     {id:'clientes',label:'Administración · Clientes'},
     {id:'usuarios',label:'Administración · Usuarios'},
-    {id:'mapa-rutas',label:'Administración · Mapa Rutas'},
-    {id:'comunas',label:'Administración · Comunas'},
-    {id:'comunicados',label:'Administración · Comunicados'},
+    {id:'mapa-rutas',label:'Operaciones · Mapas y Rutas'},
+    {id:'comunas',label:'Operaciones · Comunas'},
+    {id:'comunicados',label:'Operaciones · Comunicados'},
     {id:'cierre',label:'Cierre Mes'}
   ];
   // 'parentId' opcional: si se pasa, un permiso de detalle sin fila propia en la base de datos
@@ -13505,10 +13505,10 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
     ],
     tab:tab,setTab:irA
   }),
-  puedeVer('pagos')&&/*#__PURE__*/React.createElement(NavDropdown,{
+  (puedeVer('pagos')||(perfil&&perfil.esSuperAdmin))&&/*#__PURE__*/React.createElement(NavDropdown,{
     label:'Pagos y Cobros',
-    active:tab==='pagos',
-    actual:tab==='pagos'?'pagos|'+(subSec.pagos||''):null,
+    active:tab==='pagos'||tab==='calendario-cobros',
+    actual:tab==='pagos'?'pagos|'+(subSec.pagos||''):tab,
     items:[
       ...(puedeVerSub('pagos','pagos')?[{id:'pagos|pagos',label:'Pagos'},{id:'pagos|tarifas',label:'Tarifas de Pago'}]:[]),
       ...((perfil&&perfil.esSuperAdmin)?[{id:'pagos|soporte',label:'Soporte Firmas'}]:[]),
@@ -13516,7 +13516,8 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
       ...(puedeVerSub('pagos','retiros')?[{id:'pagos|retiros',label:'Planilla Retiros'}]:[]),
       ...(puedeVerSub('pagos','productos')?[{id:'pagos|productos',label:'Productos'},{id:'pagos|consumo',label:'Consumo Diario'}]:[]),
       ...(puedeVerSub('pagos','adelantos')?[{id:'pagos|adelantos',label:'Adelantos y Deudas'}]:[]),
-      ...(puedeVerSub('pagos','historial')?[{id:'pagos|historial',label:'Historial'}]:[])
+      ...(puedeVerSub('pagos','historial')?[{id:'pagos|historial',label:'Historial'}]:[]),
+      ...((perfil&&perfil.esSuperAdmin)?[{id:'calendario-cobros',label:'Calendario Cobros'}]:[])
     ],
     tab:tab,setTab:irA
   }),
@@ -13527,12 +13528,15 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
   (perfil&&(perfil.esSuperAdmin||perfil.esAdmin))&&/*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='market'?'active':''}`,onClick:()=>irA('market')},'🥬 Pgso Market'),
   // 12-10-2026: sección Operaciones = Firmas Operadores (gestión de entregas por las operadoras)
   // + Firmas en Vivo (revisión de evidencias). Novedades del día quedó en Informes.
-  (puedeVer('firmas')||(puedeVer('operaciones')&&puedeVerSub('operaciones','firmas-vivo')))&&/*#__PURE__*/React.createElement(NavDropdown,{
+  (puedeVer('firmas')||(puedeVer('operaciones')&&puedeVerSub('operaciones','firmas-vivo'))||puedeVer('mapa-rutas')||puedeVer('comunas')||puedeVer('comunicados'))&&/*#__PURE__*/React.createElement(NavDropdown,{
     label:'Operaciones',
-    active:tab==='firmas'||tab==='firmas-vivo',
+    active:tab==='firmas'||tab==='firmas-vivo'||tab==='mapa-rutas'||tab==='comunas'||tab==='comunicados',
     items:[
       ...(puedeVer('firmas')?[{id:'firmas',label:'Firmas Operadores'}]:[]),
-      ...((puedeVer('operaciones')&&puedeVerSub('operaciones','firmas-vivo'))?[{id:'firmas-vivo',label:'Firmas en Vivo'}]:[])
+      ...((puedeVer('operaciones')&&puedeVerSub('operaciones','firmas-vivo'))?[{id:'firmas-vivo',label:'Firmas en Vivo'}]:[]),
+      ...(puedeVer('mapa-rutas')?[{id:'mapa-rutas',label:'Mapas y Rutas'}]:[]),
+      ...(puedeVer('comunas')?[{id:'comunas',label:'Comunas'}]:[]),
+      ...(puedeVer('comunicados')?[{id:'comunicados',label:'Comunicados'}]:[])
     ],
     tab:tab,setTab:irA
   }),
@@ -13548,20 +13552,17 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
     ],
     tab:tab,setTab:irA
   }),
-  (puedeVer('mensajeros')||puedeVer('clientes')||puedeVer('usuarios')||puedeVer('mapa-rutas')||puedeVer('comunas')||puedeVer('comunicados')||(perfil!=null&&perfil.esSuperAdmin))&&/*#__PURE__*/React.createElement(NavDropdown,{
+  (puedeVer('mensajeros')||puedeVer('clientes')||puedeVer('usuarios')||(perfil!=null&&perfil.esSuperAdmin))&&/*#__PURE__*/React.createElement(NavDropdown,{
     label:'Administración',
-    active:tab==='mensajeros'||tab==='clientes'||tab==='usuarios'||tab==='mapa-rutas'||tab==='comunicados'||tab==='permisos'||tab==='calendario-cobros'||tab==='secciones',
+    active:tab==='mensajeros'||tab==='clientes'||tab==='usuarios'||tab==='permisos'||tab==='secciones',
     items:[
       ...(puedeVer('mensajeros')?[{id:'mensajeros',label:'Mensajeros'}]:[]),
       ...(puedeVer('clientes')?[{id:'clientes',label:'Clientes'}]:[]),
       ...(puedeVer('usuarios')?[{id:'usuarios',label:'Usuarios'}]:[]),
-      ...(puedeVer('mapa-rutas')?[{id:'mapa-rutas',label:'Mapa Rutas'}]:[]),
-      ...(puedeVer('comunas')?[{id:'comunas',label:'Comunas'}]:[]),
-      ...(puedeVer('comunicados')?[{id:'comunicados',label:'Comunicados'}]:[]),
       // FIX 2026-10-03 (Secciones): pantalla nueva para que Luis administre él mismo el catálogo
       // de Secciones (ej. "XXL") y sus tarifas de cobro/pago -- gateada igual que Permisos y
       // Calendario de Cobros (solo superadmin), por tocar directamente montos de cobro y pago.
-      ...(perfil!=null&&perfil.esSuperAdmin?[{id:'permisos',label:'Permisos'},{id:'calendario-cobros',label:'📅 Calendario Cobros'},{id:'secciones',label:'🏷️ Secciones'}]:[])
+      ...(perfil!=null&&perfil.esSuperAdmin?[{id:'permisos',label:'Permisos'},{id:'secciones',label:'Secciones'}]:[])
     ],
     tab:tab,setTab:irA
   }),
