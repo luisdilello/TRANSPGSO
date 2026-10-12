@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1791844552;
+window.__MODULES_VERSION=1791844903;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -759,96 +759,187 @@ async function desuscribirsePush(nombreMensajero){
 }
 // ⚠️ Completar esta URL con la del Worker una vez desplegado en Cloudflare
 const PUSH_WORKER_URL='https://transpgso-push.luisdilellopadrino.workers.dev';
+// 12-10-2026: Permisos en detalle por PUESTO DE TRABAJO. Matriz con una columna por puesto (más
+// "Admin sin puesto" para quien no tenga puesto asignado) y una fila por sección y subsección,
+// ordenadas igual que el menú. Cada casilla se tilda por separado. Los puestos y a quién se le
+// asigna cada uno se administran acá mismo (tablas puestos / usuario_puesto, escritura solo Super
+// Admin por RLS). Los accesos se guardan en la tabla permisos con rol='puesto:<id>'.
+// Regla de subsecciones: una subsección con 'padre' solo se ve si también está tildado el padre
+// (la sección en el menú). Tildar una subsección enciende el padre y deja explícitamente
+// apagadas las hermanas que no estaban definidas, para que no se enciendan solas por herencia.
+var CATALOGO_PERMISOS=[
+  {label:'Consulta Express',key:'consulta-express'},
+  {label:'Colecta',hijos:[{label:'Lector / Scanner',key:'colecta-admin'},{label:'Envíos Manuales',key:'etiquetas'}]},
+  {label:'Pagos y Cobros',key:'pagos',nota:'Soporte Firmas y Calendario Cobros: solo Super Admin',hijos:[
+    {label:'Pagos',key:'pagos.pagos',padre:'pagos'},
+    {label:'Tarifas de Pago',key:'pagos.tarifas',padre:'pagos'},
+    {label:'Cobros a Clientes',key:'pagos.cobros',padre:'pagos'},
+    {label:'Planilla Retiros',key:'pagos.retiros',padre:'pagos'},
+    {label:'Productos',key:'pagos.productos',padre:'pagos'},
+    {label:'Consumo Diario',key:'pagos.consumo',padre:'pagos'},
+    {label:'Adelantos y Deudas',key:'pagos.adelantos',padre:'pagos'},
+    {label:'Historial',key:'pagos.historial',padre:'pagos'}]},
+  {label:'Siniestros',key:'siniestros'},
+  {label:'Pgso Market',key:'market'},
+  {label:'Operaciones',hijos:[
+    {label:'Firmas Operadores',key:'firmas'},
+    {label:'Firmas en Vivo',key:'operaciones.firmas-vivo',padre:'operaciones'},
+    {label:'Mapas y Rutas',key:'mapa-rutas'},
+    {label:'Comunas',key:'comunas'},
+    {label:'Comunicados',key:'comunicados'}]},
+  {label:'Informes',key:'informes',hijos:[
+    {label:'Informe de cierre',key:'informes.cierre',padre:'informes'},
+    {label:'Novedades del día',key:'operaciones.cierre-diario',padre:'operaciones'},
+    {label:'Informe libre',key:'informes.libre',padre:'informes'},
+    {label:'Envíos automáticos',key:'informes.envios',padre:'informes'}]},
+  {label:'Administración',nota:'Permisos y Secciones: solo Super Admin',hijos:[
+    {label:'Mensajeros',key:'mensajeros'},{label:'Clientes',key:'clientes'},{label:'Usuarios',key:'usuarios'}]},
+  {label:'Cierre Mes',key:'cierre'}
+];
 function Permisos(_ref_perm){let permisos=_ref_perm.permisos,setPermisos=_ref_perm.setPermisos,toast=_ref_perm.toast;
-  const _uRolP=useState('operador'),rolEditando=_uRolP[0],setRolEditando=_uRolP[1];
-  // Qué sección queda "desplegada" mostrando sus permisos de detalle (solo una a la vez).
-  const _uExp=useState(null),expandido=_uExp[0],setExpandido=_uExp[1];
-  const SECCIONES=[
-    {id:'consulta-express',label:'Consulta Express'},
-    {id:'colecta-admin',label:'Colecta · Lector/Scanner'},
-    {id:'etiquetas',label:'Colecta · Envíos Manuales'},
-    // "Pagos y Cobros" agrupa cosas muy distintas: la Planilla de Retiros que el equipo usa
-    // a diario, y la tabla de Pagos con montos/adelantos/préstamos de cada mensajero, que Luis
-    // no quiere que el rol Admin vea aunque sí use el resto a diario. Antes era un único
-    // interruptor (todo o nada); ahora cada pestaña interna tiene su propio permiso de detalle.
-    {id:'pagos',label:'Pagos y Cobros',subs:[
-      {id:'pagos',label:'Pagos (montos, adelantos, préstamos)'},
-      {id:'cobros',label:'Cobros a Clientes'},
-      {id:'retiros',label:'Planilla de Retiros'},
-      {id:'productos',label:'Productos / Consumo'},
-      {id:'adelantos',label:'Adelantos a Mensajeros'},
-      {id:'historial',label:'Historial de Cierres'}
-    ]},
-    {id:'siniestros',label:'Siniestros'},
-    {id:'firmas',label:'Operaciones · Firmas Operadores'},
-    {id:'operaciones',label:'Novedades del día (Informes) y Firmas en Vivo (Operaciones)',subs:[
-      {id:'cierre-diario',label:'Novedades del día'},
-      {id:'firmas-vivo',label:'Firmas en Vivo'}
-    ]},
-    {id:'informes',label:'Informes',subs:[
-      {id:'cierre',label:'Informe de cierre'},
-      {id:'libre',label:'Informe libre'}
-    ]},
-    {id:'mensajeros',label:'Administración · Mensajeros'},
-    {id:'clientes',label:'Administración · Clientes'},
-    {id:'usuarios',label:'Administración · Usuarios'},
-    {id:'mapa-rutas',label:'Operaciones · Mapas y Rutas'},
-    {id:'comunas',label:'Operaciones · Comunas'},
-    {id:'comunicados',label:'Operaciones · Comunicados'},
-    {id:'cierre',label:'Cierre Mes'}
-  ];
-  // 'parentId' opcional: si se pasa, un permiso de detalle sin fila propia en la base de datos
-  // todavía no fue tocado por nadie -- en ese caso HEREDA el estado del permiso general (así
-  // habilitar/deshabilitar la sección completa sigue funcionando como antes para todo lo que
-  // no se haya personalizado). Solo al hacer clic en el detalle se guarda una excepción explícita.
-  async function toggle(seccion,parentId){
-    const key=rolEditando+'|'+seccion;
-    const actual=permisos[key]!==undefined?permisos[key]===true:(parentId!=null?permisos[rolEditando+'|'+parentId]===true:false);
-    const nuevo=!actual;
-    setPermisos(prev=>({...prev,[key]:nuevo}));
-    try{
-      await db.from('permisos').upsert({seccion,rol:rolEditando,permitido:nuevo},{onConflict:'seccion,rol'});
-      toast(`✓ ${nuevo?'Habilitado':'Deshabilitado'} para ${rolEditando==='admin'?'Admin':'Operador'}`);
-    }catch(e){toast('⚠ Error guardando: '+e.message);}
+  const _uPu=useState([]),puestos=_uPu[0],setPuestos=_uPu[1];
+  const _uUs=useState([]),usuariosStaff=_uUs[0],setUsuariosStaff=_uUs[1];
+  const _uAs=useState({}),asignaciones=_uAs[0],setAsignaciones=_uAs[1];
+  const _uNuevo=useState(''),nuevoPuesto=_uNuevo[0],setNuevoPuesto=_uNuevo[1];
+  const _uRen=useState(null),renombrando=_uRen[0],setRenombrando=_uRen[1];
+
+  function cargar(){
+    db.from('puestos').select('*').order('id').then(r=>setPuestos((r&&r.data)||[]));
+    db.from('usuarios_publico').select('id,nombre,rol,activo').in('rol',['admin','operador']).eq('activo',true).order('nombre').then(r=>setUsuariosStaff((r&&r.data)||[]));
+    db.from('usuario_puesto').select('usuario_id,puesto_id').then(r=>{const m={};((r&&r.data)||[]).forEach(x=>{m[x.usuario_id]=x.puesto_id;});setAsignaciones(m);});
   }
-  return/*#__PURE__*/React.createElement("div",null,
-    /*#__PURE__*/React.createElement("div",{className:"section-head"},/*#__PURE__*/React.createElement("div",{className:"section-title"},"Permisos")),
-    /*#__PURE__*/React.createElement("div",{className:"panel"},
-      /*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:8,marginBottom:20}},
-        /*#__PURE__*/React.createElement("button",{onClick:()=>setRolEditando('operador'),style:{flex:1,padding:'12px',borderRadius:10,border:'2px solid '+(rolEditando==='operador'?'var(--gold)':'var(--border)'),background:rolEditando==='operador'?'rgba(200,168,75,0.1)':'#fff',cursor:'pointer',fontWeight:700,color:rolEditando==='operador'?'var(--dark)':'var(--text-soft)'}},'💼 Operador'),
-        /*#__PURE__*/React.createElement("button",{onClick:()=>setRolEditando('admin'),style:{flex:1,padding:'12px',borderRadius:10,border:'2px solid '+(rolEditando==='admin'?'var(--gold)':'var(--border)'),background:rolEditando==='admin'?'rgba(200,168,75,0.1)':'#fff',cursor:'pointer',fontWeight:700,color:rolEditando==='admin'?'var(--dark)':'var(--text-soft)'}},'🔐 Admin')
+  useEffect(()=>{cargar();},[]);
+
+  const columnas=puestos.map(p=>({rol:'puesto:'+p.id,label:p.nombre,puesto:p})).concat([{rol:'admin',label:'Admin sin puesto'}]);
+
+  function crudo(rol,key){return permisos[rol+'|'+key];}
+  function efectivo(rol,item){
+    if(item.padre){
+      const padreOn=crudo(rol,item.padre)===true;
+      const v=crudo(rol,item.key);
+      return padreOn&&(v===undefined?true:v===true);
+    }
+    return crudo(rol,item.key)===true;
+  }
+  async function guardarFilas(rol,cambios){
+    // cambios: {key:boolean}
+    setPermisos(prev=>{const n={...prev};Object.keys(cambios).forEach(k=>{n[rol+'|'+k]=cambios[k];});return n;});
+    const filas=Object.keys(cambios).map(k=>({seccion:k,rol:rol,permitido:cambios[k]}));
+    const r=await db.from('permisos').upsert(filas,{onConflict:'seccion,rol'});
+    if(r&&r.error)toast('Error guardando: '+r.error.message);
+  }
+  function cambiosParaItem(rol,item,valor,acc){
+    acc[item.key]=valor;
+    if(item.padre&&valor&&crudo(rol,item.padre)!==true){
+      acc[item.padre]=true;
+      // Hermanas con el mismo padre que no estaban definidas quedan apagadas explícitamente.
+      CATALOGO_PERMISOS.forEach(g=>(g.hijos||[]).forEach(h=>{
+        if(h.padre===item.padre&&h.key!==item.key&&crudo(rol,h.key)===undefined&&acc[h.key]===undefined)acc[h.key]=false;
+      }));
+    }
+    return acc;
+  }
+  function toggleItem(rol,item){guardarFilas(rol,cambiosParaItem(rol,item,!efectivo(rol,item),{}));}
+  function estadoGrupo(rol,g){
+    const hs=g.hijos||[];const on=hs.filter(h=>efectivo(rol,h)).length;
+    return{todos:hs.length>0&&on===hs.length,alguno:on>0&&on<hs.length};
+  }
+  function toggleGrupo(rol,g){
+    if(g.key){guardarFilas(rol,{[g.key]:!(crudo(rol,g.key)===true)});return;}
+    const st=estadoGrupo(rol,g);const valor=!st.todos;const acc={};
+    (g.hijos||[]).forEach(h=>cambiosParaItem(rol,h,valor,acc));
+    guardarFilas(rol,acc);
+  }
+  async function crearPuesto(){
+    const nombre=nuevoPuesto.trim();if(!nombre)return;
+    const r=await db.from('puestos').insert({nombre}).select().single();
+    if(r.error){toast('Error: '+r.error.message);return;}
+    setNuevoPuesto('');setPuestos(prev=>prev.concat([r.data]));toast('Puesto creado: '+nombre+' (sin accesos, tilda lo que corresponda)');
+  }
+  async function renombrar(p,nombre){
+    nombre=(nombre||'').trim();setRenombrando(null);if(!nombre||nombre===p.nombre)return;
+    const r=await db.from('puestos').update({nombre}).eq('id',p.id);
+    if(r.error){toast('Error: '+r.error.message);return;}
+    setPuestos(prev=>prev.map(x=>x.id===p.id?{...x,nombre}:x));
+  }
+  async function eliminarPuesto(p){
+    const usan=usuariosStaff.filter(u=>asignaciones[u.id]===p.id).map(u=>u.nombre);
+    if(!window.confirm('¿Eliminar el puesto "'+p.nombre+'"?'+(usan.length?'\n\nQuedarán sin puesto (con los accesos de "Admin sin puesto"): '+usan.join(', '):'')))return;
+    await db.from('permisos').delete().eq('rol','puesto:'+p.id);
+    const r=await db.from('puestos').delete().eq('id',p.id);
+    if(r.error){toast('Error: '+r.error.message);return;}
+    cargar();toast('Puesto eliminado');
+  }
+  async function asignar(u,puestoId){
+    if(!puestoId){
+      const r=await db.from('usuario_puesto').delete().eq('usuario_id',u.id);
+      if(r.error){toast('Error: '+r.error.message);return;}
+    }else{
+      const r=await db.from('usuario_puesto').upsert({usuario_id:u.id,puesto_id:+puestoId,updated_at:new Date().toISOString()},{onConflict:'usuario_id'});
+      if(r.error){toast('Error: '+r.error.message);return;}
+    }
+    setAsignaciones(prev=>{const n={...prev};if(puestoId)n[u.id]=+puestoId;else delete n[u.id];return n;});
+    toast(u.nombre+': '+(puestoId?(puestos.find(p=>p.id===+puestoId)||{}).nombre:'sin puesto')+' (aplica la próxima vez que recargue)');
+  }
+
+  const celdaCheck=(checked,indet,onChange,key)=>React.createElement('td',{key:key,style:{textAlign:'center',padding:'6px 4px'}},
+    React.createElement('input',{type:'checkbox',checked:!!checked,onChange:onChange,ref:el=>{if(el)el.indeterminate=!!indet;},style:{width:17,height:17,cursor:'pointer',accentColor:'#C8A84B'}}));
+  const filas=[];
+  CATALOGO_PERMISOS.forEach(g=>{
+    const tieneHijos=Array.isArray(g.hijos)&&g.hijos.length>0;
+    filas.push(React.createElement('tr',{key:'g-'+g.label,style:{background:tieneHijos?'rgba(200,168,75,0.08)':'#fff',borderTop:'1px solid var(--border)'}},
+      React.createElement('td',{style:{padding:'9px 14px',fontWeight:800,fontSize:13,position:'sticky',left:0,background:tieneHijos?'#fbf5e4':'#fff'}},g.label,g.nota?React.createElement('div',{style:{fontSize:10,fontWeight:400,color:'var(--text-soft)',marginTop:2}},g.nota):null),
+      columnas.map(c=>{
+        if(!tieneHijos)return celdaCheck(crudo(c.rol,g.key)===true,false,()=>toggleItem(c.rol,g),c.rol);
+        if(g.key)return celdaCheck(crudo(c.rol,g.key)===true,false,()=>toggleGrupo(c.rol,g),c.rol);
+        const st=estadoGrupo(c.rol,g);return celdaCheck(st.todos,st.alguno,()=>toggleGrupo(c.rol,g),c.rol);
+      })
+    ));
+    (g.hijos||[]).forEach(h=>{
+      filas.push(React.createElement('tr',{key:'h-'+h.key,style:{borderTop:'1px solid rgba(0,0,0,0.04)'}},
+        React.createElement('td',{style:{padding:'7px 14px 7px 34px',fontSize:12,position:'sticky',left:0,background:'#fff'}},h.label),
+        columnas.map(c=>celdaCheck(efectivo(c.rol,h),false,()=>toggleItem(c.rol,h),c.rol))
+      ));
+    });
+  });
+
+  return React.createElement('div',null,
+    React.createElement('div',{className:'section-head'},React.createElement('div',{className:'section-title'},'Permisos')),
+    React.createElement('div',{className:'panel',style:{marginBottom:20}},
+      React.createElement('div',{className:'panel-title'},'Accesos por puesto de trabajo'),
+      React.createElement('div',{style:{fontSize:12,color:'var(--text-mid)',marginBottom:14}},'Dashboard, Envíos y Analítica están siempre disponibles. Tilda cada sección y subsección que puede ver cada puesto; se guarda al instante. Una subsección solo se ve si su sección también está tildada.'),
+      React.createElement('div',{style:{overflowX:'auto',border:'1px solid var(--border)',borderRadius:10}},
+        React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',minWidth:300+columnas.length*130}},
+          React.createElement('thead',null,React.createElement('tr',{style:{background:'var(--dark)'}},
+            React.createElement('th',{style:{padding:'10px 14px',textAlign:'left',color:'var(--gold)',fontFamily:'Bebas Neue',letterSpacing:1,fontSize:13,position:'sticky',left:0,background:'var(--dark)'}},'Sección / subsección'),
+            columnas.map(c=>React.createElement('th',{key:c.rol,style:{padding:'8px 6px',textAlign:'center',color:'var(--gold)',fontSize:11,fontWeight:700,minWidth:120}},
+              c.puesto&&renombrando===c.puesto.id
+                ?React.createElement('input',{autoFocus:true,defaultValue:c.puesto.nombre,onBlur:e=>renombrar(c.puesto,e.target.value),onKeyDown:e=>{if(e.key==='Enter')e.target.blur();if(e.key==='Escape')setRenombrando(null);},style:{width:110,fontSize:11,padding:'3px 5px',borderRadius:5,border:'1px solid var(--gold)'}})
+                :React.createElement('div',null,c.label,
+                  c.puesto?React.createElement('div',{style:{marginTop:3,display:'flex',gap:6,justifyContent:'center'}},
+                    React.createElement('span',{onClick:()=>setRenombrando(c.puesto.id),style:{fontSize:9,color:'rgba(255,255,255,0.55)',cursor:'pointer',textDecoration:'underline'}},'Renombrar'),
+                    React.createElement('span',{onClick:()=>eliminarPuesto(c.puesto),style:{fontSize:9,color:'#e08080',cursor:'pointer',textDecoration:'underline'}},'Eliminar')):null)
+            ))
+          )),
+          React.createElement('tbody',null,filas)
+        )
       ),
-      /*#__PURE__*/React.createElement("div",{className:"panel-title"},"Acceso del rol ",rolEditando==='admin'?'Admin':'Operador'),
-      /*#__PURE__*/React.createElement("div",{style:{fontSize:13,color:'var(--text-mid)',marginBottom:20}},"Dashboard, Envíos y Analítica siempre están disponibles para todos. Aquí controlas qué otras secciones puede ver este rol. Las secciones con \"Detalle\" se pueden abrir para permitir solo partes específicas. Super Admin siempre ve todo, sin excepción."),
-      /*#__PURE__*/React.createElement("div",{style:{display:'flex',flexDirection:'column',gap:10}},SECCIONES.map(s=>{
-        const activo=permisos[rolEditando+'|'+s.id]===true;
-        const tieneSubs=Array.isArray(s.subs)&&s.subs.length>0;
-        const abierto=expandido===s.id;
-        return/*#__PURE__*/React.createElement(React.Fragment,{key:s.id},
-          /*#__PURE__*/React.createElement("div",{onClick:()=>toggle(s.id),style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'14px 18px',borderRadius:10,border:'1px solid '+(activo?'var(--gold)':'var(--border)'),background:activo?'rgba(200,168,75,0.08)':'#fff',cursor:'pointer',transition:'all 0.15s'}},
-            /*#__PURE__*/React.createElement("span",{style:{fontWeight:600,fontSize:14,display:'flex',alignItems:'center',gap:10}},
-              s.label,
-              tieneSubs&&/*#__PURE__*/React.createElement("span",{onClick:ev=>{ev.stopPropagation();setExpandido(abierto?null:s.id);},style:{fontSize:10,color:'var(--gold)',fontWeight:700,cursor:'pointer',padding:'3px 10px',borderRadius:20,border:'1px solid var(--gold-border)',background:'rgba(200,168,75,0.06)'}},abierto?'Ocultar detalle ▲':'Detalle ▾')
-            ),
-            /*#__PURE__*/React.createElement("span",{style:{padding:'4px 14px',borderRadius:20,fontSize:11,fontWeight:700,background:activo?'var(--gold)':'var(--cream)',color:activo?'var(--dark-deep)':'var(--text-soft)'}},activo?'✓ Habilitado':'Deshabilitado')
-          ),
-          tieneSubs&&abierto&&/*#__PURE__*/React.createElement("div",{style:{margin:'-4px 0 4px 18px',paddingLeft:14,borderLeft:'2px solid var(--gold-border)',display:'flex',flexDirection:'column',gap:6}},
-            /*#__PURE__*/React.createElement("div",{style:{fontSize:11,color:'var(--text-soft)',margin:'4px 0 2px'}},'Qué puede ver dentro de "'+s.label+'" — sin tocar nada, cada uno hereda el estado general de arriba ('+(activo?'Habilitado':'Deshabilitado')+').'),
-            s.subs.map(sub=>{
-              const key=s.id+'.'+sub.id;
-              const heredado=permisos[rolEditando+'|'+key]===undefined;
-              const activoSub=heredado?activo:permisos[rolEditando+'|'+key]===true;
-              return/*#__PURE__*/React.createElement("div",{key:sub.id,onClick:()=>toggle(key,s.id),style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 14px',borderRadius:8,border:'1px solid '+(activoSub?'var(--gold)':'var(--border)'),background:activoSub?'rgba(200,168,75,0.06)':'#fff',cursor:'pointer'}},
-                /*#__PURE__*/React.createElement("span",{style:{fontSize:13}},sub.label),
-                /*#__PURE__*/React.createElement("span",{style:{display:'flex',alignItems:'center',gap:8}},
-                  heredado&&/*#__PURE__*/React.createElement("span",{style:{fontSize:10,color:'var(--text-soft)',fontStyle:'italic'}},'(hereda)'),
-                  /*#__PURE__*/React.createElement("span",{style:{padding:'3px 12px',borderRadius:20,fontSize:10,fontWeight:700,background:activoSub?'var(--gold)':'var(--cream)',color:activoSub?'var(--dark-deep)':'var(--text-soft)'}},activoSub?'✓ Habilitado':'Deshabilitado')
-                )
-              );
-            })
-          )
-        );
-      }))
+      React.createElement('div',{style:{display:'flex',gap:8,marginTop:14,alignItems:'center',flexWrap:'wrap'}},
+        React.createElement('input',{className:'form-input',placeholder:'Nombre del nuevo puesto',value:nuevoPuesto,onChange:e=>setNuevoPuesto(e.target.value),onKeyDown:e=>{if(e.key==='Enter')crearPuesto();},style:{maxWidth:260,margin:0}}),
+        React.createElement('button',{className:'btn-primary',onClick:crearPuesto,disabled:!nuevoPuesto.trim()},'Agregar puesto')
+      )
+    ),
+    React.createElement('div',{className:'panel'},
+      React.createElement('div',{className:'panel-title'},'Puesto de cada usuario'),
+      React.createElement('div',{style:{fontSize:12,color:'var(--text-mid)',marginBottom:12}},'El usuario ve lo que tenga tildado su puesto. Sin puesto, ve lo de la columna "Admin sin puesto". El cambio se aplica cuando el usuario recarga el sistema.'),
+      usuariosStaff.length===0?React.createElement('div',{className:'info-banner'},'No hay usuarios administrativos activos.'):
+      React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8}},usuariosStaff.map(u=>React.createElement('div',{key:u.id,style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 14px',border:'1px solid var(--border)',borderRadius:8,gap:10,flexWrap:'wrap'}},
+        React.createElement('span',{style:{fontWeight:700,fontSize:13}},u.nombre),
+        React.createElement('select',{value:asignaciones[u.id]||'',onChange:e=>asignar(u,e.target.value),style:{padding:'6px 10px',borderRadius:6,border:'1px solid var(--border)',fontSize:12,minWidth:200}},
+          React.createElement('option',{value:''},'Sin puesto'),
+          puestos.map(p=>React.createElement('option',{key:p.id,value:p.id},p.nombre))
+        )
+      )))
     )
   );
 }
@@ -13230,12 +13321,12 @@ useEffect(()=>{
   }).catch(function(){});
 },[]);
 useEffect(()=>{try{const saved=localStorage.getItem('transpgso_v1_mensajeros');if(saved){const parsed=JSON.parse(saved);const nombres=parsed.map(m=>m.nombre);const hayDuplicados=new Set(nombres).size<nombres.length;const muchosMensajeros=parsed.length>40;const muchasTarifas1800=parsed.filter(m=>m.tarifa===1800).length>15;if(hayDuplicados||muchosMensajeros||muchasTarifas1800){['mensajeros','pagos_semana','cierre_semanas','cierre_colecta'].forEach(k=>{localStorage.removeItem('transpgso_v1_'+k);});console.log('Migración v2: duplicados eliminados');}}}catch(e){}},[]);const _useState100=useState('dashboard'),tab=_useState100[0],setTab=_useState100[1];const _pwaInst=useState(false),pwaInstalable=_pwaInst[0],setPwaInstalable=_pwaInst[1];useEffect(function(){if(window._pwaPrompt)setPwaInstalable(true);function onPwaListo(){setPwaInstalable(true);}window.addEventListener('pwa-instalable',onPwaListo);return function(){window.removeEventListener('pwa-instalable',onPwaListo);};},[]);function instalarAppHeader(){if(window._pwaPrompt){window._pwaPrompt.prompt();window._pwaPrompt.userChoice.then(function(){setPwaInstalable(false);window._pwaPrompt=null;});}}const _useState101=useState(()=>lsLoad('clientes',INIT_CLIENTES)),clientes=_useState101[0],setClientes=_useState101[1];const _useState102=useState(()=>{const local=lsLoad('mensajeros',INIT_MENSAJEROS);return local.map(m=>({...m,nombre:(m.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim()}));
-}),mensajeros=_useState102[0],setMensajeros=_useState102[1];const _useState103=useState(()=>lsLoad('mensajerosDia',[])),mensajerosDia=_useState103[0],setMensajerosDia=_useState103[1];const _useState104=useState(()=>lsLoad('kpi',{fecha:'',totalPaquetes:0,entregados:0,enCamino:0,reprogramados:0,cancelados:0,obs:''})),kpi=_useState104[0],setKpi=_useState104[1];const _useState105=useState(null),toastMsg=_useState105[0],setToastMsg=_useState105[1];const _useState106=useState(()=>lsLoad('session_usuario',null)),usuarioActivo=_useState106[0],setUsuarioActivo=_useState106[1];const _useState107=useState(()=>lsLoad('session_perfil',null)),perfil=_useState107[0],setPerfil=_useState107[1];window.__app.perfil=perfil;const _useState108=useState(false),showManifiesto=_useState108[0],setShowManifiesto=_useState108[1];const _useStateNavMob=useState(false),navMobileOpen=_useStateNavMob[0],setNavMobileOpen=_useStateNavMob[1];const _useState109=useState([]),enviosSupabase=_useState109[0],setEnviosSupabase=_useState109[1];const _usePermOp=useState({}),permisos=_usePermOp[0],setPermisos=_usePermOp[1];useEffect(()=>{db.from('permisos').select('*').then(res=>{if(res.data){const map={};res.data.forEach(p=>{map[p.rol+'|'+p.seccion]=p.permitido;});setPermisos(map);}}).catch(()=>{});},[]);function puedeVer(seccion){if(perfil&&perfil.esSuperAdmin)return true;const rolActual=perfil&&perfil.esAdmin?'admin':'operador';return permisos[rolActual+'|'+seccion]===true;}
+}),mensajeros=_useState102[0],setMensajeros=_useState102[1];const _useState103=useState(()=>lsLoad('mensajerosDia',[])),mensajerosDia=_useState103[0],setMensajerosDia=_useState103[1];const _useState104=useState(()=>lsLoad('kpi',{fecha:'',totalPaquetes:0,entregados:0,enCamino:0,reprogramados:0,cancelados:0,obs:''})),kpi=_useState104[0],setKpi=_useState104[1];const _useState105=useState(null),toastMsg=_useState105[0],setToastMsg=_useState105[1];const _useState106=useState(()=>lsLoad('session_usuario',null)),usuarioActivo=_useState106[0],setUsuarioActivo=_useState106[1];const _useState107=useState(()=>lsLoad('session_perfil',null)),perfil=_useState107[0],setPerfil=_useState107[1];window.__app.perfil=perfil;const _useState108=useState(false),showManifiesto=_useState108[0],setShowManifiesto=_useState108[1];const _useStateNavMob=useState(false),navMobileOpen=_useStateNavMob[0],setNavMobileOpen=_useStateNavMob[1];const _useState109=useState([]),enviosSupabase=_useState109[0],setEnviosSupabase=_useState109[1];const _usePermOp=useState({}),permisos=_usePermOp[0],setPermisos=_usePermOp[1];useEffect(()=>{db.from('permisos').select('*').then(res=>{if(res.data){const map={};res.data.forEach(p=>{map[p.rol+'|'+p.seccion]=p.permitido;});setPermisos(map);}}).catch(()=>{});},[]);/* 12-10-2026: puestos de trabajo -- si el usuario tiene un puesto asignado (Permisos), sus accesos salen de las filas 'puesto:<id>' de la tabla permisos en vez de las del rol. */const _usePuestoId=useState(null),puestoId=_usePuestoId[0],setPuestoId=_usePuestoId[1];useEffect(()=>{if(!usuarioActivo||!perfil||perfil.esSuperAdmin){setPuestoId(null);return;}db.rpc('mi_puesto').then(r=>{setPuestoId(r&&r.data!=null?r.data:null);}).catch(()=>{});},[usuarioActivo&&usuarioActivo.email,perfil&&perfil.rol]);function rolPermisos(){if(puestoId!=null)return 'puesto:'+puestoId;return perfil&&perfil.esAdmin?'admin':'operador';}function puedeVer(seccion){if(perfil&&perfil.esSuperAdmin)return true;const rolActual=rolPermisos();return permisos[rolActual+'|'+seccion]===true;}
 // Permiso de DETALLE dentro de una sección (ej. 'pagos'/'retiros' dentro de 'pagos'). Si nadie
 // tocó nunca ese permiso puntual (no hay fila en la base para 'rol|pagos.retiros'), hereda el
 // valor del permiso general de la sección -- así habilitar/deshabilitar "Pagos y Cobros" entero
 // sigue funcionando igual que antes para todo lo que no se haya personalizado en Permisos.
-function puedeVerSub(seccionPadre,subId){if(perfil&&perfil.esSuperAdmin)return true;const rolActual=perfil&&perfil.esAdmin?'admin':'operador';const key=rolActual+'|'+seccionPadre+'.'+subId;if(permisos[key]!==undefined)return permisos[key]===true;return permisos[rolActual+'|'+seccionPadre]===true;}
+function puedeVerSub(seccionPadre,subId){if(perfil&&perfil.esSuperAdmin)return true;const rolActual=rolPermisos();const key=rolActual+'|'+seccionPadre+'.'+subId;if(permisos[key]!==undefined)return permisos[key]===true;return permisos[rolActual+'|'+seccionPadre]===true;}
 // 12-10-2026: subsecciones elegidas desde el menú desplegable ('pagos|cobros', 'informes|libre').
 // Cada sección con subsecciones las muestra solo como lista desplegable arriba (ya no con
 // botones dentro de la página).
@@ -13510,11 +13601,13 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
     active:tab==='pagos'||tab==='calendario-cobros',
     actual:tab==='pagos'?'pagos|'+(subSec.pagos||''):tab,
     items:[
-      ...(puedeVerSub('pagos','pagos')?[{id:'pagos|pagos',label:'Pagos'},{id:'pagos|tarifas',label:'Tarifas de Pago'}]:[]),
+      ...(puedeVerSub('pagos','pagos')?[{id:'pagos|pagos',label:'Pagos'}]:[]),
+      ...(puedeVerSub('pagos','tarifas')?[{id:'pagos|tarifas',label:'Tarifas de Pago'}]:[]),
       ...((perfil&&perfil.esSuperAdmin)?[{id:'pagos|soporte',label:'Soporte Firmas'}]:[]),
       ...(puedeVerSub('pagos','cobros')?[{id:'pagos|cobros',label:'Cobros a Clientes'}]:[]),
       ...(puedeVerSub('pagos','retiros')?[{id:'pagos|retiros',label:'Planilla Retiros'}]:[]),
-      ...(puedeVerSub('pagos','productos')?[{id:'pagos|productos',label:'Productos'},{id:'pagos|consumo',label:'Consumo Diario'}]:[]),
+      ...(puedeVerSub('pagos','productos')?[{id:'pagos|productos',label:'Productos'}]:[]),
+      ...(puedeVerSub('pagos','consumo')?[{id:'pagos|consumo',label:'Consumo Diario'}]:[]),
       ...(puedeVerSub('pagos','adelantos')?[{id:'pagos|adelantos',label:'Adelantos y Deudas'}]:[]),
       ...(puedeVerSub('pagos','historial')?[{id:'pagos|historial',label:'Historial'}]:[]),
       ...((perfil&&perfil.esSuperAdmin)?[{id:'calendario-cobros',label:'Calendario Cobros'}]:[])
@@ -13525,7 +13618,7 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
   // NUEVO 2026-09-25: Pgso Market -- por ahora solo admin/superadmin (no pasa por el sistema
   // de Permisos todavía; se puede agregar como sección de Permisos más adelante si Luis quiere
   // que algún operador también confirme pagos).
-  (perfil&&(perfil.esSuperAdmin||perfil.esAdmin))&&/*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='market'?'active':''}`,onClick:()=>irA('market')},'🥬 Pgso Market'),
+  puedeVer('market')&&/*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='market'?'active':''}`,onClick:()=>irA('market')},'🥬 Pgso Market'),
   // 12-10-2026: sección Operaciones = Firmas Operadores (gestión de entregas por las operadoras)
   // + Firmas en Vivo (revisión de evidencias). Novedades del día quedó en Informes.
   (puedeVer('firmas')||(puedeVer('operaciones')&&puedeVerSub('operaciones','firmas-vivo'))||puedeVer('mapa-rutas')||puedeVer('comunas')||puedeVer('comunicados'))&&/*#__PURE__*/React.createElement(NavDropdown,{
@@ -13548,7 +13641,7 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
       ...((puedeVer('informes')&&puedeVerSub('informes','cierre'))?[{id:'informes|cierre',label:'Informe de cierre'}]:[]),
       ...((puedeVer('operaciones')&&puedeVerSub('operaciones','cierre-diario'))?[{id:'informes|novedades',label:'Novedades del día'}]:[]),
       ...((puedeVer('informes')&&puedeVerSub('informes','libre'))?[{id:'informes|libre',label:'Informe libre'}]:[]),
-      ...((perfil&&(perfil.esAdmin||perfil.esSuperAdmin))?[{id:'informes|envios',label:'Envíos automáticos'}]:[])
+      ...((puedeVer('informes')&&puedeVerSub('informes','envios'))?[{id:'informes|envios',label:'Envíos automáticos'}]:[])
     ],
     tab:tab,setTab:irA
   }),
@@ -13567,7 +13660,7 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
     tab:tab,setTab:irA
   }),
   puedeVer('cierre')&&/*#__PURE__*/React.createElement('button',{className:`nav-btn ${tab==='cierre'?'active':''}`,onClick:()=>irA('cierre')},'Cierre Mes')
-),/*#__PURE__*/React.createElement("div",{className:"main"},tab==='dashboard'&&/*#__PURE__*/React.createElement(Dashboard,{kpi:kpiVista,mensajerosDia:mensajerosDiaVista,db:db,enviosLocales:enviosGestion,clientes:clientes}),tab==='envios'&&(gestionEnviosReady?/*#__PURE__*/React.createElement(GestionEnvios,{mensajeros:mensajeros,clientes:clientes,toast:toast,usuario:usuarioActivo,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Envios...")),tab==='market'&&(pedidosMarketReady?/*#__PURE__*/React.createElement(PedidosMarketAdmin,{toast:toast,usuario:usuarioActivo,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Pgso Market...")),tab==='consulta-express'&&(consultaExpressReady?/*#__PURE__*/React.createElement(ConsultaExpress,{toast:toast}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Consulta Express...")),tab==='importar'&&/*#__PURE__*/React.createElement(ImportarExcel,{mensajeros:mensajeros,setMensajeros:setMensajeros,setMensajerosDia:setMensajerosDia,setKpi:setKpi,toast:toast}),tab==='kpi-men'&&/*#__PURE__*/React.createElement(KpiMensajeros,{mensajerosDia:mensajerosDiaVista,setMensajerosDia:setMensajerosDia}),tab==='analitica'&&(analiticaReady?/*#__PURE__*/React.createElement(Analitica,null):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Analitica...")),puedeVer('etiquetas')&&tab==='etiquetas'&&/*#__PURE__*/React.createElement(Etiquetas,{clientes:clientes}),puedeVer('pagos')&&tab==='pagos'&&(pagosMensajerosReady?/*#__PURE__*/React.createElement(PagosMensajeros,{subTab:subSec.pagos,mensajeros:mensajeros,mensajerosDia:mensajerosDiaVista,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin,toast:toast,clientes:clientes,permisosPago:{pagos:puedeVerSub('pagos','pagos'),cobros:puedeVerSub('pagos','cobros'),retiros:puedeVerSub('pagos','retiros'),productos:puedeVerSub('pagos','productos'),/* consumo reusa el mismo permiso 'productos': en pantalla de Permisos es una sola fila "Productos / Consumo" -- antes leía una llave 'pagos.consumo' separada que la UI nunca escribía, así que deshabilitar esa fila no ocultaba Consumo Diario (quedaba huérfana heredando siempre el permiso general de Pagos y Cobros) */consumo:puedeVerSub('pagos','productos'),adelantos:puedeVerSub('pagos','adelantos'),historial:puedeVerSub('pagos','historial')}}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Pagos Mensajeros...")),puedeVer('siniestros')&&tab==='siniestros'&&(siniestrosReady?/*#__PURE__*/React.createElement(Siniestros,{mensajeros:mensajeros,clientes:clientes,toast:toast,usuario:usuarioActivo,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Siniestros...")),puedeVer('firmas')&&tab==='firmas'&&(firmasReady?/*#__PURE__*/React.createElement(Firmas,{mensajeros:mensajerosVista,toast:toast,usuario:usuarioActivo,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Firmas...")),puedeVer('operaciones')&&puedeVerSub('operaciones','firmas-vivo')&&tab==='firmas-vivo'&&((operacionesReady&&window.OperacionesFirmasEnVivo)?React.createElement('div',null,React.createElement('div',{className:'section-head'},React.createElement('div',{className:'section-title'},'Firmas en Vivo')),React.createElement(window.OperacionesFirmasEnVivo,{mensajeros:mensajerosVista,clientes:clientes,toast:toast,usuario:usuarioActivo,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin})):React.createElement('div',{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},'Cargando Firmas en Vivo...')),(puedeVer('informes')||puedeVer('operaciones'))&&(tab==='informes'||tab==='operaciones')&&(informesReady?/*#__PURE__*/React.createElement(Informes,{toast:toast,usuario:usuarioActivo,mensajeros:mensajerosVista,clientes:clientes,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin,puedeVerLibre:puedeVer('informes')&&puedeVerSub('informes','libre'),puedeVerCierre:puedeVer('informes')&&puedeVerSub('informes','cierre'),puedeVerNovedades:puedeVer('operaciones')&&puedeVerSub('operaciones','cierre-diario'),operacionesReady:operacionesReady,sub:subSec.informes||(tab==='operaciones'?'novedades':null)}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Informes...")),puedeVer('colecta-admin')&&tab==='colecta-admin'&&(colectaAdminReady?React.createElement(ColectaAdmin,{clientes:clientes,mensajeros:mensajeros,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin,usuario:usuarioActivo}):React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Colecta Admin...")),puedeVer('cierre')&&tab==='cierre'&&(cierreMesReady?/*#__PURE__*/React.createElement(CierreMes,{clientes:clientes,mensajeros:mensajeros,esAdmin:perfil==null?void 0:perfil.esAdmin,toast:toast}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Cierre de Mes...")),puedeVer('usuarios')&&tab==='usuarios'&&(gestionUsuariosReady?/*#__PURE__*/React.createElement(GestionUsuarios,{toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Usuarios...")),puedeVer('clientes')&&tab==='clientes'&&(gestionClientesReady?/*#__PURE__*/React.createElement(GestionClientes,{clientes:clientes,setClientes:setClientes,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Clientes...")),puedeVer('mensajeros')&&tab==='mensajeros'&&(gestionMensajerosReady?/*#__PURE__*/React.createElement(GestionMensajeros,{mensajeros:mensajeros,setMensajeros:setMensajeros,mensajerosDia:mensajerosDiaVista,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Mensajeros...")),perfil!=null&&perfil.esSuperAdmin&&tab==='permisos'&&/*#__PURE__*/React.createElement(Permisos,{permisos:permisos,setPermisos:setPermisos,toast:toast}),perfil!=null&&perfil.esSuperAdmin&&tab==='calendario-cobros'&&/*#__PURE__*/React.createElement(CalendarioCobros,{clientes:clientes,usuario:usuarioActivo,toast:toast}),perfil!=null&&perfil.esSuperAdmin&&tab==='secciones'&&/*#__PURE__*/React.createElement(GestionSecciones,{clientes:clientes,mensajeros:mensajeros,toast:toast,db:db,esAdmin:perfil==null?void 0:perfil.esAdmin})),puedeVer('comunicados')&&tab==='comunicados'&&/*#__PURE__*/React.createElement(Comunicados,{mensajeros:mensajeros,toast:toast}),puedeVer('mapa-rutas')&&tab==='mapa-rutas'&&/*#__PURE__*/React.createElement(MapaRutas,{mensajeros:mensajeros,toast:toast,db:db,envios:enviosGestion||[]}),puedeVer('comunas')&&tab==='comunas'&&/*#__PURE__*/React.createElement(ComunasControl,{mensajeros:mensajeros,toast:toast,db:db,esAdmin:perfil==null?void 0:perfil.esAdmin}),toastMsg&&/*#__PURE__*/React.createElement(Toast,{msg:toastMsg,onClose:()=>setToastMsg(null)}),showManifiesto&&/*#__PURE__*/React.createElement(ManifiestoExport,{mensajerosDia:mensajerosDiaVista,clientes:clientes,kpi:kpiVista,esAdmin:perfil==null?void 0:perfil.esAdmin,onClose:()=>setShowManifiesto(false)}));}
+),/*#__PURE__*/React.createElement("div",{className:"main"},tab==='dashboard'&&/*#__PURE__*/React.createElement(Dashboard,{kpi:kpiVista,mensajerosDia:mensajerosDiaVista,db:db,enviosLocales:enviosGestion,clientes:clientes}),tab==='envios'&&(gestionEnviosReady?/*#__PURE__*/React.createElement(GestionEnvios,{mensajeros:mensajeros,clientes:clientes,toast:toast,usuario:usuarioActivo,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Envios...")),puedeVer('market')&&tab==='market'&&(pedidosMarketReady?/*#__PURE__*/React.createElement(PedidosMarketAdmin,{toast:toast,usuario:usuarioActivo,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Pgso Market...")),tab==='consulta-express'&&(consultaExpressReady?/*#__PURE__*/React.createElement(ConsultaExpress,{toast:toast}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Consulta Express...")),tab==='importar'&&/*#__PURE__*/React.createElement(ImportarExcel,{mensajeros:mensajeros,setMensajeros:setMensajeros,setMensajerosDia:setMensajerosDia,setKpi:setKpi,toast:toast}),tab==='kpi-men'&&/*#__PURE__*/React.createElement(KpiMensajeros,{mensajerosDia:mensajerosDiaVista,setMensajerosDia:setMensajerosDia}),tab==='analitica'&&(analiticaReady?/*#__PURE__*/React.createElement(Analitica,null):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Analitica...")),puedeVer('etiquetas')&&tab==='etiquetas'&&/*#__PURE__*/React.createElement(Etiquetas,{clientes:clientes}),puedeVer('pagos')&&tab==='pagos'&&(pagosMensajerosReady?/*#__PURE__*/React.createElement(PagosMensajeros,{subTab:subSec.pagos,mensajeros:mensajeros,mensajerosDia:mensajerosDiaVista,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin,toast:toast,clientes:clientes,permisosPago:{pagos:puedeVerSub('pagos','pagos'),tarifas:puedeVerSub('pagos','tarifas'),cobros:puedeVerSub('pagos','cobros'),retiros:puedeVerSub('pagos','retiros'),productos:puedeVerSub('pagos','productos'),/* consumo reusa el mismo permiso 'productos': en pantalla de Permisos es una sola fila "Productos / Consumo" -- antes leía una llave 'pagos.consumo' separada que la UI nunca escribía, así que deshabilitar esa fila no ocultaba Consumo Diario (quedaba huérfana heredando siempre el permiso general de Pagos y Cobros) */consumo:puedeVerSub('pagos','consumo'),adelantos:puedeVerSub('pagos','adelantos'),historial:puedeVerSub('pagos','historial')}}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Pagos Mensajeros...")),puedeVer('siniestros')&&tab==='siniestros'&&(siniestrosReady?/*#__PURE__*/React.createElement(Siniestros,{mensajeros:mensajeros,clientes:clientes,toast:toast,usuario:usuarioActivo,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Siniestros...")),puedeVer('firmas')&&tab==='firmas'&&(firmasReady?/*#__PURE__*/React.createElement(Firmas,{mensajeros:mensajerosVista,toast:toast,usuario:usuarioActivo,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Firmas...")),puedeVer('operaciones')&&puedeVerSub('operaciones','firmas-vivo')&&tab==='firmas-vivo'&&((operacionesReady&&window.OperacionesFirmasEnVivo)?React.createElement('div',null,React.createElement('div',{className:'section-head'},React.createElement('div',{className:'section-title'},'Firmas en Vivo')),React.createElement(window.OperacionesFirmasEnVivo,{mensajeros:mensajerosVista,clientes:clientes,toast:toast,usuario:usuarioActivo,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin})):React.createElement('div',{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},'Cargando Firmas en Vivo...')),(puedeVer('informes')||puedeVer('operaciones'))&&(tab==='informes'||tab==='operaciones')&&(informesReady?/*#__PURE__*/React.createElement(Informes,{toast:toast,usuario:usuarioActivo,mensajeros:mensajerosVista,clientes:clientes,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin,puedeVerLibre:puedeVer('informes')&&puedeVerSub('informes','libre'),puedeVerCierre:puedeVer('informes')&&puedeVerSub('informes','cierre'),puedeVerNovedades:puedeVer('operaciones')&&puedeVerSub('operaciones','cierre-diario'),puedeVerEnvios:puedeVer('informes')&&puedeVerSub('informes','envios'),operacionesReady:operacionesReady,sub:subSec.informes||(tab==='operaciones'?'novedades':null)}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Informes...")),puedeVer('colecta-admin')&&tab==='colecta-admin'&&(colectaAdminReady?React.createElement(ColectaAdmin,{clientes:clientes,mensajeros:mensajeros,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin,usuario:usuarioActivo}):React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Colecta Admin...")),puedeVer('cierre')&&tab==='cierre'&&(cierreMesReady?/*#__PURE__*/React.createElement(CierreMes,{clientes:clientes,mensajeros:mensajeros,esAdmin:perfil==null?void 0:perfil.esAdmin,toast:toast}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Cierre de Mes...")),puedeVer('usuarios')&&tab==='usuarios'&&(gestionUsuariosReady?/*#__PURE__*/React.createElement(GestionUsuarios,{toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin,esSuperAdmin:perfil==null?void 0:perfil.esSuperAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Usuarios...")),puedeVer('clientes')&&tab==='clientes'&&(gestionClientesReady?/*#__PURE__*/React.createElement(GestionClientes,{clientes:clientes,setClientes:setClientes,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Clientes...")),puedeVer('mensajeros')&&tab==='mensajeros'&&(gestionMensajerosReady?/*#__PURE__*/React.createElement(GestionMensajeros,{mensajeros:mensajeros,setMensajeros:setMensajeros,mensajerosDia:mensajerosDiaVista,toast:toast,esAdmin:perfil==null?void 0:perfil.esAdmin}):/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px',color:'var(--text-soft)'}},"Cargando Mensajeros...")),perfil!=null&&perfil.esSuperAdmin&&tab==='permisos'&&/*#__PURE__*/React.createElement(Permisos,{permisos:permisos,setPermisos:setPermisos,toast:toast}),perfil!=null&&perfil.esSuperAdmin&&tab==='calendario-cobros'&&/*#__PURE__*/React.createElement(CalendarioCobros,{clientes:clientes,usuario:usuarioActivo,toast:toast}),perfil!=null&&perfil.esSuperAdmin&&tab==='secciones'&&/*#__PURE__*/React.createElement(GestionSecciones,{clientes:clientes,mensajeros:mensajeros,toast:toast,db:db,esAdmin:perfil==null?void 0:perfil.esAdmin})),puedeVer('comunicados')&&tab==='comunicados'&&/*#__PURE__*/React.createElement(Comunicados,{mensajeros:mensajeros,toast:toast}),puedeVer('mapa-rutas')&&tab==='mapa-rutas'&&/*#__PURE__*/React.createElement(MapaRutas,{mensajeros:mensajeros,toast:toast,db:db,envios:enviosGestion||[]}),puedeVer('comunas')&&tab==='comunas'&&/*#__PURE__*/React.createElement(ComunasControl,{mensajeros:mensajeros,toast:toast,db:db,esAdmin:perfil==null?void 0:perfil.esAdmin}),toastMsg&&/*#__PURE__*/React.createElement(Toast,{msg:toastMsg,onClose:()=>setToastMsg(null)}),showManifiesto&&/*#__PURE__*/React.createElement(ManifiestoExport,{mensajerosDia:mensajerosDiaVista,clientes:clientes,kpi:kpiVista,esAdmin:perfil==null?void 0:perfil.esAdmin,onClose:()=>setShowManifiesto(false)}));}
 // ══════════════════════════════════════════════════════════
 // MapaRutas v3 — fixes: persistencia, panel, dibujo
 // ══════════════════════════════════════════════════════════

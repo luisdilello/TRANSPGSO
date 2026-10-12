@@ -712,7 +712,7 @@ function EnviosAutomaticos(props){
 }
 
 function Informes(props){
-  var puedeLibre=props.puedeVerLibre!==false, puedeCierre=props.puedeVerCierre!==false, esAdm=!!(props.esAdmin||props.esSuperAdmin);
+  var puedeLibre=props.puedeVerLibre!==false, puedeCierre=props.puedeVerCierre!==false, esAdm=props.puedeVerEnvios!=null?!!props.puedeVerEnvios:!!(props.esAdmin||props.esSuperAdmin);
   // 12-10-2026: la antigua sección "Operaciones" (informe de novedades del día para Fernando, Liz e
   // Hiram + Firmas en Vivo) vive ahora acá como subsecciones. Sus componentes vienen de
   // modules/operaciones.js (window.OperacionesNovedades / window.OperacionesFirmasEnVivo), que
