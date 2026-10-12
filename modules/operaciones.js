@@ -1086,4 +1086,8 @@ function Operaciones(props){
 }
 
 window.Operaciones=Operaciones;
+// 12-10-2026: Novedades del día (antes 'Cierre Diario') y Firmas en Vivo se muestran como
+// subsecciones de Informes (modules/informes.js) -- se exportan sueltas para eso.
+window.OperacionesNovedades=CierreDiario;
+window.OperacionesFirmasEnVivo=FirmasEnVivo;
 })();

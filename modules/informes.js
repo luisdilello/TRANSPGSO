@@ -713,21 +713,43 @@ function EnviosAutomaticos(props){
 
 function Informes(props){
   var puedeLibre=props.puedeVerLibre!==false, puedeCierre=props.puedeVerCierre!==false, esAdm=!!(props.esAdmin||props.esSuperAdmin);
-  var _sub=useState(function(){return puedeCierre?'cierre':'libre';}),sub=_sub[0],setSub=_sub[1];
+  // 12-10-2026: la antigua sección "Operaciones" (informe de novedades del día para Fernando, Liz e
+  // Hiram + Firmas en Vivo) vive ahora acá como subsecciones. Sus componentes vienen de
+  // modules/operaciones.js (window.OperacionesNovedades / window.OperacionesFirmasEnVivo), que
+  // index.html carga al entrar a Informes; sus permisos siguen siendo los de 'operaciones'.
+  var puedeNov=!!props.puedeVerNovedades, puedeFV=!!props.puedeVerFirmasVivo;
+  var inicial=function(){
+    if(props.subInicial==='novedades'&&puedeNov)return 'novedades';
+    if(puedeCierre)return 'cierre';
+    if(puedeNov)return 'novedades';
+    if(puedeLibre)return 'libre';
+    if(puedeFV)return 'firmas-vivo';
+    return 'cierre';
+  };
+  var _sub=useState(inicial),sub=_sub[0],setSub=_sub[1];
   var chipStyle=function(active){return active?{background:'rgba(200,168,75,0.18)',borderColor:'var(--gold)',color:'var(--gold)'}:undefined;};
+  var opsListo=!!(window.OperacionesNovedades&&window.OperacionesFirmasEnVivo);
+  var cargandoOps=h('div',{style:{textAlign:'center',padding:'40px 20px',color:'var(--text-soft)'}},'Cargando...');
+  // Las subsecciones de Operaciones usan puedeVerCierre con otro significado: se les pasa una
+  // copia de props sin los permisos de Informes para no mezclarlos.
+  var opsProps={mensajeros:props.mensajeros,clientes:props.clientes,toast:props.toast,usuario:props.usuario,esAdmin:props.esAdmin,esSuperAdmin:props.esSuperAdmin};
   return h('div',null,
     h('style',null,'@media (max-width:820px){.informes-grid{grid-template-columns:1fr!important}}'),
     h('div',{className:'section-head'},
       h('div',{className:'section-title'},'Informes'),
-      h('div',{style:{display:'flex',gap:8}},
+      h('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
         puedeCierre&&h('button',{className:'btn-secondary',style:chipStyle(sub==='cierre'),onClick:function(){setSub('cierre');}},'Informe de cierre'),
+        puedeNov&&h('button',{className:'btn-secondary',style:chipStyle(sub==='novedades'),onClick:function(){setSub('novedades');}},'Novedades del día'),
         puedeLibre&&h('button',{className:'btn-secondary',style:chipStyle(sub==='libre'),onClick:function(){setSub('libre');}},'Informe libre'),
+        puedeFV&&h('button',{className:'btn-secondary',style:chipStyle(sub==='firmas-vivo'),onClick:function(){setSub('firmas-vivo');}},'Firmas en Vivo'),
         esAdm&&h('button',{className:'btn-secondary',style:chipStyle(sub==='envios'),onClick:function(){setSub('envios');}},'Envíos automáticos'))
     ),
     sub==='cierre'&&puedeCierre&&h(InformeCierre,props),
+    sub==='novedades'&&puedeNov&&(opsListo?h(window.OperacionesNovedades,opsProps):cargandoOps),
     sub==='libre'&&puedeLibre&&h(InformeLibre,props),
+    sub==='firmas-vivo'&&puedeFV&&(opsListo?h(window.OperacionesFirmasEnVivo,opsProps):cargandoOps),
     sub==='envios'&&esAdm&&h(EnviosAutomaticos,props),
-    !puedeLibre&&!puedeCierre&&h('div',{style:{textAlign:'center',padding:'40px 20px',color:'var(--text-soft)'}},'No tienes acceso a ninguna subsección de Informes. Pídele a un administrador que te habilite el permiso desde Permisos.')
+    !puedeLibre&&!puedeCierre&&!puedeNov&&!puedeFV&&h('div',{style:{textAlign:'center',padding:'40px 20px',color:'var(--text-soft)'}},'No tienes acceso a ninguna subsección de Informes. Pídele a un administrador que te habilite el permiso desde Permisos.')
   );
 }
 
