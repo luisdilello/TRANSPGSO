@@ -1,16 +1,19 @@
-// TransPgso SW v1791820273
+// TransPgso SW v1791820683
 // Antes este service worker borraba TODO el cache al instalar y no guardaba nada -- eso
 // significaba que si el mensajero se quedaba sin señal, la app ni siquiera podía abrir
 // (pantalla en blanco). Ahora precachea lo minimo necesario para que la app y las librerias
 // de las que depende (React, Supabase, el lector de codigo de barras) sigan funcionando sin
 // conexion, y actualiza ese cache solo cuando SI hay señal.
+// FIX 12-10-2026: res.clone() se hacía dentro de una promesa (después de devolver 'res' al
+// navegador), y a veces la respuesta ya se había leído -> "Response body is already used" en la
+// consola y ese archivo no quedaba en cache. Ahora se clona antes de devolverla.
 // OJO: cada vez que se despliega un fix de JS en index.html, hay que bumpear este
 // APP_VERSION también (aunque este archivo sw.js no haya cambiado de lógica) — eso obliga
 // al navegador a instalar un Service Worker "nuevo" y dispara el aviso/recarga automática
 // que ya tiene la app (ver controllerchange en index.html). Si no se bumpea, un mensajero
 // que dejó la PWA abierta en segundo plano sigue corriendo el JS viejo indefinidamente,
 // aunque el index.html ya esté actualizado en GitHub Pages.
-const APP_VERSION = '1791820273';
+const APP_VERSION = '1791820683';
 const CACHE_NAME = 'transpgso-' + APP_VERSION;
 const LOGO_ICON = 'logo.jpg';
 
@@ -61,7 +64,7 @@ self.addEventListener('fetch', e => {
     // sirve la ultima que se guardo en cache -- asi la app abre igual sin conexion.
     e.respondWith(
       fetch(e.request, { cache: 'no-cache' })
-        .then(res => { caches.open(CACHE_NAME).then(c => c.put(e.request, res.clone())); return res; })
+        .then(res => { const copia = res.clone(); caches.open(CACHE_NAME).then(c => c.put(e.request, copia)); return res; })
         .catch(() => caches.match(e.request).then(r => r || caches.match('/index.html')))
     );
     return;
@@ -71,7 +74,7 @@ self.addEventListener('fetch', e => {
     // Iconos, manifest, etc: no cambian seguido -- cache primero, red como respaldo.
     e.respondWith(
       caches.match(e.request).then(cached => cached || fetch(e.request)
-        .then(res => { caches.open(CACHE_NAME).then(c => c.put(e.request, res.clone())); return res; })
+        .then(res => { const copia = res.clone(); caches.open(CACHE_NAME).then(c => c.put(e.request, copia)); return res; })
         .catch(() => cached))
     );
     return;
