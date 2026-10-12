@@ -214,7 +214,29 @@ function cancelarConfirmCambio(){
 // Los operadores ven y filtran envios en 'Retorno' igual que cualquier otro estado, pero no
 // pueden asignarselo — se les oculta de todos los botones/selectores que ESCRIBEN el estado.
 const estadosEditables=useMemo(()=>(esAdmin||esSuperAdmin)?ESTADOS_ENVIO:ESTADOS_ENVIO.filter(est=>!est.soloAdmin),[esAdmin,esSuperAdmin]);
-useEffect(()=>{sincronizarDesdeSupabase();const _autoSyncInterval=setInterval(sincronizarDesdeSupabase,180000);return()=>clearInterval(_autoSyncInterval);},[periodo,mesFiltro,desde,hasta]);// Antes cada 60s: se sube a 3 min (igual que los otros dos auto-refrescos de esta pantalla, ver más abajo) -- es de solo lectura, no necesita ser al segundo, y así no se repiten 3 consultas por minuto por cada pestaña de Gestión de Envíos que quede abierta.// Igual que el sistema anterior de Luis: por defecto solo trae el DIA EN CURSO (rapido), y solo trae
+// 12-10-2026 (pedido de Luis: "debe dar el cambio específicamente de las piezas gestionadas"):
+// antes este efecto volvía a descargar el período COMPLETO cada 3 min (sincronizarDesdeSupabase,
+// más entregados/retornos/demás estados por fecha real, cada uno con su propio setInterval) --
+// en "Semana" eran ~12-15 MB por vuelta y por pestaña, y en un cierre de mes mucho más. Ahora la
+// carga completa se hace UNA vez al abrir la pantalla o cambiar de período, y después
+// sincronizarCambios() pregunta cada minuto (solo con la pestaña visible) por las piezas que
+// cambiaron: envíos con updated_at nuevo (lo mantiene un trigger en Supabase desde el 12-10-2026)
+// y eventos nuevos de historial_envios. Ver sincronizarCambios más abajo.
+const cursoresCambiosRef=useRef({env:null,hist:null,elim:null,clave:null});
+const syncCambiosEnCursoRef=useRef(false);
+useEffect(()=>{
+  const clave=periodo+'|'+mesFiltro+'|'+desde+'|'+hasta;
+  cursoresCambiosRef.current={env:null,hist:null,elim:null,clave:clave};
+  let vigente=true;
+  (async function(){
+    // Las marcas se toman ANTES de la carga completa: lo que cambie mientras se descarga igual
+    // se recoge en la primera vuelta incremental (y el margen de 2 min cubre lo que esté en vuelo).
+    try{const m=await marcasCambiosEnvios();if(vigente&&cursoresCambiosRef.current.clave===clave)Object.assign(cursoresCambiosRef.current,{env:m.env,hist:m.hist,elim:m.elim});}catch(_e){}
+    if(vigente)sincronizarDesdeSupabase();
+  })();
+  const limpiar=intervaloVisible(sincronizarCambios,60000);
+  return()=>{vigente=false;limpiar();};
+},[periodo,mesFiltro,desde,hasta]);// Antes cada 60s: se sube a 3 min (igual que los otros dos auto-refrescos de esta pantalla, ver más abajo) -- es de solo lectura, no necesita ser al segundo, y así no se repiten 3 consultas por minuto por cada pestaña de Gestión de Envíos que quede abierta.// Igual que el sistema anterior de Luis: por defecto solo trae el DIA EN CURSO (rapido), y solo trae
 // mas cuando el usuario cambia de periodo (Semana/Mes/Rango). Antes se traia SIEMPRE la tabla
 // completa cada 60s sin importar el filtro visible, lo que iba a pesar cada vez mas a medida
 // que crece el historico. Este helper calcula el rango de fechas exacto para el periodo activo
@@ -264,7 +286,7 @@ async function cargarEntregadosPeriodoReal(){
   }catch(eReal){console.warn('Error cargando entregados por fecha real:',eReal.message);}
   setCargandoEntregadosReal(false);
 }
-useEffect(()=>{cargarEntregadosPeriodoReal();const _ivEntReal=setInterval(cargarEntregadosPeriodoReal,180000);return()=>clearInterval(_ivEntReal);},[periodo,mesFiltro,desde,hasta]);// Antes cada 60s: se sube a 3 min por la misma razón que sincronizarDesdeSupabase de arriba.
+useEffect(()=>{cargarEntregadosPeriodoReal();},[periodo,mesFiltro,desde,hasta]);// 12-10-2026: sin refresco periódico; los cambios llegan por sincronizarCambios().// Antes cada 60s: se sube a 3 min por la misma razón que sincronizarDesdeSupabase de arriba.
 // Mismo criterio que 'Entregado' arriba, pero para 'Retorno': Luis reporto que al sacar los
 // retornos de la quincena 2 de un cliente (filtro de fecha en Gestion de Envios) le salian 18
 // paquetes cuando en realidad eran 14 -- el filtro estaba usando la fecha de DESPACHO
@@ -294,7 +316,7 @@ async function cargarRetornadosPeriodoReal(){
   }catch(eReal){console.warn('Error cargando retornados por fecha real:',eReal.message);}
   setCargandoRetornadosReal(false);
 }
-useEffect(()=>{cargarRetornadosPeriodoReal();const _ivRetReal=setInterval(cargarRetornadosPeriodoReal,180000);return()=>clearInterval(_ivRetReal);},[periodo,mesFiltro,desde,hasta]);// Antes cada 60s: se sube a 3 min por la misma razón que las otras dos.
+useEffect(()=>{cargarRetornadosPeriodoReal();},[periodo,mesFiltro,desde,hasta]);// 12-10-2026: sin refresco periódico; los cambios llegan por sincronizarCambios().// Antes cada 60s: se sube a 3 min por la misma razón que las otras dos.
 // Luis (16-09-2026), cruzando Gestión de Envíos contra el Drive de un cliente: "para mí, al
 // colocar rango de fechas busco es todo lo gestionado dentro de ese rango" -- es decir, el mismo
 // criterio de "fecha real del evento" que ya usan Entregado/Retorno arriba, pero para TODOS los
@@ -339,7 +361,116 @@ async function cargarOtrosPeriodoReal(){
   }catch(eOtros){console.warn('Error cargando otros estados por fecha real:',eOtros.message);}
   setCargandoOtrosReal(false);
 }
-useEffect(()=>{cargarOtrosPeriodoReal();const _ivOtrosReal=setInterval(cargarOtrosPeriodoReal,180000);return()=>clearInterval(_ivOtrosReal);},[periodo,mesFiltro,desde,hasta,vistaEstado]);
+useEffect(()=>{cargarOtrosPeriodoReal();},[periodo,mesFiltro,desde,hasta,vistaEstado]);// 12-10-2026: sin refresco periódico; los cambios llegan por sincronizarCambios().
+// ── sincronizarCambios (NUEVO 12-10-2026) ──────────────────────────────────────────────
+// Trae SOLO lo que cambió desde la última vuelta y lo aplica pieza por pieza:
+//  1) envíos con updated_at posterior al último visto → se actualizan en la lista (o se agregan
+//     si son del período), respetando las ediciones propias de los últimos 10 s;
+//  2) eventos nuevos de historial_envios → cada código que cambió de estado se mueve entre los
+//     conjuntos "por fecha real" (entregados / retornos / demás estados) según su estado actual
+//     y la hora real del evento, sin volver a calcular esos conjuntos completos;
+//  3) envíos eliminados por un admin (envios_eliminados_log) → se quitan de la pantalla.
+// Si algo falla o llegan demasiados cambios juntos, la próxima vuelta hace la carga completa.
+const COLS_CAMBIOS='id,codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,nota_admin,fuente,peso,valor_siniestro,tuvo_siniestro,updated_at,created_at,aviso_tardio';
+function normalizarFilaSB(sb,extra){
+  return Object.assign({id:sb.id,codigo:sb.codigo,cliente:sb.cliente||'',destinatario:sb.destinatario||'',telefono:sb.telefono||'',
+    direccion:sb.direccion||'',comuna:sb.comuna||'',referencia:sb.referencia||'',fecha:sb.fecha||'',
+    estado:sb.estado||'en_bodega',mensajero:sb.mensajero||'',monto:sb.monto||0,enUnCambio:sb.en_un_cambio||false,
+    nota:sb.nota||'',nota_admin:sb.nota_admin||'',fuente:sb.fuente||'propio',peso:sb.peso||null,
+    valor_siniestro:sb.valor_siniestro||null,tuvo_siniestro:sb.tuvo_siniestro||false,created_at:sb.created_at||null,
+    updated_at:sb.updated_at||null,aviso_tardio:sb.aviso_tardio||false,
+    historial:[{fecha:sb.created_at,estado:sb.estado,nota:'Desde Supabase'}],_synced:true},extra||{});
+}
+async function sincronizarCambios(){
+  const cur=cursoresCambiosRef.current;
+  if(!cur.env||cur.hist==null)return;// la carga completa todavía no fija las marcas
+  if(syncCambiosEnCursoRef.current)return;
+  syncCambiosEnCursoRef.current=true;
+  const claveAlEmpezar=cur.clave;
+  try{
+    const[resEnv,resHist]=await Promise.all([traerEnviosCambiados(cur.env,COLS_CAMBIOS,null,null),traerHistorialNuevo(cur.hist)]);
+    let eliminadosNuevos=[];
+    try{
+      const rEl=await db.from('envios_eliminados_log').select('codigo,eliminado_en').gt('eliminado_en',cur.elim).order('eliminado_en',{ascending:true}).limit(1000);
+      if(!rEl.error&&rEl.data){eliminadosNuevos=rEl.data;if(rEl.data.length)cur.elim=rEl.data[rEl.data.length-1].eliminado_en;}
+    }catch(_e){}// solo los admin pueden leer este log; para el resto se ignora
+    if(cursoresCambiosRef.current.clave!==claveAlEmpezar)return;// cambió el período mientras se consultaba
+    if(!resEnv.completo){// demasiados cambios juntos (ej. importación masiva): carga completa
+      sincronizarDesdeSupabase();cargarEntregadosPeriodoReal();cargarRetornadosPeriodoReal();cargarOtrosPeriodoReal();
+      const m=await marcasCambiosEnvios();Object.assign(cursoresCambiosRef.current,{env:m.env,hist:m.hist});
+      return;
+    }
+    cur.env=resEnv.cursor;cur.hist=resHist.cursor;
+    const filas={};resEnv.rows.forEach(function(r){filas[r.codigo]=r;});
+    // Códigos con eventos nuevos que no vinieron en la consulta de envíos (no debería pasar con el
+    // trigger, pero por las dudas): se piden puntualmente.
+    const faltan=[...new Set(resHist.eventos.map(function(h){return h.codigo_envio;}))].filter(function(c){return !filas[c];});
+    for(let i=0;i<faltan.length;i+=200){
+      const r=await db.from('envios').select(COLS_CAMBIOS).in('codigo',faltan.slice(i,i+200));
+      if(!r.error)(r.data||[]).forEach(function(x){filas[x.codigo]=x;});
+    }
+    const cambiados=Object.keys(filas);
+    const codElim=new Set(eliminadosNuevos.map(function(x){return x.codigo;}));
+    if(!cambiados.length&&!codElim.size)return;
+    const{desde:dQ,hasta:hQ}=limitesPeriodoGE();
+    const enPeriodo=function(f){return(!dQ||f>=dQ)&&(!hQ||f<=hQ);};
+    // 1) lista principal
+    const ahora=Date.now();
+    setEnvios(function(prev){
+      const idx={};prev.forEach(function(e,i){idx[e.codigo]=i;});
+      const out=prev.slice();
+      cambiados.forEach(function(cod){
+        const sb=filas[cod];if(sb.estado==='eliminado')return;
+        const ed=edicionesRecientesRef.current[cod];const reciente=ed&&(ahora-ed.ts)<10000;
+        if(idx[cod]!==undefined){
+          const e=out[idx[cod]];
+          out[idx[cod]]=Object.assign({},e,normalizarFilaSB(sb,{id:e.id||sb.id,historial:e.historial||[]}),reciente?{estado:ed.estado,mensajero:ed.mensajero}:{});
+        }else if(enPeriodo(sb.fecha)){
+          out.push(normalizarFilaSB(sb));
+        }
+      });
+      return codElim.size?out.filter(function(e){return !codElim.has(e.codigo);}):out;
+    });
+    // 2) conjuntos por fecha real: el código sale de los conjuntos cuyo estado ya no tiene, y entra
+    //    al de su estado actual si el evento de ese estado ocurrió dentro del período.
+    if(dQ&&hQ&&(resHist.eventos.length||codElim.size)){
+      const iniTs=new Date(limiteDiaChileUTC(dQ,false)).getTime(),finTs=new Date(limiteDiaChileUTC(hQ,true)).getTime();
+      const ultimoEvento={};resHist.eventos.forEach(function(h){ultimoEvento[h.codigo_envio+'|'+h.estado]=h.created_at;});
+      const aplicar=function(lista,estadoLista,camposFecha){
+        let cambio=false;const fuera=new Set();const nuevos=[];const refrescar={};
+        cambiados.forEach(function(cod){
+          const sb=filas[cod];
+          if(codElim.has(cod)||sb.estado!==estadoLista){fuera.add(cod);return;}
+          const ts=ultimoEvento[cod+'|'+estadoLista];
+          if(!ts){refrescar[cod]=sb;return;}// sigue en este estado sin evento nuevo: solo se refrescan sus datos (mensajero, cliente, etc.)
+          const t=new Date(ts).getTime();
+          fuera.add(cod);
+          if(t>=iniTs&&t<=finTs){const extra={};extra[camposFecha[0]]=fechaHoyCL(new Date(ts));extra[camposFecha[1]]=ts;nuevos.push(normalizarFilaSB(sb,extra));}
+        });
+        codElim.forEach(function(c){fuera.add(c);});
+        const base=lista.filter(function(e){if(fuera.has(e.codigo)){cambio=true;return false;}return true;}).map(function(e){
+          const sb=refrescar[e.codigo];if(!sb)return e;cambio=true;
+          const extra={};camposFecha.forEach(function(k){extra[k]=e[k];});return normalizarFilaSB(sb,extra);
+        });
+        if(nuevos.length)cambio=true;
+        return cambio?base.concat(nuevos):lista;
+      };
+      setEntregadosPeriodoReal(function(prev){return aplicar(prev,'entregado',['_fechaRealEntrega','_fechaRealEntregaISO']);});
+      setRetornadosPeriodoReal(function(prev){return aplicar(prev,'retorno',['_fechaRealEstado','_fechaRealEstadoISO']);});
+      setOtrosPeriodoReal(function(prev){
+        const out={};let cambio=false;
+        Object.keys(prev||{}).forEach(function(est){const n=aplicar(prev[est]||[],est,['_fechaRealEstado','_fechaRealEstadoISO']);if(n!==prev[est])cambio=true;out[est]=n;});
+        return cambio?out:prev;
+      });
+      const entregasNuevas={};resHist.eventos.forEach(function(h){if(h.estado==='entregado')entregasNuevas[h.codigo_envio]=h.created_at;});
+      if(Object.keys(entregasNuevas).length)setEntregasReal(function(prev){return Object.assign({},prev,entregasNuevas);});
+    }
+  }catch(err){
+    console.warn('Actualización de cambios falló, se reintenta en la próxima vuelta:',err&&err.message);
+  }finally{
+    syncCambiosEnCursoRef.current=false;
+  }
+}
 async function sincronizarDesdeSupabase(){setSincronizando(true);try{
   // Solo trae el periodo activo (Hoy por defecto), no la tabla completa. Se pagina en bloques
   // de 1000 igual que antes por si un periodo amplio (Mes/Rango grande) supera esa cantidad,
@@ -1041,6 +1172,7 @@ const _uEnvPerEfec=useState([]),enviosPeriodoEfectivo=_uEnvPerEfec[0],setEnviosP
 // un calculo anterior de calcularEstadoEfectivo todavia esta en vuelo -- sin esto, una
 // respuesta vieja que llega tarde podia pisar el resultado de una mas nueva.
 const efectivoGenRef=useRef(0);
+const efectivoCacheRef=useRef({clave:null,estados:null});
 async function cargarEnviosPeriodoEfectivo(){
   const miGen=++efectivoGenRef.current;
   // En vista 'actual' (estado en vivo) este cálculo no se usa para nada (stats/filtrados miran
@@ -1049,10 +1181,28 @@ async function cargarEnviosPeriodoEfectivo(){
   if(vistaEstado==='actual'){if(miGen===efectivoGenRef.current)setEnviosPeriodoEfectivo(enviosPeriodo);return;}
   const{hasta:hastaQ}=limitesPeriodoGE();
   if(!hastaQ||!enviosPeriodo.length){if(miGen===efectivoGenRef.current)setEnviosPeriodoEfectivo(enviosPeriodo);return;}
+  // 12-10-2026: si el período termina hoy o después, el "estado al cierre" ES el estado actual
+  // (no hay eventos posteriores al cierre que deshacer) -- no hace falta paginar historial_envios.
+  if(hastaQ>=fechaHoyCL()){if(miGen===efectivoGenRef.current)setEnviosPeriodoEfectivo(enviosPeriodo);efectivoCacheRef.current={clave:null,estados:null};return;}
+  // Período ya cerrado: los cambios que llegan ahora (actualización incremental) son POSTERIORES al
+  // cierre, así que no cambian el estado al cierre ya calculado. Se recalcula con historial solo la
+  // primera vez para este período (o si cambió el conjunto de envíos); en las demás vueltas se
+  // reusan los estados al cierre ya calculados y solo se refrescan los demás campos.
+  const claveEfec=periodo+'|'+mesFiltro+'|'+desde+'|'+hasta;
+  const cache=efectivoCacheRef.current;
+  if(cache.clave===claveEfec&&cache.estados&&enviosPeriodo.every(function(e){return cache.estados[e.codigo]!==undefined;})){
+    const reusado=enviosPeriodo.map(function(e){const c=cache.estados[e.codigo];return Object.assign({},e,{_estadoEfectivo:c.est,_fechaEfectivaISO:c.fecha});});
+    if(miGen===efectivoGenRef.current)setEnviosPeriodoEfectivo(reusado);
+    return;
+  }
   try{
     const hastaISO=limiteDiaChileUTC(hastaQ,true);
     const rows=await calcularEstadoEfectivo(enviosPeriodo,hastaISO);
-    if(miGen===efectivoGenRef.current)setEnviosPeriodoEfectivo(rows);
+    if(miGen===efectivoGenRef.current){
+      setEnviosPeriodoEfectivo(rows);
+      const estados={};rows.forEach(function(r){estados[r.codigo]={est:r._estadoEfectivo||r.estado,fecha:r._fechaEfectivaISO||null};});
+      efectivoCacheRef.current={clave:claveEfec,estados:estados};
+    }
   }catch(eEfec){console.warn('Error calculando estado efectivo:',eEfec.message);if(miGen===efectivoGenRef.current)setEnviosPeriodoEfectivo(enviosPeriodo);}
 }
 // URGENTE (fix incidente 07-09): este efecto dependia de 'enviosPeriodo', que cambia de

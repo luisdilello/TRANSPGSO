@@ -626,7 +626,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1791768026;
+window.__MODULES_VERSION=1791819187;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1297,6 +1297,92 @@ function limiteDiaChileUTC(fechaStr,finDelDia){
   var offsetMin=m&&m[2]?parseInt(m[2],10)*(offsetHoras<0?-1:1):0;
   var offsetMs=(offsetHoras*60+offsetMin)*60000;
   return new Date(guess.getTime()-offsetMs).toISOString();
+}
+// ══════════════════════════════════════════════════════════════════════════════════════
+// ACTUALIZACIÓN INCREMENTAL DE ENVÍOS (NUEVO 12-10-2026)
+// Antes, Gestión de Envíos, el Dashboard y el cache global volvían a descargar el período
+// COMPLETO cada 3 minutos (ej. 7.572 envíos ≈ 4,4 MB por vuelta en "Semana", y otro tanto para
+// entregados/retornos/demás estados por fecha real), aunque no hubiera cambiado nada. Se hacía
+// así porque no había forma confiable de saber qué piezas cambiaron: envios.updated_at solo lo
+// escribía la app del mensajero, y los cambios del panel lo dejaban viejo. Desde el 12-10-2026 un
+// trigger en Supabase (trg_envios_updated_at) lo actualiza en el servidor en cada cambio real, así
+// que ahora: la carga completa se hace solo al abrir la pantalla o cambiar de período, y después
+// cada minuto se pregunta SOLO por los envíos con updated_at posterior al último visto (las piezas
+// gestionadas), más los eventos nuevos de historial_envios. Además, nada de esto corre mientras la
+// pestaña está oculta: al volver a ella se pone al día de inmediato con lo que cambió.
+// ══════════════════════════════════════════════════════════════════════════════════════
+// Ejecuta fn cada 'ms' SOLO mientras la pestaña está visible. Si la pestaña estuvo oculta y
+// vuelve a verse cuando ya pasó el intervalo, ejecuta fn de inmediato. Devuelve la función de limpieza.
+function intervaloVisible(fn,ms){
+  let ultimo=Date.now();
+  const tick=function(){if(document.hidden)return;ultimo=Date.now();fn();};
+  const id=setInterval(tick,ms);
+  const onVis=function(){if(!document.hidden&&Date.now()-ultimo>=ms){ultimo=Date.now();fn();}};
+  document.addEventListener('visibilitychange',onVis);
+  return function(){clearInterval(id);document.removeEventListener('visibilitychange',onVis);};
+}
+// Marcas iniciales para preguntar "qué cambió desde ahora": el updated_at más reciente de envios
+// y el id más alto de historial_envios (ambos con índice, consultas de 1 fila).
+async function marcasCambiosEnvios(){
+  const [a,b]=await Promise.all([
+    db.from('envios').select('updated_at').not('updated_at','is',null).order('updated_at',{ascending:false}).limit(1),
+    db.from('historial_envios').select('id').order('id',{ascending:false}).limit(1)
+  ]);
+  return{env:(a.data&&a.data[0]&&a.data[0].updated_at)||new Date().toISOString(),hist:(b.data&&b.data[0]&&b.data[0].id)||0,elim:new Date().toISOString()};
+}
+// Envíos modificados después de 'cursorISO' (con 2 min de margen por transacciones en vuelo;
+// se deduplican por código). desde/hasta opcionales acotan por fecha de despacho.
+async function traerEnviosCambiados(cursorISO,cols,desde,hasta){
+  const colsQ=cols.indexOf('updated_at')<0?cols+',updated_at':cols;
+  let desdeTs=new Date(new Date(cursorISO).getTime()-120000).toISOString();
+  let nuevo=cursorISO;const mapa={};let completo=true;
+  for(let vuelta=0;vuelta<20;vuelta++){
+    let q=db.from('envios').select(colsQ).gte('updated_at',desdeTs).neq('estado','eliminado').order('updated_at',{ascending:true}).limit(1000);
+    if(desde)q=q.gte('fecha',desde);
+    if(hasta)q=q.lte('fecha',hasta);
+    const r=await q;
+    if(r.error)throw r.error;
+    const d=r.data||[];
+    d.forEach(function(x){mapa[x.codigo]=x;if(x.updated_at>nuevo)nuevo=x.updated_at;});
+    if(d.length<1000)break;
+    const ultimoTs=d[d.length-1].updated_at;
+    if(ultimoTs===desdeTs){completo=false;break;}// >1000 filas con la misma hora: que el llamador haga carga completa
+    desdeTs=ultimoTs;
+    if(vuelta===19)completo=false;
+  }
+  return{rows:Object.values(mapa),cursor:nuevo,completo:completo};
+}
+// Limita una función a como máximo 1 ejecución cada 'ms' (la última llamada pendiente se ejecuta
+// al cumplirse el plazo). Se usa para recargas disparadas por el canal en vivo: antes, en hora de
+// entregas, cada entrega de cualquier mensajero volvía a recargar la lista completa.
+function conFreno(fn,ms){
+  let t=null,ult=0;
+  return function(){
+    const ahora=Date.now();
+    if(ahora-ult>=ms){ult=ahora;fn();return;}
+    if(!t)t=setTimeout(function(){t=null;ult=Date.now();fn();},ms-(ahora-ult));
+  };
+}
+// Reemplaza/agrega por código las filas que cambiaron, sin tocar el resto.
+function mezclarPorCodigo(prev,rows){
+  if(!rows||!rows.length)return prev;
+  const nuevos={};rows.forEach(function(r){nuevos[r.codigo]=r;});
+  const out=(prev||[]).map(function(e){if(nuevos[e.codigo]){const r=nuevos[e.codigo];delete nuevos[e.codigo];return Object.assign({},e,r);}return e;});
+  Object.keys(nuevos).forEach(function(k){out.push(nuevos[k]);});
+  return out;
+}
+// Eventos nuevos del historial (id > cursorId). Sirve para saber qué piezas cambiaron de estado y
+// a qué hora real, sin volver a calcular los conjuntos "entregados/retornos por fecha real".
+async function traerHistorialNuevo(cursorId){
+  let out=[];let cur=cursorId||0;
+  for(let vuelta=0;vuelta<20;vuelta++){
+    const r=await db.from('historial_envios').select('id,codigo_envio,estado,created_at').gt('id',cur).order('id',{ascending:true}).limit(1000);
+    if(r.error)throw r.error;
+    const d=r.data||[];out=out.concat(d);
+    if(d.length)cur=d[d.length-1].id;
+    if(d.length<1000)break;
+  }
+  return{eventos:out,cursor:cur};
 }
 // fetchPorFechaRealDeEstado generaliza el mecanismo de "fecha real" (antes solo para 'entregado')
 // a CUALQUIER estado -- se agrego para el mismo caso pero con 'retorno': un envio despachado antes
@@ -2371,8 +2457,8 @@ function Dashboard(_ref7){
   // igual de confiables entre sí.
   useEffect(()=>{
     if(!db||(periodo!=='mes'&&periodo!=='semana'&&periodo!=='hoy'&&periodo!=='ayer'))return; // 'rango' y 'todos' ya tienen su propio fetch acotado mas abajo
-    let cancelado=false;
-    async function fetchExtra(esRefresco){
+    let cancelado=false;let cursorDash=null;
+    async function fetchExtra(esRefresco){ // 12-10-2026: el refresco trae solo los envíos que cambiaron (cursorDash)
       if(!esRefresco)setCargandoExtra(true);
       try{
         // Acotado por fecha en la propia consulta (antes traia la tabla ENTERA sin importar el
@@ -2384,8 +2470,10 @@ function Dashboard(_ref7){
         else if(periodo==='ayer'){const d=new Date(hoyFE+'T12:00:00');d.setDate(d.getDate()-1);const ay=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');desdeFE=hastaFE=ay;}
         else if(periodo==='semana'){const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));desdeFE=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
         else{const mes=mesFiltro||hoyFE.slice(0,7);const[y,m]=mes.split('-').map(Number);desdeFE=mes+'-01';hastaFE=mes+'-'+String(new Date(y,m,0).getDate()).padStart(2,'0');}
+        if(esRefresco&&cursorDash){const res=await traerEnviosCambiados(cursorDash,'id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at,tuvo_siniestro',desdeFE,hastaFE);if(res.completo){cursorDash=res.cursor;if(res.rows.length&&!cancelado)setExtraEnvios(prev=>mezclarPorCodigo(prev,res.rows));return;}cursorDash=null;}
+        let marcaDash=null;try{marcaDash=(await marcasCambiosEnvios()).env;}catch(_m){}
         const acumulado=await fetchPorDiasParalelo(desdeFE,hastaFE,(fecha,cursor,limite)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at,tuvo_siniestro').neq('estado','eliminado').eq('fecha',fecha).gt('id',cursor).order('id',{ascending:true}).limit(limite));
-        if(!cancelado)setExtraEnvios(acumulado);
+        if(!cancelado){setExtraEnvios(acumulado);cursorDash=marcaDash;}
       }catch(e){console.warn('Dashboard fetch extra error:',e.message);}
       if(!cancelado)setCargandoExtra(false);
     }
@@ -2393,47 +2481,51 @@ function Dashboard(_ref7){
     // Antes cada 60s: para una pantalla de solo lectura como el Dashboard (no hay riesgo de
     // pisar cambios) no hace falta tan seguido -- se sube a 3 min, igual que 'Todo' más abajo,
     // para no repetir esta consulta de más por cada pestaña de Dashboard que quede abierta.
-    const _intervalExtra=setInterval(()=>fetchExtra(true),180000);
-    return()=>{cancelado=true;clearInterval(_intervalExtra);};
+    const _limpiarExtra=intervaloVisible(()=>fetchExtra(true),120000);
+    return()=>{cancelado=true;_limpiarExtra();};
   },[periodo,mesFiltro,db]);
   // Consulta específica para Rango: se dispara cada vez que cambian las fechas elegidas,
   // trayendo exactamente ese rango directo de Supabase (sin depender del tope de 20.000 del fetch general).
   useEffect(()=>{
     if(!db||periodo!=='rango'||!desde||!hasta)return;
-    let cancelado=false;
+    let cancelado=false;let cursorRango=null;
     async function fetchRango(esRefresco){
       if(!esRefresco)setCargandoRango(true);
       try{
         // Igual que fetchExtra: paginado en paralelo con fetchPaginadoParalelo en vez de
         // pagina por pagina, para que un rango grande no tarde varios segundos en cargar.
+        if(esRefresco&&cursorRango){const res=await traerEnviosCambiados(cursorRango,'id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at,tuvo_siniestro',desde,hasta);if(res.completo){cursorRango=res.cursor;if(res.rows.length&&!cancelado)setRangoEnvios(prev=>mezclarPorCodigo(prev,res.rows));return;}cursorRango=null;}
+        let marcaRango=null;try{marcaRango=(await marcasCambiosEnvios()).env;}catch(_m){}
         const acumulado=await fetchPorDiasParalelo(desde,hasta,(fecha,cursor,limite)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at,tuvo_siniestro').neq('estado','eliminado').eq('fecha',fecha).gt('id',cursor).order('id',{ascending:true}).limit(limite));
-        if(!cancelado)setRangoEnvios(acumulado);
+        if(!cancelado){setRangoEnvios(acumulado);cursorRango=marcaRango;}
       }catch(e){console.warn('Dashboard fetch rango error:',e.message);}
       if(!cancelado)setCargandoRango(false);
     }
     fetchRango(false);
     // Mismo criterio que fetchExtra: se sube de 60s a 3 min, es de solo lectura y no necesita
     // refrescarse tan seguido.
-    const _intervalRango=setInterval(()=>fetchRango(true),180000);
-    return()=>{cancelado=true;clearInterval(_intervalRango);};
+    const _limpiarRango=intervaloVisible(()=>fetchRango(true),120000);
+    return()=>{cancelado=true;_limpiarRango();};
   },[periodo,desde,hasta,db]);
   // Consulta completa para 'Todo': trae TODA la tabla en bloques de 1000, sin tope artificial,
   // solo se carga una vez por sesión (igual que el fetch genérico) porque es costosa a alto volumen.
   useEffect(()=>{
     if(!db||periodo!=='todos')return;
-    let cancelado=false;
-    async function fetchTodoHistorico(){
-      setCargandoTodos(true);
+    let cancelado=false;let cursorTodos=null;
+    async function fetchTodoHistorico(){ // 12-10-2026: solo la primera vez trae la tabla completa; después solo los cambios
+      if(!cursorTodos)setCargandoTodos(true);
       try{
+        if(cursorTodos){const res=await traerEnviosCambiados(cursorTodos,'id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at,tuvo_siniestro',null,null);if(res.completo){cursorTodos=res.cursor;if(res.rows.length&&!cancelado)setTodosHistorico(prev=>mezclarPorCodigo(prev,res.rows));setCargandoTodos(false);return;}cursorTodos=null;}
+        let marcaTodos=null;try{marcaTodos=(await marcasCambiosEnvios()).env;}catch(_m){}
         const acumulado=await fetchPaginadoParalelo((cursor,limite)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at,tuvo_siniestro').neq('estado','eliminado').gt('id',cursor).order('id',{ascending:true}).limit(limite));
-        if(!cancelado)setTodosHistorico(acumulado);
+        if(!cancelado){setTodosHistorico(acumulado);cursorTodos=marcaTodos;}
       }catch(e){console.warn('Dashboard fetch todo histórico error:',e.message);}
       if(!cancelado)setCargandoTodos(false);
     }
     fetchTodoHistorico();
     // Refresco cada 3 min (no 60s) porque es un escaneo completo de la tabla, mas pesado que los otros.
-    const _intervalTodos=setInterval(fetchTodoHistorico,180000);
-    return()=>{cancelado=true;clearInterval(_intervalTodos);};
+    const _limpiarTodos=intervaloVisible(fetchTodoHistorico,180000);
+    return()=>{cancelado=true;_limpiarTodos();};
   },[periodo,db]);
   const lunesStr=(()=>{const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
   // Fecha de ingreso al sistema = primera entrada del historial (cuando se creó)
@@ -3564,9 +3656,9 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
     // El canal realtime de abajo ya avisa al instante ante cualquier cambio -- este intervalo
     // es solo una red de seguridad por si se pierde algún evento, así que puede ser mucho más
     // espaciado de lo que estaba (antes cada 15s, repitiendo la misma consulta sin necesidad).
-    var interval=setInterval(function(){sincronizarDesdeSupabaseRetiros(false);},120000);
+    var limpiarIv=intervaloVisible(function(){sincronizarDesdeSupabaseRetiros(false);},120000);// 12-10-2026: pausa con la pestaña oculta
     var canal=db.channel('planilla-retiros-admin-'+retiroFecha).on('postgres_changes',{event:'*',schema:'public',table:'retiros',filter:'fecha=eq.'+retiroFecha},function(){sincronizarDesdeSupabaseRetiros(false);}).subscribe();
-    return function(){clearInterval(interval);db.removeChannel(canal);};
+    return function(){limpiarIv();db.removeChannel(canal);};
   },[retiroFecha]);
 
   // ── Piezas ligadas a la colecta real del día ──────────────────────────────
@@ -3597,9 +3689,12 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
     cargarColectaDelDia();
     // Mismo criterio que el intervalo de arriba: el canal realtime ya cubre los cambios al
     // instante, este polling es solo respaldo (antes cada 20s).
-    var interval=setInterval(cargarColectaDelDia,120000);
-    var canal=db.channel('planilla-retiros-colecta-'+retiroFecha).on('postgres_changes',{event:'*',schema:'public',table:'envios',filter:'fecha=eq.'+retiroFecha},cargarColectaDelDia).subscribe();
-    return function(){clearInterval(interval);db.removeChannel(canal);};
+    // 12-10-2026: pausa con la pestaña oculta y el canal en vivo recarga como máximo cada 30 s
+    // (antes cada entrega del día de cualquier mensajero recargaba toda la colecta del día).
+    var limpiarIv=intervaloVisible(cargarColectaDelDia,120000);
+    var recargaFrenada=conFreno(cargarColectaDelDia,30000);
+    var canal=db.channel('planilla-retiros-colecta-'+retiroFecha).on('postgres_changes',{event:'*',schema:'public',table:'envios',filter:'fecha=eq.'+retiroFecha},function(){if(!document.hidden)recargaFrenada();}).subscribe();
+    return function(){limpiarIv();db.removeChannel(canal);};
   },[retiroFecha]);
   React.useEffect(function(){
     setFilas(function(prev){
@@ -9070,12 +9165,12 @@ function RetirosRider(_ref_rr){
     cargarRetiros(fechaVer);
     calcularPiezasAuto(fechaVer);
     // El canal realtime de abajo ya avisa al instante -- este polling es solo respaldo (antes cada 30s).
-    var interval=setInterval(function(){cargarRetiros(fechaVer);calcularPiezasAuto(fechaVer);},120000);
+    var limpiarIvR=intervaloVisible(function(){cargarRetiros(fechaVer);calcularPiezasAuto(fechaVer);},120000);// 12-10-2026: pausa con la app en segundo plano
     var canalId='retiros-rider-'+(usuario.nombre||'').toLowerCase().replace(/[^a-z0-9]/g,'_');
     var canal=db.channel(canalId).on('postgres_changes',{event:'*',schema:'public',table:'retiros'},function(){cargarRetiros(fechaVer);}).subscribe();
     var canalId2='colecta-piezas-'+(usuario.nombre||'').toLowerCase().replace(/[^a-z0-9]/g,'_');
     var canal2=db.channel(canalId2).on('postgres_changes',{event:'*',schema:'public',table:'envios',filter:'mensajero=eq.'+normNombre(usuario.nombre)},function(){calcularPiezasAuto(fechaVer);}).subscribe();
-    return function(){clearInterval(interval);db.removeChannel(canal);db.removeChannel(canal2);};
+    return function(){limpiarIvR();db.removeChannel(canal);db.removeChannel(canal2);};
   },[fechaVer]);
 
   // Cuenta cuántos paquetes escaneó realmente el mensajero en Colecta, por cliente, ese día
@@ -10740,9 +10835,10 @@ const ESTADOS_RIDER=[{val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#C8A84B',
   }
   useEffect(()=>{
   cargarEnvios();
-  // Recargar cada 2 minutos para mantener datos frescos
-  const interval=setInterval(cargarEnvios, 120000);
-  return ()=>clearInterval(interval);
+  // Recargar cada 2 minutos para mantener datos frescos (12-10-2026: solo con la app visible;
+  // al volver a abrirla se recarga de inmediato)
+  const limpiarIvE=intervaloVisible(cargarEnvios,120000);
+  return limpiarIvE;
 },[]);useEffect(()=>{const channel=db.channel('rider-envios').on('postgres_changes',{event:'UPDATE',schema:'public',table:'envios'},payload=>{setEnvios(prev=>prev.map(e=>e.codigo===payload.new.codigo?{...e,...payload.new}:e));}).subscribe();return()=>{db.removeChannel(channel);};},[]);const enviosFiltrados=useMemo(()=>{let base;if(filtro==='pendientes')base=envios.filter(e=>e.estado==='en_ruta'||e.estado==='reprogramado');else if(filtro==='reprogramados')base=envios.filter(e=>e.estado==='reprogramado');else if(filtro==='cancelados')base=envios.filter(e=>e.estado==='cancelado');else if(filtro==='siniestros')base=envios.filter(e=>e.estado==='siniestro');else if(filtro==='entregados')base=envios.filter(e=>e.estado==='entregado');else base=envios;if(busquedaEnvio.trim()){const q=busquedaEnvio.trim().toLowerCase();base=base.filter(e=>(e.codigo||'').toLowerCase().includes(q)||(e.destinatario||'').toLowerCase().includes(q)||(e.direccion||'').toLowerCase().includes(q)||(e.comuna||'').toLowerCase().includes(q)||(e.telefono||'').toLowerCase().includes(q)||(e.cliente||'').toLowerCase().includes(q));}return base;},[envios,filtro,busquedaEnvio]);const stats={total:envios.length,entregados:envios.filter(e=>e.estado==='entregado').length,enRuta:envios.filter(e=>e.estado==='en_ruta').length,reprogramados:envios.filter(e=>e.estado==='reprogramado').length,cancelados:envios.filter(e=>e.estado==='cancelado').length,siniestros:envios.filter(e=>e.estado==='siniestro').length,pendientes:envios.filter(e=>e.estado==='en_ruta'||e.estado==='reprogramado').length};const efectividad=stats.total>0?Math.round(stats.entregados/stats.total*100):0;return/*#__PURE__*/React.createElement("div",{style:{minHeight:'100vh',background:T.pageBg,color:T.text,fontFamily:'DM Sans,sans-serif',paddingBottom:90}},/*#__PURE__*/React.createElement("div",{style:{background:'var(--dark)',borderBottom:'3px solid var(--gold)',padding:'10px 16px',paddingTop:'max(10px,env(safe-area-inset-top))',display:'flex',alignItems:'center',justifyContent:'space-between'},className:'rider-sticky'},/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:10}},/*#__PURE__*/React.createElement("div",{style:{width:42,height:42,borderRadius:8,overflow:'hidden',flexShrink:0,border:'2px solid var(--gold)',background:'var(--dark-deep)'}},/*#__PURE__*/React.createElement("img",{src:LOGO_SRC,style:{width:'100%',height:'100%',objectFit:'cover'},onError:e=>{e.target.style.display='none';}})),/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:15,letterSpacing:2,color:'var(--gold)',lineHeight:1}},"TRANSPGSO"),/*#__PURE__*/React.createElement("div",{style:{fontSize:10,color:'rgba(200,168,75,0.5)',letterSpacing:1}},"RIDER \xB7 ",usuario.nombre.replace(/,\s*/g,' ').split(' ')[0]),pendientesSync>0&&/*#__PURE__*/React.createElement("div",{title:"Guardado en el celular, esperando señal para sincronizar",style:{marginTop:3,fontSize:10,color:'#e6a23c',background:'rgba(230,162,60,0.12)',border:'1px solid rgba(230,162,60,0.35)',borderRadius:6,padding:'2px 6px',display:'inline-flex',alignItems:'center',gap:4,fontWeight:700}},"📴 ",pendientesSync," sin sincronizar"))),/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:8}},/*#__PURE__*/React.createElement("button",{onClick:cargarEnvios,title:"Actualizar",style:{background:'none',border:'1px solid rgba(200,168,75,0.25)',borderRadius:10,padding:'9px 10px',color:'var(--gold)',cursor:'pointer',fontSize:16,minWidth:40,minHeight:40,display:'flex',alignItems:'center',justifyContent:'center'}},"\u21BA"),/*#__PURE__*/React.createElement("button",{onClick:()=>setTema(t=>t==='light'?'dark':'light'),title:tema==='light'?'Cambiar a modo oscuro':'Cambiar a modo claro',style:{background:'none',border:'1px solid rgba(200,168,75,0.25)',borderRadius:10,padding:'9px 10px',color:'var(--gold)',cursor:'pointer',fontSize:16,minWidth:40,minHeight:40,display:'flex',alignItems:'center',justifyContent:'center'}},tema==='light'?"\uD83C\uDF19":"\u2600\uFE0F"),/*#__PURE__*/React.createElement("button",{onClick:onLogout,title:"Salir",style:{background:'none',border:'1px solid rgba(255,255,255,0.12)',borderRadius:10,padding:'9px 10px',color:'rgba(255,255,255,0.4)',cursor:'pointer',fontSize:14,minWidth:40,minHeight:40,display:'flex',alignItems:'center',justifyContent:'center'}},"\uD83D\uDEAA"))),riderTab==='envios'&&/*#__PURE__*/React.createElement(React.Fragment,null,/*#__PURE__*/React.createElement("div",{style:{padding:'10px 14px 0',background:T.bandaTop}},/*#__PURE__*/React.createElement("input",{type:"text",placeholder:"🔍 Buscar por código, destinatario, dirección...",value:busquedaEnvio,onChange:e=>setBusquedaEnvio(e.target.value),style:{width:'100%',padding:'10px 12px',borderRadius:10,border:'1px solid rgba(200,168,75,0.25)',background:T.tint(0.05),color:T.text,fontSize:13,boxSizing:'border-box'}})),/*#__PURE__*/React.createElement("div",{style:{background:T.bandaTop,padding:'12px 14px',borderBottom:'1px solid rgba(200,168,75,0.2)'}},[  /*#__PURE__*/React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,marginBottom:6}},
     [{label:'TOTAL',val:stats.total,color:T.text,bg:T.tint(0.06)},{label:'ENTREGADOS',val:stats.entregados,color:'#44b876',bg:'rgba(46,125,79,0.15)'},{label:'EN RUTA',val:stats.enRuta,color:'#C8A84B',bg:'rgba(200,168,75,0.12)'},{label:'EFECT.',val:efectividad+'%',color:efectividad>=90?'#44b876':efectividad>=80?'#C8A84B':'#e05555',bg:efectividad>=90?'rgba(46,125,79,0.12)':efectividad>=80?'rgba(200,168,75,0.1)':'rgba(176,48,48,0.12)'}]
     .map((s,i)=>/*#__PURE__*/React.createElement('div',{key:i,style:{textAlign:'center',background:s.bg,borderRadius:10,padding:'10px 4px',border:'1px solid '+s.color+'33',boxShadow:`0 2px 8px rgba(0,0,0,0.2),inset 0 1px 0 ${T.tint(0.05)}`}},
@@ -11854,11 +11950,15 @@ function lsClear(){try{Object.keys(localStorage).filter(k=>k.startsWith(LS_KEY))
     }
     cargar();
     var canalId='envios-cliente-'+nombreCliente.replace(/[^a-zA-Z0-9]/g,'_');
-    var canal=db.channel(canalId).on('postgres_changes',{event:'*',schema:'public',table:'envios',filter:'cliente=eq.'+nombreCliente},function(){cargar();}).subscribe();
+    // 12-10-2026: cada cambio de un envío del cliente recargaba su período completo (en hora de
+    // entregas, decenas de veces por minuto); ahora como máximo 1 vez cada 30 s y solo con la
+    // pestaña visible.
+    var recargaFrenadaCli=conFreno(cargar,30000);
+    var canal=db.channel(canalId).on('postgres_changes',{event:'*',schema:'public',table:'envios',filter:'cliente=eq.'+nombreCliente},function(){if(!document.hidden)recargaFrenadaCli();}).subscribe();
     // El canal realtime ya cubre los cambios al instante -- este intervalo es solo una red de
     // seguridad por si se pierde algún evento, así que puede ser mucho más espaciado que antes.
-    var iv=setInterval(cargar,300000);
-    return function(){cancelado=true;db.removeChannel(canal);clearInterval(iv);};
+    var limpiarIvC=intervaloVisible(cargar,300000);
+    return function(){cancelado=true;db.removeChannel(canal);limpiarIvC();};
   },[nombreCliente,periodo,fechaDesde,fechaHasta]);
   React.useEffect(function(){
     function tryInit(){
@@ -13435,7 +13535,30 @@ useEffect(()=>{
       syncEnCurso=false;
     }
   }
+  // 12-10-2026: la carga completa de 8 días se hace solo la PRIMERA vez (al abrir la app); las
+  // siguientes vueltas traen solo los envíos con updated_at posterior al último visto (ver
+  // traerEnviosCambiados). Antes cada 3 min se volvían a bajar hasta 8.000 envíos (~4,6 MB).
+  let cursorEnvGlobal=null;
   async function intentarSync(){
+    if(cursorEnvGlobal){
+      try{
+        const desde8=new Date();desde8.setDate(desde8.getDate()-8);
+        const res=await traerEnviosCambiados(cursorEnvGlobal,'id,codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,nota_admin,fuente,peso,valor_siniestro,tuvo_siniestro,created_at,updated_at',fechaHoyCL(desde8),null);
+        if(!res.completo){cursorEnvGlobal=null;}// demasiados cambios juntos: la próxima vuelta hace carga completa
+        else cursorEnvGlobal=res.cursor;
+        if(!res.rows.length)return;
+        const local=lsLoad('gestion_envios',[]);const mapaLocal={};local.forEach(e=>{mapaLocal[e.codigo]=e;});
+        res.rows.forEach(function(sb){
+          const existente=mapaLocal[sb.codigo];
+          mapaLocal[sb.codigo]=Object.assign({},existente||{},{id:(existente&&existente.id)||sb.id,codigo:sb.codigo,cliente:sb.cliente||'',destinatario:sb.destinatario||'',telefono:sb.telefono||'',direccion:sb.direccion||'',comuna:sb.comuna||'',referencia:sb.referencia||'',fecha:sb.fecha||fechaHoyCL(),estado:sb.estado||'en_bodega',mensajero:sb.mensajero||'',monto:sb.monto||0,enUnCambio:sb.en_un_cambio||false,nota:sb.nota||'',fuente:sb.fuente||'propio',historial:(existente&&existente.historial)||[{fecha:sb.created_at||new Date().toISOString(),estado:sb.estado,nota:'Sincronizado desde Supabase'}],_synced:true});
+        });
+        const eliminadosInc=new Set(lsLoad('envios_eliminados',[]));
+        const finalInc=Object.values(mapaLocal).filter(function(e){return!eliminadosInc.has(e.codigo);});
+        lsSave('gestion_envios',finalInc);setEnviosGestion(finalInc);
+      }catch(e){console.warn('Sync incremental error:',e.message);}
+      return;
+    }
+    let marcaInicial=null;try{marcaInicial=(await marcasCambiosEnvios()).env;}catch(_e){}
     async function pedir(diasAtras,limite){
       const desde=new Date();desde.setDate(desde.getDate()-diasAtras);
       return await db.from('envios').select('id,codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,nota_admin,fuente,peso,valor_siniestro,tuvo_siniestro,created_at,updated_at').gte('fecha',fechaHoyCL(desde)).neq('estado','eliminado').order('updated_at',{ascending:false}).limit(limite);
@@ -13464,15 +13587,14 @@ useEffect(()=>{
       });
       const eliminadosInit=new Set(lsLoad('envios_eliminados',[]));
       const final=Object.values(mapaLocal).filter(function(e){return!eliminadosInit.has(e.codigo);});
-      lsSave('gestion_envios',final);setEnviosGestion(final);console.log('✓ Sync inicial:',data.length,'envíos actualizados de los últimos 8 días · '+final.length+' en total');
+      lsSave('gestion_envios',final);setEnviosGestion(final);cursorEnvGlobal=marcaInicial;console.log('✓ Sync inicial:',data.length,'envíos actualizados de los últimos 8 días · '+final.length+' en total');
     }catch(e){console.warn('Sync inicial error:',e.message);}
   }
   syncInicial();
-  // Antes cada 60s -- con el filtro de rol de arriba ya no lo hace cada rider, pero igual
-  // subimos el intervalo a 3 minutos para dejar más margen (este cache no necesita ser
-  // segundo a segundo, es de respaldo para las pantallas de administración).
-  const _autoSyncInterval2=setInterval(syncInicial,180000);
-  return()=>clearInterval(_autoSyncInterval2);
+  // Cada 3 min y solo con la pestaña visible (intervaloVisible); desde el 12-10-2026 cada vuelta
+  // trae solo los envíos que cambiaron (ver intentarSync).
+  const _limpiarSync2=intervaloVisible(syncInicial,180000);
+  return _limpiarSync2;
 },[]);
 const mensajerosActivos=useMemo(()=>mensajeros.filter(m=>m.activo!==false),[mensajeros]);const mensajerosVista=useMemo(()=>{if(!perfil||perfil.verTodo)return mensajerosActivos;return mensajerosActivos.filter(m=>perfil.mensajerosIds.includes(m.id));},[perfil,mensajerosActivos]);const mensajerosDiaVista=useMemo(()=>{if(!perfil||perfil.verTodo)return mensajerosDia;const nombresPermitidos=new Set(mensajerosVista.map(m=>m.nombre));return mensajerosDia.filter(m=>nombresPermitidos.has(m.nombre));},[perfil,mensajerosDia,mensajerosVista]);const kpiVista=useMemo(()=>{if(!perfil||perfil.verTodo)return kpi;const totEnt=mensajerosDiaVista.reduce((a,m)=>a+m.entregados,0);const totCam=mensajerosDiaVista.reduce((a,m)=>a+(m.enCamino||0),0);const totRep=mensajerosDiaVista.reduce((a,m)=>a+m.reprogram,0);const totCan=mensajerosDiaVista.reduce((a,m)=>a+m.cancelados,0);const totTotal=mensajerosDiaVista.reduce((a,m)=>a+m.total,0);return{...kpi,totalPaquetes:totTotal,entregados:totEnt,enCamino:totCam,reprogramados:totRep,cancelados:totCan};},[perfil,kpi,mensajerosDiaVista]);if(!usuarioActivo){return/*#__PURE__*/React.createElement(LoginScreen,{onLogin:u=>{setUsuarioActivo(u);lsSave('session_usuario',u);let pf=null;if(u.rol==='superadmin'){pf={nombre:u.nombre,rol:'superadmin',esAdmin:true,esSuperAdmin:true,verTodo:true,mensajerosIds:[]};}else if(u.rol==='admin'){pf={nombre:u.nombre,rol:'admin',esAdmin:true,esSuperAdmin:false,verTodo:true,mensajerosIds:[]};}else if(u.rol==='rider'){pf={nombre:u.nombre,rol:'rider',esAdmin:false,esSuperAdmin:false,verTodo:false,mensajerosIds:[]};}if(pf){setPerfil(pf);lsSave('session_perfil',pf);}}});}if((usuarioActivo==null?void 0:usuarioActivo.rol)==='cliente'){return/*#__PURE__*/React.createElement(PortalCliente,{usuario:usuarioActivo,onLogout:()=>{setUsuarioActivo(null);lsSave('session_usuario',null);}});}if((usuarioActivo==null?void 0:usuarioActivo.rol)==='rider'){return/*#__PURE__*/React.createElement(RiderApp,{usuario:usuarioActivo,mensajeros:mensajeros,onLogout:()=>{setUsuarioActivo(null);setPerfil(null);lsSave('session_usuario',null);lsSave('session_perfil',null);}});}if(!perfil){return/*#__PURE__*/React.createElement(PerfilSelector,{mensajeros:mensajeros,usuario:usuarioActivo,onConfirm:p=>{const pf2={...p,rol:p.rol||usuarioActivo.rol,esAdmin:p.esAdmin,esSuperAdmin:p.esSuperAdmin||false};setPerfil(pf2);lsSave('session_perfil',pf2);}});}const tabs=[];return/*#__PURE__*/React.createElement(React.Fragment,null,
 avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,left:0,right:0,zIndex:99999,display:'flex',flexDirection:'column',gap:4,padding:'8px 8px 0'}},
@@ -14236,8 +14358,8 @@ function MapaRutas(props){
     var canal=db.channel('ubicaciones-live').on('postgres_changes',{event:'*',schema:'public',table:'ubicaciones_mensajeros'},function(){cargarConThrottle();}).subscribe();
     // El canal realtime ya avisa al instante ante cualquier cambio de ubicación -- este
     // polling es solo respaldo por si se pierde algún evento (antes cada 30s).
-    var iv=setInterval(cargarUbicaciones,120000);
-    return function(){db.removeChannel(canal);clearInterval(iv);};
+    var limpiarIvU=intervaloVisible(cargarUbicaciones,120000);// 12-10-2026: pausa con la pestaña oculta
+    return function(){db.removeChannel(canal);limpiarIvU();};
   },[]);
 
   var _a=React.useState({});var asig=_a[0];var setAsig=_a[1];
