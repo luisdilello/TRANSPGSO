@@ -1994,6 +1994,8 @@ async function marcarEstado(p,nuevoEstadoForzado){
 const _usePagosTab=useState(()=>window._pagosTab||'pagos'),pagosTab=_usePagosTab[0],setPagosTab=_usePagosTab[1];
 
 React.useEffect(()=>{window._pagosTab=pagosTab;},[pagosTab]);
+// 12-10-2026: la subsección se elige desde el menú desplegable 'Pagos y Cobros' (index.html).
+React.useEffect(()=>{if(_ref18.subTab)setPagosTab(_ref18.subTab);},[_ref18.subTab]);
 
 // Si el rol no tiene permiso para la pestaña activa (recien entra, o un Super Admin le acaba
 // de quitar el permiso mientras la tenia abierta), lo manda a la primera pestaña que SI puede
@@ -3663,15 +3665,11 @@ const fmtCLP=n=>`$${Math.round(n).toLocaleString('es-CL')}`;function exportarCom
 
     </body></html>`);win.document.close();}if(!esAdmin)return/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px'}},/*#__PURE__*/React.createElement("div",{style:{fontSize:48,marginBottom:16}},"\uD83D\uDD10"),/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:24,color:'var(--dark)',letterSpacing:2}},"Acceso Restringido"),/*#__PURE__*/React.createElement("div",{style:{fontSize:13,color:'var(--text-soft)',marginTop:8}},"Solo los administradores pueden ver los pagos de mensajeros."));if(tabsVisibles.length===0)return/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'60px 20px'}},/*#__PURE__*/React.createElement("div",{style:{fontSize:48,marginBottom:16}},"🔐"),/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:24,color:'var(--dark)',letterSpacing:2}},"Sin acceso habilitado"),/*#__PURE__*/React.createElement("div",{style:{fontSize:13,color:'var(--text-soft)',marginTop:8}},"Tu rol no tiene ninguna sección de Pagos y Cobros habilitada. Pide a un Super Admin que te habilite al menos una en Permisos."));return React.createElement(React.Fragment,null,/*#__PURE__*/React.createElement("div",{className:"pm-root tab-"+pagosTab},/*#__PURE__*/React.createElement("div",{className:"section-head"},
 
-  /*#__PURE__*/React.createElement("div",{className:"section-title"},"Pagos ",/*#__PURE__*/React.createElement("span",null,"Mensajeros")),
+  /*#__PURE__*/React.createElement("div",{className:"section-title"},"Pagos y Cobros ",/*#__PURE__*/React.createElement("span",null,((TABS_PAGOS.find(t=>t.val===pagosTab)||{}).label)||"")),
 
   /*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:6}},
 
-    tabsVisibles.map(t=>
-
-      /*#__PURE__*/React.createElement("button",{key:t.val,onClick:()=>setPagosTab(t.val),style:{padding:'7px 16px',borderRadius:8,border:`1px solid ${pagosTab===t.val?'var(--gold)':'var(--border)'}`,background:pagosTab===t.val?'rgba(200,168,75,0.12)':'#fff',color:pagosTab===t.val?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer'}},t.label)
-
-    )
+    null
 
   ),pp.pagos&&pagosTab==='pagos'&&/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}},/*#__PURE__*/React.createElement("button",{className:'btn-futurista '+((criterioEf.bonoActivo||criterioEf.descuentoActivo)?'btn-f-gold':'btn-f-ghost'),onClick:()=>setCriterioModalAbierto(true),title:[criterioEf.bonoActivo?('Bono: \u2265'+criterioEf.umbralBonoPct+'% \u2192 +$'+Math.round(criterioEf.bono).toLocaleString('es-CL')):null,criterioEf.descuentoActivo?('Descuento: <'+criterioEf.umbralDescuentoPct+'% \u2192 -$'+Math.round(criterioEf.descuento).toLocaleString('es-CL')):null].filter(Boolean).join(' | ')||'Pago por efectividad desactivado -- clic para configurar'},"\uD83C\uDFAF Criterio Efectividad"),(criterioEf.bonoActivo||criterioEf.descuentoActivo)&&/*#__PURE__*/React.createElement("button",{className:'btn-futurista '+(vistaPreviaSinCriterio?'btn-f-danger':'btn-f-ghost'),onClick:()=>setVistaPreviaSinCriterio(v=>!v),title:vistaPreviaSinCriterio?'Viendo los montos SIN bono/descuento por efectividad (vista previa, no se guarda nada) -- clic para volver a lo real':'Ver c\u00F3mo quedar\u00EDan los montos SIN aplicar el bono/descuento por efectividad, sin tocar nada guardado'},vistaPreviaSinCriterio?"\uD83D\uDC41\uFE0F Viendo: SIN Efectividad":"\uD83D\uDC41\uFE0F Vista Previa"),/*#__PURE__*/React.createElement(ExportBtn,{label:"Exportar",onPDF:exportarResumen,onExcel:exportarPlanillaExcel}))),pp.pagos&&/*#__PURE__*/React.createElement("div",{className:"pm-pagos-main"},/*#__PURE__*/React.createElement("div",{style:{background:'#fff',border:'1px solid var(--border)',borderTop:'3px solid var(--gold)',borderRadius:10,padding:20,marginBottom:20,boxShadow:'0 2px 10px rgba(43,46,32,0.07)'}},/*#__PURE__*/React.createElement("div",{className:"form-row"},/*#__PURE__*/React.createElement("div",{className:"form-group",style:{marginBottom:0}},/*#__PURE__*/React.createElement("label",{className:"form-label"},"Período / Semana"),
 

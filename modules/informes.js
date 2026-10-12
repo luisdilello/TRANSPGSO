@@ -719,7 +719,7 @@ function Informes(props){
   // index.html carga al entrar a Informes; sus permisos siguen siendo los de 'operaciones'.
   var puedeNov=!!props.puedeVerNovedades, puedeFV=false; // Firmas en Vivo se movió a Operaciones (12-10-2026)
   var inicial=function(){
-    if(props.subInicial==='novedades'&&puedeNov)return 'novedades';
+    if(props.sub)return props.sub;
     if(puedeCierre)return 'cierre';
     if(puedeNov)return 'novedades';
     if(puedeLibre)return 'libre';
@@ -727,6 +727,9 @@ function Informes(props){
     return 'cierre';
   };
   var _sub=useState(inicial),sub=_sub[0],setSub=_sub[1];
+  // 12-10-2026: la subsección se elige desde el menú desplegable 'Informes' (index.html).
+  React.useEffect(function(){if(props.sub)setSub(props.sub);},[props.sub]);
+  var TITULOS={cierre:'Informe de cierre',novedades:'Novedades del día',libre:'Informe libre',envios:'Envíos automáticos'};
   var chipStyle=function(active){return active?{background:'rgba(200,168,75,0.18)',borderColor:'var(--gold)',color:'var(--gold)'}:undefined;};
   var opsListo=!!(window.OperacionesNovedades&&window.OperacionesFirmasEnVivo);
   var cargandoOps=h('div',{style:{textAlign:'center',padding:'40px 20px',color:'var(--text-soft)'}},'Cargando...');
@@ -736,13 +739,7 @@ function Informes(props){
   return h('div',null,
     h('style',null,'@media (max-width:820px){.informes-grid{grid-template-columns:1fr!important}}'),
     h('div',{className:'section-head'},
-      h('div',{className:'section-title'},'Informes'),
-      h('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
-        puedeCierre&&h('button',{className:'btn-secondary',style:chipStyle(sub==='cierre'),onClick:function(){setSub('cierre');}},'Informe de cierre'),
-        puedeNov&&h('button',{className:'btn-secondary',style:chipStyle(sub==='novedades'),onClick:function(){setSub('novedades');}},'Novedades del día'),
-        puedeLibre&&h('button',{className:'btn-secondary',style:chipStyle(sub==='libre'),onClick:function(){setSub('libre');}},'Informe libre'),
-        puedeFV&&h('button',{className:'btn-secondary',style:chipStyle(sub==='firmas-vivo'),onClick:function(){setSub('firmas-vivo');}},'Firmas en Vivo'),
-        esAdm&&h('button',{className:'btn-secondary',style:chipStyle(sub==='envios'),onClick:function(){setSub('envios');}},'Envíos automáticos'))
+      h('div',{className:'section-title'},'Informes ',h('span',null,TITULOS[sub]||''))
     ),
     sub==='cierre'&&puedeCierre&&h(InformeCierre,props),
     sub==='novedades'&&puedeNov&&(opsListo?h(window.OperacionesNovedades,opsProps):cargandoOps),
