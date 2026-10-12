@@ -717,7 +717,7 @@ function Informes(props){
   // Hiram + Firmas en Vivo) vive ahora acá como subsecciones. Sus componentes vienen de
   // modules/operaciones.js (window.OperacionesNovedades / window.OperacionesFirmasEnVivo), que
   // index.html carga al entrar a Informes; sus permisos siguen siendo los de 'operaciones'.
-  var puedeNov=!!props.puedeVerNovedades, puedeFV=!!props.puedeVerFirmasVivo;
+  var puedeNov=!!props.puedeVerNovedades, puedeFV=false; // Firmas en Vivo se movió a Operaciones (12-10-2026)
   var inicial=function(){
     if(props.subInicial==='novedades'&&puedeNov)return 'novedades';
     if(puedeCierre)return 'cierre';

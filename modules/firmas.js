@@ -338,7 +338,7 @@ function Firmas(props){
 
   return React.createElement('div',null,
     React.createElement('div',{className:'section-head'},
-      React.createElement('div',{className:'section-title'},'Firmas · Gestión de Entregas'),
+      React.createElement('div',{className:'section-title'},'Firmas Operadores'),
       mensajeroSel&&React.createElement('button',{className:'btn-secondary',onClick:function(){cargarEnvios(mensajeroSel);}},'↺ Actualizar')),
     React.createElement('div',{className:'info-banner'},
       '✍ Selecciona un mensajero para ver sus entregas pendientes y gestionarlas desde acá — con las mismas opciones que tiene el mensajero en su celular (estado, motivo, fotos). ',
