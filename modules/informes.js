@@ -26,6 +26,12 @@ var db=window.__app.db, fechaHoyCL=window.__app.fechaHoyCL, exportToExcel=window
 var LOGO_B64='data:image/png;base64,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';
 var HORAS_CORTE=[19,20,21,22,23];
 
+/*<NUCLEO_INFORME>*/
+// Todo lo que está entre las marcas NUCLEO_INFORME es puro (sin React ni pantalla). La Edge Function
+// 'enviar-informes' (supabase/functions/enviar-informes) descarga ESTE archivo publicado y ejecuta
+// este bloque, para que el correo automático sea idéntico al informe del panel sin redeploy.
+// OJO: no usar aquí React, window ni document fuera de funciones que el correo no llama, y no
+// mover/renombrar las marcas.
 function escHTML(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function estiloBaseHTML(titulo){
   return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5"/><meta name="theme-color" content="#C8A84B"/><title>'+escHTML(titulo)+'</title>'
@@ -218,8 +224,10 @@ function alertasHTML(A){
   if(!reales.length)items='<div style="background:#EAF6EC;border-left:4px solid #2E7D32;border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:13px;font-weight:700;color:#2E7D32">Sin alertas: todo dentro de las metas.</div>'+items;
   return tarjetaHTML('Alertas'+(reales.length?' ('+reales.length+')':''),items);
 }
-function htmlInformeCierre(dias,t,notas,periodo,generadoPor,alertas){
-  var multi=dias.length>1;
+// opciones.compacto = versión para el cuerpo de un correo (Gmail recorta los mensajes de más de
+// ~100 KB): deja alertas, resumen, cortes, clientes y notas; el informe completo va adjunto.
+function htmlInformeCierre(dias,t,notas,periodo,generadoPor,alertas,opciones){
+  var multi=dias.length>1;var compacto=!!(opciones&&opciones.compacto);
   var F=construirFilasCierre(dias,t);
   var colsCortes=[{key:'corte',label:'Corte'},{key:'entregados',label:'Entregados acumulados',num:true},{key:'pct',label:'% sobre salida a ruta',num:true},{key:'porEntregar',label:'Sin entregar',num:true}];
   var colsCli=[{key:'cliente',label:'Cliente'},{key:'llegada',label:'Llegó',num:true},{key:'noSalio',label:'Llegó y no salió',num:true},{key:'salida',label:'Salió a ruta',num:true},{key:'ent',label:'Entregados',num:true},{key:'rep',label:'Reprog.',num:true},{key:'can',label:'Cancel.',num:true},{key:'pen',label:'Pend.',num:true},{key:'pct',label:'% entrega',num:true}];
@@ -235,8 +243,9 @@ function htmlInformeCierre(dias,t,notas,periodo,generadoPor,alertas){
   var titulo='Informe de Cierre - '+periodo.label;
   return estiloBaseHTML(titulo)
     +headerReciboHTML('Informe de Cierre · Operaciones',periodo.label)
-    +barraAccionesHTML()
+    +(compacto?'':barraAccionesHTML())
     +'<div style="padding:16px;max-width:980px;margin:0 auto">'
+    +(compacto?'<div style="background:#FDF8EC;border:1px solid #EDE3C8;border-radius:10px;padding:10px 14px;font-size:12px;color:#A0842A;font-weight:700;margin-bottom:16px">Resumen del informe. El informe completo (mensajeros, calidad, carga que no salió con sus códigos y detalle) va adjunto en este correo.</div>':'')
     +(t.diaEnCurso?'<div style="background:#FFF4E5;border:1px solid #E8B04B;color:#8a5a00;border-radius:10px;padding:10px 14px;font-size:12px;font-weight:700;margin-bottom:16px">El día de hoy todavía está en curso: los cortes que aún no llegan su hora y el final de ruta se completarán solos al volver a generar el informe.</div>':'')
     +(alertas?alertasHTML(alertas):'')
     +tarjetaHTML('Resumen del '+(multi?'período':'día'),
@@ -246,29 +255,31 @@ function htmlInformeCierre(dias,t,notas,periodo,generadoPor,alertas){
       +'<div style="height:10px"></div>'
       +gridHTML(150,[infoBoxHTML('Salida: carga del día',fmtN(t.salidaDia)),infoBoxHTML('Salida: de días anteriores',fmtN(t.salidaAnt)),infoBoxHTML('Reprogramados',fmtN(t.rep)),infoBoxHTML('Cancelados',fmtN(t.can)),infoBoxHTML('Sin cierre (pendiente / otro)',fmtN(t.pen+t.otr)),infoBoxHTML('Entregados después de las 23:00',fmtN(t.tardias)),infoBoxHTML('Retenidas por operación (FERNANDOCHECK)',fmtN(t.retenidas)+(t.retenidas?' · '+fmtN(t.retenidasDia)+' del día · '+fmtN(t.retenidasEnt)+' entregadas después':''))]))
     +tarjetaHTML('Cortes horarios — avance de entrega sobre lo que salió a ruta',tablaHTML(colsCortes,F.cortes))
-    +tarjetaHTML('Carga que llegó y no salió a ruta ('+fmtN(t.noSalio)+')',
+    +(compacto?tarjetaHTML('Carga que llegó y no salió a ruta ('+fmtN(t.noSalio)+')',t.noSalio?gridHTML(200,[infoBoxHTML('Por cliente',t.noSalioPorCliente.map(function(c){return c.cliente+': '+c.n;}).join('\n')),infoBoxHTML('Estado al cierre',t.noSalioPorEstado.map(function(c){return nombreEstado(c.estado)+': '+c.n;}).join('\n'))]):'<div style="font-size:12px;color:#2E7D32;font-weight:700">Toda la carga que llegó salió a ruta.</div>'):tarjetaHTML('Carga que llegó y no salió a ruta ('+fmtN(t.noSalio)+')',
        (t.noSalio===0?'<div style="font-size:12px;color:#2E7D32;font-weight:700">Toda la carga que llegó salió a ruta '+(multi?'el mismo día.':'ese día.')+'</div>':
         gridHTML(200,[infoBoxHTML('Llegó y no salió',fmtN(t.noSalio)+' de '+fmtN(t.llegada)+' ('+pct(t.noSalio,t.llegada)+')',true),infoBoxHTML('De esas, retenidas por operación',fmtN(t.noSalioRet)),infoBoxHTML('Por cliente',t.noSalioPorCliente.map(function(c){return c.cliente+': '+c.n;}).join('\n')),infoBoxHTML('Estado al cierre',t.noSalioPorEstado.map(function(c){return nombreEstado(c.estado)+': '+c.n;}).join('\n'))])
         +'<div style="height:10px"></div>'
         +tablaHTML((multi?[{key:'dia',label:'Día'}]:[]).concat([{key:'codigo',label:'Código'},{key:'cliente',label:'Cliente'},{key:'comuna',label:'Comuna'},{key:'destinatario',label:'Destinatario'},{key:'estado',label:'Estado al cierre'}]),F.noSalio.slice(0,300),null,true)
-        +(F.noSalio.length>300?'<div style="font-size:11px;color:#888;margin-top:6px">Se muestran 300 de '+fmtN(F.noSalio.length)+'. La lista completa está en el Excel.</div>':'')))
+        +(F.noSalio.length>300?'<div style="font-size:11px;color:#888;margin-top:6px">Se muestran 300 de '+fmtN(F.noSalio.length)+'. La lista completa está en el Excel.</div>':''))))
     +tarjetaHTML('Carga por cliente',tablaHTML(colsCli,F.clientes,F.totCli))
-    +tarjetaHTML('Mensajeros que salieron a ruta',tablaHTML(colsMen,F.mens,F.totMen,true))
-    +tarjetaHTML('Calidad de entrega',
+    +(compacto?tarjetaHTML('Mensajeros y calidad',gridHTML(170,[infoBoxHTML('Mensajeros en ruta',String(t.mensajeros.length),true),infoBoxHTML('No salieron (activos)',String(t.sinSalida.length),true),infoBoxHTML('Entregas con 2+ fotos',pct(t.cal.fotos2,t.cal.ent),true),infoBoxHTML('Marcadas por operador',fmtN(t.cal.panel)+' ('+pct(t.cal.panel,t.cal.ent)+')',true)])):'')
+    +(compacto?'':tarjetaHTML('Mensajeros que salieron a ruta',tablaHTML(colsMen,F.mens,F.totMen,true)))
+    +(compacto?'':tarjetaHTML('Calidad de entrega',
        gridHTML(170,[infoBoxHTML('Entregas con 2 o más fotos',pct(t.cal.fotos2,t.cal.ent),true),infoBoxHTML('Entregas sin 2 fotos',fmtN(t.cal.sinFotos),true),infoBoxHTML('Marcadas por operador (no desde la app)',fmtN(t.cal.panel)+' ('+pct(t.cal.panel,t.cal.ent)+')',true),infoBoxHTML('Reprogramados con GPS',fmtN(t.cal.repGps)+' de '+fmtN(t.cal.rep)+' ('+pct(t.cal.repGps,t.cal.rep)+')',true)])
        +(t.marcadasPor.length?'<div style="font-size:11px;color:#888;margin:8px 0 2px">Marcadas por: '+escHTML(t.marcadasPor.map(function(u){return u.usuario+' ('+fmtN(u.n)+')';}).join(' · '))+'</div>':'')
        +'<div style="height:8px"></div>'
-       +tablaHTML([{key:'mensajero',label:'Mensajero'},{key:'ent',label:'Entregados',num:true},{key:'fotos2',label:'Con 2+ fotos',num:true},{key:'sinFotos',label:'Sin 2 fotos',num:true},{key:'panel',label:'Marcadas por operador',num:true},{key:'rep',label:'Reprog.',num:true},{key:'repGps',label:'Reprog. con GPS',num:true}],F.calidad,F.totCal,true))
-    +tarjetaHTML('Mensajeros activos que no salieron a ruta ('+F.sinSalida.length+')',
+       +tablaHTML([{key:'mensajero',label:'Mensajero'},{key:'ent',label:'Entregados',num:true},{key:'fotos2',label:'Con 2+ fotos',num:true},{key:'sinFotos',label:'Sin 2 fotos',num:true},{key:'panel',label:'Marcadas por operador',num:true},{key:'rep',label:'Reprog.',num:true},{key:'repGps',label:'Reprog. con GPS',num:true}],F.calidad,F.totCal,true)))
+    +(compacto?'':tarjetaHTML('Mensajeros activos que no salieron a ruta ('+F.sinSalida.length+')',
        (F.sinSalida.length?'<div style="font-size:11px;color:#888;margin-bottom:8px">Mensajeros activos en el sistema sin ninguna salida a ruta registrada '+(multi?'en esos días':'ese día')+'. "Entregas registradas" = entregas marcadas con su usuario aunque no haya salido a ruta ese día.</div>':'')
-       +tablaHTML([{key:'mensajero',label:'Mensajero'}].concat(multi?[{key:'dias',label:'Días sin salir',num:true}]:[]).concat([{key:'entregas',label:'Entregas registradas',num:true}]),F.sinSalida,null,true))
-    +(multi?tarjetaHTML('Detalle por día (% de entrega en cada corte)',tablaHTML(colsDia,F.porDia,null,true)):'')
+       +tablaHTML([{key:'mensajero',label:'Mensajero'}].concat(multi?[{key:'dias',label:'Días sin salir',num:true}]:[]).concat([{key:'entregas',label:'Entregas registradas',num:true}]),F.sinSalida,null,true)))
+    +(multi&&!compacto?tarjetaHTML('Detalle por día (% de entrega en cada corte)',tablaHTML(colsDia,F.porDia,null,true)):'')
     +tarjetaHTML('Notas del personal administrativo',notasHTML)
     +'</div>'
     +piePaginaHTML('Informe generado automáticamente desde el sistema. Llegó = envíos recibidos con fecha del día. Salió a ruta = envíos asignados a un mensajero ese día (incluye carga de días anteriores; no incluye las piezas retenidas por operación en el usuario FERNANDOCHECK, que se informan aparte). Cortes = entregados hasta esa hora. Final de ruta = último estado hasta las 06:00 del día siguiente. % operacional = entregados ÷ (entregados + reprogramados + cancelados).')
     +'</body></html>';
 }
 
+/*</NUCLEO_INFORME>*/
 function exportarCierreExcel(dias,t,notas,periodo){
   var multi=dias.length>1;
   var F=construirFilasCierre(dias,t);
@@ -552,8 +563,113 @@ function InformeLibre(props){
   );
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════════════
+// ENVÍOS AUTOMÁTICOS (solo admin). Cada fila de 'informe_envios' es un envío programado; los
+// procesa la Edge Function 'enviar-informes' (pg_cron cada 10 min). El correo trae un resumen en
+// el cuerpo y el informe completo adjunto. Servicio de correo: Resend (secreto RESEND_API_KEY).
+// ══════════════════════════════════════════════════════════════════════════════════════
+var DIAS_SEMANA=['','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+function describirEnvio(e){
+  if(e.tipo==='diario')return 'Todos los días a las '+e.hora+' · informa '+(e.hora>='23:00'?'el mismo día':'el día anterior');
+  if(e.tipo==='semanal')return 'Cada '+DIAS_SEMANA[e.dia_semana].toLowerCase()+' a las '+e.hora+' · informa '+(e.dia_semana===7&&e.hora>='23:00'?'la semana que termina':'la semana anterior (lunes a domingo)');
+  return 'El día 1 de cada mes a las '+e.hora+' · informa el mes anterior';
+}
+function parsearCorreos(txt){return String(txt||'').split(/[\s,;]+/).map(function(x){return x.trim().toLowerCase();}).filter(Boolean);}
+function EnviosAutomaticos(props){
+  var toast=props.toast, usuario=props.usuario;
+  var vacio=function(){return{id:null,nombre:'Informe de cierre diario',tipo:'diario',hora:'23:30',dia_semana:1,destinatarios:'',activo:true};};
+  var _l=useState(null),lista=_l[0],setLista=_l[1];
+  var _log=useState([]),log=_log[0],setLog=_log[1];
+  var _ed=useState(null),ed=_ed[0],setEd=_ed[1];
+  var _env=useState(null),enviando=_env[0],setEnviando=_env[1];
+  async function cargar(){
+    var r=await db.from('informe_envios').select('*').order('created_at',{ascending:true});
+    if(r.error){toast('No se pudieron cargar los envíos: '+r.error.message);setLista([]);return;}
+    setLista(r.data||[]);
+    var l=await db.from('informe_envios_log').select('id,created_at,nombre,periodo,destinatarios,ok,detalle,manual').order('created_at',{ascending:false}).limit(25);
+    if(!l.error)setLog(l.data||[]);
+  }
+  useEffect(function(){cargar();},[]);
+  async function guardar(){
+    var correos=parsearCorreos(ed.destinatarios);
+    var malos=correos.filter(function(c){return !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c);});
+    if(!ed.nombre.trim()){toast('Ponle un nombre');return;}
+    if(!correos.length){toast('Agrega al menos un correo');return;}
+    if(malos.length){toast('Correo no válido: '+malos.join(', '));return;}
+    var fila={nombre:ed.nombre.trim(),tipo:ed.tipo,hora:ed.hora||'23:30',dia_semana:+ed.dia_semana||1,destinatarios:correos,activo:!!ed.activo};
+    var r=ed.id?await db.from('informe_envios').update(fila).eq('id',ed.id):await db.from('informe_envios').insert(Object.assign({creado_por:(usuario&&usuario.nombre)||null},fila));
+    if(r.error){toast('No se pudo guardar: '+r.error.message);return;}
+    setEd(null);toast('Envío guardado');cargar();
+  }
+  async function alternar(e){var r=await db.from('informe_envios').update({activo:!e.activo}).eq('id',e.id);if(r.error){toast(r.error.message);return;}cargar();}
+  async function eliminar(e){if(!window.confirm('¿Eliminar el envío "'+e.nombre+'"?'))return;var r=await db.from('informe_envios').delete().eq('id',e.id);if(r.error){toast(r.error.message);return;}cargar();}
+  async function enviarAhora(e){
+    setEnviando(e.id);
+    try{
+      var r=await db.functions.invoke('enviar-informes',{body:{accion:'enviar_ahora',id:e.id}});
+      var data=r.data||{};
+      if(r.error||data.error){
+        var msg=data.error;
+        if(!msg&&r.error&&r.error.context&&typeof r.error.context.json==='function'){try{var j=await r.error.context.json();msg=j&&j.error;}catch(_e){}}
+        throw new Error(msg||(r.error&&r.error.message)||'Error desconocido');
+      }
+      toast('Enviado: '+(data.periodo||''));
+    }catch(err){toast('No se pudo enviar: '+(err&&err.message||err));}
+    setEnviando(null);cargar();
+  }
+  var set=function(k){return function(ev){var v=ev.target.type==='checkbox'?ev.target.checked:ev.target.value;setEd(function(p){var n=Object.assign({},p);n[k]=v;return n;});};};
+  return h('div',null,
+    h('div',{className:'panel',style:{marginBottom:14}},
+      h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:10}},
+        h('div',null,h('div',{className:'panel-title',style:{marginBottom:4}},'Envíos automáticos por correo'),
+          h('div',{style:{fontSize:12,color:'var(--text-soft)'}},'Tú decides qué informe sale, cuándo y a quién. El correo trae el resumen y el informe completo adjunto.')),
+        !ed&&h('button',{className:'btn-primary',onClick:function(){setEd(vacio());}},'Nuevo envío')),
+      ed&&h('div',{style:{border:'1px solid var(--border)',borderRadius:10,padding:14,marginBottom:12,background:'#fff'}},
+        h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:10}},
+          h('div',{style:{gridColumn:'1/-1'}},h('label',{className:'form-label'},'Nombre'),h('input',{className:'form-input',value:ed.nombre,onChange:set('nombre')})),
+          h('div',null,h('label',{className:'form-label'},'Informe'),h('select',{className:'form-input',value:ed.tipo,onChange:set('tipo')},h('option',{value:'diario'},'Cierre diario'),h('option',{value:'semanal'},'Cierre semanal'),h('option',{value:'mensual'},'Cierre mensual'))),
+          ed.tipo==='semanal'&&h('div',null,h('label',{className:'form-label'},'Día de envío'),h('select',{className:'form-input',value:ed.dia_semana,onChange:set('dia_semana')},[1,2,3,4,5,6,7].map(function(d){return h('option',{key:d,value:d},DIAS_SEMANA[d]);}))),
+          h('div',null,h('label',{className:'form-label'},'Hora (Chile)'),h('input',{type:'time',className:'form-input',value:ed.hora,onChange:set('hora')})),
+          h('div',{style:{gridColumn:'1/-1'}},h('label',{className:'form-label'},'Destinatarios (separados por coma o salto de línea)'),h('textarea',{className:'form-input',rows:2,value:ed.destinatarios,onChange:set('destinatarios'),placeholder:'contacto@transpgso.cl, fernando@transpgso.cl',style:{resize:'vertical',fontFamily:'inherit'}})),
+          h('label',{style:{display:'flex',alignItems:'center',gap:8,fontSize:13}},h('input',{type:'checkbox',checked:!!ed.activo,onChange:set('activo')}),'Activo')
+        ),
+        h('div',{style:{fontSize:12,color:'var(--text-soft)',marginTop:8}},describirEnvio({tipo:ed.tipo,hora:ed.hora||'23:30',dia_semana:+ed.dia_semana||1})),
+        h('div',{style:{display:'flex',gap:8,marginTop:12}},h('button',{className:'btn-primary',onClick:guardar},'Guardar'),h('button',{className:'btn-secondary',onClick:function(){setEd(null);}},'Cancelar'))
+      ),
+      lista===null?h('div',{style:{fontSize:12,color:'var(--text-soft)'}},'Cargando…'):
+      lista.length===0?h('div',{style:{fontSize:12,color:'var(--text-soft)',padding:'8px 0'}},'Todavía no hay envíos programados.'):
+      h('div',{style:{display:'flex',flexDirection:'column',gap:8}},lista.map(function(e){
+        return h('div',{key:e.id,style:{border:'1px solid var(--border)',borderLeft:'3px solid '+(e.activo?'var(--gold)':'#ccc'),borderRadius:8,padding:'10px 12px',background:'#fff',opacity:e.activo?1:0.7}},
+          h('div',{style:{display:'flex',justifyContent:'space-between',gap:10,flexWrap:'wrap'}},
+            h('div',null,h('div',{style:{fontWeight:700,fontSize:14}},e.nombre+(e.activo?'':' (pausado)')),
+              h('div',{style:{fontSize:12,color:'var(--text-mid)'}},describirEnvio(e)),
+              h('div',{style:{fontSize:12,color:'var(--text-soft)'}},'Para: '+(e.destinatarios||[]).join(', ')),
+              e.ultimo_envio_at&&h('div',{style:{fontSize:11,color:'var(--success)',marginTop:2}},'Último envío: '+fechaHoraCL(e.ultimo_envio_at)),
+              e.ultimo_error&&h('div',{style:{fontSize:11,color:'var(--danger)',marginTop:2,fontWeight:700}},'Último error: '+e.ultimo_error)),
+            h('div',{style:{display:'flex',gap:6,flexWrap:'wrap',alignItems:'flex-start'}},
+              h('button',{className:'action-btn btn-edit',disabled:enviando===e.id,onClick:function(){enviarAhora(e);}},enviando===e.id?'Enviando…':'Enviar ahora'),
+              h('button',{className:'action-btn',onClick:function(){setEd({id:e.id,nombre:e.nombre,tipo:e.tipo,hora:e.hora,dia_semana:e.dia_semana,destinatarios:(e.destinatarios||[]).join(', '),activo:e.activo});}},'Editar'),
+              h('button',{className:'action-btn',onClick:function(){alternar(e);}},e.activo?'Pausar':'Activar'),
+              h('button',{className:'action-btn',onClick:function(){eliminar(e);}},'Eliminar'))));
+      }))
+    ),
+    h('div',{className:'panel'},
+      h('div',{className:'panel-title'},'Últimos envíos'),
+      log.length===0?h('div',{style:{fontSize:12,color:'var(--text-soft)'}},'Todavía no se ha enviado ningún informe.'):
+      h('div',{style:{display:'flex',flexDirection:'column',gap:4}},log.map(function(l){
+        return h('div',{key:l.id,style:{fontSize:12,display:'flex',gap:8,flexWrap:'wrap',borderBottom:'1px solid var(--border)',padding:'5px 0'}},
+          h('span',{style:{fontFamily:'JetBrains Mono',color:'var(--text-soft)'}},fechaHoraCL(l.created_at)),
+          h('span',{style:{fontWeight:700,color:l.ok?'var(--success)':'var(--danger)'}},l.ok?'Enviado':'Falló'),
+          h('span',null,(l.manual?'(manual) ':'')+(l.detalle||l.nombre||'')),
+          h('span',{style:{color:'var(--text-soft)'}},'→ '+(l.destinatarios||[]).join(', ')));
+      }))
+    )
+  );
+}
+
 function Informes(props){
-  var puedeLibre=props.puedeVerLibre!==false, puedeCierre=props.puedeVerCierre!==false;
+  var puedeLibre=props.puedeVerLibre!==false, puedeCierre=props.puedeVerCierre!==false, esAdm=!!(props.esAdmin||props.esSuperAdmin);
   var _sub=useState(function(){return puedeCierre?'cierre':'libre';}),sub=_sub[0],setSub=_sub[1];
   var chipStyle=function(active){return active?{background:'rgba(200,168,75,0.18)',borderColor:'var(--gold)',color:'var(--gold)'}:undefined;};
   return h('div',null,
@@ -562,10 +678,12 @@ function Informes(props){
       h('div',{className:'section-title'},'Informes'),
       h('div',{style:{display:'flex',gap:8}},
         puedeCierre&&h('button',{className:'btn-secondary',style:chipStyle(sub==='cierre'),onClick:function(){setSub('cierre');}},'Informe de cierre'),
-        puedeLibre&&h('button',{className:'btn-secondary',style:chipStyle(sub==='libre'),onClick:function(){setSub('libre');}},'Informe libre'))
+        puedeLibre&&h('button',{className:'btn-secondary',style:chipStyle(sub==='libre'),onClick:function(){setSub('libre');}},'Informe libre'),
+        esAdm&&h('button',{className:'btn-secondary',style:chipStyle(sub==='envios'),onClick:function(){setSub('envios');}},'Envíos automáticos'))
     ),
     sub==='cierre'&&puedeCierre&&h(InformeCierre,props),
     sub==='libre'&&puedeLibre&&h(InformeLibre,props),
+    sub==='envios'&&esAdm&&h(EnviosAutomaticos,props),
     !puedeLibre&&!puedeCierre&&h('div',{style:{textAlign:'center',padding:'40px 20px',color:'var(--text-soft)'}},'No tienes acceso a ninguna subsección de Informes. Pídele a un administrador que te habilite el permiso desde Permisos.')
   );
 }
