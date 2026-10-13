@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1791845742;
+window.__MODULES_VERSION=1791849800;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -14282,10 +14282,21 @@ function MapaRutas(props){
   var markersBusquedaRef=React.useRef({}); // {codigo: marker}
   var _nrb=React.useState(0);var numResultadosBusqueda=_nrb[0];var setNumResultadosBusqueda=_nrb[1];
   var _bmm=React.useState(false);var buscandoMasivo=_bmm[0];var setBuscandoMasivo=_bmm[1];
+  // 12-10-2026: "Consulta de códigos" sobre el mapa (estilo Consulta Express): pegar varios
+  // códigos y ver cada uno como punto en el mapa + una lista con el estado de cada código.
+  var _cq=React.useState(false);var consultaAbierta=_cq[0];var setConsultaAbierta=_cq[1];
+  var _cqt=React.useState('');var consultaTexto=_cqt[0];var setConsultaTexto=_cqt[1];
+  var _cqr=React.useState([]);var resultadosConsulta=_cqr[0];var setResultadosConsulta=_cqr[1];
+  function marcarResultado(codigo,cambios){setResultadosConsulta(function(prev){return prev.map(function(r){return r.codigo===codigo?Object.assign({},r,cambios):r;});});}
+  function irAResultado(r){
+    var mk=markersBusquedaRef.current[r.codigo];
+    if(mk&&mapObj.current){mapObj.current.panTo(mk.getPosition());mapObj.current.setZoom(16);google.maps.event.trigger(mk,'click');}
+  }
   function limpiarBusquedaMasiva(){
     Object.keys(markersBusquedaRef.current).forEach(function(cod){markersBusquedaRef.current[cod].setMap(null);});
     markersBusquedaRef.current={};
     setNumResultadosBusqueda(0);
+    setResultadosConsulta([]);
   }
   var pinFiltroAnteriorRef=React.useRef(null);
   var pinsVisibleRef=React.useRef(true);
@@ -14934,6 +14945,14 @@ function MapaRutas(props){
     var noEncontrados=codigosUnicos.filter(function(c){return !encontradosMap[c];});
     var conDireccion=resultados.filter(function(e){return e.direccion&&e.comuna;});
     var sinDireccion=resultados.length-conDireccion.length;
+    var porCod={};resultados.forEach(function(e){porCod[e.codigo.toUpperCase()]=e;});
+    setResultadosConsulta(codigosUnicos.map(function(c){
+      var e=porCod[c];
+      if(!e)return{codigo:c,estadoBusqueda:'no_existe'};
+      var tieneDir=!!(e.direccion&&e.comuna);
+      return{codigo:e.codigo,destinatario:e.destinatario,direccion:e.direccion,comuna:e.comuna,estado:e.estado,mensajero:e.mensajero,
+        estadoBusqueda:!tieneDir?'sin_direccion':((e.lat&&e.lng)?'ubicado':'ubicando')};
+    }));
 
     var bounds=new google.maps.LatLngBounds();
     var conCoordsYa=0;
@@ -14961,6 +14980,9 @@ function MapaRutas(props){
             bounds.extend(pos);
             if(!bounds.isEmpty())mapObj.current.fitBounds(bounds,60);
             db.rpc('guardar_coords_envio',{p_codigo:e.codigo,p_lat:pos.lat,p_lng:pos.lng}).then(function(){},function(){});
+            marcarResultado(e.codigo,{estadoBusqueda:'ubicado'});
+          }else{
+            marcarResultado(e.codigo,{estadoBusqueda:'sin_ubicar'});
           }
         });
       },i*70);
@@ -15744,6 +15766,57 @@ function MapaRutas(props){
     // ── MAPA ─────────────────────────────────────────────
     React.createElement('div',{style:{flex:1,position:'relative'}},
       React.createElement('div',{ref:mapRef,style:{width:'100%',height:'100%',minHeight:500}}),
+      // Consulta de códigos (12-10-2026)
+      !consultaAbierta&&React.createElement('button',{onClick:function(){setConsultaAbierta(true);},
+        style:{position:'absolute',top:12,right:60,zIndex:5,padding:'9px 16px',borderRadius:8,border:'1px solid rgba(200,168,75,0.6)',background:'linear-gradient(135deg,#2b2e20,#1e2118)',color:'var(--gold)',fontFamily:'Bebas Neue',letterSpacing:1.5,fontSize:14,cursor:'pointer',boxShadow:'0 4px 14px rgba(0,0,0,0.35)'}
+      },'Consulta de códigos'+(resultadosConsulta.length?' ('+resultadosConsulta.length+')':'')),
+      consultaAbierta&&React.createElement('div',{style:{position:'absolute',top:12,right:12,zIndex:6,width:isMobile?'calc(100% - 24px)':360,maxHeight:'calc(100% - 24px)',display:'flex',flexDirection:'column',background:'linear-gradient(180deg,#2b2e20,#1e2118)',border:'1px solid rgba(200,168,75,0.45)',borderRadius:12,boxShadow:'0 10px 32px rgba(0,0,0,0.5)',overflow:'hidden'}},
+        React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 14px',borderBottom:'1px solid rgba(200,168,75,0.2)'}},
+          React.createElement('span',{style:{fontFamily:'Bebas Neue',letterSpacing:2,fontSize:16,color:'var(--gold)'}},'Consulta de códigos'),
+          React.createElement('button',{onClick:function(){setConsultaAbierta(false);},title:'Minimizar',style:{background:'transparent',border:'none',color:'rgba(255,255,255,0.6)',fontSize:16,cursor:'pointer'}},'✕')
+        ),
+        React.createElement('div',{style:{padding:'10px 14px'}},
+          React.createElement('textarea',{value:consultaTexto,onChange:function(e){setConsultaTexto(e.target.value);},rows:5,
+            placeholder:'Pega los códigos (uno por línea, o separados por espacio o coma)',
+            style:{width:'100%',boxSizing:'border-box',padding:'8px 10px',borderRadius:8,border:'1px solid rgba(200,168,75,0.3)',background:'rgba(255,255,255,0.05)',color:'#fff',fontFamily:'JetBrains Mono',fontSize:12,resize:'vertical'}}),
+          React.createElement('div',{style:{display:'flex',gap:8,marginTop:8}},
+            React.createElement('button',{disabled:buscandoMasivo||!consultaTexto.trim(),onClick:function(){
+                var toks=consultaTexto.split(/[\s,;]+/).map(function(t){return t.trim();}).filter(Boolean);
+                if(toks.length)buscarVariosCodigos(toks);
+              },style:{flex:1,padding:'8px',borderRadius:8,border:'none',background:'linear-gradient(135deg,#d4b050,#C8A84B)',color:'#1a1d13',fontWeight:700,fontSize:12,cursor:'pointer',opacity:(!consultaTexto.trim()||buscandoMasivo)?0.5:1}},buscandoMasivo?'Buscando...':'Ver en el mapa'),
+            React.createElement('button',{onClick:function(){setConsultaTexto('');limpiarBusquedaMasiva();},style:{padding:'8px 12px',borderRadius:8,border:'1px solid rgba(255,255,255,0.2)',background:'transparent',color:'rgba(255,255,255,0.7)',fontSize:12,cursor:'pointer'}},'Limpiar')
+          )
+        ),
+        resultadosConsulta.length>0&&(function(){
+          var cnt={ubicado:0,ubicando:0,sin_direccion:0,sin_ubicar:0,no_existe:0};
+          resultadosConsulta.forEach(function(r){cnt[r.estadoBusqueda]=(cnt[r.estadoBusqueda]||0)+1;});
+          var lbl={ubicado:'En el mapa',ubicando:'Ubicando...',sin_direccion:'Sin dirección',sin_ubicar:'Dirección no encontrada',no_existe:'No existe'};
+          var col={ubicado:'#7fd18b',ubicando:'#C8A84B',sin_direccion:'#e0a050',sin_ubicar:'#e0a050',no_existe:'#ff8a80'};
+          return React.createElement('div',{style:{display:'flex',flexDirection:'column',minHeight:0,borderTop:'1px solid rgba(200,168,75,0.2)'}},
+            React.createElement('div',{style:{padding:'8px 14px',fontSize:11,color:'rgba(255,255,255,0.7)',display:'flex',gap:10,flexWrap:'wrap'}},
+              Object.keys(cnt).filter(function(k){return cnt[k]>0;}).map(function(k){return React.createElement('span',{key:k,style:{color:col[k],fontWeight:700}},cnt[k]+' '+lbl[k].toLowerCase());})
+            ),
+            React.createElement('div',{style:{overflowY:'auto',maxHeight:isMobile?220:'45vh',padding:'0 8px 10px'}},
+              resultadosConsulta.map(function(r){
+                var clickable=r.estadoBusqueda==='ubicado';
+                return React.createElement('div',{key:r.codigo,onClick:clickable?function(){irAResultado(r);}:undefined,
+                  style:{padding:'8px 8px',margin:'4px 0',borderRadius:8,background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.06)',cursor:clickable?'pointer':'default'}},
+                  React.createElement('div',{style:{display:'flex',justifyContent:'space-between',gap:8,alignItems:'center'}},
+                    React.createElement('span',{style:{fontFamily:'JetBrains Mono',fontSize:12,color:'#fff',fontWeight:700}},r.codigo),
+                    React.createElement('span',{style:{fontSize:10,fontWeight:700,color:col[r.estadoBusqueda]}},lbl[r.estadoBusqueda])
+                  ),
+                  r.estadoBusqueda!=='no_existe'&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.65)',marginTop:3,lineHeight:1.35}},
+                    (r.destinatario||'')+(r.comuna?' · '+r.comuna:''),
+                    React.createElement('div',null,
+                      React.createElement('span',{style:{color:colorEstado(r.estado),fontWeight:700}},(r.estado||'').replace(/_/g,' ').toUpperCase()),
+                      r.mensajero?' · '+r.mensajero:'')
+                  )
+                );
+              })
+            )
+          );
+        })()
+      ),
 
       // Aviso "siguiendo a X" — mientras esté activo, el mapa se centra solo en su posición
       // y se va dibujando el recorrido (ver efecto de 'Mensajeros en tiempo real en el mapa').
