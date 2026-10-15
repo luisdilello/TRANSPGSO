@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1791849800;
+window.__MODULES_VERSION=1792083400;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -4862,10 +4862,14 @@ function ImportarPDFColecta(_ref_ipdf){
         if(bloqueActual.length>0)bloques.push(bloqueActual);
         var envioObjsPagina=[];
         bloques.forEach(function(bloqueLineas){
-          var codigo='',destinatario='',direccion='',referencia='',comuna='',flexIdx=-1;
+          var codigo='',destinatario='',direccion='',referencia='',comuna='',flexIdx=-1,fechaEtiqueta='';
           bloqueLineas.forEach(function(l,idx){
             var mCod=l.match(/Envio[:\s]+(\d[\d\s]{5,})/i);if(mCod&&!codigo)codigo=mCod[1].replace(/\s+/g,'');
             if(/FLEX/i.test(l))flexIdx=idx;
+            // 15-10-2026: fecha impresa en la etiqueta ("FLEX 13 OCT") -- es la fecha real del envío,
+            // no el día en que se importa el PDF (ver comparación de código reutilizado más abajo).
+            var mFe=l.match(/FLEX\s+(\d{1,2})\s+(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC)/i);
+            if(mFe&&!fechaEtiqueta){var hoyF=fechaHoyCL();var anio=+hoyF.slice(0,4);var mesE=meses[mFe[2].toUpperCase()];if(+mesE===12&&+hoyF.slice(5,7)===1)anio--;fechaEtiqueta=anio+'-'+mesE+'-'+String(mFe[1]).padStart(2,'0');}
             var mDir=l.match(/^Direcci[oó]n[:\s]+(.+)/i);if(mDir&&!direccion)direccion=mDir[1].trim();
             var mRef=l.match(/^Referencia[:\s]+(.+)/i);if(mRef){var rv=mRef[1].replace(/^Referencia[:\s]*/i,'').trim();if(rv&&referencia.indexOf(rv)===-1)referencia=referencia?referencia+' '+rv:rv;}
             var mDest=l.match(/^Destinatario[:\s]+(.+)/i);if(mDest&&!destinatario)destinatario=mDest[1].replace(/\([^)]*\)/g,'').trim();
@@ -4879,7 +4883,7 @@ function ImportarPDFColecta(_ref_ipdf){
             var mFlex=matchComuna(c);if(mFlex){comuna=mFlex;break;}
           }}}
           if(codigo&&codigo.length>=8){
-            var envioObj={codigo,cliente:clientePDF,destinatario,direccion,referencia,comuna,fecha:fechaHoyCL(),estado:'en_bodega',mensajero:'',monto:0,nota:referencia||'',fuente:'flex',telefono:'',foto_etiqueta:null,historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:'Importado desde PDF Flex'}]};
+            var envioObj={codigo,cliente:clientePDF,destinatario,direccion,referencia,comuna,fecha:fechaHoyCL(),fechaEtiqueta:fechaEtiqueta,estado:'en_bodega',mensajero:'',monto:0,nota:referencia||'',fuente:'flex',telefono:'',foto_etiqueta:null,historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:'Importado desde PDF Flex'}]};
             envios.push(envioObj);
             envioObjsPagina.push(envioObj);
           }
@@ -4937,7 +4941,13 @@ function ImportarPDFColecta(_ref_ipdf){
                 // MercadoLibre Flex reutiliza códigos de envíos antiguos ya cerrados (entregado/cancelado)
                 // para paquetes nuevos en otra fecha. Si la fecha del PDF no coincide con la guardada,
                 // es un paquete distinto reusando el código: se refresca todo y se reabre en bodega.
-                if(env.fecha&&curData.fecha&&env.fecha!==curData.fecha){
+                // 15-10-2026 FIX: antes se comparaba la fecha del DÍA DE IMPORTACIÓN con la guardada, así
+                // que importar tarde un PDF de envíos ya colectados/entregados los "reabría" en bodega
+                // sin mensajero (borrando la entrega). Ahora solo se trata como código reutilizado si la
+                // fecha IMPRESA en la etiqueta es POSTERIOR a la guardada y el envío ya está cerrado;
+                // si no, solo se completan los campos vacíos (el PDF prevalece en datos, no en estado).
+                var cerradoPrev=['entregado','cancelado','retorno','en_bodega_cancelado'].indexOf(curData.estado)!==-1;
+                if(env.fechaEtiqueta&&curData.fecha&&env.fechaEtiqueta>curData.fecha&&cerradoPrev){
                   upd={cliente:env.cliente,destinatario:env.destinatario,telefono:env.telefono,direccion:env.direccion,
                     comuna:env.comuna,referencia:env.referencia||'',fecha:env.fecha,estado:'en_bodega',mensajero:'',
                     monto:env.monto,nota:env.nota,fuente:env.fuente};
