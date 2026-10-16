@@ -221,11 +221,11 @@ function GestionEntregaModal(props){
     React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginBottom:8}},'Actualizar estado'),
     React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))',gap:8,marginBottom:16}},
       ESTADOS_FIRMAS.map(function(s){
-        var permitido=estadoPermitido(envio.estado,s.val,true);
+        var permitido=estadoPermitido(envio.estado,s.val,true,props.esSuperAdmin===true);
         var esActual=envio.estado===s.val;
         var esSel=estadoSel===s.val;
-        return React.createElement('button',{key:s.val,type:'button',disabled:terminal,
-          onClick:function(){if(terminal)return;setAviso('');setEstadoSel(esSel?null:s.val);},
+        return React.createElement('button',{key:s.val,type:'button',disabled:terminal||(!permitido&&!esActual),
+          onClick:function(){if(terminal||(!permitido&&!esActual))return;setAviso('');setEstadoSel(esSel?null:s.val);},
           style:{padding:'12px 8px',borderRadius:10,border:'2px solid '+(esSel?s.color:'var(--border)'),
             background:esSel?s.bg:'#fff',color:esSel?s.color:'var(--text-mid)',
             cursor:terminal?'not-allowed':'pointer',fontSize:12,fontWeight:700,textAlign:'center',
