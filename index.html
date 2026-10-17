@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1792173992;
+window.__MODULES_VERSION=1792200032;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7854,8 +7854,44 @@ function AsignacionRider(_ref_ar){
     }
     // Buscar todos en Supabase de una vez
     let encontrados={};
+    // FIX 2026-10-16: antes un error de la consulta (sesión vencida, timeout, corte a mitad) se
+    // tragaba en silencio y TODOS los códigos salían como "No existe ningún envío con este código"
+    // aunque sí existieran. Ahora: sin sesión -> se avisa que vuelva a iniciar sesión; error de red
+    // -> se guarda en la cola offline (igual que sin señal); otro error -> "no se pudo verificar".
+    let _fallaBusqueda=null,_datosB=null;
     try{
-      const {data}=await db.from('envios').select('id,codigo,cliente,destinatario,telefono,direccion,comuna,fecha,estado,mensajero,monto,nota').in('codigo',codigos);
+      const _ses=await db.auth.getSession();
+      if(!_ses||!_ses.data||!_ses.data.session)_fallaBusqueda='sesion';
+    }catch(eS){_fallaBusqueda=esErrorDeRed(eS)?'red':'error';}
+    if(!_fallaBusqueda){
+      try{
+        const _rB=await db.from('envios').select('id,codigo,cliente,destinatario,telefono,direccion,comuna,fecha,estado,mensajero,monto,nota').in('codigo',codigos);
+        _datosB=_rB.data||[];
+        if(_rB.error)_fallaBusqueda=esErrorDeRed(_rB.error)||/fetch|network|timeout|Failed/i.test(_rB.error.message||'')?'red':(/JWT|token|auth/i.test(_rB.error.message||'')?'sesion':'error');
+      }catch(eB){_fallaBusqueda=esErrorDeRed(eB)?'red':'error';}
+    }
+    if(_fallaBusqueda==='red'){
+      await encolarAccionOffline('asignacion',{codigos:codigos,mensajero:usuario.nombre},usuario.nombre);
+      setPaquetes(prev=>prev.map(p=>({...p,estado:'asignado',motivo:null})));
+      try{localStorage.removeItem(claveSesionAsig);}catch(e){}
+      window.__TRANSPGSO_GUARDANDO_CRITICO--;
+      setGuardando(false);
+      playSound('success');
+      setFinalizado(true);
+      toast('Señal inestable — quedó guardado en el celular, se confirma solo apenas vuelva la señal');
+      return;
+    }
+    if(_fallaBusqueda){
+      const _mot=_fallaBusqueda==='sesion'?'Tu sesión venció — cierra sesión, vuelve a entrar y escanea de nuevo':'No se pudo verificar en el servidor — vuelve a escanear';
+      setPaquetes(prev=>prev.map(p=>({...p,estado:'rechazado',motivo:_mot})));
+      window.__TRANSPGSO_GUARDANDO_CRITICO--;
+      setGuardando(false);
+      setFinalizado(true);
+      toast(_mot);
+      return;
+    }
+    try{
+      const data=_datosB;
       if(data) data.forEach(r=>{ encontrados[r.codigo]=r; });
       // Si no encontró alguno, buscar por ilike (código puede tener formato diferente, ej. mayúsculas
       // o guiones). Se exige coincidencia UNICA para evitar asociar el paquete equivocado cuando el
@@ -8146,10 +8182,17 @@ async function procesarCodigo(codigo){
   setModo('buscando');
   setResultado({codigo:cod});
   try{
-    const {data,error}=await db.from('envios').select('*').eq('codigo',cod).single();
-    if(error||!data){
+    const {data,error}=await db.from('envios').select('*').eq('codigo',cod).maybeSingle();
+    // FIX 2026-10-16: un error de consulta o sesión vencida ya no se muestra como "no registrado".
+    if(error){
+      playSound('error');setModo('error');
+      setResultado({codigo:cod,msg:esErrorDeRed(error)||/fetch|network|timeout/i.test(error.message||'')?'Señal inestable — no se pudo verificar el código, vuelve a escanear':(/JWT|token|auth/i.test(error.message||'')?'Tu sesión venció — cierra sesión y vuelve a entrar':'No se pudo verificar el código — vuelve a escanear')});
+      return;
+    }
+    if(!data){
+      try{const _sS=await db.auth.getSession();if(!_sS||!_sS.data||!_sS.data.session){playSound('error');setModo('error');setResultado({codigo:cod,msg:'Tu sesión venció — cierra sesión y vuelve a entrar'});return;}}catch(_e){}
       // Try case-insensitive
-      const {data:data2}=await db.from('envios').select('*').ilike('codigo',cod).single();
+      const {data:data2}=await db.from('envios').select('*').ilike('codigo',cod).maybeSingle();
       if(!data2){
         playSound('error');
         setModo('noexiste');
