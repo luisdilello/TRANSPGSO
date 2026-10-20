@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1792466787;
+window.__MODULES_VERSION=1792518305;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -796,6 +796,37 @@ var CATALOGO_PERMISOS=[
     {label:'Mensajeros',key:'mensajeros'},{label:'Clientes',key:'clientes'},{label:'Usuarios',key:'usuarios'}]},
   {label:'Cierre Mes',key:'cierre'}
 ];
+// Permiso individual "Corregir estados finales" + listado de correcciones (2026-10-20).
+// Solo visible en Permisos (Super Admin). La base además exige Super Admin para cambiar el permiso.
+function CorreccionesEstadoPanel(_rc){const toast=_rc.toast;
+  const _uA=useState([]),admins=_uA[0],setAdmins=_uA[1];
+  const _uC=useState([]),corr=_uC[0],setCorr=_uC[1];
+  function cargar(){
+    db.from('usuarios').select('id,nombre,rol,puede_corregir_estados').eq('rol','admin').eq('activo',true).order('nombre').then(r=>setAdmins((r&&r.data)||[]));
+    db.from('correcciones_estado').select('*').order('created_at',{ascending:false}).limit(200).then(r=>setCorr((r&&r.data)||[]));
+  }
+  useEffect(()=>{cargar();},[]);
+  async function toggle(u){const nv=!u.puede_corregir_estados;const r=await db.from('usuarios').update({puede_corregir_estados:nv}).eq('id',u.id);
+    if(r&&r.error){toast('Error: '+r.error.message);return;}setAdmins(prev=>prev.map(x=>x.id===u.id?{...x,puede_corregir_estados:nv}:x));toast(nv?('Permiso de corrección activado para '+u.nombre):('Permiso de corrección quitado a '+u.nombre));}
+  const fmt=d=>{try{return new Date(d).toLocaleString('es-CL',{timeZone:'America/Santiago',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return d;}};
+  return React.createElement('div',{className:'panel',style:{marginBottom:20}},
+    React.createElement('div',{className:'panel-title'},'Corrección de estados finales'),
+    React.createElement('div',{style:{fontSize:12,color:'var(--text-mid)',marginBottom:12,lineHeight:1.5}},'Quien tenga este permiso puede sacar un envío de Entregado o Retorno, o hacer otros cambios fuera del orden normal de estados. Cada corrección exige un motivo y queda registrada abajo.'),
+    React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:16}},admins.map(u=>React.createElement('label',{key:u.id,style:{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',border:'1px solid var(--border)',borderRadius:8,cursor:'pointer',background:u.puede_corregir_estados?'rgba(46,125,79,0.08)':'transparent'}},
+      React.createElement('input',{type:'checkbox',checked:!!u.puede_corregir_estados,onChange:()=>toggle(u)}),u.nombre))),
+    React.createElement('div',{style:{fontWeight:700,fontSize:13,marginBottom:8}},'Correcciones realizadas ('+corr.length+')'),
+    corr.length===0?React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)'}},'Todavía no hay correcciones.'):
+    React.createElement('div',{style:{overflowX:'auto',border:'1px solid var(--border)',borderRadius:10,maxHeight:360,overflowY:'auto'}},
+      React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:12,minWidth:640}},
+        React.createElement('thead',null,React.createElement('tr',null,['Fecha','Código','De','A','Motivo','Usuario'].map(h=>React.createElement('th',{key:h,style:{textAlign:'left',padding:'8px 10px',borderBottom:'1px solid var(--border)',color:'var(--text-mid)'}},h)))),
+        React.createElement('tbody',null,corr.map(c=>React.createElement('tr',{key:c.id},
+          React.createElement('td',{style:{padding:'7px 10px',whiteSpace:'nowrap'}},fmt(c.created_at)),
+          React.createElement('td',{style:{padding:'7px 10px',fontFamily:'JetBrains Mono'}},c.codigo),
+          React.createElement('td',{style:{padding:'7px 10px'}},estadoInfo(c.estado_anterior).label),
+          React.createElement('td',{style:{padding:'7px 10px'}},estadoInfo(c.estado_nuevo).label),
+          React.createElement('td',{style:{padding:'7px 10px'}},c.motivo),
+          React.createElement('td',{style:{padding:'7px 10px',whiteSpace:'nowrap'}},c.usuario)))))));
+}
 function Permisos(_ref_perm){let permisos=_ref_perm.permisos,setPermisos=_ref_perm.setPermisos,toast=_ref_perm.toast;
   const _uPu=useState([]),puestos=_uPu[0],setPuestos=_uPu[1];
   const _uUs=useState([]),usuariosStaff=_uUs[0],setUsuariosStaff=_uUs[1];
@@ -940,7 +971,8 @@ function Permisos(_ref_perm){let permisos=_ref_perm.permisos,setPermisos=_ref_pe
           puestos.map(p=>React.createElement('option',{key:p.id,value:p.id},p.nombre))
         )
       )))
-    )
+    ),
+    React.createElement(CorreccionesEstadoPanel,{toast})
   );
 }
 function Comunicados(_ref_com){let mensajeros=_ref_com.mensajeros||[],toast=_ref_com.toast;
@@ -5444,7 +5476,7 @@ function transicionPermitidaAdmin(actual,nuevo,esSuper){
   return t.includes(nuevo);
 }
 function motivoTransicionBloqueada(actual,nuevo){
-  if(actual==='entregado'||actual==='retorno') return estadoInfo(actual).label+' es un estado final: solo el Super Admin puede corregirlo';
+  if(actual==='entregado'||actual==='retorno') return estadoInfo(actual).label+' es un estado final: requiere el permiso de corrección de estados';
   return 'no se puede pasar de '+estadoInfo(actual).label+' a '+estadoInfo(nuevo).label;
 }
 function estadoPermitido(actual,nuevo,esAdmin,esSuper){
