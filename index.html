@@ -1114,6 +1114,21 @@ async function subirFotoStorage(base64,codigo,tag,carpeta){
     return (data&&data.publicUrl)||base64;
   }catch(e){console.warn('subirFotoStorage error:',e.message);return base64;}
 }
+// FIX 2026-10-20: las fotos de etiqueta de colecta / retiro masivo / galería se guardaban como
+// texto base64 dentro de envios.foto_etiqueta (~100 KB por paquete). Eso infló la tabla a 6,5 GB
+// y cada actualización en vivo mandaba la foto completa a todos los celulares. Ahora se suben a
+// Storage y en la tabla queda solo la URL. Si no hay señal o falla la subida, se guarda la
+// base64 como antes (no se pierde la foto) y la cola offline sigue funcionando igual.
+async function fotoAUrl(foto,codigo){
+  if(!foto||typeof foto!=='string'||foto.indexOf('data:')!==0)return foto||null;
+  if(typeof navigator!=='undefined'&&navigator.onLine===false)return foto;
+  return await subirFotoStorage(foto,codigo,'etq','etiquetas');
+}
+async function fotosInsertsAUrl(filas){
+  const conFoto=(filas||[]).filter(f=>f&&typeof f.foto_etiqueta==='string'&&f.foto_etiqueta.indexOf('data:')===0);
+  if(!conFoto.length)return;
+  await procesarConcurrencia(conFoto,async function(f){f.foto_etiqueta=await fotoAUrl(f.foto_etiqueta,f.codigo);},4);
+}
 async function subirVideoStorage(blob,codigo,tag){
   try{
     const ext=(blob.type&&blob.type.includes('mp4'))?'mp4':'webm';
@@ -4660,7 +4675,7 @@ function FotosEntregaConRecarga(_ref23b){
   }
   return React.createElement(FotosEntrega,{codigo,fotoEtiqueta,fotosEntregaExternas:fotosEntregaDB,esAdmin,onBorrarFotoEtiqueta:borrarFotoEtiqueta,onBorrarIntento:borrarIntento});
 }
-function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoEtiqueta,fotosEntregaExternas=_ref23.fotosEntregaExternas,esAdmin=_ref23.esAdmin,onBorrarFotoEtiqueta=_ref23.onBorrarFotoEtiqueta,onBorrarIntento=_ref23.onBorrarIntento;const [zoomFoto,setZoomFoto]=useState(null);const _useState54=useState([]),fotos=_useState54[0],setFotos=_useState54[1];const _useState55=useState(true),loading=_useState55[0],setLoading=_useState55[1];useEffect(()=>{if(!codigo)return;db.storage.from('evidencias').list('',{limit:500,offset:0,sortBy:{column:'created_at',order:'desc'}}).then(_ref24=>{let data=_ref24.data,error=_ref24.error;if(error){console.warn('Storage list error:',error);setLoading(false);return;}if(data&&data.length>0){const archivos=data.filter(f=>f.name&&f.name.includes(codigo));if(archivos.length>0){const urls=archivos.map(f=>{const _db$storage$from$getP=db.storage.from('evidencias').getPublicUrl(f.name),u=_db$storage$from$getP.data;return{name:f.name,url:(u==null?void 0:u.publicUrl)||''};}).filter(f=>f.url);setFotos(urls);}}setLoading(false);}).catch(e=>{console.warn('Storage error:',e);setLoading(false);});},[codigo]);// Mostrar foto de etiqueta directamente desde el campo del envio
+function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoEtiqueta,fotosEntregaExternas=_ref23.fotosEntregaExternas,esAdmin=_ref23.esAdmin,onBorrarFotoEtiqueta=_ref23.onBorrarFotoEtiqueta,onBorrarIntento=_ref23.onBorrarIntento;const [zoomFoto,setZoomFoto]=useState(null);const _useState54=useState([]),fotos=_useState54[0],setFotos=_useState54[1];const _useState55=useState(true),loading=_useState55[0],setLoading=_useState55[1];useEffect(()=>{/* FIX 2026-10-20: antes listaba la raíz completa del bucket 'evidencias' (5 s por consulta) buscando archivos por nombre, pero ahí no hay archivos sueltos: nunca encontraba nada. Las fotos vienen de foto_etiqueta y fotos_entrega. */setLoading(false);},[codigo]);// Mostrar foto de etiqueta directamente desde el campo del envio
   const fotosEtiquetaDirecta=fotoEtiqueta?[{url:fotoEtiqueta,name:'etiqueta_colecta'}]:[];
   const fotosEntregaArrCheck=fotosEntregaExternas||[];if(loading&&fotosEntregaArrCheck.length===0&&!fotoEtiqueta)return/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginBottom:16,padding:'8px 12px',background:'var(--cream)',borderRadius:7}},"\u23F3 Buscando fotos...");const allFotos=[...fotosEtiquetaDirecta,...fotos,...fotosEntregaArrCheck];const sinFotos=allFotos.length===0&&!fotoEtiqueta;if(sinFotos)return/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginBottom:16,padding:'8px 12px',background:'var(--cream)',borderRadius:7}},"\uD83D\uDCF7 Sin fotos de evidencia registradas");const fotosEtiqueta=[...fotosEtiquetaDirecta,...fotos.filter(f=>f.name.includes('__etiqueta__'))];
   const intentosEntrega=fotosEntregaExternas||[];
@@ -6056,7 +6071,7 @@ function RetiroMasivoRider(_ref_rm){
     // la vieja — si el reintento tampoco lee nada, el paquete sigue marcado como vacío y el
     // mensajero puede completar los datos a mano, que es la salida de emergencia que ya existía.
     setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{foto:foto,analizandoIA:true,datosIA:null,editando:false,editDest:undefined,editDir:undefined,editComuna:undefined}):p;});});
-    intentarConColaOffline('actualizar_envio',{codigo:codigo,campos:{foto_etiqueta:foto}},usuario&&usuario.nombre).catch(function(){});
+    fotoAUrl(foto,codigo).then(function(f){return intentarConColaOffline('actualizar_envio',{codigo:codigo,campos:{foto_etiqueta:f}},usuario&&usuario.nombre);}).catch(function(){});
     var b64=foto.split(',')[1];
     rotarImagenSiVertical(b64).then(function(b64r){
       return analizarConFallback180(b64r,'image/jpeg');
@@ -6211,7 +6226,8 @@ function RetiroMasivoRider(_ref_rm){
       if(yaExistia){
         r=await db.from('envios').update({estado:'en_bodega',mensajero:normNombre(usuario.nombre)}).eq('codigo',codigo);
       }else{
-        r=await db.from('envios').upsert({codigo:codigo,cliente:clienteNombre,estado:'en_bodega',mensajero:normNombre(usuario.nombre),fecha:fechaHoyCL(),fuente:'retiro_masivo',foto_etiqueta:fotoInicial||null,monto:0,en_un_cambio:false,peso:0,nota:'Retiro masivo - '+usuario.nombre},{onConflict:'codigo',ignoreDuplicates:false});
+        var fotoGuardarRM=fotoInicial?await fotoAUrl(fotoInicial,codigo):null;
+        r=await db.from('envios').upsert({codigo:codigo,cliente:clienteNombre,estado:'en_bodega',mensajero:normNombre(usuario.nombre),fecha:fechaHoyCL(),fuente:'retiro_masivo',foto_etiqueta:fotoGuardarRM,monto:0,en_un_cambio:false,peso:0,nota:'Retiro masivo - '+usuario.nombre},{onConflict:'codigo',ignoreDuplicates:false});
       }
       var ok=!(r&&r.error);
       setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{syncEstado:ok?(yaExistia?'guardado':'parcial'):'error',esPDF:esPDF,reingreso:yaExistia&&!esPDF}):p;});});
@@ -6322,6 +6338,7 @@ function RetiroMasivoRider(_ref_rm){
     var codigosFallidosRM=[];
     // Insertar en lotes de 50
     var LOTE=50;
+    await fotosInsertsAUrl(inserts);
     for(var i=0;i<inserts.length;i+=LOTE){
       var lote=inserts.slice(i,i+LOTE);
       try{
@@ -6381,7 +6398,7 @@ function RetiroMasivoRider(_ref_rm){
       paquetes.forEach(function(p){
         if(p.foto&&!codigosProtegidosSetRM.has(p.codigo)){
           try{
-            db.from('envios').update({foto_etiqueta:p.foto}).eq('codigo',p.codigo).then(function(){}).catch(function(){});
+            fotoAUrl(p.foto,p.codigo).then(function(f){return db.from('envios').update({foto_etiqueta:f}).eq('codigo',p.codigo);}).then(function(){}).catch(function(){});
           }catch(e){}
         }
       });
@@ -7221,6 +7238,7 @@ function ColectaRider(_ref_cr){
       // (esto es justo lo que le pasó al retiro de 166 paquetes de DMT en Retiro Masivo).
       let insertsFallaron=false;
       if(inserts.length>0){
+        await fotosInsertsAUrl(inserts);
         const {error}=await db.from('envios').upsert(inserts,{onConflict:'codigo',ignoreDuplicates:false});
         if(error){ console.warn('Upsert warning:',error.message); insertsFallaron=true; }
         else sbRegistrarHistorialLote(inserts.map(function(e){return e.codigo;}),'en_bodega','Colecta Galería '+turno,usuario.nombre,'app_mensajero');
@@ -7259,7 +7277,7 @@ function ColectaRider(_ref_cr){
             img.src=f.preview;
           });
           if(!fotoBase64){errFotos.push('Error comprimiendo imagen');return;}
-          const {error:updErr}=await db.from('envios').update({foto_etiqueta:fotoBase64}).eq('codigo',f.datos.codigo);
+          const {error:updErr}=await db.from('envios').update({foto_etiqueta:await fotoAUrl(fotoBase64,f.datos.codigo)}).eq('codigo',f.datos.codigo);
           if(updErr){errFotos.push('DB: '+updErr.message);return;}
           fotasSubidas++;
         }catch(e){errFotos.push(e.message);}
@@ -7290,7 +7308,7 @@ function ColectaRider(_ref_cr){
           await Promise.all(manuales.map(async(f,idx)=>{
             try{
               const fotoBase64=await new Promise(res=>{const img=new Image();img.onload=()=>{const MAX=600;const scale=Math.min(1,MAX/Math.max(img.width,img.height));const canvas=document.createElement('canvas');canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);res(canvas.toDataURL('image/jpeg',0.65));};img.onerror=()=>res(null);img.src=f.preview;});
-              if(fotoBase64) await db.from('envios').update({foto_etiqueta:fotoBase64}).eq('codigo',insertsManuales[idx].codigo);
+              if(fotoBase64) await db.from('envios').update({foto_etiqueta:await fotoAUrl(fotoBase64,insertsManuales[idx].codigo)}).eq('codigo',insertsManuales[idx].codigo);
             }catch(e){}
           }));
         }catch(e){console.warn('Error insertando manuales:',e.message);}
@@ -7396,7 +7414,7 @@ function ColectaRider(_ref_cr){
           if(dActual.direccion) updateFields.direccion=dActual.direccion;
           if(dActual.telefono) updateFields.telefono=dActual.telefono;
           if(dActual.comuna) updateFields.comuna=dActual.comuna;
-          if(pActual?.foto) updateFields.foto_etiqueta=pActual.foto;
+          if(pActual?.foto) updateFields.foto_etiqueta=await fotoAUrl(pActual.foto,cod);
         }
         const r=await db.from('envios').update(updateFields).eq('codigo',cod);
         if(r.error)throw r.error;
@@ -7416,6 +7434,7 @@ function ColectaRider(_ref_cr){
     // Bulk insert nuevos
     if(inserts.length>0){
       try{
+        await fotosInsertsAUrl(inserts);
         const {error}=await db.from('envios').insert(inserts);
         if(error)throw error;
         ok+=inserts.length;sbRegistrarHistorialLote(inserts.map(function(e){return e.codigo;}),'en_bodega','Colecta '+turno,usuario.nombre,'app_mensajero');
@@ -11639,7 +11658,7 @@ async function sincronizarColectaOffline(payload){
       if(dActual.direccion)updateFields.direccion=dActual.direccion;
       if(dActual.telefono)updateFields.telefono=dActual.telefono;
       if(dActual.comuna)updateFields.comuna=dActual.comuna;
-      if(pActual&&pActual.foto)updateFields.foto_etiqueta=pActual.foto;
+      if(pActual&&pActual.foto)updateFields.foto_etiqueta=await fotoAUrl(pActual.foto,cod);
     }
     const r=await db.from('envios').update(updateFields).eq('codigo',cod);
     if(r.error)throw r.error;
@@ -11647,6 +11666,7 @@ async function sincronizarColectaOffline(payload){
   }
   if(codigosUpdateOk.length>0)sbRegistrarHistorialLote(codigosUpdateOk,'en_bodega','Colecta '+payload.turno+' (sincronizado, se hizo sin señal)',payload.mensajero,'app_mensajero');
   if(inserts.length>0){
+    await fotosInsertsAUrl(inserts);
     const{error}=await db.from('envios').insert(inserts);
     if(error)throw error;
     sbRegistrarHistorialLote(inserts.map(function(e){return e.codigo;}),'en_bodega','Colecta '+payload.turno+' (sincronizado, se hizo sin señal)',payload.mensajero,'app_mensajero');
@@ -11679,6 +11699,7 @@ async function sincronizarRetiroOffline(payload){
     inserts.push({codigo:p.codigo,cliente:payload.clienteNombre,destinatario:p.editDest!=null?p.editDest:(d.destinatario||''),direccion:p.editDir!=null?p.editDir:(d.direccion||''),telefono:d.telefono||'',comuna:p.editComuna!=null?p.editComuna:(d.comuna||''),referencia:d.referencia||'',fecha:fecha,estado:'en_bodega',mensajero:normNombre(payload.mensajero),monto:0,en_un_cambio:false,peso:parseFloat(p.peso)||0,nota:'Retiro masivo - '+payload.mensajero+' (sincronizado, se hizo sin señal)',fuente:'retiro_masivo',foto_etiqueta:p.foto||null});
   });
   const LOTE=50;
+  await fotosInsertsAUrl(inserts);
   for(let i=0;i<inserts.length;i+=LOTE){
     const lote=inserts.slice(i,i+LOTE);
     const res=await db.from('envios').upsert(lote,{onConflict:'codigo',ignoreDuplicates:false});
