@@ -480,6 +480,30 @@ function exportarFirmasVivoHTML(filtrados,periodoLabel){
 // ══════════════════════════════════════════════════════════════════════════════════════
 // A-E: Cierre Diario de Rutas (informe de cierre digitalizado)
 // ══════════════════════════════════════════════════════════════════════════════════════
+
+// Resumen de retiros / colectas del día (2026-10-21): muestra por cada retiro cuántos paquetes
+// se escanearon, cuántos fueron nuevos y cuáles ya estaban registrados (otra colecta, otro cliente
+// u otro día), para que no se pierda esa información como antes.
+function RetirosResumenDia(props){
+  var fecha=props.fecha;
+  var _r=useState([]),rows=_r[0],setRows=_r[1];
+  useEffect(function(){var vivo=true;db.from('retiros_resumen').select('*').eq('fecha',fecha).order('created_at').then(function(r){if(vivo)setRows((r&&r.data)||[]);});return function(){vivo=false;};},[fecha]);
+  var hora=function(d){try{return new Date(d).toLocaleTimeString('es-CL',{timeZone:'America/Santiago',hour:'2-digit',minute:'2-digit'});}catch(e){return '';}};
+  return React.createElement('div',{className:'panel',style:{marginTop:20}},
+    React.createElement('div',{className:'panel-title'},'Retiros y colectas del día'),
+    rows.length===0?React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)'}},'Sin retiros registrados para esta fecha.'):
+    React.createElement('div',{style:{overflowX:'auto'}},React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:12,minWidth:620}},
+      React.createElement('thead',null,React.createElement('tr',null,['Hora','Mensajero','Cliente','Escaneados','Nuevos','Ya registrados','Bloqueados'].map(function(h){return React.createElement('th',{key:h,style:{textAlign:'left',padding:'7px 8px',borderBottom:'1px solid var(--border)',color:'var(--text-mid)'}},h);}))),
+      React.createElement('tbody',null,rows.map(function(r){var rep=r.repetidos||[];var blq=r.bloqueados||[];
+        return React.createElement('tr',{key:r.id,style:{verticalAlign:'top'}},
+          React.createElement('td',{style:{padding:'7px 8px'}},hora(r.created_at)),
+          React.createElement('td',{style:{padding:'7px 8px'}},r.mensajero),
+          React.createElement('td',{style:{padding:'7px 8px',fontWeight:700}},r.cliente),
+          React.createElement('td',{style:{padding:'7px 8px'}},r.escaneados),
+          React.createElement('td',{style:{padding:'7px 8px'}},r.nuevos),
+          React.createElement('td',{style:{padding:'7px 8px',color:rep.length?'#a8650a':'inherit'}},rep.length===0?'0':rep.map(function(x){return React.createElement('div',{key:x.codigo},React.createElement('span',{style:{fontFamily:'JetBrains Mono'}},x.codigo),' · '+(x.cliente||'')+' · '+(x.hora||''));})),
+          React.createElement('td',{style:{padding:'7px 8px',color:blq.length?'#b03030':'inherit'}},blq.length===0?'0':blq.map(function(x){return React.createElement('div',{key:x.codigo,style:{fontFamily:'JetBrains Mono'}},x.codigo);})));})))));
+}
 function CierreDiario(props){
   var mensajeros=props.mensajeros||[], usuario=props.usuario, esAdmin=props.esAdmin, toast=props.toast;
   var nombreUsuario=(usuario&&usuario.nombre)||'—';
@@ -814,7 +838,8 @@ function CierreDiario(props){
       !soloLectura&&React.createElement('button',{className:'btn-secondary',disabled:guardando,onClick:function(){guardar(false);}},guardando?'Guardando...':'💾 Guardar borrador'),
       !soloLectura&&React.createElement('button',{className:'btn-confirm',disabled:guardando,onClick:function(){guardar(true);}},guardando?'Guardando...':'🔒 Cerrar revisión'),
       reporteId&&React.createElement('button',{className:'btn-secondary',onClick:function(){exportarCierreHTML({fecha:fecha,turno:turno,supervisor_responsable:supervisorResponsable,jefe_responsable:jefeResponsable,estado_ruta:estadoRuta,incidencias:incidencias,firmas_checklist:firmasChecklist,firmas_excepciones:firmasExcepciones,respaldos:respaldos,respaldos_checklist:respaldosChecklist,pendientes:pendientes,resultado_revision:resultadoRevision,observaciones_generales:observacionesGenerales,fecha_hora_cierre:fechaHoraCierre,estado_reporte:estadoReporte,creado_por:creadoPor,cerrado_por:cerradoPor,ponderacion_economica:{puntosGravedadDia:puntosGravedadDia,montoMultasDia:montoMultasDia,costoDiarioOperador:costoDiarioOperador,seRecuperoCosto:seRecuperoCosto}});}},'⬇ Exportar a HTML')
-    )
+    ),
+    React.createElement(RetirosResumenDia,{fecha:fecha})
   );
 }
 

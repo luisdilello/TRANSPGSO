@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1792518305;
+window.__MODULES_VERSION=1792606176;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1320,7 +1320,7 @@ async function registrarSiniestro(codigo,mensajero,nota,opts){
 // inicial ya insertó el envio con su estado - esto solo deja la marca de quién y por qué medio entró al sistema).
 async function sbRegistrarHistorial(codigo,estado,nota,usuario,canal){try{await db.from('historial_envios').insert({envio_id:null,codigo_envio:codigo,estado,nota:nota||'',usuario:usuario||'Sistema',canal:canal||'sistema',created_at:new Date().toISOString()});}catch(e){console.warn('Registrar historial error:',e.message);}}
 // Version en lote: para inserciones masivas (colecta, importaciones) evita 1 insert por paquete.
-async function sbRegistrarHistorialLote(codigos,estado,nota,usuario,canal){try{if(!codigos||!codigos.length)return;const ts=new Date().toISOString();const filas=codigos.map(function(cod){return{envio_id:null,codigo_envio:cod,estado,nota:nota||'',usuario:usuario||'Sistema',canal:canal||'sistema',created_at:ts};});await db.from('historial_envios').insert(filas);}catch(e){console.warn('Registrar historial lote error:',e.message);}}async function obtenerFuentesExistentes(codigos){try{if(!codigos||!codigos.length)return new Map();var uniq=Array.from(new Set(codigos.filter(Boolean)));if(!uniq.length)return new Map();var res=await db.from('envios').select('codigo,fuente').in('codigo',uniq);var mapa=new Map();if(res&&res.data)res.data.forEach(function(r){mapa.set(r.codigo,r.fuente);});return mapa;}catch(e){console.warn('obtenerFuentesExistentes error:',e.message);return new Map();}}async function obtenerEnviosExistentes(codigos){try{if(!codigos||!codigos.length)return new Map();var uniq=Array.from(new Set(codigos.filter(Boolean)));if(!uniq.length)return new Map();var res=await db.from('envios').select('codigo,estado,mensajero,fuente').in('codigo',uniq);var mapa=new Map();if(res&&res.data)res.data.forEach(function(r){mapa.set(r.codigo,r);});return mapa;}catch(e){console.warn('obtenerEnviosExistentes error:',e.message);return new Map();}}
+async function sbRegistrarHistorialLote(codigos,estado,nota,usuario,canal){try{if(!codigos||!codigos.length)return;const ts=new Date().toISOString();const filas=codigos.map(function(cod){return{envio_id:null,codigo_envio:cod,estado,nota:nota||'',usuario:usuario||'Sistema',canal:canal||'sistema',created_at:ts};});await db.from('historial_envios').insert(filas);}catch(e){console.warn('Registrar historial lote error:',e.message);}}async function obtenerFuentesExistentes(codigos){try{if(!codigos||!codigos.length)return new Map();var uniq=Array.from(new Set(codigos.filter(Boolean)));if(!uniq.length)return new Map();var res=await db.from('envios').select('codigo,fuente').in('codigo',uniq);var mapa=new Map();if(res&&res.data)res.data.forEach(function(r){mapa.set(r.codigo,r.fuente);});return mapa;}catch(e){console.warn('obtenerFuentesExistentes error:',e.message);return new Map();}}async function obtenerEnviosExistentes(codigos){try{if(!codigos||!codigos.length)return new Map();var uniq=Array.from(new Set(codigos.filter(Boolean)));if(!uniq.length)return new Map();var res=await db.from('envios').select('codigo,estado,mensajero,fuente,cliente,fecha,created_at').in('codigo',uniq);var mapa=new Map();if(res&&res.data)res.data.forEach(function(r){mapa.set(r.codigo,r);});return mapa;}catch(e){console.warn('obtenerEnviosExistentes error:',e.message);return new Map();}}
 // Trae TODAS las filas de una consulta paginandola en bloques de 1000 (tope de Supabase/PostgREST),
 // pero en PARALELO en vez de pagina por pagina: pide la primera pagina pidiendo tambien el conteo
 // exacto (count:'exact'), y con ese total sabe cuantas paginas mas faltan y las pide TODAS juntas con
@@ -5856,6 +5856,11 @@ function RetiroMasivoRider(_ref_rm){
   var _s2=useState(null),clienteSel=_s2[0],setClienteSel=_s2[1];
   var _s3=useState([]),paquetes=_s3[0],setPaquetes=_s3[1];
   var _s4=useState(null),lastScan=_s4[0],setLastScan=_s4[1];
+  // FIX 2026-10-21: aviso cuando se escanea un código que YA estaba registrado (otra colecta, otro
+  // cliente u otro día). Antes la app lo aceptaba en silencio y la pantalla final lo contaba como
+  // si fuera del cliente de este retiro.
+  var _sRep=useState(null),avisoRep=_sRep[0],setAvisoRep=_sRep[1];
+  var creadosSesionRMRef=useRef(new Set());
   var _s5=useState(false),guardando=_s5[0],setGuardando=_s5[1];
   var _s6=useState(false),linternaOn=_s6[0],setLinternaOn=_s6[1];
   var _s7=useState(''),manualCode=_s7[0],setManualCode=_s7[1];
@@ -6254,6 +6259,20 @@ function RetiroMasivoRider(_ref_rm){
       var yaExistia=!!ex;
       if(yaExistia) esPDFRefRM.current.add(codigo); // tanto PDF como reingreso: no pisar con la IA de la fase 2 (ver comentario en la declaración del ref)
       var clienteNombre=clienteSel&&clienteSel.nombre?clienteSel.nombre:'Sin cliente';
+      // Re-escaneo de un paquete que se creó en ESTE mismo retiro (ej. se borró de la lista y se
+      // volvió a escanear): no es un repetido real, no se vuelve a escribir ni se duplica el historial.
+      if(yaExistia&&creadosSesionRMRef.current.has(codigo)){
+        setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{syncEstado:'parcial'}):p;});});
+        return;
+      }
+      if(yaExistia&&!esPDF){
+        var horaRep='';try{horaRep=ex.created_at?new Date(ex.created_at).toLocaleTimeString('es-CL',{timeZone:'America/Santiago',hour:'2-digit',minute:'2-digit'}):'';}catch(_h){}
+        var infoRep={cliente:ex.cliente||'',fecha:ex.fecha||'',hora:horaRep,otroCliente:!!(ex.cliente&&ex.cliente!==clienteNombre),hoy:ex.fecha===fechaHoyCL()};
+        setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{yaRegistrado:infoRep}):p;});});
+        setAvisoRep(Object.assign({codigo:codigo},infoRep));
+        setTimeout(function(){setAvisoRep(function(a){return a&&a.codigo===codigo?null:a;});},5000);
+        playSound('error');
+      }
       var r;
       if(yaExistia){
         r=await db.from('envios').update({estado:'en_bodega',mensajero:normNombre(usuario.nombre)}).eq('codigo',codigo);
@@ -6262,6 +6281,7 @@ function RetiroMasivoRider(_ref_rm){
         r=await db.from('envios').upsert({codigo:codigo,cliente:clienteNombre,estado:'en_bodega',mensajero:normNombre(usuario.nombre),fecha:fechaHoyCL(),fuente:'retiro_masivo',foto_etiqueta:fotoGuardarRM,monto:0,en_un_cambio:false,peso:0,nota:'Retiro masivo - '+usuario.nombre},{onConflict:'codigo',ignoreDuplicates:false});
       }
       var ok=!(r&&r.error);
+      if(ok&&!yaExistia)creadosSesionRMRef.current.add(codigo);
       setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{syncEstado:ok?(yaExistia?'guardado':'parcial'):'error',esPDF:esPDF,reingreso:yaExistia&&!esPDF}):p;});});
       if(ok){
         sbRegistrarHistorial(codigo,'en_bodega',esPDF?'Colecta / Retiro masivo (dato PDF preservado)':(yaExistia?'Colecta / Retiro masivo (ya estaba en el sistema, no se cuenta como nuevo ingreso)':'Colecta / Retiro masivo'),usuario.nombre,'app_mensajero');
@@ -6435,6 +6455,11 @@ function RetiroMasivoRider(_ref_rm){
         }
       });
       try{localStorage.removeItem(claveSesionRM);}catch(e){}
+      try{
+        var _rep=paquetes.filter(function(p){return p.yaRegistrado;}).map(function(p){return {codigo:p.codigo,cliente:p.yaRegistrado.cliente,fecha:p.yaRegistrado.fecha,hora:p.yaRegistrado.hora};});
+        var _blq=paquetes.filter(function(p){return p.syncEstado==='bloqueado';}).map(function(p){return {codigo:p.codigo};});
+        db.from('retiros_resumen').insert({fecha:fechaHoyCL(),mensajero:usuario.nombre,cliente:clienteNombre,escaneados:paquetes.length,nuevos:Math.max(0,paquetes.length-_rep.length-_blq.length),repetidos:_rep,bloqueados:_blq}).then(function(){}).catch(function(){});
+      }catch(_rr){}
       setFase('resumen');
       var pdfOkCount=protegidosRM.filter(function(p){return p._esPDF;}).length;
       var reingresoOkCount=protegidosRM.filter(function(p){return!p._esPDF;}).length;
@@ -6607,6 +6632,12 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
       )
     ),
     // Último scan
+    avisoRep&&React.createElement('div',{style:{position:'absolute',top:70,left:12,right:12,display:'flex',justifyContent:'center',pointerEvents:'none',zIndex:5}},
+      React.createElement('div',{style:{background:'rgba(230,160,20,0.97)',color:'#1a1406',padding:'12px 16px',borderRadius:14,boxShadow:'0 0 24px rgba(255,180,0,0.55)',border:'2px solid #ffd060',maxWidth:420,width:'100%',textAlign:'center',fontFamily:'DM Sans,sans-serif'}},
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:22,letterSpacing:1.5}},'YA ESTABA REGISTRADO'),
+        React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontWeight:700,fontSize:14,marginTop:2}},avisoRep.codigo),
+        React.createElement('div',{style:{fontSize:13,fontWeight:700,marginTop:4}},(avisoRep.cliente||'Sin cliente')+' · '+(avisoRep.hoy?('hoy '+avisoRep.hora):(avisoRep.fecha+' '+avisoRep.hora))),
+        avisoRep.otroCliente&&React.createElement('div',{style:{fontSize:12,marginTop:4}},'Es de otro cliente: sepáralo de este retiro'))),
     lastScan&&React.createElement('div',{style:{position:'absolute',bottom:120,left:0,right:0,display:'flex',justifyContent:'center',pointerEvents:'none'}},
       React.createElement('div',{style:{background:lastScan.noLeido?'rgba(180,80,0,0.95)':lastScan.duplicado?'rgba(200,0,0,0.95)':lastScan.esperandoFoto?'rgba(200,168,75,0.95)':'rgba(0,180,80,0.95)',padding:'14px 28px',borderRadius:24,fontSize:15,fontWeight:800,fontFamily:'JetBrains Mono',letterSpacing:1.5,boxShadow:lastScan.noLeido?'0 0 20px rgba(255,140,0,0.6)':lastScan.duplicado?'0 0 20px rgba(255,0,0,0.6)':lastScan.esperandoFoto?'0 0 20px rgba(200,168,75,0.6)':'0 0 20px rgba(0,255,100,0.5)',border:lastScan.noLeido?'2px solid #ff9800':lastScan.duplicado?'2px solid #ff4444':lastScan.esperandoFoto?'2px solid var(--gold)':'2px solid #00ff88',transition:'all 0.2s'}},
         lastScan.noLeido?'⚠ NO SE PUDO LEER':lastScan.duplicado?'YA ESCANEADO':lastScan.esperandoFoto?'📸 '+lastScan.codigo+'...':'✅ '+lastScan.codigo
@@ -6766,8 +6797,19 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
   return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff',fontFamily:'DM Sans,sans-serif',padding:24}},
     React.createElement('div',{style:{fontSize:60,marginBottom:16}},'✅'),
     React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:32,color:'var(--gold)',letterSpacing:3,marginBottom:8}},'RETIRO COMPLETADO'),
-    React.createElement('div',{style:{fontSize:16,color:'rgba(255,255,255,0.6)',marginBottom:8}},paquetes.length+' paquetes registrados'),
-    React.createElement('div',{style:{fontSize:13,color:'rgba(255,255,255,0.4)',marginBottom:32}},clienteSel&&clienteSel.nombre),
+    (function(){
+      var rep=paquetes.filter(function(p){return p.yaRegistrado;});
+      var blq=paquetes.filter(function(p){return p.syncEstado==='bloqueado';});
+      var nuevos=paquetes.length-rep.length-blq.length;
+      return React.createElement('div',{style:{width:'100%',maxWidth:360,marginBottom:28,textAlign:'center'}},
+        React.createElement('div',{style:{fontSize:16,color:'rgba(255,255,255,0.75)',marginBottom:6}},paquetes.length+' paquetes escaneados'),
+        React.createElement('div',{style:{fontSize:15,color:'#7fe3a6',fontWeight:700}},nuevos+' nuevos de '+((clienteSel&&clienteSel.nombre)||'este cliente')),
+        rep.length>0&&React.createElement('div',{style:{marginTop:12,background:'rgba(230,160,20,0.12)',border:'1px solid rgba(230,160,20,0.5)',borderRadius:10,padding:'10px 12px',textAlign:'left'}},
+          React.createElement('div',{style:{fontSize:13,color:'#ffc960',fontWeight:700,marginBottom:6}},rep.length+' ya estaba'+(rep.length!==1?'n':'')+' registrado'+(rep.length!==1?'s':'')+' (no se cuentan como nuevos)'),
+          rep.map(function(p){return React.createElement('div',{key:p.codigo,style:{fontSize:12,color:'rgba(255,255,255,0.8)',padding:'3px 0'}},
+            React.createElement('span',{style:{fontFamily:'JetBrains Mono',fontWeight:700}},p.codigo),' · '+(p.yaRegistrado.cliente||'Sin cliente')+' · '+(p.yaRegistrado.hoy?('hoy '+p.yaRegistrado.hora):(p.yaRegistrado.fecha+' '+p.yaRegistrado.hora)));})),
+        blq.length>0&&React.createElement('div',{style:{marginTop:10,fontSize:13,color:'#ff8f87',fontWeight:700}},blq.length+' bloqueado'+(blq.length!==1?'s':'')+': requieren revisión de un administrador'));
+    })(),
     React.createElement('button',{onClick:onClose,style:{padding:'16px 40px',borderRadius:12,border:'none',background:'linear-gradient(135deg,var(--gold),#a87d2a)',color:'var(--dark-deep)',fontFamily:'Bebas Neue',fontSize:20,letterSpacing:2,cursor:'pointer'}},'IR A MIS ENVÍOS')
   );
 }
