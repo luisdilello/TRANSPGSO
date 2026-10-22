@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1792606176;
+window.__MODULES_VERSION=1792683567;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -5861,6 +5861,7 @@ function RetiroMasivoRider(_ref_rm){
   // si fuera del cliente de este retiro.
   var _sRep=useState(null),avisoRep=_sRep[0],setAvisoRep=_sRep[1];
   var creadosSesionRMRef=useRef(new Set());
+  var inicioRetiroRMRef=useRef(null); // ms del primer escaneo de ESTE retiro (o del recuperado)
   var _s5=useState(false),guardando=_s5[0],setGuardando=_s5[1];
   var _s6=useState(false),linternaOn=_s6[0],setLinternaOn=_s6[1];
   var _s7=useState(''),manualCode=_s7[0],setManualCode=_s7[1];
@@ -5922,6 +5923,8 @@ function RetiroMasivoRider(_ref_rm){
     setClienteSel(sesionRecuperableRM.clienteSel);
     setPaquetes(sesionRecuperableRM.paquetes);
     codigosRef.current=new Set(sesionRecuperableRM.paquetes.map(function(p){return p.codigo;}));
+    sesionRecuperableRM.paquetes.forEach(function(p){creadosSesionRMRef.current.add(p.codigo);});
+    try{var _ts=sesionRecuperableRM.paquetes.map(function(p){return p.ts?new Date(p.ts).getTime():NaN;}).filter(function(x){return!isNaN(x);});inicioRetiroRMRef.current=_ts.length?Math.min.apply(null,_ts):Date.now();}catch(_e){inicioRetiroRMRef.current=Date.now();}
     setFase('escaneando');
     setSesionRecuperableRM(null);
   }
@@ -6165,6 +6168,7 @@ function RetiroMasivoRider(_ref_rm){
       return;
     }
     codigosRef.current.add(codigo);
+    if(!inicioRetiroRMRef.current)inicioRetiroRMRef.current=Date.now();
     playSound('scan');
     setLastScan({codigo:codigo,esperandoFoto:true});
     setScanEstado('alineando');
@@ -6261,7 +6265,17 @@ function RetiroMasivoRider(_ref_rm){
       var clienteNombre=clienteSel&&clienteSel.nombre?clienteSel.nombre:'Sin cliente';
       // Re-escaneo de un paquete que se creó en ESTE mismo retiro (ej. se borró de la lista y se
       // volvió a escanear): no es un repetido real, no se vuelve a escribir ni se duplica el historial.
-      if(yaExistia&&creadosSesionRMRef.current.has(codigo)){
+      // FIX 2026-10-22: además de la memoria del retiro (que se pierde si la app se recarga a mitad),
+      // se reconoce como "de este mismo retiro" un paquete del mismo cliente, cargado por Retiro
+      // Masivo desde que empezó este retiro. Así ya no aparece como "ya estaba registrado" un
+      // paquete que se sacó de la lista y se volvió a escanear.
+      var _mismoRetiro=false;
+      try{
+        var _ini=inicioRetiroRMRef.current;
+        _mismoRetiro=!!(ex&&ex.fuente==='retiro_masivo'&&ex.cliente===clienteNombre&&ex.fecha===fechaHoyCL()&&ex.created_at&&_ini&&new Date(ex.created_at).getTime()>=_ini-120000);
+      }catch(_m){}
+      if(yaExistia&&(creadosSesionRMRef.current.has(codigo)||_mismoRetiro)){
+        creadosSesionRMRef.current.add(codigo);
         setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{syncEstado:'parcial'}):p;});});
         return;
       }
@@ -6646,7 +6660,7 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
     // Bottom bar
     React.createElement('div',{style:{position:'absolute',bottom:0,left:0,right:0,background:'linear-gradient(to top,rgba(0,0,0,0.9),transparent)',padding:'16px',paddingBottom:'max(16px,env(safe-area-inset-bottom))'}},
       React.createElement('div',{style:{display:'flex',gap:10}},
-        React.createElement('button',{onClick:function(){detenerScanner();setFase('seleccion');setPaquetes([]);codigosRef.current=new Set();},style:{flex:1,padding:'12px',borderRadius:10,border:'1px solid rgba(255,255,255,0.2)',background:'transparent',color:'rgba(255,255,255,0.5)',fontFamily:'Bebas Neue',fontSize:15,cursor:'pointer'}},'CANCELAR'),
+        React.createElement('button',{onClick:function(){detenerScanner();setFase('seleccion');setPaquetes([]);codigosRef.current=new Set();creadosSesionRMRef.current=new Set();inicioRetiroRMRef.current=null;},style:{flex:1,padding:'12px',borderRadius:10,border:'1px solid rgba(255,255,255,0.2)',background:'transparent',color:'rgba(255,255,255,0.5)',fontFamily:'Bebas Neue',fontSize:15,cursor:'pointer'}},'CANCELAR'),
         paquetes.length>0&&React.createElement('button',{onClick:function(){detenerScanner();setFase('revision');},style:{flex:2,padding:'12px',borderRadius:10,border:'none',background:'linear-gradient(135deg,var(--gold),#a87d2a)',color:'var(--dark-deep)',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,cursor:'pointer'}},'REVISAR '+paquetes.length+' PAQUETES →')
       )
     ),
@@ -6772,7 +6786,7 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
         analizando===0&&vaciosTotalRM>0&&React.createElement('div',{style:{textAlign:'center',fontSize:12,color:'#ff5555',fontWeight:800,marginBottom:8}},'🚫 '+vaciosTotalRM+' paquete'+(vaciosTotalRM>1?'s':'')+' sin ningún dato (marcados en rojo fuerte arriba) — reescanea la foto con 🔁 o escribe los datos a mano con ✎ para poder confirmar'),
         analizando===0&&vaciosTotalRM===0&&incompletosRM>0&&React.createElement('div',{style:{textAlign:'center',fontSize:12,color:'#ff8a8a',fontWeight:700,marginBottom:8}},'⚠ '+incompletosRM+' paquete'+(incompletosRM>1?'s':'')+' con datos incompletos (marcados en rojo arriba) — revísalos antes de confirmar si puedes'),
         React.createElement('div',{style:{display:'flex',gap:10}},
-          React.createElement('button',{onClick:function(){setFase('seleccion');setPaquetes([]);codigosRef.current=new Set();},style:{flex:1,padding:'14px',borderRadius:10,border:'1px solid rgba(255,255,255,0.15)',background:'transparent',color:'rgba(255,255,255,0.4)',fontFamily:'Bebas Neue',fontSize:15,cursor:'pointer'}},'CANCELAR'),
+          React.createElement('button',{onClick:function(){setFase('seleccion');setPaquetes([]);codigosRef.current=new Set();creadosSesionRMRef.current=new Set();inicioRetiroRMRef.current=null;},style:{flex:1,padding:'14px',borderRadius:10,border:'1px solid rgba(255,255,255,0.15)',background:'transparent',color:'rgba(255,255,255,0.4)',fontFamily:'Bebas Neue',fontSize:15,cursor:'pointer'}},'CANCELAR'),
           // Blindaje: mientras haya paquetes con la etiqueta completa y CERO datos, no se puede
           // confirmar el lote — hay que reescanear o completar a mano primero. Los incompletos
           // (falta solo un campo, típico de etiquetas chicas dobladas) NO bloquean, solo avisan.
