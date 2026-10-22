@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1792683567;
+window.__MODULES_VERSION=1792683834;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -6286,6 +6286,11 @@ function RetiroMasivoRider(_ref_rm){
         setAvisoRep(Object.assign({codigo:codigo},infoRep));
         setTimeout(function(){setAvisoRep(function(a){return a&&a.codigo===codigo?null:a;});},5000);
         playSound('error');
+        // FIX 2026-10-22 (regla de Luis): el PRIMER registro se respeta. Un código que ya estaba
+        // registrado (y no viene del PDF) no se modifica desde la app: ni estado, ni mensajero, ni
+        // cliente, ni historial. Cualquier corrección se hace desde el panel administrativo.
+        setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{syncEstado:'guardado',reingreso:true}):p;});});
+        return;
       }
       var r;
       if(yaExistia){
@@ -6428,7 +6433,9 @@ function RetiroMasivoRider(_ref_rm){
     // tocar los datos que ya tenían ni subir la foto del mensajero encima — ese dato ya es el
     // mejor registro que hay, sea porque vino del PDF o porque ya se había capturado antes.
     if(protegidosRM.length>0){
-      await procesarConcurrencia(protegidosRM,async function(p){
+      // Solo los del PDF se confirman (estado+mensajero). Los que ya tenían otro registro NO se
+      // tocan: se respeta el primer registro (cambios solo desde el panel administrativo).
+      await procesarConcurrencia(protegidosRM.filter(function(p){return p._esPDF;}),async function(p){
         try{
           var r=await db.from('envios').update({estado:'en_bodega',mensajero:normNombre(usuario.nombre)}).eq('codigo',p.codigo);
           if(r.error)throw r.error;
@@ -6442,7 +6449,7 @@ function RetiroMasivoRider(_ref_rm){
       },8);
       var protegidosOkRM=protegidosRM.filter(function(p){return codigosFallidosRM.indexOf(p.codigo)===-1;});
       var protegidosOkPDF=protegidosOkRM.filter(function(p){return p._esPDF;});
-      var protegidosOkReingreso=protegidosOkRM.filter(function(p){return!p._esPDF;});
+      var protegidosOkReingreso=[]; // ya no se modifican ni se anotan: se respeta el primer registro
       if(protegidosOkPDF.length>0) sbRegistrarHistorialLote(protegidosOkPDF.map(function(p){return p.codigo;}),'en_bodega','Colecta / Retiro masivo (dato PDF preservado)',usuario.nombre,'app_mensajero');
       if(protegidosOkReingreso.length>0) sbRegistrarHistorialLote(protegidosOkReingreso.map(function(p){return p.codigo;}),'en_bodega','Colecta / Retiro masivo (ya estaba en el sistema, no se cuenta como nuevo ingreso)',usuario.nombre,'app_mensajero');
     }
@@ -6916,6 +6923,8 @@ function ColectaRider(_ref_cr){
     if(sesionRecuperableCol.turno) setTurno(sesionRecuperableCol.turno);
     setPaquetes(sesionRecuperableCol.paquetes);
     codigosRef.current=new Set(sesionRecuperableCol.paquetes.map(function(p){return p.codigo;}));
+    sesionRecuperableCol.paquetes.forEach(function(p){creadosSesionColRef.current.add(p.codigo);});
+    try{var _tsC=sesionRecuperableCol.paquetes.map(function(p){return p.ts?new Date(p.ts).getTime():NaN;}).filter(function(x){return!isNaN(x);});inicioColRef.current=_tsC.length?Math.min.apply(null,_tsC):Date.now();}catch(_e){inicioColRef.current=Date.now();}
     setFase('escaneo');
     setSesionRecuperableCol(null);
   }
@@ -6939,6 +6948,9 @@ function ColectaRider(_ref_cr){
   const scannerRef=useRef(null);
   const procesandoRef=useRef(false);
   const codigosRef=useRef(new Set());
+  const creadosSesionColRef=useRef(new Set()); // códigos creados en ESTA colecta
+  const inicioColRef=useRef(null);
+  function esDeEstaColecta(ex,clienteNombre){try{return !!(ex&&String(ex.fuente||'').indexOf('colecta_')===0&&ex.cliente===clienteNombre&&ex.fecha===fechaHoyCL()&&ex.created_at&&inicioColRef.current&&new Date(ex.created_at).getTime()>=inicioColRef.current-120000);}catch(e){return false;}}
   const esPDFRefCol=useRef(new Set()); // códigos detectados como protegidos por PDF, para no pisarlos en la fase 2
 
   useEffect(()=>{
@@ -7016,6 +7028,7 @@ function ColectaRider(_ref_cr){
       return;
     }
     codigosRef.current.add(codigo);
+    if(!inicioColRef.current)inicioColRef.current=Date.now();
     playSound('success');
     setPaquetes(prev=>[{codigo,raw,estado:'pendiente',datos:null,ts:new Date().toISOString(),syncEstado:'guardando'},...prev]);
     setLastScan({codigo,nuevo:true,esperandoFoto:true});
@@ -7036,6 +7049,22 @@ function ColectaRider(_ref_cr){
       var esPDF=ex&&ex.fuente==='flex';
       if(esPDF) esPDFRefCol.current.add(codigo);
       var clienteNombre=clienteSel?.nombre||clienteSel||'Sin cliente';
+      // FIX 2026-10-22: el primer registro se respeta. Si el código ya existía (y no es del PDF):
+      // - si se creó en ESTA misma colecta (re-escaneo), no se toca y no se avisa;
+      // - si es otro registro, se avisa y NO se modifica nada (cambios solo desde el panel).
+      if(ex&&!esPDF){
+        if(creadosSesionColRef.current.has(codigo)||esDeEstaColecta(ex,clienteNombre)){
+          creadosSesionColRef.current.add(codigo);
+          setPaquetes(prev=>prev.map(p=>p.codigo===codigo?{...p,syncEstado:'parcial'}:p));
+          return;
+        }
+        var horaC='';try{horaC=ex.created_at?new Date(ex.created_at).toLocaleTimeString('es-CL',{timeZone:'America/Santiago',hour:'2-digit',minute:'2-digit'}):'';}catch(_h){}
+        var infoC={cliente:ex.cliente||'',fecha:ex.fecha||'',hora:horaC,hoy:ex.fecha===fechaHoyCL(),otroCliente:!!(ex.cliente&&ex.cliente!==clienteNombre)};
+        setPaquetes(prev=>prev.map(p=>p.codigo===codigo?{...p,syncEstado:'guardado',yaRegistrado:infoC}:p));
+        playSound('error');
+        toast('Ya estaba registrado: '+codigo+' · '+(infoC.cliente||'Sin cliente')+' · '+(infoC.hoy?('hoy '+infoC.hora):(infoC.fecha+' '+infoC.hora))+(infoC.otroCliente?' · es de otro cliente, sepáralo':'')+'. No se modificó.');
+        return;
+      }
       var r;
       if(esPDF){
         r=await db.from('envios').update({estado:'en_bodega',mensajero:normNombre(usuario.nombre)}).eq('codigo',codigo);
@@ -7045,6 +7074,7 @@ function ColectaRider(_ref_cr){
         r=await db.from('envios').insert({codigo:codigo,cliente:clienteNombre,estado:'en_bodega',fuente:'colecta_'+turno,mensajero:normNombre(usuario.nombre),destinatario:'',direccion:'',telefono:'',comuna:'',referencia:'',fecha:fechaHoyCL(),monto:0,en_un_cambio:false,nota:'Colecta '+turno+' - '+usuario.nombre});
       }
       var ok=!(r&&r.error);
+      if(ok&&!ex)creadosSesionColRef.current.add(codigo);
       setPaquetes(prev=>prev.map(p=>p.codigo===codigo?{...p,syncEstado:ok?(esPDF?'guardado':'parcial'):'error',esPDF:esPDF}:p));
       if(ok){
         sbRegistrarHistorial(codigo,'en_bodega',esPDF?'Colecta '+turno+' (dato PDF preservado)':(ex?'Colecta '+turno+' (ya estaba en el sistema)':'Colecta '+turno),usuario.nombre,'app_mensajero');
@@ -7250,6 +7280,13 @@ function ColectaRider(_ref_cr){
       var fuentesG=await obtenerFuentesExistentes([codigo]);
       var esPDF=fuentesG.get(codigo)==='flex';
       var clienteNombre=clienteSel?.nombre||clienteSel||'Sin cliente';
+      // El primer registro se respeta (2026-10-22): si el código ya tenía otro registro (no PDF),
+      // no se pisa con la foto de galería. Cambios solo desde el panel administrativo.
+      if(fuentesG.has(codigo)&&!esPDF){
+        setFotosGaleria(prev=>prev.map(f=>f.datos&&f.datos.codigo===codigo?{...f,syncEstado:'guardado'}:f));
+        if(!creadosSesionColRef.current.has(codigo)){playSound('error');toast('Ya estaba registrado: '+codigo+'. No se modificó.');}
+        return;
+      }
       var r;
       if(esPDF){
         r=await db.from('envios').update({estado:'en_ruta',mensajero:normNombre(usuario.nombre)}).eq('codigo',codigo);
@@ -7257,6 +7294,7 @@ function ColectaRider(_ref_cr){
         r=await db.from('envios').upsert({codigo:codigo,cliente:clienteNombre,estado:'en_ruta',fuente:'colecta_galeria_'+turno,mensajero:normNombre(usuario.nombre),destinatario:datos.destinatario||'',direccion:datos.direccion||'',telefono:datos.telefono||'',comuna:datos.comuna?(matchComuna(datos.comuna)||String(datos.comuna).trim().toUpperCase()):'',referencia:datos.referencia||'',fecha:fechaHoyCL(),monto:0,en_un_cambio:false,nota:'Colecta Galería '+turno+' - '+usuario.nombre},{onConflict:'codigo',ignoreDuplicates:false});
       }
       var ok=!(r&&r.error);
+      if(ok&&!esPDF)creadosSesionColRef.current.add(codigo);
       setFotosGaleria(prev=>prev.map(f=>f.datos&&f.datos.codigo===codigo?{...f,syncEstado:ok?'guardado':'error',esPDF:esPDF}:f));
       if(ok){
         sbRegistrarHistorial(codigo,'en_bodega',esPDF?'Colecta Galería '+turno+' (dato PDF preservado)':'Colecta Galería '+turno,usuario.nombre,'app_mensajero');
@@ -7300,7 +7338,8 @@ function ColectaRider(_ref_cr){
     // destinatario/dirección/comuna/teléfono/referencia con lo leído de la foto de galería.
     const fuentesExistentesGal=await obtenerFuentesExistentes(conCodigo.map(f=>f.datos.codigo));
     const conCodigoProtegidos=conCodigo.filter(f=>fuentesExistentesGal.get(f.datos.codigo)==='flex');
-    const conCodigoNormales=conCodigo.filter(f=>fuentesExistentesGal.get(f.datos.codigo)!=='flex');
+    // Existentes con otro registro (no PDF) no se pisan: se respeta el primer registro.
+    const conCodigoNormales=conCodigo.filter(f=>!fuentesExistentesGal.has(f.datos.codigo)||(fuentesExistentesGal.get(f.datos.codigo)!=='flex'&&creadosSesionColRef.current.has(f.datos.codigo)));
     const inserts=conCodigoNormales.map(f=>{
       const d=f.datos||{};
       return{
@@ -7444,7 +7483,7 @@ function ColectaRider(_ref_cr){
     let existentes=new Map();
     if(codigos.length>0){
       try{
-        const {data}=await db.from('envios').select('codigo,estado,mensajero,fuente').in('codigo',codigos);
+        const {data}=await db.from('envios').select('codigo,estado,mensajero,fuente,cliente,fecha,created_at').in('codigo',codigos);
         if(data) data.forEach(r=>existentes.set(r.codigo,r));
       }catch(e){}
     }
@@ -7459,6 +7498,11 @@ function ColectaRider(_ref_cr){
           // No se puede re-adquirir por Colecta: debe pasar primero por un admin (ver motivoNoAdquirible)
           bloqueados++;
           bloqueadosSet.add(p.codigo);
+          continue;
+        }
+        // El primer registro se respeta: un código que ya tenía OTRO registro (no PDF y no creado
+        // en esta colecta) no se modifica. Se cuenta como ya registrado.
+        if(ex.fuente!=='flex'&&!creadosSesionColRef.current.has(p.codigo)&&!esDeEstaColecta(ex,clienteNombre)){
           continue;
         }
         updates.push(p.codigo);
@@ -11719,7 +11763,7 @@ registrarHandlerOffline('entrega',sincronizarEntregaOffline);
 async function sincronizarColectaOffline(payload){
   const ts=new Date().toISOString();
   const codigos=payload.paquetes.map(function(p){return p.codigo;});
-  const{data}=await db.from('envios').select('codigo,estado,mensajero,fuente').in('codigo',codigos);
+  const{data}=await db.from('envios').select('codigo,estado,mensajero,fuente,cliente,fecha').in('codigo',codigos);
   const existentes=new Map();
   if(data)data.forEach(function(r){existentes.set(r.codigo,r);});
   const updates=[];
@@ -11728,6 +11772,10 @@ async function sincronizarColectaOffline(payload){
     if(existentes.has(p.codigo)){
       const ex=existentes.get(p.codigo);
       if(!ESTADOS_ADQUIRIBLES_ESCANEO.includes(ex.estado))return;
+      // El primer registro se respeta (2026-10-22): un código con OTRO registro previo (no PDF y
+      // que no sea de esta misma colecta) no se modifica. Cambios solo desde el panel administrativo.
+      const deEstaColecta=ex.fuente==='colecta_'+payload.turno&&ex.cliente===payload.clienteNombre&&ex.fecha===fechaHoyCL()&&normNombre(ex.mensajero||'')===normNombre(payload.mensajero||'');
+      if(ex.fuente!=='flex'&&!deEstaColecta)return;
       updates.push(p.codigo);
     }else{
       const d=p.datos||{};
@@ -11797,9 +11845,10 @@ async function sincronizarRetiroOffline(payload){
   if(protegidos.length>0){
     const protegidosPDF=[],protegidosReingreso=[];
     for(const p of protegidos){
+      if(!p._esPDF)continue; // ya tenía otro registro: se respeta, no se toca (cambios solo desde el panel)
       const r=await db.from('envios').update({estado:'en_bodega',mensajero:normNombre(payload.mensajero)}).eq('codigo',p.codigo);
       if(r.error)throw r.error;
-      (p._esPDF?protegidosPDF:protegidosReingreso).push(p.codigo);
+      protegidosPDF.push(p.codigo);
     }
     if(protegidosPDF.length>0)sbRegistrarHistorialLote(protegidosPDF,'en_bodega','Colecta / Retiro masivo (dato PDF preservado, sincronizado sin señal)',payload.mensajero,'app_mensajero');
     if(protegidosReingreso.length>0)sbRegistrarHistorialLote(protegidosReingreso,'en_bodega','Colecta / Retiro masivo (ya estaba en el sistema, sincronizado sin señal)',payload.mensajero,'app_mensajero');
