@@ -13,7 +13,7 @@
 // que ya tiene la app (ver controllerchange en index.html). Si no se bumpea, un mensajero
 // que dejó la PWA abierta en segundo plano sigue corriendo el JS viejo indefinidamente,
 // aunque el index.html ya esté actualizado en GitHub Pages.
-const APP_VERSION = '1792687583';
+const APP_VERSION = '1792719245';
 const CACHE_NAME = 'transpgso-' + APP_VERSION;
 const LOGO_ICON = 'logo.jpg';
 
