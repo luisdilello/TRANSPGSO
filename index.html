@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1793207844;
+window.__MODULES_VERSION=1793208400;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -2523,6 +2523,125 @@ function CalendarioCobros(_ref_cc){
     )
   );
 }
+// ── CARGA POR COMUNA (EN VIVO) — 28-10-2026 ─────────────────────────────────────────
+// Resumen para armar rutas con anticipación: cuántas piezas pendientes hay por comuna, según
+// su estado actual (no depende del período del Dashboard). Los números salen de la función SQL
+// public.resumen_carga_comuna() (un solo conteo agrupado, liviano). Se actualiza cada 60 s.
+function CargaPorComuna(){
+  const [filas,setFilas]=useState([]);
+  const [cargando,setCargando]=useState(true);
+  const [error,setError]=useState('');
+  const [hora,setHora]=useState('');
+  const [soloHoy,setSoloHoy]=useState(false);
+  const [busq,setBusq]=useState('');
+  const [orden,setOrden]=useState('ruta');
+  async function cargar(){
+    try{
+      const r=await conTimeout(db.rpc('resumen_carga_comuna'),20000,'carga por comuna');
+      if(r.error)throw r.error;
+      setFilas(r.data||[]);setError('');
+      setHora(new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'}));
+    }catch(e){setError('No se pudo actualizar: '+(e.message||''));}
+    setCargando(false);
+  }
+  useEffect(function(){
+    cargar();
+    const iv=setInterval(function(){if(!document.hidden)cargar();},60000);
+    return function(){clearInterval(iv);};
+  },[]);
+  const porComuna={};
+  filas.forEach(function(f){
+    if(soloHoy&&!f.de_hoy&&f.estado!=='reprogramado')return;
+    const c=porComuna[f.comuna]||(porComuna[f.comuna]={comuna:f.comuna,bodega:0,reprog:0,porFecha:0,enRuta:0});
+    const n=+f.cantidad||0;
+    if(f.estado==='en_bodega'||f.estado==='sin_asignar')c.bodega+=n;
+    else if(f.estado==='reprogramado')c.reprog+=n;
+    else if(f.estado==='en_bodega_fecha')c.porFecha+=n;
+    else if(f.estado==='en_ruta')c.enRuta+=n;
+  });
+  let lista=Object.values(porComuna).map(function(c){c.paraRuta=c.bodega+c.reprog;return c;});
+  const q=busq.trim().toUpperCase();
+  if(q)lista=lista.filter(function(c){return c.comuna.indexOf(q)>=0;});
+  lista.sort(function(a,b){
+    if(orden==='comuna')return a.comuna.localeCompare(b.comuna);
+    if(orden==='enRuta')return b.enRuta-a.enRuta;
+    return (b.paraRuta-a.paraRuta)||(b.enRuta-a.enRuta)||a.comuna.localeCompare(b.comuna);
+  });
+  const tot=lista.reduce(function(t,c){t.bodega+=c.bodega;t.reprog+=c.reprog;t.porFecha+=c.porFecha;t.enRuta+=c.enRuta;t.paraRuta+=c.paraRuta;return t;},{bodega:0,reprog:0,porFecha:0,enRuta:0,paraRuta:0});
+  const maxR=Math.max(1,...lista.map(function(c){return c.paraRuta;}));
+  const th={textAlign:'right',padding:'7px 8px',fontSize:10,letterSpacing:1,textTransform:'uppercase',color:'var(--text-soft)',borderBottom:'2px solid var(--border)',whiteSpace:'nowrap',cursor:'pointer'};
+  const td={textAlign:'right',padding:'7px 8px',fontSize:13,borderBottom:'1px solid var(--border)',fontFamily:'JetBrains Mono',whiteSpace:'nowrap'};
+  const num=function(n,color){return React.createElement('span',{style:{color:n?color:'#c4c1b0',fontWeight:n?700:400}},n);};
+  function exportar(){
+    exportToExcel('Carga_por_comuna_'+fechaHoyCL(),[{name:'Carga por comuna',headers:['Comuna','Total para ruta','En bodega','Reprogramados','Bodega por fecha','En ruta ahora'],
+      rows:lista.map(function(c){return[c.comuna,c.paraRuta,c.bodega,c.reprog,c.porFecha,c.enRuta];}),totalsRow:['TOTAL',tot.paraRuta,tot.bodega,tot.reprog,tot.porFecha,tot.enRuta]}]);
+  }
+  const tarjeta=function(label,valor,color){return React.createElement('div',{style:{flex:'1 1 120px',background:'#fff',border:'1px solid var(--border)',borderRadius:10,padding:'10px 12px'}},
+    React.createElement('div',{style:{fontSize:10,letterSpacing:1,textTransform:'uppercase',color:'var(--text-soft)'}},label),
+    React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:28,color:color,lineHeight:1.1}},valor));};
+  return React.createElement('div',{className:'panel'},
+    React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,flexWrap:'wrap',marginBottom:12}},
+      React.createElement('div',null,
+        React.createElement('div',{className:'panel-title',style:{margin:0}},'Carga por comuna (en vivo)'),
+        React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginTop:2}},'Estado actual de las piezas pendientes. No depende del período elegido arriba.'+(hora?' Actualizado '+hora+'.':''))
+      ),
+      React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}},
+        React.createElement('button',{className:'filter-btn'+(!soloHoy?' active':''),onClick:function(){setSoloHoy(false);}},'Todo lo pendiente'),
+        React.createElement('button',{className:'filter-btn'+(soloHoy?' active':''),onClick:function(){setSoloHoy(true);}},'Carga de hoy'),
+        React.createElement('button',{className:'btn-secondary',style:{padding:'6px 12px',fontSize:12},onClick:function(){setCargando(true);cargar();}},cargando?'Actualizando…':'Actualizar'),
+        React.createElement('button',{className:'btn-secondary',style:{padding:'6px 12px',fontSize:12},onClick:exportar,disabled:!lista.length},'Excel')
+      )
+    ),
+    error&&React.createElement('div',{style:{fontSize:12,color:'var(--danger)',marginBottom:8}},error),
+    React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}},
+      tarjeta('Total para ruta',tot.paraRuta,'var(--gold)'),
+      tarjeta('En bodega',tot.bodega,'#1a6b8a'),
+      tarjeta('Reprogramados',tot.reprog,'#9c27b0'),
+      tarjeta('Bodega por fecha',tot.porFecha,'#7a5c1a'),
+      tarjeta('En ruta ahora',tot.enRuta,'#2e7d4f'),
+      tarjeta('Comunas con carga',lista.filter(function(c){return c.paraRuta>0;}).length,'var(--dark)')
+    ),
+    React.createElement('input',{className:'form-input',value:busq,onChange:function(e){setBusq(e.target.value);},placeholder:'Buscar comuna',style:{marginBottom:8,maxWidth:260}}),
+    cargando&&!filas.length?React.createElement('div',{style:{color:'var(--text-soft)',fontSize:13,padding:'14px 0'}},'Cargando…'):
+    lista.length===0?React.createElement('div',{style:{color:'var(--text-soft)',fontSize:13,padding:'14px 0'}},'No hay piezas pendientes.'):
+    React.createElement('div',{style:{maxHeight:460,overflow:'auto'}},
+      React.createElement('table',{style:{width:'100%',borderCollapse:'collapse'}},
+        React.createElement('thead',null,React.createElement('tr',null,
+          React.createElement('th',{style:Object.assign({},th,{textAlign:'left'}),onClick:function(){setOrden('comuna');}},'Comuna'),
+          React.createElement('th',{style:Object.assign({},th,{textAlign:'left',width:'30%'}),onClick:function(){setOrden('ruta');}},'Para ruta'),
+          React.createElement('th',{style:th,onClick:function(){setOrden('ruta');}},'Total'),
+          React.createElement('th',{style:th},'En bodega'),
+          React.createElement('th',{style:th},'Reprog.'),
+          React.createElement('th',{style:th},'Por fecha'),
+          React.createElement('th',{style:th,onClick:function(){setOrden('enRuta');}},'En ruta')
+        )),
+        React.createElement('tbody',null,
+          lista.map(function(c){return React.createElement('tr',{key:c.comuna},
+            React.createElement('td',{style:Object.assign({},td,{textAlign:'left',fontFamily:'inherit',fontWeight:700,fontSize:12})},c.comuna),
+            React.createElement('td',{style:Object.assign({},td,{textAlign:'left'})},
+              React.createElement('div',{style:{height:8,background:'var(--cream-dark)',borderRadius:4,overflow:'hidden'}},
+                React.createElement('div',{style:{height:'100%',width:(c.paraRuta/maxR*100)+'%',background:'var(--gold)',borderRadius:4}}))),
+            React.createElement('td',{style:Object.assign({},td,{fontWeight:800,fontSize:14})},c.paraRuta),
+            React.createElement('td',{style:td},num(c.bodega,'#1a6b8a')),
+            React.createElement('td',{style:td},num(c.reprog,'#9c27b0')),
+            React.createElement('td',{style:td},num(c.porFecha,'#7a5c1a')),
+            React.createElement('td',{style:td},num(c.enRuta,'#2e7d4f'))
+          );}),
+          React.createElement('tr',null,
+            React.createElement('td',{style:Object.assign({},td,{textAlign:'left',fontFamily:'inherit',fontWeight:800,background:'var(--cream)'})},'TOTAL'),
+            React.createElement('td',{style:Object.assign({},td,{background:'var(--cream)'})},''),
+            React.createElement('td',{style:Object.assign({},td,{fontWeight:800,background:'var(--cream)'})},tot.paraRuta),
+            React.createElement('td',{style:Object.assign({},td,{fontWeight:700,background:'var(--cream)'})},tot.bodega),
+            React.createElement('td',{style:Object.assign({},td,{fontWeight:700,background:'var(--cream)'})},tot.reprog),
+            React.createElement('td',{style:Object.assign({},td,{fontWeight:700,background:'var(--cream)'})},tot.porFecha),
+            React.createElement('td',{style:Object.assign({},td,{fontWeight:700,background:'var(--cream)'})},tot.enRuta)
+          )
+        )
+      )
+    ),
+    React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginTop:8,lineHeight:1.5}},'Para ruta = En bodega + Reprogramados. "Por fecha" son piezas que esperan su fecha de entrega. "Carga de hoy" muestra solo lo despachado hoy más los reprogramados.')
+  );
+}
 function Dashboard(_ref7){
   let kpi=_ref7.kpi,mensajerosDia=_ref7.mensajerosDia,db=_ref7.db,enviosLocales=_ref7.enviosLocales,clientes=_ref7.clientes||[];
   // ── FILTRO DE PERÍODO ─────────────────────────────────────────
@@ -2945,6 +3064,7 @@ function Dashboard(_ref7){
           )
       )
     ),
+    React.createElement(CargaPorComuna,null),
     // ── RESUMEN POR CLIENTE ──
     React.createElement('div',{className:'panel'},
       React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}},
