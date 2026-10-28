@@ -224,6 +224,8 @@ async function comprobanteEnvio(codigo,ventana){
     var fotos=(Array.isArray(it.fotos)?it.fotos:[]).filter(function(u){return typeof u==='string'&&u;});
     g+='<h3>Intento '+(it.intento||ix+1)+' · '+esc(ii.label||it.estado||'—')+(it.fecha?' · '+esc(fFH(it.fecha)):'')+'</h3>';
     g+=metaHTML([['Resultado',badgeEstado(it.estado),1,true],['Fecha y hora',it.fecha?fFH(it.fecha):'—'],['Mensajero',it.mensajero||e.mensajero],['Observación',it.nota||'Sin observaciones']]);
+    if(it.correccion_estado){var ce=it.correccion_estado;g+='<p style="background:#FBF3DC;border-left:3px solid #C8A84B;padding:6px 10px;font-size:10.5px"><b>Resultado corregido por administración:</b> '+esc((estadoInfo(ce.de)||{}).label||ce.de)+' → '+esc((estadoInfo(ce.a)||{}).label||ce.a)+(ce.fecha?' ('+esc(fFH(ce.fecha))+')':'')+'. Motivo: '+esc(ce.motivo||'—')+'</p>';}
+    if(Array.isArray(it.correcciones)&&it.correcciones.length){g+='<p style="font-size:10px;color:#6b6e5c">'+it.correcciones.map(function(c){return 'Respaldo fotográfico corregido por administración ('+esc(fFH(c.fecha))+'): '+(c.accion==='quitar'?'se quitó ':'se agregó ')+c.cantidad+' foto'+(c.cantidad!==1?'s':'')+'. Motivo: '+esc(c.motivo||'—');}).join('<br/>')+'</p>';}
     if(fotos.length)g+=figurasHTML(fotos.map(function(u,k){cont.n++;return {url:u,pie:'<b>Figura '+cont.n+'.</b> Respaldo fotográfico '+(k+1)+' de '+fotos.length+' — intento '+(it.intento||ix+1)+'.'};}));
     else g+='<p style="color:#888">Sin fotografías en este intento.</p>';
   });

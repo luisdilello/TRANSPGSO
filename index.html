@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1793208712;
+window.__MODULES_VERSION=1793209441;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -818,10 +818,11 @@ function CorreccionesEstadoPanel(_rc){const toast=_rc.toast;
     corr.length===0?React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)'}},'Todavía no hay correcciones.'):
     React.createElement('div',{style:{overflowX:'auto',border:'1px solid var(--border)',borderRadius:10,maxHeight:360,overflowY:'auto'}},
       React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:12,minWidth:640}},
-        React.createElement('thead',null,React.createElement('tr',null,['Fecha','Código','De','A','Motivo','Usuario'].map(h=>React.createElement('th',{key:h,style:{textAlign:'left',padding:'8px 10px',borderBottom:'1px solid var(--border)',color:'var(--text-mid)'}},h)))),
+        React.createElement('thead',null,React.createElement('tr',null,['Fecha','Código','Tipo','De','A','Motivo','Usuario'].map(h=>React.createElement('th',{key:h,style:{textAlign:'left',padding:'8px 10px',borderBottom:'1px solid var(--border)',color:'var(--text-mid)'}},h)))),
         React.createElement('tbody',null,corr.map(c=>React.createElement('tr',{key:c.id},
           React.createElement('td',{style:{padding:'7px 10px',whiteSpace:'nowrap'}},fmt(c.created_at)),
           React.createElement('td',{style:{padding:'7px 10px',fontFamily:'JetBrains Mono'}},c.codigo),
+          React.createElement('td',{style:{padding:'7px 10px'}},c.tipo==='fotos'?'Fotos':'Estado'),
           React.createElement('td',{style:{padding:'7px 10px'}},estadoInfo(c.estado_anterior).label),
           React.createElement('td',{style:{padding:'7px 10px'}},estadoInfo(c.estado_nuevo).label),
           React.createElement('td',{style:{padding:'7px 10px'}},c.motivo),
@@ -4777,6 +4778,50 @@ return/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createEleme
   </body></html>`);
   win.document.close();
 }
+// ── Corrección de fotos de entrega (28-10-2026, pedido de Fernando) ─────────────────────
+// Solo usuarios con permiso de corrección (usuarios.puede_corregir_estados) o super admin. Cada
+// cambio pide motivo y queda en "Correcciones realizadas" (Permisos). Se hace por la función SQL
+// corregir_fotos_entrega, que valida el permiso en el servidor.
+var __permisoCorrPromesa=null;
+function puedeCorregirActual(){
+  if(!__permisoCorrPromesa){
+    __permisoCorrPromesa=db.auth.getSession().then(function(r){
+      var uid=r&&r.data&&r.data.session&&r.data.session.user&&r.data.session.user.id;
+      if(!uid)return false;
+      return db.from('usuarios').select('rol,puede_corregir_estados').eq('auth_id',uid).maybeSingle().then(function(q){var u=q&&q.data;return !!(u&&(u.puede_corregir_estados||u.rol==='superadmin'));});
+    }).catch(function(){__permisoCorrPromesa=null;return false;});
+  }
+  return __permisoCorrPromesa;
+}
+function pedirMotivoDOM(titulo,descripcion){
+  return new Promise(function(resolve){
+    var fondo=document.createElement('div');
+    fondo.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px';
+    fondo.innerHTML='<div style="background:#fff;border-radius:12px;max-width:440px;width:100%;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.3);font-family:inherit">'
+      +'<div style="font-weight:800;font-size:15px;color:#2B2E20;margin-bottom:6px"></div>'
+      +'<div style="font-size:12px;color:#666;margin-bottom:10px;line-height:1.5"></div>'
+      +'<textarea rows="3" style="width:100%;border:1px solid #ddd;border-radius:8px;padding:8px;font-family:inherit;font-size:13px;resize:vertical" placeholder="Motivo de la corrección (obligatorio)"></textarea>'
+      +'<div style="font-size:11px;color:#b03030;min-height:16px;margin-top:4px"></div>'
+      +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px"><button data-x="c" style="padding:8px 14px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer">Cancelar</button><button data-x="o" style="padding:8px 14px;border-radius:8px;border:none;background:#C8A84B;color:#fff;font-weight:700;cursor:pointer">Guardar corrección</button></div></div>';
+    var caja=fondo.firstChild;caja.children[0].textContent=titulo;caja.children[1].textContent=descripcion||'';
+    var ta=caja.querySelector('textarea'),err=caja.children[3];
+    function cerrar(v){document.body.removeChild(fondo);resolve(v);}
+    caja.querySelector('[data-x=c]').onclick=function(){cerrar(null);};
+    caja.querySelector('[data-x=o]').onclick=function(){var v=(ta.value||'').trim();if(v.length<5){err.textContent='Escribe un motivo de al menos 5 caracteres.';return;}cerrar(v);};
+    document.body.appendChild(fondo);setTimeout(function(){ta.focus();},50);
+  });
+}
+function comprimirFotoArchivo(file,maxW){
+  maxW=maxW||1400;
+  return new Promise(function(res,rej){
+    var url=URL.createObjectURL(file);var img=new Image();
+    img.onload=function(){var w=img.naturalWidth,h=img.naturalHeight;if(w>maxW){h=Math.round(h*maxW/w);w=maxW;}
+      var c=document.createElement('canvas');c.width=w;c.height=h;var x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(img,0,0,w,h);URL.revokeObjectURL(url);
+      c.toBlob(function(b){b?res(b):rej(new Error('No se pudo procesar la imagen'));},'image/jpeg',0.82);};
+    img.onerror=function(){URL.revokeObjectURL(url);rej(new Error('Formato de imagen no soportado'));};
+    img.src=url;
+  });
+}
 function FotosEntregaConRecarga(_ref23b){
   let codigo=_ref23b.codigo,fotoEtiquetaInicial=_ref23b.fotoEtiquetaInicial,esAdmin=_ref23b.esAdmin;
   const [fotoEtiqueta,setFotoEtiqueta]=useState(fotoEtiquetaInicial||null);
@@ -4838,9 +4883,45 @@ function FotosEntregaConRecarga(_ref23b){
       setFotosEntregaRaw(filtrado);
     }catch(e){alert('Error al borrar las fotos: '+e.message);}
   }
-  return React.createElement(FotosEntrega,{codigo,fotoEtiqueta,fotosEntregaExternas:fotosEntregaDB,esAdmin,onBorrarFotoEtiqueta:borrarFotoEtiqueta,onBorrarIntento:borrarIntento});
+  const [puedeCorr,setPuedeCorr]=useState(false);
+  const [corrMsg,setCorrMsg]=useState('');
+  useEffect(function(){if(esAdmin)puedeCorregirActual().then(setPuedeCorr);},[esAdmin]);
+  function errCorr(e){const m=(e&&e.message)||'';return m.indexOf('SIN_PERMISO')>=0?'No tienes permiso de corrección.':m.indexOf('MOTIVO')>=0?'Falta el motivo.':m;}
+  async function aplicarCorreccion(ii,accion,urls,motivo){
+    const r=await db.rpc('corregir_fotos_entrega',{p_codigo:codigo,p_intento:ii,p_accion:accion,p_urls:urls,p_motivo:motivo});
+    if(r.error)throw r.error;
+    if(r.data&&r.data.fotos_entrega){setEsFormatoViejo(false);setFotosEntregaRaw(r.data.fotos_entrega);}
+  }
+  async function quitarFoto(ii,url){
+    const mot=await pedirMotivoDOM('Quitar foto de respaldo','Intento '+((fotosEntregaDB[ii]&&fotosEntregaDB[ii].intento)||ii+1)+'. La foto deja de aparecer en la ficha, en el portal del cliente y en el PDF. La corrección queda registrada con tu nombre.');
+    if(!mot)return;
+    try{setCorrMsg('Guardando…');await aplicarCorreccion(ii,'quitar',[url],mot);setCorrMsg('Foto quitada.');}
+    catch(e){setCorrMsg('No se pudo quitar: '+errCorr(e));}
+  }
+  async function agregarFotos(ii,files){
+    const lista=Array.prototype.filter.call(files||[],function(f){return f&&/^image\//.test(f.type);});
+    if(!lista.length)return;
+    const mot=await pedirMotivoDOM('Agregar '+lista.length+' foto'+(lista.length>1?'s':'')+' de respaldo',(fotosEntregaDB.length?'Intento '+((fotosEntregaDB[ii]&&fotosEntregaDB[ii].intento)||ii+1)+'. ':'')+'La corrección queda registrada con tu nombre.');
+    if(!mot)return;
+    try{
+      setCorrMsg('Subiendo fotos…');const urls=[];
+      for(let k=0;k<lista.length;k++){
+        const blob=await comprimirFotoArchivo(lista[k]);
+        const fn='entregas/'+codigo+'_adm_'+Date.now()+'_'+k+'.jpg';
+        const up=await db.storage.from('evidencias').upload(fn,blob,{contentType:'image/jpeg',upsert:false});
+        if(up.error)throw up.error;
+        const pu=db.storage.from('evidencias').getPublicUrl(fn);urls.push(pu.data.publicUrl);
+      }
+      await aplicarCorreccion(ii,'agregar',urls,mot);
+      setCorrMsg(urls.length===1?'Foto agregada.':urls.length+' fotos agregadas.');
+    }catch(e){setCorrMsg('No se pudo agregar: '+errCorr(e));}
+  }
+  return React.createElement(React.Fragment,null,
+    React.createElement(FotosEntrega,{codigo,fotoEtiqueta,fotosEntregaExternas:fotosEntregaDB,esAdmin,onBorrarFotoEtiqueta:borrarFotoEtiqueta,onBorrarIntento:borrarIntento,
+      puedeCorregir:esAdmin&&puedeCorr,onQuitarFoto:quitarFoto,onAgregarFotos:agregarFotos}),
+    corrMsg&&React.createElement('div',{style:{fontSize:12,color:'var(--text-mid)',margin:'-8px 0 12px'}},corrMsg));
 }
-function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoEtiqueta,fotosEntregaExternas=_ref23.fotosEntregaExternas,esAdmin=_ref23.esAdmin,onBorrarFotoEtiqueta=_ref23.onBorrarFotoEtiqueta,onBorrarIntento=_ref23.onBorrarIntento;const [zoomFoto,setZoomFoto]=useState(null);const _useState54=useState([]),fotos=_useState54[0],setFotos=_useState54[1];const _useState55=useState(true),loading=_useState55[0],setLoading=_useState55[1];useEffect(()=>{/* FIX 2026-10-20: antes listaba la raíz completa del bucket 'evidencias' (5 s por consulta) buscando archivos por nombre, pero ahí no hay archivos sueltos: nunca encontraba nada. Las fotos vienen de foto_etiqueta y fotos_entrega. */setLoading(false);},[codigo]);// Mostrar foto de etiqueta directamente desde el campo del envio
+function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoEtiqueta,fotosEntregaExternas=_ref23.fotosEntregaExternas,esAdmin=_ref23.esAdmin,onBorrarFotoEtiqueta=_ref23.onBorrarFotoEtiqueta,onBorrarIntento=_ref23.onBorrarIntento;const puedeCorregir=_ref23.puedeCorregir,onQuitarFoto=_ref23.onQuitarFoto,onAgregarFotos=_ref23.onAgregarFotos;const [zoomFoto,setZoomFoto]=useState(null);const _useState54=useState([]),fotos=_useState54[0],setFotos=_useState54[1];const _useState55=useState(true),loading=_useState55[0],setLoading=_useState55[1];useEffect(()=>{/* FIX 2026-10-20: antes listaba la raíz completa del bucket 'evidencias' (5 s por consulta) buscando archivos por nombre, pero ahí no hay archivos sueltos: nunca encontraba nada. Las fotos vienen de foto_etiqueta y fotos_entrega. */setLoading(false);},[codigo]);// Mostrar foto de etiqueta directamente desde el campo del envio
   const fotosEtiquetaDirecta=fotoEtiqueta?[{url:fotoEtiqueta,name:'etiqueta_colecta'}]:[];
   const fotosEntregaArrCheck=fotosEntregaExternas||[];if(loading&&fotosEntregaArrCheck.length===0&&!fotoEtiqueta)return/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginBottom:16,padding:'8px 12px',background:'var(--cream)',borderRadius:7}},"\u23F3 Buscando fotos...");const allFotos=[...fotosEtiquetaDirecta,...fotos,...fotosEntregaArrCheck];const sinFotos=allFotos.length===0&&!fotoEtiqueta;if(sinFotos)return/*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginBottom:16,padding:'8px 12px',background:'var(--cream)',borderRadius:7}},"\uD83D\uDCF7 Sin fotos de evidencia registradas");const fotosEtiqueta=[...fotosEtiquetaDirecta,...fotos.filter(f=>f.name.includes('__etiqueta__'))];
   const intentosEntrega=fotosEntregaExternas||[];
@@ -4870,8 +4951,15 @@ function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoE
           React.createElement("span",{style:{fontSize:11,fontWeight:700,color:estadoColor(it.estado),background:`${estadoColor(it.estado)}22`,padding:'3px 10px',borderRadius:10}},estadoInfo(it.estado)?.label||it.estado),
           it.mensajero&&React.createElement("span",{style:{fontSize:12,fontWeight:700,color:'var(--dark)'}},"· ",it.mensajero),
           it.fecha&&React.createElement("span",{style:{fontSize:11,color:'var(--text-soft)',marginLeft:(esAdmin&&onBorrarIntento)?0:'auto',fontFamily:'JetBrains Mono'}},new Date(it.fecha).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})),
-          esAdmin&&onBorrarIntento&&React.createElement("button",{onClick:()=>onBorrarIntento(ii),style:{marginLeft:'auto',padding:'4px 11px',borderRadius:6,border:'1px solid #b03030',background:'rgba(176,48,48,0.08)',color:'#b03030',fontWeight:700,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}},"🗑 Borrar fotos")
+          puedeCorregir&&onAgregarFotos&&React.createElement("label",{style:{marginLeft:'auto',padding:'4px 11px',borderRadius:6,border:'1px solid #2e7d4f',background:'rgba(46,125,79,0.08)',color:'#2e7d4f',fontWeight:700,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}},"Agregar fotos",
+            React.createElement("input",{type:'file',accept:'image/*',multiple:true,style:{display:'none'},onChange:ev=>{const f=ev.target.files;onAgregarFotos(ii,f);ev.target.value='';}})),
+          esAdmin&&onBorrarIntento&&React.createElement("button",{onClick:()=>onBorrarIntento(ii),style:{marginLeft:(puedeCorregir&&onAgregarFotos)?0:'auto',padding:'4px 11px',borderRadius:6,border:'1px solid #b03030',background:'rgba(176,48,48,0.08)',color:'#b03030',fontWeight:700,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}},"🗑 Borrar fotos")
         ),
+        it.correccion_estado&&React.createElement("div",{style:{margin:'10px 14px 0',padding:'8px 12px',background:'rgba(200,168,75,0.12)',border:'1px solid rgba(200,168,75,0.5)',borderRadius:7,fontSize:12,color:'#7a5c1a',lineHeight:1.5}},
+          React.createElement("b",null,"Resultado corregido por administración: "),(estadoInfo(it.correccion_estado.de)?.label||it.correccion_estado.de)+" → "+(estadoInfo(it.correccion_estado.a)?.label||it.correccion_estado.a),
+          React.createElement("br",null),"Motivo: "+(it.correccion_estado.motivo||'—')+" · "+(it.correccion_estado.usuario||'')+(it.correccion_estado.fecha?" · "+new Date(it.correccion_estado.fecha).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}):'')),
+        Array.isArray(it.correcciones)&&it.correcciones.length>0&&React.createElement("div",{style:{margin:'8px 14px 0',fontSize:11,color:'var(--text-soft)',lineHeight:1.5}},
+          it.correcciones.map((c,ci)=>React.createElement("div",{key:ci},"Fotos corregidas: "+(c.accion==='quitar'?'se quitó ':'se agregó ')+c.cantidad+" · "+(c.usuario||'')+(c.fecha?" · "+new Date(c.fecha).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}):'')+" · Motivo: "+(c.motivo||'—')))),
         it.nota&&React.createElement("div",{style:{margin:'10px 14px 0',padding:'10px 12px',background:`${estadoColor(it.estado)}0d`,border:`1px solid ${estadoColor(it.estado)}40`,borderLeft:`4px solid ${estadoColor(it.estado)}`,borderRadius:7}},
           React.createElement("div",{style:{fontSize:10,fontWeight:800,letterSpacing:1.2,textTransform:'uppercase',color:estadoColor(it.estado),marginBottom:3}},"📝 Nota del mensajero"),
           React.createElement("div",{style:{fontSize:13,color:'var(--dark)',lineHeight:1.45}},it.nota)
@@ -4879,7 +4967,8 @@ function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoE
         React.createElement("div",{style:{display:'flex',gap:6,flexWrap:'wrap',padding:10}},
           (it.fotos||[]).map((f,fi)=>React.createElement("div",{key:fi,onClick:()=>setZoomFoto(f.url||f),style:{position:'relative',borderRadius:7,overflow:'hidden',border:`2px solid ${estadoColor(it.estado)}`,width:90,height:90,flexShrink:0,cursor:'zoom-in',transition:'transform 0.15s'},onMouseEnter:e=>e.currentTarget.style.transform='scale(1.05)',onMouseLeave:e=>e.currentTarget.style.transform='scale(1)'},
             React.createElement("img",{src:f.url||f,style:{width:'100%',height:'100%',objectFit:'cover'},onError:e=>e.target.style.display='none'}),
-            React.createElement("div",{style:{position:'absolute',bottom:0,left:0,right:0,background:'rgba(0,0,0,0.5)',fontSize:8,color:'#fff',textAlign:'center',padding:'1px 0'}},(fi+1)+"/"+(it.fotos||[]).length)
+            React.createElement("div",{style:{position:'absolute',bottom:0,left:0,right:0,background:'rgba(0,0,0,0.5)',fontSize:8,color:'#fff',textAlign:'center',padding:'1px 0'}},(fi+1)+"/"+(it.fotos||[]).length),
+            puedeCorregir&&onQuitarFoto&&React.createElement("button",{title:'Quitar esta foto',onClick:ev=>{ev.stopPropagation();onQuitarFoto(ii,f.url||f);},style:{position:'absolute',top:3,right:3,width:22,height:22,borderRadius:11,border:'none',background:'rgba(176,48,48,0.92)',color:'#fff',fontWeight:800,fontSize:12,lineHeight:'22px',padding:0,cursor:'pointer'}},"✕")
           ))
         ),
         it.video&&React.createElement("div",{style:{padding:'0 10px 10px'}},
@@ -4889,6 +4978,8 @@ function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoE
       ))
     ),
     fotosEtiqueta.length===0&&intentosEntrega.length===0&&React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',padding:'8px 12px',background:'var(--cream)',borderRadius:7}},"📷 Sin fotos registradas"),
+    intentosEntrega.length===0&&puedeCorregir&&onAgregarFotos&&React.createElement("label",{style:{display:'inline-block',marginTop:8,padding:'6px 12px',borderRadius:6,border:'1px solid #2e7d4f',background:'rgba(46,125,79,0.08)',color:'#2e7d4f',fontWeight:700,fontSize:11,cursor:'pointer'}},"Agregar fotos de respaldo",
+      React.createElement("input",{type:'file',accept:'image/*',multiple:true,style:{display:'none'},onChange:ev=>{const f=ev.target.files;onAgregarFotos(0,f);ev.target.value='';}})),
     // Modal zoom
     zoomFoto&&React.createElement('div',{onClick:()=>setZoomFoto(null),style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.92)',zIndex:99999,display:'flex',alignItems:'center',justifyContent:'center',cursor:'zoom-out',padding:16}},
       React.createElement('div',{style:{position:'relative',maxWidth:'95vw',maxHeight:'92vh'}},
