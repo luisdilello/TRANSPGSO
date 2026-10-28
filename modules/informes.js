@@ -498,6 +498,32 @@ function InformeCierre(props){
 // Formato del texto (se explica en pantalla): una línea en blanco separa párrafos; una línea que
 // empieza con "# " es un subtítulo; las líneas que empiezan con "- " forman una lista.
 // ══════════════════════════════════════════════════════════════════════════════════════
+// Imágenes dentro del informe (28-10-2026): cada imagen es una línea propia con el formato
+// [imagen:URL] y opcionalmente un pie de foto después, ej.: [imagen:https://...jpg] Paquete dañado.
+// Las fotos se suben a Storage (bucket evidencias, carpeta informes/) y en el texto queda solo la URL.
+var RE_IMG_INFORME=/^\[imagen:(https?:\/\/[^\]\s]+)\]\s*(.*)$/;
+function comprimirImagenInforme(file,maxW){
+  maxW=maxW||1600;
+  return new Promise(function(res,rej){
+    var url=URL.createObjectURL(file);var img=new Image();
+    img.onload=function(){
+      var w=img.naturalWidth,hh=img.naturalHeight;if(w>maxW){hh=Math.round(hh*maxW/w);w=maxW;}
+      var c=document.createElement('canvas');c.width=w;c.height=hh;var ctx=c.getContext('2d');
+      ctx.fillStyle='#fff';ctx.fillRect(0,0,w,hh);ctx.drawImage(img,0,0,w,hh);URL.revokeObjectURL(url);
+      c.toBlob(function(b){b?res(b):rej(new Error('No se pudo procesar la imagen'));},'image/jpeg',0.85);
+    };
+    img.onerror=function(){URL.revokeObjectURL(url);rej(new Error('Formato de imagen no soportado'));};
+    img.src=url;
+  });
+}
+async function subirImagenInforme(file){
+  var blob=await comprimirImagenInforme(file);
+  var fn='informes/'+Date.now()+'_'+Math.random().toString(36).slice(2,8)+'.jpg';
+  var r=await db.storage.from('evidencias').upload(fn,blob,{contentType:'image/jpeg',upsert:false});
+  if(r.error)throw new Error(r.error.message);
+  var u=db.storage.from('evidencias').getPublicUrl(fn);
+  return u&&u.data&&u.data.publicUrl;
+}
 function cuerpoAHTML(texto){
   var lineas=String(texto||'').replace(/\r/g,'').split('\n');
   var out=[];var parrafo=[];var lista=[];
@@ -506,6 +532,13 @@ function cuerpoAHTML(texto){
   lineas.forEach(function(l){
     var t=l.trim();
     if(t===''){cerrarParrafo();cerrarLista();return;}
+    var mImg=t.match(RE_IMG_INFORME);
+    if(mImg){cerrarParrafo();cerrarLista();
+      var url=escHTML(mImg[1]),pie=(mImg[2]||'').trim();
+      out.push('<figure style="margin:14px 0;text-align:center;page-break-inside:avoid;break-inside:avoid">'
+        +'<a href="'+url+'" target="_blank" rel="noopener"><img src="'+url+'" style="max-width:100%;max-height:520px;border-radius:8px;border:1px solid #EDE3C8"/></a>'
+        +(pie?'<figcaption style="font-size:12px;color:#777;margin-top:6px">'+escHTML(pie)+'</figcaption>':'')+'</figure>');
+      return;}
     if(/^#\s+/.test(t)){cerrarParrafo();cerrarLista();out.push('<div style="font-weight:800;font-size:15px;color:#A0842A;margin:18px 0 8px;padding-bottom:4px;border-bottom:1px solid #EDE3C8">'+escHTML(t.replace(/^#\s+/,''))+'</div>');return;}
     if(/^[-•]\s+/.test(t)){cerrarParrafo();lista.push(t.replace(/^[-•]\s+/,''));return;}
     cerrarLista();parrafo.push(l);
@@ -532,6 +565,42 @@ function InformeLibre(props){
   var _ed=useState(vacio),ed=_ed[0],setEd=_ed[1];
   var _guardando=useState(false),guardando=_guardando[0],setGuardando=_guardando[1];
   var _busq=useState(''),busq=_busq[0],setBusq=_busq[1];
+  var _subiendo=useState(0),subiendo=_subiendo[0],setSubiendo=_subiendo[1];
+  var taRef=React.useRef(null), fileRef=React.useRef(null);
+
+  // Sube las imágenes y deja una línea [imagen:URL] por cada una donde está el cursor.
+  async function agregarImagenes(files){
+    var lista=Array.prototype.filter.call(files||[],function(f){return f&&/^image\//.test(f.type);});
+    if(!lista.length){toast('Selecciona un archivo de imagen');return;}
+    setSubiendo(function(n){return n+lista.length;});
+    var lineas=[];
+    for(var i=0;i<lista.length;i++){
+      try{var url=await subirImagenInforme(lista[i]);if(url)lineas.push('[imagen:'+url+']');}
+      catch(e){toast('No se pudo subir una imagen: '+e.message);}
+      setSubiendo(function(n){return Math.max(0,n-1);});
+    }
+    if(!lineas.length)return;
+    var ta=taRef.current;
+    setEd(function(p){
+      var txt=p.cuerpo||'';var pos=(ta&&typeof ta.selectionStart==='number')?ta.selectionStart:txt.length;
+      var antes=txt.slice(0,pos),despues=txt.slice(pos);
+      var ins=(antes&&!/\n$/.test(antes)?'\n':'')+lineas.join('\n')+'\n';
+      return Object.assign({},p,{cuerpo:antes+ins+despues});
+    });
+    toast(lineas.length===1?'Imagen agregada':lineas.length+' imágenes agregadas');
+  }
+  function onPegar(e){
+    var items=(e.clipboardData&&e.clipboardData.items)||[];var fs=[];
+    for(var i=0;i<items.length;i++){if(items[i].kind==='file'&&/^image\//.test(items[i].type)){var f=items[i].getAsFile();if(f)fs.push(f);}}
+    if(fs.length){e.preventDefault();agregarImagenes(fs);}
+  }
+  function onSoltar(e){
+    if(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files.length){e.preventDefault();agregarImagenes(e.dataTransfer.files);}
+  }
+  function quitarImagen(url){
+    setEd(function(p){return Object.assign({},p,{cuerpo:(p.cuerpo||'').split('\n').filter(function(l){var m=l.trim().match(RE_IMG_INFORME);return !(m&&m[1]===url);}).join('\n')});});
+  }
+  var imagenesEd=(ed.cuerpo||'').split('\n').map(function(l){var m=l.trim().match(RE_IMG_INFORME);return m?{url:m[1],pie:(m[2]||'').trim()}:null;}).filter(Boolean);
 
   async function cargar(){
     var r=await db.from('informes').select('id,created_at,updated_at,autor,titulo,fecha_informe,destinatario,cuerpo').order('fecha_informe',{ascending:false}).order('created_at',{ascending:false}).limit(200);
@@ -543,6 +612,7 @@ function InformeLibre(props){
   async function guardar(){
     if(!ed.titulo.trim()){toast('Ponle un título al informe');return null;}
     if(!ed.cuerpo.trim()){toast('El informe está vacío');return null;}
+    if(subiendo>0){toast('Espera a que terminen de subir las imágenes');return null;}
     setGuardando(true);
     var fila={titulo:ed.titulo.trim(),fecha_informe:ed.fecha_informe||fechaHoyCL(),destinatario:ed.destinatario.trim()||null,cuerpo:ed.cuerpo,updated_at:new Date().toISOString()};
     var r;
@@ -580,7 +650,18 @@ function InformeLibre(props){
         h('div',null,h('label',{className:'form-label'},'Dirigido a (opcional)'),h('input',{className:'form-input',value:ed.destinatario,onChange:set('destinatario'),placeholder:'Ej.: Gerencia / Cliente ANDES'}))
       ),
       h('label',{className:'form-label'},'Contenido'),
-      h('textarea',{className:'form-input',value:ed.cuerpo,onChange:set('cuerpo'),rows:18,placeholder:'Escribe el informe.\n\nUna línea en blanco separa párrafos.\n# Así se escribe un subtítulo\n- Así se escribe un punto de una lista',style:{width:'100%',resize:'vertical',fontFamily:'inherit',lineHeight:1.6}}),
+      h('textarea',{ref:taRef,className:'form-input',value:ed.cuerpo,onChange:set('cuerpo'),onPaste:onPegar,onDrop:onSoltar,onDragOver:function(e){e.preventDefault();},rows:18,placeholder:'Escribe el informe.\n\nUna línea en blanco separa párrafos.\n# Así se escribe un subtítulo\n- Así se escribe un punto de una lista\n\nImágenes: botón "Agregar imágenes", o pégalas / arrástralas aquí.',style:{width:'100%',resize:'vertical',fontFamily:'inherit',lineHeight:1.6}}),
+      h('div',{style:{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',marginTop:8}},
+        h('input',{ref:fileRef,type:'file',accept:'image/*',multiple:true,style:{display:'none'},onChange:function(e){var f=e.target.files;agregarImagenes(f);e.target.value='';}}),
+        h('button',{className:'btn-secondary',type:'button',onClick:function(){fileRef.current&&fileRef.current.click();},disabled:subiendo>0},subiendo>0?('Subiendo '+subiendo+' imagen'+(subiendo>1?'es':'')+'…'):'Agregar imágenes'),
+        h('span',{style:{fontSize:11,color:'var(--text-soft)'}},'La imagen queda donde está el cursor. Para ponerle un pie de foto, escríbelo en la misma línea, después del ]')
+      ),
+      imagenesEd.length>0&&h('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}},imagenesEd.map(function(im,ix){
+        return h('div',{key:im.url+ix,style:{width:110,border:'1px solid var(--border)',borderRadius:8,padding:4,background:'#fff',textAlign:'center'}},
+          h('img',{src:im.url,style:{width:'100%',height:80,objectFit:'cover',borderRadius:6,display:'block'}}),
+          im.pie&&h('div',{style:{fontSize:10,color:'var(--text-soft)',margin:'3px 0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},im.pie),
+          h('button',{className:'action-btn',type:'button',style:{marginTop:4,fontSize:10,padding:'2px 8px'},onClick:function(){quitarImagen(im.url);}},'Quitar'));
+      })),
       h('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginTop:12}},
         h('button',{className:'btn-primary',onClick:generar,disabled:guardando},'Generar informe'),
         h('button',{className:'btn-secondary',onClick:function(){guardar().then(function(r){if(r)toast('Informe guardado');});},disabled:guardando},guardando?'Guardando…':'Guardar'),
