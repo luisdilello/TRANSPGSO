@@ -2105,6 +2105,13 @@ asignarModal&&/*#__PURE__*/React.createElement(Modal,{title:'Asignar '+selected.
     React.createElement('button',{className:'btn-primary',onClick:aplicarConfirmCambio,autoFocus:true},'✓ Confirmar')
   )
 ),detalleEnvio&&/*#__PURE__*/React.createElement(Modal,{title:'Envío '+detalleEnvio.codigo,onClose:()=>setDetalleEnvio(null)},
+  // Exportar PDF (28-10-2026): comprobante de entrega / informe de estado (modules/doc-pdf.js).
+  React.createElement('div',{style:{display:'flex',justifyContent:'flex-end',marginBottom:12}},
+    React.createElement('button',{className:'btn-primary',type:'button',style:{padding:'8px 16px',fontSize:12},onClick:function(){
+      var w=window.open('','_blank');var cod=detalleEnvio.codigo;
+      loadScriptOnce('doc-pdf','modules/doc-pdf.js').then(function(){return window.__docPDF.comprobanteEnvio(cod,w);})
+        .catch(function(err){try{w&&w.close();}catch(e2){}alert('No se pudo generar el PDF: '+(err&&err.message||''));});
+    }},'Exportar PDF')),
   /*#__PURE__*/detalleEnvio.fuente==='etiqueta'&&React.createElement("div",{style:{display:'flex',justifyContent:'center',marginBottom:16}},/*#__PURE__*/React.createElement(EtiquetaPreview,{envio:detalleEnvio,logoSrc:(document.querySelector('.logo-img')||{}).src||''})),
   // ── Cambiar cliente ──
   /*#__PURE__*/React.createElement("div",{style:{background:'linear-gradient(145deg,rgba(200,168,75,0.1),rgba(200,168,75,0.04))',border:'1px solid rgba(200,168,75,0.3)',borderRadius:12,padding:'14px 16px',marginBottom:16,display:'flex',alignItems:'center',gap:12,boxShadow:'inset 0 1px 0 rgba(255,255,255,0.5),3px 3px 8px rgba(43,46,32,0.08)'}},
