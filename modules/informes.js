@@ -557,6 +557,11 @@ function htmlInformeLibre(inf){
     +'</div>'+piePaginaHTML('')+'</body></html>';
 }
 
+// Documento profesional (modules/doc-pdf.js). Si no se puede cargar, se usa el formato anterior.
+async function verInformeLibre(w,inf){
+  try{await loadScriptOnce('doc-pdf','modules/doc-pdf.js');window.__docPDF.abrir(w,window.__docPDF.informeLibreHTML(inf));}
+  catch(e){abrirVentanaHTML(w,htmlInformeLibre(inf));}
+}
 function InformeLibre(props){
   var usuario=props.usuario, esAdmin=props.esAdmin||props.esSuperAdmin, toast=props.toast;
   var nombreUsuario=(usuario&&usuario.nombre)||'—';
@@ -628,7 +633,7 @@ function InformeLibre(props){
     var w=window.open('','_blank');// se abre antes del await para que el navegador no la bloquee
     var inf=await guardar();
     if(!inf){if(w)w.close();return;}
-    abrirVentanaHTML(w,htmlInformeLibre(inf));
+    await verInformeLibre(w,inf);
     toast('Informe guardado y generado');
   }
   async function eliminar(inf){
@@ -663,9 +668,9 @@ function InformeLibre(props){
           h('button',{className:'action-btn',type:'button',style:{marginTop:4,fontSize:10,padding:'2px 8px'},onClick:function(){quitarImagen(im.url);}},'Quitar'));
       })),
       h('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginTop:12}},
-        h('button',{className:'btn-primary',onClick:generar,disabled:guardando},'Generar informe'),
+        h('button',{className:'btn-primary',onClick:generar,disabled:guardando},'Generar PDF'),
         h('button',{className:'btn-secondary',onClick:function(){guardar().then(function(r){if(r)toast('Informe guardado');});},disabled:guardando},guardando?'Guardando…':'Guardar'),
-        ed.id&&h('button',{className:'btn-secondary',onClick:function(){descargarHTML((ed.titulo||'Informe').replace(/[^\wáéíóúñÁÉÍÓÚÑ -]/g,'').trim().replace(/\s+/g,'_')+'.html',htmlInformeLibre(ed));}},'Descargar HTML'),
+
         h('button',{className:'btn-secondary',onClick:function(){setEd(vacio());}},'Nuevo')
       )
     ),
@@ -679,7 +684,7 @@ function InformeLibre(props){
           h('div',{style:{fontWeight:700,fontSize:13}},i.titulo),
           h('div',{style:{fontSize:11,color:'var(--text-soft)'}},fmtDMY(i.fecha_informe)+' · '+(i.autor||'—')),
           h('div',{style:{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}},
-            h('button',{className:'action-btn btn-edit',onClick:function(){abrirVentanaHTML(null,htmlInformeLibre(i));}},'Ver'),
+            h('button',{className:'action-btn btn-edit',onClick:function(){var w=window.open('','_blank');verInformeLibre(w,i);}},'Ver PDF'),
             puede&&h('button',{className:'action-btn',onClick:function(){setEd({id:i.id,titulo:i.titulo,fecha_informe:i.fecha_informe,destinatario:i.destinatario||'',cuerpo:i.cuerpo,autor:i.autor});window.scrollTo({top:0,behavior:'smooth'});}},'Editar'),
             puede&&h('button',{className:'action-btn',onClick:function(){eliminar(i);}},'Eliminar')));
       }))
