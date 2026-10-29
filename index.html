@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1793233599;
+window.__MODULES_VERSION=1793235454;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -5968,6 +5968,15 @@ async function medirNitidez(base64img){
     }catch(e){resolve(999);}
   });
 }
+// Lectura de etiquetas con IA: va por la función 'analizar-etiqueta' de Supabase, que exige sesión
+// activa y fija el modelo/límites en el servidor (28-10-2026). Antes iba por un proxy de Cloudflare
+// abierto a cualquiera, que permitía usar la clave de IA para cualquier cosa.
+const IA_URL=SUPA_URL+'/functions/v1/analizar-etiqueta';
+async function headersIA(){
+  let tok=SUPA_KEY;
+  try{const r=await db.auth.getSession();if(r&&r.data&&r.data.session&&r.data.session.access_token)tok=r.data.session.access_token;}catch(e){}
+  return{'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+tok};
+}
 async function analizarEtiqueta(base64img,mediaType,_retry=0){
   try{
     if(_retry===0){
@@ -5976,12 +5985,9 @@ async function analizarEtiqueta(base64img,mediaType,_retry=0){
         return{_error:'📷 Foto movida o borrosa — no se alcanza a leer. Vuelve a tomarla sujetando firme el celular.',_borrosa:true};
       }
     }
-    const resp=await fetch('https://transpgso-ai.luisdilellopadrino.workers.dev',{
+    const resp=await fetch(IA_URL,{
       method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'Content-Type':'application/json'
-      },
+      headers:await headersIA(),
       body:JSON.stringify({
         model:'claude-haiku-4-5',
         max_tokens:500,
@@ -6130,9 +6136,9 @@ async function analizarEtiquetaManual(base64img,mediaType,_retry=0){
         return{_error:'📷 Foto movida o borrosa — no se alcanza a leer. Vuelve a tomarla con buena luz y bien enfocada.',_borrosa:true};
       }
     }
-    const resp=await fetch('https://transpgso-ai.luisdilellopadrino.workers.dev',{
+    const resp=await fetch(IA_URL,{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:await headersIA(),
       body:JSON.stringify({
         model:'claude-haiku-4-5',
         max_tokens:500,
