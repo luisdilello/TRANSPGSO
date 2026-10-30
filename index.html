@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1793387948;
+window.__MODULES_VERSION=1793389225;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -6360,16 +6360,17 @@ function RetiroMasivoRider(_ref_rm){
       var track=stream.getVideoTracks()[0];
       if(!track) return;
       var nueva=!linternaRef.current;
-      await track.applyConstraints({advanced:[{torch:nueva}]});
+      var rl=await alternarLinterna(track,nueva);
+      if(!rl.ok){toast(rl.motivo);return;}
       linternaRef.current=nueva;
       setLinternaOn(nueva);
-    }catch(e){toast('⚠ Linterna no disponible');}
+    }catch(e){toast('Linterna no disponible en este celular');}
   }
 
   async function iniciarScanner(){
     try{
       if('BarcodeDetector' in window){
-        var stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}});
+        var stream=await obtenerStreamCamara(1920,1080);
         if(videoRef.current){
           videoRef.current.srcObject=stream;
           await videoRef.current.play();
@@ -6464,7 +6465,7 @@ function RetiroMasivoRider(_ref_rm){
       // mensajero sin poder seguir escaneando el resto del lote.
       reescaneandoResumeScannerRef.current=(fase==='escaneando');
       if(fase==='escaneando') detenerScanner();
-      var stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}});
+      var stream=await obtenerStreamCamara(1920,1080);
       // No conectar el stream a videoRef.current acá todavía: en fase 'escaneando' este mismo
       // stream se pide ANTES de que React desmonte el <video> del escáner y monte el del modal
       // de reescaneo (ambos usan el mismo ref) — asignarlo ahora quedaría pegado al nodo viejo,
@@ -7338,10 +7339,11 @@ function ColectaRider(_ref_cr){
       const track=stream.getVideoTracks()[0];
       if(!track) return;
       const nuevaLinterna=!linternaRef.current;
-      await track.applyConstraints({advanced:[{torch:nuevaLinterna}]});
+      const rl=await alternarLinterna(track,nuevaLinterna);
+      if(!rl.ok){toast(rl.motivo);return;}
       linternaRef.current=nuevaLinterna;
       setLinternaOn(nuevaLinterna);
-    }catch(e){ toast('⚠ Linterna no disponible'); }
+    }catch(e){ toast('Linterna no disponible en este celular'); }
   }
   const scannerRef=useRef(null);
   const procesandoRef=useRef(false);
@@ -7359,7 +7361,7 @@ function ColectaRider(_ref_cr){
   async function iniciarScannerColecta(){
     try{
       if('BarcodeDetector' in window){
-        const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});
+        const stream=await obtenerStreamCamara(1280,720);
         if(videoRef.current){ videoRef.current.srcObject=stream; await videoRef.current.play(); }
         const det=new BarcodeDetector({formats:['qr_code','code_128','code_39','ean_13','ean_8','upc_a','data_matrix','pdf417']});
         const canvas=document.createElement('canvas');
@@ -8249,10 +8251,11 @@ function AsignacionRider(_ref_ar){
       const track=stream.getVideoTracks()[0];
       if(!track) return;
       const nueva=!linternaAsigRef.current;
-      await track.applyConstraints({advanced:[{torch:nueva}]});
+      const rl=await alternarLinterna(track,nueva);
+      if(!rl.ok){toast(rl.motivo);return;}
       linternaAsigRef.current=nueva;
       setLinternaAsigOn(nueva);
-    }catch(e){ toast('⚠ Linterna no disponible'); }
+    }catch(e){ toast('Linterna no disponible en este celular'); }
   }
 
   const codigosRef=useRef(new Set());
@@ -8304,7 +8307,7 @@ function AsignacionRider(_ref_ar){
   async function iniciarScannerAsig(){
     try{
       if('BarcodeDetector' in window){
-        const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});
+        const stream=await obtenerStreamCamara(1280,720);
         if(videoRef.current){ videoRef.current.srcObject=stream; await videoRef.current.play(); }
         const det=new BarcodeDetector({formats:['qr_code','code_128','code_39','ean_13','ean_8','upc_a','data_matrix','pdf417']});
         const canvas=document.createElement('canvas');
@@ -8619,7 +8622,8 @@ async function toggleLintScan(){
     const track=stream.getVideoTracks()[0];
     if(!track) return;
     const nueva=!lintScanRef.current;
-    await track.applyConstraints({advanced:[{torch:nueva}]});
+    const rl=await alternarLinterna(track,nueva);
+    if(!rl.ok){try{(typeof toast==='function'?toast:alert)(rl.motivo);}catch(_t){}return;}
     lintScanRef.current=nueva;
     setLintScanOn(nueva);
   }catch(e){}
@@ -8634,7 +8638,7 @@ async function iniciarScanner(){
   try{
     if('BarcodeDetector' in window){
       // Flujo nativo: manejamos stream manualmente
-      const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});
+      const stream = await obtenerStreamCamara(1280,720);
       if(videoRef.current){
         videoRef.current.srcObject=stream;
         await videoRef.current.play();
@@ -10144,6 +10148,69 @@ function RetirosRider(_ref_rr){
 }
 
 // ── OPTIMIZAR RUTA (IA) ─────────────────────────────────────────
+// ── Cámara trasera y linterna (30-10-2026) ──────────────────────────────────────────────
+// Problema: en muchos Android con varias cámaras traseras, el navegador abre una (gran angular
+// o macro) que NO tiene flash, y la linterna "no prende". Además algunos Chrome ignoran el
+// pedido de linterna en silencio. Solución:
+//  1) obtenerStreamCamara: si ya sabemos cuál cámara trasera tiene linterna (guardada en el
+//     celular), abre esa; si no, abre la trasera por defecto y en segundo plano busca cuál tiene
+//     linterna para usarla la próxima vez.
+//  2) alternarLinterna: prende/apaga probando las formas que soporta cada navegador y confirma
+//     que de verdad quedó prendida.
+var __CAM_LINTERNA_KEY='transpgso_cam_linterna';
+function __esIOS(){return /iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);}
+async function obtenerStreamCamara(ancho,alto,conAudio){
+  var base={};if(ancho)base.width={ideal:ancho};if(alto)base.height={ideal:alto};
+  var id=null;try{id=localStorage.getItem(__CAM_LINTERNA_KEY);}catch(e){}
+  // Si la última vez la cámara abierta no tenía flash, se busca la que sí tiene ANTES de abrir
+  // el escáner (buscar con la cámara ya en uso puede cortarla en algunos celulares).
+  if(!id){var buscar=false;try{buscar=localStorage.getItem(__CAM_LINTERNA_KEY+'_buscar')==='1';}catch(e){}
+    if(buscar){try{localStorage.removeItem(__CAM_LINTERNA_KEY+'_buscar');}catch(e){}id=await buscarCamaraConLinterna(null);}}
+  if(id){
+    try{return await navigator.mediaDevices.getUserMedia({video:Object.assign({deviceId:{exact:id}},base),audio:!!conAudio});}
+    catch(e){try{localStorage.removeItem(__CAM_LINTERNA_KEY);}catch(e2){}}
+  }
+  var stream=await navigator.mediaDevices.getUserMedia({video:Object.assign({facingMode:'environment'},base),audio:!!conAudio});
+  try{var t=stream.getVideoTracks()[0];var c=t&&t.getCapabilities?t.getCapabilities():null;
+    if(c&&c.torch){try{localStorage.setItem(__CAM_LINTERNA_KEY,t.getSettings().deviceId||'');localStorage.removeItem(__CAM_LINTERNA_KEY+'_sin');}catch(e){}}
+  }catch(e){}
+  return stream;
+}
+var __buscandoCam=false;
+async function buscarCamaraConLinterna(idActual){
+  if(__buscandoCam)return null;__buscandoCam=true;
+  try{
+    var devs=(await navigator.mediaDevices.enumerateDevices()).filter(function(d){return d.kind==='videoinput'&&d.deviceId&&d.deviceId!==idActual;});
+    var traseras=devs.filter(function(d){return !/front|frontal|user|selfie/i.test(d.label||'');});
+    for(var i=0;i<traseras.length;i++){
+      try{
+        var s=await navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:traseras[i].deviceId}}});
+        var t=s.getVideoTracks()[0];var c=t.getCapabilities?t.getCapabilities():{};var fm=(c.facingMode||[]);
+        s.getTracks().forEach(function(x){x.stop();});
+        if(c.torch&&(fm.length===0||fm.indexOf('user')<0)){try{localStorage.setItem(__CAM_LINTERNA_KEY,traseras[i].deviceId);localStorage.removeItem(__CAM_LINTERNA_KEY+'_sin');}catch(e){}return traseras[i].deviceId;}
+      }catch(e){}
+    }
+  }catch(e){}finally{__buscandoCam=false;}
+  return null;
+}
+// Devuelve {ok:true} o {ok:false,motivo:'texto para el mensajero'}
+async function alternarLinterna(track,encender){
+  if(!track)return{ok:false,motivo:'La cámara no está abierta.'};
+  if(__esIOS())return{ok:false,motivo:'En iPhone el navegador no deja prender la linterna desde la app. Usa la linterna del Centro de control (desliza desde arriba a la derecha) mientras escaneas.'};
+  var caps=null;try{caps=track.getCapabilities?track.getCapabilities():null;}catch(e){}
+  if(caps&&!caps.torch){
+    var yaBuscada=false;try{yaBuscada=localStorage.getItem(__CAM_LINTERNA_KEY+'_sin')==='1';}catch(e){}
+    if(yaBuscada)return{ok:false,motivo:'Este celular no permite prender la linterna desde el navegador.'};
+    try{localStorage.setItem(__CAM_LINTERNA_KEY+'_buscar','1');localStorage.setItem(__CAM_LINTERNA_KEY+'_sin','1');}catch(e){}
+    return{ok:false,motivo:'Esta cámara no tiene flash. Cierra y vuelve a abrir el escáner: el sistema va a buscar la cámara que sí tiene linterna.'};
+  }
+  function quedo(){try{var st=track.getSettings?track.getSettings():{};return st.torch===undefined?null:!!st.torch===!!encender;}catch(e){return null;}}
+  try{await track.applyConstraints({advanced:[{torch:!!encender}]});}catch(e){}
+  if(quedo()===true)return{ok:true};
+  try{await track.applyConstraints({torch:!!encender});}catch(e){}
+  if(quedo()!==false)return{ok:true};
+  return{ok:false,motivo:'El celular no respondió al pedido de linterna. Cierra y vuelve a abrir el escáner e inténtalo de nuevo.'};
+}
 function aiGeocode(geocoder,direccion,comuna){
   return new Promise(resolve=>{
     geocoder.geocode({address:direccion+', '+comuna+', Chile'},(results,status)=>{
@@ -11649,7 +11716,7 @@ const MAX_SEG_VIDEO=10;
 async function abrirCamaraPropia(){
   setErrorCamara('');
   try{
-    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
+    const stream=await obtenerStreamCamara(0,0,false);
     streamRefCamEA.current=stream;
     fotosSesionRefEA.current=0;
     fotosSesionDataRefEA.current=[];
@@ -11670,7 +11737,8 @@ async function toggleLinterna(){
     const track=stream.getVideoTracks()[0];
     if(!track)return;
     const nueva=!linternaOn;
-    await track.applyConstraints({advanced:[{torch:nueva}]});
+    const rl=await alternarLinterna(track,nueva);
+    if(!rl.ok){setErrorCamara(rl.motivo);return;}
     setLinternaOn(nueva);
   }catch(e){
     setErrorCamara('Este celular no permite controlar la linterna desde la cámara del navegador.');
@@ -11713,7 +11781,7 @@ function dispararFoto(){
 async function abrirGrabadora(){
   setErrorCamara('');
   try{
-    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:true});
+    const stream=await obtenerStreamCamara(0,0,true);
     streamRefCamEA.current=stream;
     setShowGrabadora(true);
     setTimeout(()=>{if(videoRefCamEA.current)videoRefCamEA.current.srcObject=stream;},50);
