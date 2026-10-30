@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1793384632;
+window.__MODULES_VERSION=1793386939;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -2556,7 +2556,7 @@ function CargaPorComuna(){
       const pIng=conTimeout(db.rpc('resumen_ingreso_comuna',{p_fecha:diaRef.current}),20000,'ingreso por comuna');
       let filas=[],desde=0;
       while(true){
-        const r=await conTimeout(db.from('envios').select('id,codigo,cliente,destinatario,direccion,comuna,fecha,estado,mensajero,updated_at,foto_etiqueta').in('estado',ESTADOS_PENDIENTES_CC).order('id',{ascending:true}).range(desde,desde+999),20000,'pendientes');
+        const r=await conTimeout(db.from('envios').select('id,codigo,cliente,destinatario,direccion,comuna,referencia,fecha,estado,mensajero,updated_at,foto_etiqueta').in('estado',ESTADOS_PENDIENTES_CC).order('id',{ascending:true}).range(desde,desde+999),20000,'pendientes');
         if(r.error)throw r.error;
         filas=filas.concat(r.data||[]);
         if(!r.data||r.data.length<1000)break;
@@ -2665,7 +2665,12 @@ function CargaPorComuna(){
         React.createElement('input',{type:'date',className:'form-input',value:dia,max:hoy,onChange:function(e){setDia(e.target.value||hoy);},style:{width:150,padding:'6px 8px'}}),
         !esHoy&&React.createElement('button',{className:'filter-btn',onClick:function(){setDia(hoy);}},'Hoy'),
         React.createElement('button',{className:'btn-secondary',style:{padding:'6px 12px',fontSize:12},onClick:function(){setCargando(true);cargar();}},cargando?'Actualizando…':'Actualizar'),
-        React.createElement('button',{className:'btn-secondary',style:{padding:'6px 12px',fontSize:12},onClick:exportar,disabled:!lista.length},'Excel')
+        React.createElement('button',{className:'btn-secondary',style:{padding:'6px 12px',fontSize:12},onClick:exportar,disabled:!lista.length},'Excel'),
+        React.createElement('button',{className:'btn-secondary',style:{padding:'6px 12px',fontSize:12},title:'Revisa en el mapa las direcciones de lo que está para ruta (en bodega + reprogramados)'+(comunaSel?' de '+comunaSel:''),onClick:function(){
+          const l=pend.filter(function(e){return (e.estado==='en_bodega'||e.estado==='sin_asignar'||e.estado==='reprogramado')&&(!comunaSel||comunaCC(e.comuna)===comunaSel);});
+          if(!l.length){alert('No hay piezas para ruta'+(comunaSel?' en '+comunaSel:'')+'.');return;}
+          loadScriptOnce('revisar-direcciones','modules/revisar-direcciones.js').then(function(){window.__revDir.abrir(l,{onClose:function(){cargar();}});});
+        }},'Revisar direcciones')
       )
     ),
     error&&React.createElement('div',{style:{fontSize:12,color:'var(--danger)',marginBottom:8}},error),

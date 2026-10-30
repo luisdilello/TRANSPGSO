@@ -2048,7 +2048,12 @@ sheets.push({name:'Resumen',headers:['Fecha','Entregados Flex','Entregados Manua
   ['Retorno resuelto en el período','','','','','','',totalRetornoResuelto],
   ['TOTAL A PAGAR (recibido − retorno)','','','','','','',totalRecibidos-totalRetornoResuelto]
 ]});
-exportToExcel('Envios_TransPgso_'+fechaHoyCL(),sheets);},onHTMLCliente:exportarHTMLPorCliente,htmlClienteLabel:'Exportar HTML por cliente — Reagendas',extras:[{label:'Exportar para Circuit / Spoke (un archivo por mensajero)',onClick:async function(){
+exportToExcel('Envios_TransPgso_'+fechaHoyCL(),sheets);},onHTMLCliente:exportarHTMLPorCliente,htmlClienteLabel:'Exportar HTML por cliente — Reagendas',extras:[{label:'Revisar direcciones y exportar para Circuit / Spoke',onClick:function(){
+  var lista=(filtrados||[]).filter(function(e){return e.estado==='en_ruta'||e.estado==='en_bodega'||e.estado==='reprogramado'||e.estado==='sin_asignar';});
+  if(!lista.length){toast('No hay envíos pendientes (en ruta, en bodega o reprogramados) en la lista filtrada.');return;}
+  if(lista.length>600&&!window.confirm('Son '+lista.length+' direcciones; revisarlas en el mapa toma unos minutos. Conviene filtrar por mensajero o comuna. ¿Continuar igual?'))return;
+  loadScriptOnce('revisar-direcciones','modules/revisar-direcciones.js').then(function(){window.__revDir.abrir(lista,{conExportar:true});}).catch(function(err){toast('No se pudo abrir la revisión: '+(err&&err.message||''));});
+}},{label:'Exportar para Circuit / Spoke sin revisar (un archivo por mensajero)',onClick:async function(){
   var ex=window.__app.exportarCircuit;var lista=(filtrados||[]).filter(function(e){return e.estado==='en_ruta'||e.estado==='en_bodega'||e.estado==='reprogramado'||e.estado==='sin_asignar';});
   if(!lista.length){toast('No hay envíos pendientes (en ruta, en bodega o reprogramados) en la lista filtrada.');return;}
   var grupos={};lista.forEach(function(e){var m=(e.mensajero||'SIN MENSAJERO').replace(/,\s*/g,' ').trim();(grupos[m]=grupos[m]||[]).push(e);});
