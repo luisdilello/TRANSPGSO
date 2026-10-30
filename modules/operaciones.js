@@ -316,6 +316,19 @@ function ReportarModal(props){
     setPuntos(it?it.envios:0);
   }
 
+  // "Agregar al informe" (30-10-2026): deja la pieza en el informe de operadores del día
+  // (tabla reportes_operador) con el motivo elegido. No multa ni toca el Cierre Diario.
+  async function agregarAlInforme(){
+    setEnviando(true);
+    var motivo=String(faltaSel||'').replace(/\s*\(-\d+\)\s*$/,'').trim()||'Sin motivo';
+    var fila={fecha:fechaHoyCL(),codigo:envio.codigo,mensajero:envio.mensajero||null,cliente:envio.cliente||null,comuna:envio.comuna||null,estado:envio.estado||null,motivo:motivo,comentario:(accion||'').trim()||null,reportado_por:nombreUsuario||null};
+    var r=await db.from('reportes_operador').insert(fila);
+    setEnviando(false);
+    if(r.error){toast&&toast('No se pudo agregar al informe: '+r.error.message);return;}
+    toast&&toast('Agregado al informe de hoy: '+envio.codigo);
+    onDone&&onDone({reportado_por:nombreUsuario||null,falta:motivo,accion:fila.comentario||'Agregado al informe de operadores',hora:new Date().toISOString()});
+    onClose();
+  }
   async function ejecutar(conMulta){
     if(!envio.mensajero){toast&&toast('⚠ Este envío no tiene mensajero asignado, no se puede reportar.');return;}
     if(conMulta&&(+puntos||0)<=0){toast&&toast('⚠ Ingresa una cantidad de puntos/envíos mayor a 0 para poder multar.');return;}
@@ -377,6 +390,7 @@ function ReportarModal(props){
       ),
       React.createElement('textarea',{placeholder:'Acción / comentario (opcional)...',rows:2,value:accion,onChange:function(e){setAccion(e.target.value);},style:{width:'100%',padding:'7px 10px',borderRadius:7,border:'1px solid var(--border)',fontSize:12,outline:'none',marginBottom:14,boxSizing:'border-box',resize:'vertical'}}),
       React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'flex-end'}},
+        React.createElement('button',{disabled:enviando,onClick:agregarAlInforme,title:'Agrega esta pieza y el motivo al informe de operadores del día (Informes → Novedades del día)',style:{padding:'8px 14px',borderRadius:8,border:'none',background:'var(--gold)',color:'#fff',fontWeight:700,fontSize:12,cursor:enviando?'default':'pointer',marginRight:'auto'}},'Agregar al informe'),
         React.createElement('button',{disabled:enviando,onClick:function(){ejecutar(false);},style:{padding:'8px 14px',borderRadius:8,border:'1px solid var(--border)',background:'var(--cream)',color:'var(--text-main)',fontWeight:700,fontSize:12,cursor:enviando?'default':'pointer'}},'📋 Solo registrar incidencia'),
         React.createElement('button',{disabled:enviando,onClick:function(){ejecutar(true);},style:{padding:'8px 14px',borderRadius:8,border:'none',background:'var(--danger)',color:'#fff',fontWeight:700,fontSize:12,cursor:enviando?'default':'pointer'}},enviando?'...':'🎯 Aplicar multa y registrar')
       )
@@ -503,6 +517,113 @@ function RetirosResumenDia(props){
           React.createElement('td',{style:{padding:'7px 8px'}},r.nuevos),
           React.createElement('td',{style:{padding:'7px 8px',color:rep.length?'#a8650a':'inherit'}},rep.length===0?'0':rep.map(function(x){return React.createElement('div',{key:x.codigo},React.createElement('span',{style:{fontFamily:'JetBrains Mono'}},x.codigo),' · '+(x.cliente||'')+' · '+(x.hora||''));})),
           React.createElement('td',{style:{padding:'7px 8px',color:blq.length?'#b03030':'inherit'}},blq.length===0?'0':blq.map(function(x){return React.createElement('div',{key:x.codigo,style:{fontFamily:'JetBrains Mono'}},x.codigo);})));})))));
+}
+// ═════════════════════════════════════════════════════════════════════════════════════
+// Informe de operadores (30-10-2026): piezas reportadas desde Firmas en Vivo con "Agregar al
+// informe". Vista del día y de la semana (lunes a domingo), con copiar códigos / listado y Excel.
+// ═════════════════════════════════════════════════════════════════════════════════════
+function lunesDe(f){var d=new Date(f+'T12:00:00');var w=(d.getDay()+6)%7;d.setDate(d.getDate()-w);return d.toISOString().slice(0,10);}
+function sumarDias(f,n){var d=new Date(f+'T12:00:00');d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
+function dmy(f){return f?f.split('-').reverse().join('-'):'';}
+function copiarTexto(txt,toast,msg){
+  function ok(){toast&&toast(msg||'Copiado');}
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(ok,function(){fallback();});}else fallback();
+  function fallback(){var ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');ok();}catch(e){toast&&toast('No se pudo copiar');}document.body.removeChild(ta);}
+}
+function ReportesOperadorPanel(props){
+  var fecha=props.fecha, toast=props.toast, esAdmin=props.esAdmin;
+  var _modo=useState('dia'),modo=_modo[0],setModo=_modo[1];
+  var _rows=useState([]),rows=_rows[0],setRows=_rows[1];
+  var _carg=useState(true),cargando=_carg[0],setCargando=_carg[1];
+  var _filtro=useState(''),filtroMotivo=_filtro[0],setFiltroMotivo=_filtro[1];
+  var desde=modo==='dia'?fecha:lunesDe(fecha), hasta=modo==='dia'?fecha:sumarDias(lunesDe(fecha),6);
+  function cargar(){
+    setCargando(true);
+    db.from('reportes_operador').select('*').gte('fecha',desde).lte('fecha',hasta).order('created_at',{ascending:true}).limit(5000)
+      .then(function(r){setRows((r&&r.data)||[]);setCargando(false);},function(){setCargando(false);});
+  }
+  useEffect(function(){cargar();var iv=setInterval(function(){if(!document.hidden)cargar();},60000);return function(){clearInterval(iv);};},[desde,hasta]);
+  var lista=filtroMotivo?rows.filter(function(r){return r.motivo===filtroMotivo;}):rows;
+  var porMotivo={},porMens={},porDia={};
+  rows.forEach(function(r){porMotivo[r.motivo]=(porMotivo[r.motivo]||0)+1;var m=(r.mensajero||'Sin mensajero').replace(/,\s*/g,' ');porMens[m]=(porMens[m]||0)+1;porDia[r.fecha]=(porDia[r.fecha]||0)+1;});
+  var motivosOrd=Object.keys(porMotivo).sort(function(a,b){return porMotivo[b]-porMotivo[a];});
+  var mensOrd=Object.keys(porMens).sort(function(a,b){return porMens[b]-porMens[a];});
+  var hora=function(d){try{return new Date(d).toLocaleTimeString('es-CL',{timeZone:'America/Santiago',hour:'2-digit',minute:'2-digit'});}catch(e){return '';}};
+  var titulo=modo==='dia'?('del '+dmy(fecha)):('semana '+dmy(desde)+' al '+dmy(hasta));
+  function codigosTxt(){var vistos={};return lista.filter(function(r){if(vistos[r.codigo])return false;vistos[r.codigo]=1;return true;}).map(function(r){return r.codigo;}).join('\n');}
+  function listadoTxt(){
+    var lineas=['Piezas reportadas '+titulo+' ('+lista.length+')'];
+    var grupos={};lista.forEach(function(r){(grupos[r.motivo]=grupos[r.motivo]||[]).push(r);});
+    Object.keys(grupos).sort(function(a,b){return grupos[b].length-grupos[a].length;}).forEach(function(mo){
+      lineas.push('');lineas.push(mo+' ('+grupos[mo].length+')');
+      grupos[mo].forEach(function(r){lineas.push(r.codigo+' - '+(r.mensajero||'Sin mensajero').replace(/,\s*/g,' ')+(r.cliente?' - '+r.cliente:'')+(modo==='semana'?' - '+dmy(r.fecha):'')+(r.comentario?' - '+r.comentario:''));});
+    });
+    return lineas.join('\n');
+  }
+  function excel(){
+    var ex=window.__app.exportToExcel;if(!ex){toast&&toast('Excel no disponible');return;}
+    ex('Reportes_operador_'+desde+(modo==='semana'?'_a_'+hasta:''),[
+      {name:'Piezas reportadas',headers:['Fecha','Hora','Código','Mensajero','Cliente','Comuna','Estado','Motivo','Comentario','Reportado por'],
+        rows:lista.map(function(r){return[dmy(r.fecha),hora(r.created_at),r.codigo,(r.mensajero||'').replace(/,\s*/g,' '),r.cliente||'',r.comuna||'',r.estado||'',r.motivo,r.comentario||'',r.reportado_por||''];})},
+      {name:'Por motivo',headers:['Motivo','Cantidad'],rows:motivosOrd.map(function(m){return[m,porMotivo[m]];})},
+      {name:'Por mensajero',headers:['Mensajero','Cantidad'],rows:mensOrd.map(function(m){return[m,porMens[m]];})}
+    ]);
+  }
+  async function quitar(r){
+    if(!window.confirm('¿Quitar '+r.codigo+' del informe?'))return;
+    var d=await db.from('reportes_operador').delete().eq('id',r.id);
+    if(d.error){toast&&toast('No se pudo quitar: '+d.error.message);return;}
+    setRows(function(p){return p.filter(function(x){return x.id!==r.id;});});
+  }
+  var btn={padding:'6px 12px',fontSize:12};
+  var th={textAlign:'left',padding:'7px 8px',fontSize:10,letterSpacing:1,textTransform:'uppercase',color:'var(--text-soft)',borderBottom:'2px solid var(--border)',whiteSpace:'nowrap',position:'sticky',top:0,background:'#fff'};
+  var td={padding:'6px 8px',borderBottom:'1px solid var(--border)',fontSize:12,verticalAlign:'top'};
+  var chip=function(label,n,act,onClick){return React.createElement('button',{key:label,type:'button',onClick:onClick,style:{padding:'4px 10px',borderRadius:14,border:'1px solid '+(act?'var(--gold)':'var(--border)'),background:act?'rgba(200,168,75,0.15)':'#fff',fontSize:11.5,cursor:'pointer',fontWeight:act?700:500}},label+' · '+n);};
+  return React.createElement('div',{className:'panel',style:{marginBottom:20}},
+    React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:10}},
+      React.createElement('div',null,
+        React.createElement('div',{className:'panel-title',style:{margin:0}},'Piezas reportadas por operadores'),
+        React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginTop:2}},'Se agregan desde Firmas en Vivo → Reportar → "Agregar al informe". '+(cargando?'Actualizando…':''))),
+      React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
+        React.createElement('button',{className:'filter-btn'+(modo==='dia'?' active':''),onClick:function(){setModo('dia');setFiltroMotivo('');}},'Del día'),
+        React.createElement('button',{className:'filter-btn'+(modo==='semana'?' active':''),onClick:function(){setModo('semana');setFiltroMotivo('');}},'Semana'))
+    ),
+    React.createElement('div',{style:{display:'flex',alignItems:'baseline',gap:10,flexWrap:'wrap',marginBottom:10}},
+      React.createElement('span',{style:{fontFamily:'Bebas Neue',fontSize:30,color:'var(--dark)',lineHeight:1}},rows.length),
+      React.createElement('span',{style:{fontSize:12,color:'var(--text-soft)'}},'pieza'+(rows.length!==1?'s':'')+' reportada'+(rows.length!==1?'s':'')+' '+titulo)),
+    rows.length>0&&React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}},
+      chip('Todos',rows.length,!filtroMotivo,function(){setFiltroMotivo('');}),
+      motivosOrd.map(function(m){return chip(m,porMotivo[m],filtroMotivo===m,function(){setFiltroMotivo(filtroMotivo===m?'':m);});})),
+    modo==='semana'&&rows.length>0&&React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))',gap:10,marginBottom:12}},
+      React.createElement('div',{style:{border:'1px solid var(--border)',borderRadius:8,padding:10}},
+        React.createElement('div',{style:{fontSize:10,letterSpacing:1,textTransform:'uppercase',color:'var(--text-soft)',marginBottom:6}},'Por día'),
+        [0,1,2,3,4,5,6].map(function(i){var f=sumarDias(desde,i);var n=porDia[f]||0;var nombres=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+          return React.createElement('div',{key:f,style:{display:'flex',justifyContent:'space-between',fontSize:12,padding:'2px 0',color:n?'var(--dark)':'#bbb'}},React.createElement('span',null,nombres[i]+' '+dmy(f).slice(0,5)),React.createElement('b',null,n));})),
+      React.createElement('div',{style:{border:'1px solid var(--border)',borderRadius:8,padding:10,maxHeight:200,overflow:'auto'}},
+        React.createElement('div',{style:{fontSize:10,letterSpacing:1,textTransform:'uppercase',color:'var(--text-soft)',marginBottom:6}},'Por mensajero'),
+        mensOrd.map(function(m){return React.createElement('div',{key:m,style:{display:'flex',justifyContent:'space-between',fontSize:12,padding:'2px 0'}},React.createElement('span',null,m),React.createElement('b',null,porMens[m]));}))),
+    React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}},
+      React.createElement('button',{className:'btn-primary',style:btn,disabled:!lista.length,onClick:function(){copiarTexto(codigosTxt(),toast,'Códigos copiados ('+lista.length+')');}},'Copiar códigos'),
+      React.createElement('button',{className:'btn-secondary',style:btn,disabled:!lista.length,onClick:function(){copiarTexto(listadoTxt(),toast,'Listado copiado');}},'Copiar listado con motivos'),
+      React.createElement('button',{className:'btn-secondary',style:btn,disabled:!lista.length,onClick:excel},'Excel')),
+    lista.length===0?React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',padding:'8px 0'}},cargando?'Cargando…':'Sin piezas reportadas '+titulo+'.'):
+    React.createElement('div',{style:{maxHeight:420,overflow:'auto',border:'1px solid var(--border)',borderRadius:8}},
+      React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',minWidth:820}},
+        React.createElement('thead',null,React.createElement('tr',null,[modo==='semana'?'Fecha':null,'Hora','Código','Mensajero','Cliente','Comuna','Motivo','Comentario','Reportó',''].filter(function(x){return x!==null;}).map(function(h,i){return React.createElement('th',{key:i,style:th},h);}))),
+        React.createElement('tbody',null,lista.map(function(r){
+          return React.createElement('tr',{key:r.id},
+            modo==='semana'&&React.createElement('td',{style:Object.assign({},td,{whiteSpace:'nowrap'})},dmy(r.fecha)),
+            React.createElement('td',{style:td},hora(r.created_at)),
+            React.createElement('td',{style:Object.assign({},td,{fontFamily:'JetBrains Mono',fontWeight:700,userSelect:'all'})},r.codigo),
+            React.createElement('td',{style:td},(r.mensajero||'—').replace(/,\s*/g,' ')),
+            React.createElement('td',{style:td},r.cliente||'—'),
+            React.createElement('td',{style:td},r.comuna||'—'),
+            React.createElement('td',{style:Object.assign({},td,{fontWeight:600})},r.motivo),
+            React.createElement('td',{style:Object.assign({},td,{color:'var(--text-mid)'})},r.comentario||''),
+            React.createElement('td',{style:Object.assign({},td,{whiteSpace:'nowrap',color:'var(--text-soft)'})},r.reportado_por||''),
+            React.createElement('td',{style:td},esAdmin&&React.createElement('button',{onClick:function(){quitar(r);},title:'Quitar del informe',style:{border:'none',background:'none',color:'var(--danger)',cursor:'pointer',fontWeight:700}},'✕')));
+        }))))
+  );
 }
 function CierreDiario(props){
   var mensajeros=props.mensajeros||[], usuario=props.usuario, esAdmin=props.esAdmin, toast=props.toast;
@@ -752,6 +873,7 @@ function CierreDiario(props){
         React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,color:soloLectura?'#2e7d4f':'#8a6d1a'}},soloLectura?'🔒 CERRADO':'📝 BORRADOR'))
     ),
 
+    React.createElement(ReportesOperadorPanel,{fecha:fecha,toast:toast,esAdmin:true}),
     // ── Ponderación económica del día ──
     React.createElement('div',{style:{background:'#fff',border:'1.5px solid '+(seRecuperoCosto?'rgba(46,125,79,0.3)':'rgba(200,168,75,0.35)'),borderRadius:10,padding:14,marginBottom:20}},
       React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,marginBottom:10}},
@@ -967,8 +1089,13 @@ function FirmasEnVivo(props){
     var q=db.from('cierres_ruta').select('fecha,firmas_excepciones');
     if(lim.desde)q=q.gte('fecha',lim.desde);
     if(lim.hasta)q=q.lte('fecha',lim.hasta);
-    q.then(function(r){
+    var q2=db.from('reportes_operador').select('fecha,codigo,motivo,comentario,reportado_por,created_at');
+    if(lim.desde)q2=q2.gte('fecha',lim.desde);
+    if(lim.hasta)q2=q2.lte('fecha',lim.hasta);
+    Promise.all([q,q2]).then(function(rs){
+      var r=rs[0],r2=rs[1];
       var mapa={};
+      ((r2&&r2.data)||[]).forEach(function(f){mapa[f.codigo]={reportado_por:f.reportado_por||null,falta:f.motivo||'',accion:f.comentario||'Agregado al informe de operadores',hora:f.created_at,fecha:f.fecha};});
       ((r&&r.data)||[]).forEach(function(row){
         (row.firmas_excepciones||[]).forEach(function(f){
           if(!f||!f.codigo)return;
