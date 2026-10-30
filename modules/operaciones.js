@@ -569,6 +569,38 @@ function ReportesOperadorPanel(props){
       {name:'Por mensajero',headers:['Mensajero','Cantidad'],rows:mensOrd.map(function(m){return[m,porMens[m]];})}
     ]);
   }
+  // PDF con el formato de documentos TransPgso (modules/doc-pdf.js)
+  function pdf(){
+    var w=window.open('','_blank');
+    loadScriptOnce('doc-pdf','modules/doc-pdf.js').then(function(){
+      var e=function(x){return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+      var tabla=function(cabs,filas){return '<table class="tabla"><tr>'+cabs.map(function(c){return '<th>'+e(c)+'</th>';}).join('')+'</tr>'+filas.map(function(f){return '<tr>'+f.map(function(v,i){return '<td'+(i===0&&cabs[0]==='Código'?' style="font-family:JetBrains Mono,monospace;font-weight:700;white-space:nowrap"':(i===0?' style="font-weight:600"':''))+'>'+e(v)+'</td>';}).join('')+'</tr>';}).join('')+'</table>';};
+      var sec=function(n,t,h){return '<div class="sec"><h2>'+n+'. '+e(t)+'</h2>'+h+'</div>';};
+      var mot={},men={};lista.forEach(function(r){mot[r.motivo]=(mot[r.motivo]||0)+1;var m=(r.mensajero||'Sin mensajero').replace(/,\s*/g,' ');men[m]=(men[m]||0)+1;});
+      var motO=Object.keys(mot).sort(function(a,b){return mot[b]-mot[a];}), menO=Object.keys(men).sort(function(a,b){return men[b]-men[a];});
+      var cuerpo='',n=1;
+      cuerpo+=sec(n++,'Resumen por motivo',tabla(['Motivo','Piezas','%'],motO.map(function(m){return[m,mot[m],Math.round(mot[m]/lista.length*100)+'%'];})));
+      cuerpo+=sec(n++,'Resumen por mensajero',tabla(['Mensajero','Piezas'],menO.map(function(m){return[m,men[m]];})));
+      var det='';
+      motO.forEach(function(m){
+        var rs=lista.filter(function(r){return r.motivo===m;});
+        det+='<h3>'+e(m)+' ('+rs.length+')</h3>'+tabla(['Código'].concat(modo==='semana'?['Fecha']:[]).concat(['Hora','Mensajero','Cliente','Comuna','Comentario','Reportó']),
+          rs.map(function(r){return [r.codigo].concat(modo==='semana'?[dmy(r.fecha)]:[]).concat([hora(r.created_at),(r.mensajero||'—').replace(/,\s*/g,' '),r.cliente||'—',r.comuna||'—',r.comentario||'',r.reportado_por||'']);}));
+      });
+      cuerpo+=sec(n++,'Detalle de piezas reportadas',det);
+      cuerpo+=sec(n++,'Códigos reportados','<p style="font-family:JetBrains Mono,monospace;font-size:10.5px;line-height:1.8">'+e(codigosTxt()).replace(/\n/g,' · ')+'</p>');
+      var D=window.__docPDF;
+      D.abrir(w,D.documentoHTML({
+        tipo:'INFORME DE OPERADORES',folio:'',fechaDoc:dmy(modo==='dia'?fecha:hasta),
+        titulo:'Piezas reportadas por operadores — '+titulo,
+        subtitulo:filtroMotivo?('Filtrado por motivo: '+filtroMotivo):'',
+        metaPares:[['Período',modo==='dia'?dmy(fecha):(dmy(desde)+' al '+dmy(hasta)),2],['Piezas reportadas',String(lista.length)],['Motivos distintos',String(motO.length)]],
+        cuerpo:cuerpo,
+        cierre:'Registro de piezas reportadas por el equipo de operadores desde Firmas en Vivo. Generado desde el sistema de gestión TransPgso.',
+        nombreArchivo:'Reportes_operador_'+(modo==='dia'?fecha:(desde+'_a_'+hasta))
+      }));
+    }).catch(function(err){try{w&&w.close();}catch(x){}toast&&toast('No se pudo generar el PDF: '+(err&&err.message||''));});
+  }
   async function quitar(r){
     if(!window.confirm('¿Quitar '+r.codigo+' del informe?'))return;
     var d=await db.from('reportes_operador').delete().eq('id',r.id);
@@ -605,7 +637,8 @@ function ReportesOperadorPanel(props){
     React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}},
       React.createElement('button',{className:'btn-primary',style:btn,disabled:!lista.length,onClick:function(){copiarTexto(codigosTxt(),toast,'Códigos copiados ('+lista.length+')');}},'Copiar códigos'),
       React.createElement('button',{className:'btn-secondary',style:btn,disabled:!lista.length,onClick:function(){copiarTexto(listadoTxt(),toast,'Listado copiado');}},'Copiar listado con motivos'),
-      React.createElement('button',{className:'btn-secondary',style:btn,disabled:!lista.length,onClick:excel},'Excel')),
+      React.createElement('button',{className:'btn-secondary',style:btn,disabled:!lista.length,onClick:excel},'Excel'),
+      React.createElement('button',{className:'btn-secondary',style:btn,disabled:!lista.length,onClick:pdf},'PDF')),
     lista.length===0?React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',padding:'8px 0'}},cargando?'Cargando…':'Sin piezas reportadas '+titulo+'.'):
     React.createElement('div',{style:{maxHeight:420,overflow:'auto',border:'1px solid var(--border)',borderRadius:8}},
       React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',minWidth:820}},
