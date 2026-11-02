@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1793639048;
+window.__MODULES_VERSION=1793641389;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -713,7 +713,20 @@ function loadScriptOnce(key, src){
 <script>
 /* v1782536513 */
 window.addEventListener("DOMContentLoaded",function(){
-const SUPA_URL='https://tiambblslqdloeqdbhrs.supabase.co';const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpYW1iYmxzbHFkbG9lcWRiaHJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzODEzNzIsImV4cCI6MjA5NDk1NzM3Mn0.LYu6YsoIfzW3sApLnYvDh0GPDizOhjDSLtZQyrGH4nU';const db=supabase.createClient(SUPA_URL,SUPA_KEY);
+const SUPA_URL='https://tiambblslqdloeqdbhrs.supabase.co';const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpYW1iYmxzbHFkbG9lcWRiaHJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzODEzNzIsImV4cCI6MjA5NDk1NzM3Mn0.LYu6YsoIfzW3sApLnYvDh0GPDizOhjDSLtZQyrGH4nU';// 02-11-2026: ninguna llamada a la base puede quedar esperando para siempre. Con un wifi sin
+// internet real (edificio, cliente) el celular cree que tiene conexión y la petición no responde
+// ni falla: la pantalla quedaba en "GUARDANDO...". Ahora, a los 60 s se corta y se trata como
+// "sin conexión" (la entrega queda en la cola offline del celular y se envía sola después).
+function fetchConLimite(url,opts){
+  opts=opts||{};
+  // Subidas de archivos (Storage) quedan fuera: pueden ser grandes y ya tienen su propio límite.
+  if(String(url).indexOf('/storage/v1/object')>=0&&/^(POST|PUT)$/i.test(opts.method||''))return fetch(url,opts);
+  var ctrl=new AbortController(),vencido=false;
+  var t=setTimeout(function(){vencido=true;ctrl.abort();},60000);
+  if(opts.signal){if(opts.signal.aborted)ctrl.abort();else opts.signal.addEventListener('abort',function(){ctrl.abort();});}
+  return fetch(url,Object.assign({},opts,{signal:ctrl.signal})).then(function(r){clearTimeout(t);return r;},function(e){clearTimeout(t);if(vencido)throw new TypeError('Failed to fetch (timeout sin respuesta)');throw e;});
+}
+const db=supabase.createClient(SUPA_URL,SUPA_KEY,{global:{fetch:fetchConLimite}});
 const VAPID_PUBLIC_KEY='BAltUDXRSz5xgb922XN5ESppiCkXBCqMYDLtaPPzmOBqU-xztkqpW9GnGSW9z2uRM7PYD4RPqkqr1Jfj_4Wqc38';
 function urlBase64ToUint8Array(base64String){
   const padding='='.repeat((4-base64String.length%4)%4);
@@ -12625,7 +12638,10 @@ async function procesarColaOffline(onCambio){
       const handler=HANDLERS_OFFLINE[item.tipo];
       if(!handler)continue;
       try{
-        await handler(item.payload);
+        if(item.tipo==='entrega'&&item.payload&&!item.payload.creadoTs){item.payload.creadoTs=item.ts;}
+        if(item.tipo==='entrega'&&item.payload)item.payload.verificarAntes=true;
+        const r=await Promise.race([handler(item.payload),new Promise(function(res){setTimeout(function(){res('__timeout');},90000);})]);
+        if(r==='__timeout')throw new Error('timeout sincronizando');
         await idbOfflineDelete(item.id);
         if(onCambio)onCambio();
       }catch(e){
