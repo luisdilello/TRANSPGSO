@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1793578858;
+window.__MODULES_VERSION=1793579318;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3352,6 +3352,25 @@ function filaCircuit(e){
   const notas=[cobra?('POR COBRAR $'+Math.round(+e.monto||0).toLocaleString('es-CL')):'','Código '+e.codigo,e.cliente?('Cliente: '+e.cliente):'',e.referencia?('Ref: '+e.referencia):'',notaUtil?('Nota: '+notaUtil):''].filter(Boolean).join(' | ');
   return[e.codigo,dir1,e.referencia||'',comuna,'Metropolitana de Santiago','','CL','','',2,notas,'',e.destinatario||'','','',telefonoCircuit(e.telefono)];
 }
+// Manifiesto de ruta en PDF (01-11-2026) para "Importar / Escanear manifiesto de ruta" de Spoke en
+// iPhone (allí no se pueden importar planillas). Texto limpio, una parada por línea, letra grande.
+var __jspdfPromesa=null;
+function cargarJsPDF(){
+  if(window.jspdf&&window.jspdf.jsPDF)return Promise.resolve();
+  if(!__jspdfPromesa)__jspdfPromesa=new Promise(function(res,rej){var sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';sc.onload=function(){res();};sc.onerror=function(){__jspdfPromesa=null;rej(new Error('jsPDF'));};document.head.appendChild(sc);});
+  return __jspdfPromesa;
+}
+function lineaManifiesto(e){var d=String(e.direccion||'').trim();if(!d)return'';var c=String(e.comuna||'').trim();if(c&&d.toUpperCase().indexOf(c.toUpperCase())<0)d+=', '+c.toLowerCase().replace(/(^|\s)\S/g,function(m){return m.toUpperCase();});return d+', Región Metropolitana, Chile';}
+async function manifiestoPDF(envios,nombre){
+  var J=window.jspdf.jsPDF;var doc=new J({unit:'mm',format:'a4'});
+  var y=18,n=0;doc.setFont('helvetica','bold');doc.setFontSize(14);doc.text('Manifiesto de ruta',14,y);y+=10;doc.setFont('helvetica','normal');doc.setFontSize(13);
+  envios.forEach(function(e){var l=lineaManifiesto(e);if(!l)return;n++;var partes=doc.splitTextToSize(n+'. '+l,182);if(y+partes.length*7>285){doc.addPage();y=18;}doc.text(partes,14,y);y+=partes.length*7+3;});
+  if(!n){alert('No hay direcciones para el manifiesto.');return false;}
+  var nom=(nombre||'Manifiesto').replace(/[^\w\-]/g,'_')+'_manifiesto.pdf';
+  var blob=doc.output('blob');var file=new File([blob],nom,{type:'application/pdf'});
+  try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:nom});return true;}}catch(err){if(err&&err.name==='AbortError')return false;}
+  var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download=nom;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},30000);return true;
+}
 // Ventana de exportación a Circuit/Spoke para el celular (01-11-2026). Cada opción se ejecuta al
 // tocar su botón (así el iPhone permite "Compartir"). En iPhone, Circuit/Spoke no aparece en la
 // lista de Compartir para planillas: se guarda en Archivos y se importa desde la app.
@@ -3364,16 +3383,22 @@ function abrirExportCircuit(envios,nombre,toast){
   f.innerHTML='<div style="background:#1d1f16;color:#eee;border-radius:18px 18px 0 0;width:100%;max-width:520px;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));font-family:Arial,sans-serif">'
     +'<div style="font-size:18px;font-weight:900;color:#C8A84B;letter-spacing:1px">LLEVAR MI RUTA A CIRCUIT / SPOKE</div>'
     +'<div style="font-size:13px;color:#bbb;margin:6px 0 4px">'+envios.length+' envíos en ruta.</div>'
-    +'<button data-x="share" style="'+b+'border:none;background:#C8A84B;color:#1d1f16">'+(ios?'Guardar archivo (Compartir → Guardar en Archivos)':'Compartir archivo a Circuit / Spoke')+'</button>'
+    +(ios?'<button data-x="pdf" disabled style="'+b+'border:none;background:#C8A84B;color:#1d1f16;opacity:.6">Preparando manifiesto PDF…</button>':'')
+    +'<button data-x="share" style="'+b+(ios?'border:1px solid #C8A84B;background:transparent;color:#C8A84B':'border:none;background:#C8A84B;color:#1d1f16')+'">'+(ios?'Planilla Excel (solo sirve en Android)':'Compartir archivo a Circuit / Spoke')+'</button>'
     +'<button data-x="copy" style="'+b+'border:1px solid #C8A84B;background:transparent;color:#C8A84B">Copiar direcciones</button>'
     +'<div style="font-size:12px;color:#aaa;line-height:1.5;margin-top:12px">'
-    +(ios?'<b style="color:#eee">En iPhone:</b> 1) Toca "Guardar archivo" y elige <b>Guardar en Archivos</b>. 2) Abre Circuit/Spoke → <b>Agregar paradas → Importar</b> → elige el archivo.<br/>Si prefieres, "Copiar direcciones" y pégalas en Circuit/Spoke (una por línea).'
+    +(ios?'<b style="color:#eee">En iPhone (Spoke no importa planillas en iPhone):</b><br/>1) Toca <b>Manifiesto PDF</b> y elige <b>Guardar en Archivos</b>.<br/>2) En Circuit/Spoke crea la ruta → botón <b>⋮</b> → <b>Importar manifiesto de ruta</b> → elige el PDF.<br/>También sirve <b>Escanear manifiesto de ruta</b>: abre el PDF en otro celular o en el computador y escanéalo con la cámara.'
          :'Elige Circuit o Spoke en la lista de Compartir. Si no aparece, guarda el archivo y en la app usa <b>Importar</b>. También puedes copiar las direcciones y pegarlas.')
     +'</div><button data-x="close" style="'+b+'border:none;background:#333;color:#ccc;margin-top:12px">Cerrar</button></div>';
   function cerrar(){if(f.parentNode)document.body.removeChild(f);}
   f.addEventListener('click',function(ev){if(ev.target===f)cerrar();});
   f.querySelector('[data-x=close]').onclick=cerrar;
   f.querySelector('[data-x=share]').onclick=function(){exportarCircuit(envios,nombre,{compartir:true}).then(function(ok){if(ok)toast('Archivo listo: '+envios.length+' envíos');});};
+  if(ios){
+    var bp=f.querySelector('[data-x=pdf]');
+    cargarJsPDF().then(function(){bp.disabled=false;bp.style.opacity='1';bp.textContent='Manifiesto PDF (para Spoke en iPhone)';},function(){bp.textContent='No se pudo preparar el PDF (revisa tu señal)';});
+    bp.onclick=function(){manifiestoPDF(envios,nombre).then(function(ok){if(ok)toast('Manifiesto listo: '+envios.length+' paradas');});};
+  }
   f.querySelector('[data-x=copy]').onclick=function(){
     var txt=envios.map(function(e){var d=String(e.direccion||'').trim();var c=String(e.comuna||'').trim();return d?(d+(c&&d.toUpperCase().indexOf(c.toUpperCase())<0?', '+c:'')+', Chile'):'';}).filter(Boolean).join('\n');
     function ok(){toast('Direcciones copiadas. Pégalas en Circuit/Spoke.');}
