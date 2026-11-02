@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1793630367;
+window.__MODULES_VERSION=1793634900;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3341,16 +3341,57 @@ function Dashboard(_ref7){
 // Arma la planilla con las columnas exactas que importa Circuit/Spoke (misma plantilla que usa
 // la empresa: CIRCUIT_CLIENTES.xlsx). Una fila por envío. En el celular intenta "Compartir" el
 // archivo (para abrirlo directo en Circuit/Spoke); si el navegador no puede, lo descarga.
-const CIRCUIT_COLS=['Address Name/Flat/Unit Number','Address Line 1','Address Line 2','B','State','Zip','Country','Earliest Time','Latest Time','Time at stop','Notes','Size','Recipient Name','Type','Recipient Email Address','Recipient Phone Number'];
+const CIRCUIT_COLS=['Address Name/Flat/Unit Number','Address Line 1','Address Line 2','City','State','Zip','Country','Earliest Time','Latest Time','Time at stop','Notes','Size','Recipient Name','Type','Recipient Email Address','Recipient Phone Number'];
 function telefonoCircuit(t){let d=String(t||'').replace(/\D/g,'');if(!d)return'';if(d.length===9&&d[0]==='9')d='56'+d;else if(d.length===8)d='569'+d;return d;}
+function tituloCircuit(t){return String(t||'').toLowerCase().replace(/(^|[\s\-])\S/g,function(m){return m.toUpperCase();});}
 function filaCircuit(e){
   const comuna=String(e.comuna||'').trim();
   const dir=String(e.direccion||'').trim();
-  const dir1=dir&&comuna&&dir.toUpperCase().indexOf(comuna.toUpperCase())<0?(dir+', '+comuna):dir;
+  // Si la dirección se verificó con Google (prepararParaCircuit), se usa la calle y número
+  // normalizados + comuna + código postal: así Circuit/Spoke la ubica en el lugar correcto.
+  const v=e._geo&&e._geo.ok?e._geo:null;
+  const calle=v?v.calle:dir;
+  const ciudad=tituloCircuit(v&&v.comuna?v.comuna:comuna);
   const cobra=(+e.monto>0)||e.en_un_cambio;
   const notaUtil=e.nota&&e.nota!==e.referencia&&!/^(retiro masivo|colecta|importado|galer)/i.test(String(e.nota).trim())?e.nota:'';
-  const notas=[cobra?('POR COBRAR $'+Math.round(+e.monto||0).toLocaleString('es-CL')):'','Código '+e.codigo,e.cliente?('Cliente: '+e.cliente):'',e.referencia?('Ref: '+e.referencia):'',notaUtil?('Nota: '+notaUtil):''].filter(Boolean).join(' | ');
-  return[e.codigo,dir1,e.referencia||'',comuna,'Metropolitana de Santiago','','CL','','',2,notas,'',e.destinatario||'','','',telefonoCircuit(e.telefono)];
+  const alerta=e._geo&&!e._geo.ok&&!/^DIRECCI[OÓ]N POR VERIFICAR/.test(String(e.nota||''))?('DIRECCIÓN POR VERIFICAR'+(e._geo.motivo?': '+e._geo.motivo:'')):'';
+  const notas=[alerta,cobra?('POR COBRAR $'+Math.round(+e.monto||0).toLocaleString('es-CL')):'','Código '+e.codigo,e.cliente?('Cliente: '+e.cliente):'',e.referencia?('Ref: '+e.referencia):'',v&&norm2(calle)!==norm2(dir)?('Dirección original: '+dir):'',notaUtil?('Nota: '+notaUtil):''].filter(Boolean).join(' | ');
+  return[e.codigo,calle,e.referencia||'',ciudad,'Región Metropolitana',v&&v.zip?v.zip:'','Chile','','',2,notas,'',e.destinatario||'','','',telefonoCircuit(e.telefono)];
+}
+function norm2(x){return String(x||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');}
+// Verifica cada dirección con Google antes de exportar (02-11-2026). Circuit/Spoke usa su propio
+// buscador de direcciones, que en Chile se equivoca con calles repetidas en varias comunas o
+// direcciones sin comuna. Google (el mismo mapa del sistema) con la comuna como referencia es más
+// certero: si encuentra la dirección exacta en su comuna, se exporta normalizada y con código
+// postal; si no, va con la nota "DIRECCIÓN POR VERIFICAR".
+async function prepararParaCircuit(envios,onProgreso){
+  const lista=(envios||[]).map(function(e){return Object.assign({},e);});
+  if(!(window.google&&google.maps&&google.maps.Geocoder))return lista;
+  const geo=new google.maps.Geocoder();
+  const sur=new google.maps.LatLngBounds(new google.maps.LatLng(-34.0,-71.2),new google.maps.LatLng(-33.1,-70.4));
+  let hechos=0;const cola=lista.slice();
+  function una(e){return new Promise(function(res){
+    const dir=String(e.direccion||'').trim(),com=String(e.comuna||'').trim();
+    if(!dir){res({ok:false,motivo:'sin dirección'});return;}
+    if(!/\d/.test(dir)){res({ok:false,motivo:'sin número'});return;}
+    geo.geocode({address:dir+(com?', '+com:'')+', Región Metropolitana, Chile',bounds:sur,componentRestrictions:{country:'CL'}},function(r,st){
+      if(st!=='OK'||!r||!r[0]){res({ok:false,motivo:'no encontrada en el mapa'});return;}
+      const x=r[0],t=x.types||[],c=x.address_components||[];
+      const g=function(k){const y=c.find(function(z){return z.types.indexOf(k)>=0;});return y?y.long_name:'';};
+      const comM=g('administrative_area_level_3')||g('locality');
+      const exacta=t.indexOf('street_address')>=0||t.indexOf('premise')>=0||t.indexOf('subpremise')>=0;
+      const calle=(g('route')+' '+g('street_number')).trim();
+      if(!exacta||!g('street_number')){res({ok:false,motivo:'el mapa no encontró el número'});return;}
+      const nums=dir.match(/\d+/g)||[];const numG=String(g('street_number')).replace(/\D.*$/,'');
+      if(nums.length&&nums.indexOf(numG)<0){res({ok:false,motivo:'el mapa la ubica en otro número ('+calle+')'});return;}
+      if(com&&comM&&norm2(comM)!==norm2(com)){res({ok:false,motivo:'el mapa la ubica en '+comM});return;}
+      const loc=x.geometry.location;
+      res({ok:true,calle:calle||dir,comuna:comM||com,zip:g('postal_code'),lat:loc.lat(),lng:loc.lng()});
+    });
+  });}
+  async function trab(){while(cola.length){const e=cola.shift();try{e._geo=await una(e);}catch(_){e._geo=null;}if(e._geo&&e._geo.ok){try{db.rpc('guardar_coords_envio',{p_codigo:e.codigo,p_lat:e._geo.lat,p_lng:e._geo.lng});}catch(_){}}hechos++;onProgreso&&onProgreso(hechos,lista.length);await new Promise(function(r){setTimeout(r,80);});}}
+  await Promise.all([trab(),trab(),trab(),trab()]);
+  return lista;
 }
 // Manifiesto de ruta en PDF (01-11-2026) para "Importar / Escanear manifiesto de ruta" de Spoke en
 // iPhone (allí no se pueden importar planillas). Texto limpio, una parada por línea, letra grande.
@@ -3360,7 +3401,7 @@ function cargarJsPDF(){
   if(!__jspdfPromesa)__jspdfPromesa=new Promise(function(res,rej){var sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';sc.onload=function(){res();};sc.onerror=function(){__jspdfPromesa=null;rej(new Error('jsPDF'));};document.head.appendChild(sc);});
   return __jspdfPromesa;
 }
-function lineaManifiesto(e){var d=String(e.direccion||'').trim();if(!d)return'';var c=String(e.comuna||'').trim();if(c&&d.toUpperCase().indexOf(c.toUpperCase())<0)d+=', '+c.toLowerCase().replace(/(^|\s)\S/g,function(m){return m.toUpperCase();});return d+', Región Metropolitana, Chile';}
+function lineaManifiesto(e){if(e._geo&&e._geo.ok)return e._geo.calle+', '+tituloCircuit(e._geo.comuna||e.comuna)+(e._geo.zip?' '+e._geo.zip:'')+', Región Metropolitana, Chile';var d=String(e.direccion||'').trim();if(!d)return'';var c=String(e.comuna||'').trim();if(c&&d.toUpperCase().indexOf(c.toUpperCase())<0)d+=', '+c.toLowerCase().replace(/(^|\s)\S/g,function(m){return m.toUpperCase();});return d+', Región Metropolitana, Chile';}
 async function manifiestoPDF(envios,nombre){
   var J=window.jspdf.jsPDF;var doc=new J({unit:'mm',format:'a4'});
   var y=18,n=0;doc.setFont('helvetica','bold');doc.setFontSize(14);doc.text('Manifiesto de ruta',14,y);y+=10;doc.setFont('helvetica','normal');doc.setFontSize(13);
@@ -3417,6 +3458,18 @@ function abrirExportCircuit(envios,nombre,toast){
     function ok(){toast('Direcciones copiadas. Pégalas en Circuit/Spoke.');}
     if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(ok,function(){alert(txt);});else{alert(txt);}
   };
+  // Verificación de direcciones antes de habilitar los botones de planilla
+  var btns=['csv','xlsx'].map(function(k){return f.querySelector('[data-x='+k+']');});
+  var etiquetas=btns.map(function(x){return x.textContent;});
+  btns.forEach(function(x){x.disabled=true;x.style.opacity='.6';x.textContent='Verificando direcciones…';});
+  prepararParaCircuit(envios,function(h,n){btns[0].textContent='Verificando direcciones ('+h+' de '+n+')…';}).then(function(lista){
+    envios=lista;
+    var malas=lista.filter(function(e){return e._geo&&!e._geo.ok;});
+    btns.forEach(function(x,i){x.disabled=false;x.style.opacity='1';x.textContent=etiquetas[i];});
+    var av=document.createElement('div');av.style.cssText='font-size:12px;margin-top:8px;padding:8px 10px;border-radius:8px;'+(malas.length?'background:rgba(224,160,80,0.15);color:#e0a050;border:1px solid rgba(224,160,80,0.5)':'background:rgba(46,125,79,0.15);color:#7fd19b;border:1px solid rgba(46,125,79,0.5)');
+    av.innerHTML=malas.length?('<b>'+malas.length+' dirección'+(malas.length>1?'es':'')+' por verificar</b> (van marcadas en las notas de Circuit): '+malas.slice(0,6).map(function(e){return e.codigo+' ('+e._geo.motivo+')';}).join(', ')+(malas.length>6?'…':'')+'. Consulta a tu supervisor antes de salir.'):'Todas las direcciones verificadas en el mapa.';
+    f.querySelector('[data-sec=android]').insertBefore(av,f.querySelector('[data-sec=android]').firstChild);
+  });
   document.body.appendChild(f);
 }
 // Android: Chrome no deja compartir archivos .xlsx (solo imágenes, PDF, texto y CSV). Por eso
@@ -3435,6 +3488,7 @@ async function compartirCircuitCSV(envios,nombre){
 async function exportarCircuit(envios,nombreArchivo,opciones){
   opciones=opciones||{};
   if(typeof XLSX==='undefined'){alert('El generador de planillas aún no carga. Intenta de nuevo en unos segundos.');return false;}
+  if(opciones.verificar!==false&&!(envios||[]).some(function(e){return e&&e._geo!==undefined;}))envios=await prepararParaCircuit(envios);
   const filas=(envios||[]).filter(function(e){return e&&(e.direccion||e.comuna);}).map(filaCircuit);
   if(!filas.length){alert('No hay envíos con dirección para exportar.');return false;}
   const ws=XLSX.utils.aoa_to_sheet([CIRCUIT_COLS].concat(filas));
