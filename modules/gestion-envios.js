@@ -806,11 +806,11 @@ function confirmarImportPDF(){
       // ningún aviso al admin. Ahora se juntan los códigos que fallaron y se avisa con un toast
       // al terminar, para no perder envíos importados sin que nadie se entere.
       const codigosFallidos=[];
-      for(const e of procesados.slice(0,500)){
+      for(const e of procesados){
         try{
           const upsertData={codigo:e.codigo,cliente:e.cliente||'',destinatario:e.destinatario||'',telefono:e.telefono||'',direccion:e.direccion||'',comuna:e.comuna||'',referencia:e.referencia||'',fecha:e.fecha||fechaHoyCL(),estado:e.estado||'en_bodega',mensajero:e.mensajero||'',monto:0,en_un_cambio:false,nota:e.nota||'',fuente:'externo'};
           if(e.foto_etiqueta)upsertData.foto_etiqueta=e.foto_etiqueta;
-          await db.from('envios').upsert(upsertData,{onConflict:'codigo'});
+          const _up=await db.from('envios').upsert(upsertData,{onConflict:'codigo'});if(_up&&_up.error)throw _up.error;
           sbRegistrarHistorial(e.codigo,upsertData.estado,'Importado por PDF (admin)',usuario?.nombre||'Admin','panel_admin');
         }catch(err){
           codigosFallidos.push(e.codigo);

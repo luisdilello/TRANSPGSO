@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1793641389;
+window.__MODULES_VERSION=1793728436;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -5478,6 +5478,20 @@ function ImportarPDFColecta(_ref_ipdf){
             // hasta encontrar una que matchee EXACTO contra la lista real de comunas RM.
             var mFlex=matchComuna(c);if(mFlex){comuna=mFlex;break;}
           }}}
+          // 03-11-2026: algunas etiquetas traen abajo la lista de productos que repite
+          // "Envio: 4841... | 2 productos"; eso armaba un segundo bloque con el MISMO código y, al
+          // insertar en lotes de 50, el código repetido hacía fallar el lote completo sin aviso
+          // (caso MR SHENG: 639 etiquetas, entraron 399). Si el código ya se leyó, solo se completan
+          // los campos que faltaban y no se agrega de nuevo.
+          var yaLeido=codigo?envios.find(function(x){return x.codigo===codigo;}):null;
+          if(yaLeido){
+            if(!yaLeido.destinatario&&destinatario)yaLeido.destinatario=destinatario;
+            if(!yaLeido.direccion&&direccion)yaLeido.direccion=direccion;
+            if(!yaLeido.comuna&&comuna)yaLeido.comuna=comuna;
+            if(!yaLeido.referencia&&referencia){yaLeido.referencia=referencia;yaLeido.nota=referencia;}
+            if(!yaLeido.fechaEtiqueta&&fechaEtiqueta)yaLeido.fechaEtiqueta=fechaEtiqueta;
+            return;
+          }
           if(codigo&&codigo.length>=8){
             var envioObj={codigo,cliente:clientePDF,destinatario,direccion,referencia,comuna,fecha:fechaHoyCL(),fechaEtiqueta:fechaEtiqueta,estado:'en_bodega',mensajero:'',monto:0,nota:referencia||'',fuente:'flex',telefono:'',foto_etiqueta:null,historial:[{fecha:new Date().toISOString(),estado:'en_bodega',nota:'Importado desde PDF Flex'}]};
             envios.push(envioObj);
@@ -5507,7 +5521,7 @@ function ImportarPDFColecta(_ref_ipdf){
     if(!clientePDF){toast('⚠ Selecciona un cliente primero');return;}
     if(!archivos.length){toast('⚠ Agrega al menos un PDF');return;}
     setProcesando(true);
-    var totalEnvios=0;
+    var totalEnvios=0,insertadosPDF=0,fallidosPDF=[];
     var BATCH=50;
     for(var ai=0;ai<archivos.length;ai++){
       var arch=archivos[ai];
@@ -5525,7 +5539,21 @@ function ImportarPDFColecta(_ref_ipdf){
           var existentes=existentesMap;
           // Insertar nuevos
           var nuevos=envios.slice(bi,bi+BATCH).filter(function(env){return!existentes.has(env.codigo);}).map(function(env){return{codigo:env.codigo,cliente:env.cliente,destinatario:env.destinatario,telefono:env.telefono,direccion:env.direccion,comuna:env.comuna,referencia:env.referencia||'',fecha:env.fecha,estado:env.estado,mensajero:env.mensajero,monto:env.monto,en_un_cambio:false,nota:env.nota,fuente:env.fuente,foto_etiqueta:env.foto_etiqueta||null};});
-          if(nuevos.length>0){try{await conTimeout(db.from('envios').insert(nuevos),20000,'insertar envios');sbRegistrarHistorialLote(nuevos.map(function(n){return n.codigo;}),'en_bodega','Importado desde PDF Flex ('+arch.nombre+')',nombreAdminPDF,'panel_admin');}catch(ue){}}
+          // 03-11-2026: antes el error del insert no se miraba (Supabase no lanza excepción, devuelve
+          // {error}) y el historial se registraba igual. Ahora: si el lote falla, se reintenta de a
+          // uno; el historial queda solo para los que de verdad entraron y se avisa cuántos fallaron.
+          if(nuevos.length>0){
+            var okCods=[];
+            try{var _ins=await conTimeout(db.from('envios').insert(nuevos),20000,'insertar envios');if(_ins&&_ins.error)throw _ins.error;okCods=nuevos.map(function(n){return n.codigo;});}
+            catch(ue){
+              await procesarConcurrencia(nuevos,async function(n){
+                try{var _r1=await conTimeout(db.from('envios').insert(n),15000,'insertar envio '+n.codigo);if(_r1&&_r1.error)throw _r1.error;okCods.push(n.codigo);}
+                catch(e1){fallidosPDF.push(n.codigo+(e1&&e1.message?' ('+e1.message+')':''));}
+              },6);
+            }
+            insertadosPDF+=okCods.length;
+            if(okCods.length)sbRegistrarHistorialLote(okCods,'en_bodega','Importado desde PDF Flex ('+arch.nombre+')',nombreAdminPDF,'panel_admin');
+          }
           // Actualizar existentes solo campos vacíos - ya tenemos sus datos del select de arriba,
           // no hace falta leer de nuevo uno por uno. Las actualizaciones van en paralelo (8 a la vez).
           var existentesArr=envios.slice(bi,bi+BATCH).filter(function(env){return existentes.has(env.codigo);});
@@ -5570,7 +5598,8 @@ function ImportarPDFColecta(_ref_ipdf){
     }
     setResultado({total:totalEnvios,cliente:clientePDF});
     setProgreso('');setProcesando(false);
-    if(totalEnvios>0)toast('✓ '+totalEnvios+' envíos importados desde '+archivos.length+' PDFs · '+clientePDF);
+    if(fallidosPDF.length>0){console.warn('PDF Flex: no se pudieron guardar',fallidosPDF);alert('Atención: '+fallidosPDF.length+' envío(s) NO se guardaron en el sistema. Vuelve a cargar el mismo PDF (los que ya entraron no se duplican).\n\nCódigos: '+fallidosPDF.slice(0,30).join(', ')+(fallidosPDF.length>30?'…':''));}
+    else if(totalEnvios>0)toast('✓ '+totalEnvios+' envíos leídos ('+insertadosPDF+' nuevos) desde '+archivos.length+' PDFs · '+clientePDF);
   }
 
   return /*#__PURE__*/React.createElement('div',null,
