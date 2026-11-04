@@ -6,6 +6,7 @@
 // Si Google no encuentra la dirección exacta, el envío queda "sin_ubicacion" y aparece en el
 // panel "Periferia" del mapa para que un admin lo marque a mano.
 (function(){
+  var db=window.__app.db; // el index no expone globales: se usa el cliente compartido
   var ESTADOS_CERRADOS=['entregado','cancelado','retorno','en_bodega_cancelado','siniestro'];
   var corriendo=false;
   function norm(x){return String(x||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');}

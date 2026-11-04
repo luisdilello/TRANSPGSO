@@ -6,6 +6,10 @@
 // La escritura pasa por el registro de handlers offline (tipo 'cierre_flex', ver index.html):
 // sin señal, el cierre queda guardado en el celular y se envía solo después.
 (function(){
+  // Lo del sistema principal se toma de window.__app (el index no expone globales).
+  var A=window.__app||{};
+  var db=A.db,fechaHoyCL=A.fechaHoyCL,headersIA=A.headersIA,SUPA_URL=A.SUPA_URL||'https://tiambblslqdloeqdbhrs.supabase.co';
+  function intentarConColaOffline(t,p,m){return (window.__app.intentarConColaOffline)(t,p,m);}
   var h=function(){return React.createElement.apply(React,arguments);};
   var LEER_URL=SUPA_URL+'/functions/v1/leer-cierre-flex';
   var MESES={enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12};
