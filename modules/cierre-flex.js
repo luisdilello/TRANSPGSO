@@ -162,7 +162,7 @@
           var html='<div style="padding:12px 14px;border-radius:12px;background:rgba(46,125,79,0.15);border:1px solid rgba(46,125,79,0.5);margin-bottom:12px"><div style="font-weight:800;color:#7fd19b;font-size:14px">Cierre registrado · '+(x.fechaTxt||fechaBonita(x.fecha))+'</div><div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:4px">'+x.filas.length+' envíos en Flex: '+c.e+' entregados, '+c.n+' no entregados.</div></div>';
           res.innerHTML=html+'<div data-dif style="font-size:13px;color:rgba(255,255,255,0.6)">Revisando contra nuestra app…</div>';
           var rep=await db.rpc('reporte_cierre_flex',{p_fecha:x.fecha,p_mensajero:null});
-          var dif=((rep&&rep.data)||[]).filter(function(r){return r.categoria!=='ok'&&r.categoria!=='ok_fallido'&&r.categoria!=='sin_cierre';});
+          var dif=((rep&&rep.data)||[]).filter(function(r){return r.categoria!=='ok'&&r.categoria!=='ok_fallido'&&r.categoria!=='sin_cierre'&&r.categoria!=='sin_movimiento';});
           var cont=res.querySelector('[data-dif]');
           if(!dif.length){cont.innerHTML='<div style="color:#7fd19b;font-weight:700">Todo cuadra con nuestra app.</div>';}
           else{
@@ -193,7 +193,9 @@
     var _m=React.useState(''),mensSubir=_m[0],setMensSubir=_m[1];
     function cargar(fc){setCargando(true);db.rpc('reporte_cierre_flex',{p_fecha:fc||fecha,p_mensajero:null}).then(function(r){setCargando(false);if(r.error){toast('Error: '+r.error.message);return;}setDatos(r.data||[]);}).catch(function(e){setCargando(false);toast('Error: '+e.message);});}
     React.useEffect(function(){cargar(fecha);},[fecha]);
-    var grupos={};(datos||[]).forEach(function(r){var g=grupos[r.mensajero]||(grupos[r.mensajero]={m:r.mensajero,filas:[],subido:r.cierre_subido,hora:r.cierre_hora});g.filas.push(r);});
+    var _o=React.useState([]),otrosDias=_o[0],setOtrosDias=_o[1];
+    React.useEffect(function(){var desde=new Date(fechaHoyCL()+'T00:00:00-03:00').toISOString();db.from('cierres_flex').select('mensajero,fecha,updated_at').gte('updated_at',desde).neq('fecha',fecha).order('updated_at',{ascending:false}).limit(20).then(function(r){setOtrosDias((r&&r.data)||[]);},function(){});},[fecha,datos]);
+    var grupos={};(datos||[]).forEach(function(r){var g=grupos[r.mensajero]||(grupos[r.mensajero]={m:r.mensajero,filas:[],subido:r.cierre_subido,hora:r.cierre_hora});if(r.categoria==='sin_movimiento'){g.sinMov=true;}else{g.filas.push(r);}});
     var lista=Object.keys(grupos).map(function(k){var g=grupos[k];
       g.flexE=g.filas.filter(function(r){return r.flex==='Entregado';}).length;
       g.flexN=g.filas.filter(function(r){return r.flex&&r.flex!=='Entregado';}).length;
@@ -201,12 +203,12 @@
       g.ok=g.filas.filter(function(r){return r.categoria==='ok'||r.categoria==='ok_fallido';}).length;
       g.dif=g.subido?g.filas.filter(function(r){return r.categoria!=='ok'&&r.categoria!=='ok_fallido';}):[];
       g.graves=g.dif.filter(function(r){return nivel(r)>=2;}).length;
-      return g;}).sort(function(a,b){return (a.subido===b.subido?0:a.subido?-1:1)||(b.dif.length-a.dif.length)||a.m.localeCompare(b.m);});
-    var conCierre=lista.filter(function(g){return g.subido;}),sinCierre=lista.filter(function(g){return !g.subido;});
+      g.orden=g.subido?0:(g.filas.length?1:2);return g;}).sort(function(a,b){return (a.orden-b.orden)||(b.dif.length-a.dif.length)||a.m.localeCompare(b.m);});
+    var conCierre=lista.filter(function(g){return g.subido;}),sinCierre=lista.filter(function(g){return !g.subido&&g.filas.length;}),sinMov=lista.filter(function(g){return !g.subido&&!g.filas.length;});
     var totDif=conCierre.reduce(function(a,g){return a+g.dif.length;},0);
     function exportar(){
       var rows=[];lista.forEach(function(g){(g.subido?g.dif:g.filas).forEach(function(r){rows.push([g.m,r.codigo,r.flex||(g.subido?'No aparece':'Sin cierre'),r.nuestro?(est(r.nuestro)+(r.hora?' '+r.hora:'')):'No lo registró',g.subido?significado(r):'Sin cierre Flex subido',r.cliente||'',r.comuna||'',est(r.estado_actual),r.mensajero_actual||'']);});});
-      window.__app.exportToExcel('Cierre_Flex_'+fecha,[{name:'Diferencias',headers:['Mensajero','Código','En Flex','En nuestra app','Qué significa','Cliente','Comuna','Estado hoy','Mensajero hoy'],rows:rows},{name:'Resumen',headers:['Mensajero','Cierre subido','Entregados Flex','No entregados Flex','Entregados nuestra app','Coinciden','Diferencias'],rows:lista.map(function(g){return[g.m,g.subido?(g.hora||'Sí'):'No',g.flexE,g.flexN,g.nuestrosE,g.ok,g.subido?g.dif.length:''];})}]);
+      window.__app.exportToExcel('Cierre_Flex_'+fecha,[{name:'Diferencias',headers:['Mensajero','Código','En Flex','En nuestra app','Qué significa','Cliente','Comuna','Estado hoy','Mensajero hoy'],rows:rows},{name:'Resumen',headers:['Mensajero','Cierre subido','Entregados Flex','No entregados Flex','Entregados nuestra app','Coinciden','Diferencias'],rows:lista.map(function(g){return[g.m,g.subido?(g.hora||'Sí'):(g.filas.length?'No':'Sin movimiento Flex'),g.flexE,g.flexN,g.nuestrosE,g.ok,g.subido?g.dif.length:''];})}]);
     }
     function subirPorMensajero(){
       if(!mensSubir){toast('Elige el mensajero');return;}
@@ -231,16 +233,17 @@
           h('button',{className:'btn-secondary',onClick:exportar,disabled:!lista.length},'Excel'))),
       h('div',{style:{fontSize:13,color:'var(--text-soft)',marginBottom:14,lineHeight:1.5}},'Cruce entre lo que cada mensajero cerró en la app Envíos Flex (video de "Mis viajes") y lo que registró en nuestra app ese día. Solo envíos Flex.'),
       h('div',{className:'stats-grid',style:{marginBottom:16}},
-        h('div',{className:'stat-card'},h('div',{className:'stat-label'},'Cierres subidos'),h('div',{className:'stat-value',style:{fontSize:30}},conCierre.length),h('div',{className:'stat-sub'},'de '+lista.length+' mensajeros con Flex')),
+        h('div',{className:'stat-card'},h('div',{className:'stat-label'},'Cierres subidos'),h('div',{className:'stat-value',style:{fontSize:30}},conCierre.length),h('div',{className:'stat-sub'},'de '+(conCierre.length+sinCierre.length)+' mensajeros con Flex ese día')),
         h('div',{className:'stat-card'},h('div',{className:'stat-label'},'Diferencias'),h('div',{className:'stat-value',style:{fontSize:30,color:totDif?'#b00020':'#2e7d4f'}},totDif),h('div',{className:'stat-sub'},'en cierres subidos')),
-        h('div',{className:'stat-card'},h('div',{className:'stat-label'},'Sin cierre'),h('div',{className:'stat-value',style:{fontSize:30,color:sinCierre.length?'#c98a1f':'#2e7d4f'}},sinCierre.length),h('div',{className:'stat-sub'},'mensajeros que no subieron video'))),
+        h('div',{className:'stat-card'},h('div',{className:'stat-label'},'Sin cierre'),h('div',{className:'stat-value',style:{fontSize:30,color:sinCierre.length?'#c98a1f':'#2e7d4f'}},sinCierre.length),h('div',{className:'stat-sub'},'con Flex que no subieron video'+(sinMov.length?(' · '+sinMov.length+' sin movimiento Flex'):'')))),
+      otrosDias.length?h('div',{style:{marginBottom:14,padding:'10px 12px',borderRadius:10,border:'1px solid rgba(201,138,31,0.5)',background:'rgba(201,138,31,0.08)',fontSize:13}},h('b',null,'Cierres de otros días subidos hoy: '),otrosDias.map(function(c,i){return h('span',{key:i},i?' · ':'',c.mensajero+' ('+fechaBonita(c.fecha)+') ',h('a',{href:'#',onClick:function(e){e.preventDefault();setFecha(c.fecha);},style:{color:'#a0842a',fontWeight:700}},'Ver'));})):null,
       h('div',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',marginBottom:16,padding:'10px 12px',border:'1px solid var(--border)',borderRadius:10,background:'var(--cream)'}},
         h('span',{style:{fontSize:13,fontWeight:700}},'Subir cierre por un mensajero:'),
         h('select',{className:'form-input',value:mensSubir,onChange:function(e){setMensSubir(e.target.value);},style:{width:240}},h('option',{value:''},'Elige mensajero'),mensajeros.filter(function(m){return m.activo!==false;}).map(function(m){return h('option',{key:m.id||m.nombre,value:(m.nombre||'').toUpperCase()},m.nombre);})),
         h('button',{className:'btn-primary',onClick:subirPorMensajero,disabled:!!subiendo},'Subir video'),
         subiendo&&h('span',{style:{fontSize:12,color:'#c98a1f'}},subiendo)),
       cargando&&!datos?h('div',{className:'empty-state'},'Cargando…'):
-      !lista.length?h('div',{className:'empty-state'},'No hay gestiones Flex ni cierres para este día.'):
+      !lista.length?h('div',{className:'empty-state'},'No hay mensajeros activos.'):
       h('div',{className:'table-wrap'},h('table',null,
         h('thead',null,h('tr',null,['Mensajero','Cierre Flex','Entregados Flex','No entregados Flex','Entregados nuestra app','Coinciden','Diferencias',''].map(function(x,i){return h('th',{key:i,style:th},x);}))),
         h('tbody',null,lista.map(function(g){
@@ -248,7 +251,7 @@
           var filasDet=g.subido?g.dif:g.filas;
           return [h('tr',{key:g.m,style:{cursor:'pointer',background:open?'rgba(200,168,75,0.08)':undefined},onClick:function(){setAbierto(open?null:g.m);}},
               h('td',{style:Object.assign({},td,{fontWeight:700})},g.m),
-              h('td',{style:td},g.subido?h('span',{style:{color:'#2e7d4f',fontWeight:700}},'Subido '+(g.hora||'')):h('span',{style:{color:'#c98a1f',fontWeight:700}},'Sin cierre')),
+              h('td',{style:td},g.subido?h('span',{style:{color:'#2e7d4f',fontWeight:700}},'Subido '+(g.hora||'')):g.filas.length?h('span',{style:{color:'#c98a1f',fontWeight:700}},'Sin cierre'):h('span',{style:{color:'var(--text-soft)'}},'Sin movimiento Flex')),
               h('td',{style:td},g.subido?g.flexE:'—'),h('td',{style:td},g.subido?g.flexN:'—'),h('td',{style:td},g.nuestrosE),
               h('td',{style:td},g.subido?g.ok:'—'),
               h('td',{style:Object.assign({},td,{fontWeight:800,color:!g.subido?'#c98a1f':g.graves?'#b00020':g.dif.length?'#c98a1f':'#2e7d4f'})},g.subido?(g.dif.length||'0'):'—'),
