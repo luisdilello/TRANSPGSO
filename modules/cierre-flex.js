@@ -24,6 +24,7 @@
     flex_n_sin_nuestro:{t:'Lo intentó en Flex, pero no lo registró en nuestra app',n:1},
     nuestro_e_sin_flex:{t:'Entregado en nuestra app, pero no aparece en Flex',n:2},
     nuestro_otro_sin_flex:{t:'Lo gestionó en nuestra app ({n}), pero no aparece en Flex',n:1},
+    flex_desconocido:{t:'Código del video que no existe en nuestro sistema: revisar (puede ser un número mal leído o un paquete que no se ingresó)',n:1},
     sin_cierre:{t:'Sin cierre Flex subido',n:1}
   };
   function significado(r){
@@ -68,25 +69,41 @@
     try{
       v.load();await esperar(v,'loadeddata',20000);
       var dur=v.duration;if(!isFinite(dur)||dur<=0)throw new Error('No se pudo leer el video');
-      var W=576,H=Math.round(v.videoHeight*W/v.videoWidth)||1280;
+      var W=720,H=Math.round(v.videoHeight*W/v.videoWidth)||1600;
       var big=document.createElement('canvas');big.width=W;big.height=H;var bctx=big.getContext('2d');
       var sm=document.createElement('canvas');sm.width=72;sm.height=Math.round(72*H/W);var sctx=sm.getContext('2d',{willReadFrequently:true});
-      var paso=dur>240?1.0:0.7;var tiempos=[];for(var t=0.05;t<dur-0.05;t+=paso)tiempos.push(t);tiempos.push(Math.max(0,dur-0.1));
+      // 04-11-2026 v2: muestras cada 0,35 s; de cada tramo se elige el cuadro MÁS QUIETO (menos
+      // movimiento respecto a sus vecinos) para que el texto salga nítido, siempre con
+      // superposición con el cuadro anterior para no saltarse filas.
+      var paso=dur>240?0.8:0.35;var tiempos=[];for(var t=0.05;t<dur-0.05;t+=paso)tiempos.push(t);tiempos.push(Math.max(0,dur-0.1));
       async function ir(t){v.currentTime=t;await esperar(v,'seeked',8000);}
-      function capturar(){bctx.drawImage(v,0,0,W,H);return big.toDataURL('image/jpeg',0.75);}
+      function capturar(){bctx.drawImage(v,0,0,W,H);return big.toDataURL('image/jpeg',0.85);}
       function perf(){sctx.drawImage(v,0,0,sm.width,sm.height);return perfil(sctx,sm.width,sm.height);}
-      var out=[];await ir(tiempos[0]);out.push(capturar());var ult=perf();var prevT=tiempos[0],ultT=tiempos[0];
-      for(var i=1;i<tiempos.length;i++){
-        await ir(tiempos[i]);var p=perf();var d=desplazamiento(ult,p);
-        if(d.err>8||d.s>d.L*0.55){
-          if(prevT!==ultT){await ir(prevT);out.push(capturar());ult=perf();ultT=prevT;await ir(tiempos[i]);p=perf();d=desplazamiento(ult,p);}
-          if(d.err>8||d.s>d.L*0.55){out.push(capturar());ult=p;ultT=tiempos[i];}
+      var P=[];
+      for(var i=0;i<tiempos.length;i++){await ir(tiempos[i]);P.push(perf());if(onProg&&i%4===0)onProg('Preparando video ('+Math.round(i/tiempos.length*80)+'%)…');}
+      var n=P.length,mov=[0];for(var i=1;i<n;i++){var dd=desplazamiento(P[i-1],P[i]);mov.push(dd.err>8?999:dd.s);}
+      function quieto(j){return mov[j]+(j+1<n?mov[j+1]:0);}
+      var elegidos=[];
+      // primer cuadro: el más quieto de los primeros ~1,5 s
+      var k=0;for(var j=1;j<Math.min(n,5);j++)if(quieto(j)<quieto(k))k=j;elegidos.push(k);
+      while(k<n-1){
+        var mejor=-1,primeroLejos=-1;
+        for(var j=k+1;j<n;j++){
+          var d=desplazamiento(P[k],P[j]);var L=d.L;
+          if(d.err>8||d.s>L*0.65){primeroLejos=j;break;}
+          if(d.s>=L*0.4&&(mejor<0||quieto(j)<quieto(mejor)))mejor=j;
         }
-        prevT=tiempos[i];
-        if(onProg)onProg('Preparando video ('+Math.round(i/tiempos.length*100)+'%)…');
-        if(out.length>=40)break;
+        if(primeroLejos<0){ // llegó al final sin alejarse: tomar el último cuadro quieto
+          var ult=n-1;for(var j=Math.max(k+1,n-4);j<n;j++)if(quieto(j)<=quieto(ult))ult=j;
+          if(ult!==k)elegidos.push(ult);break;
+        }
+        var sig=mejor>=0?mejor:Math.max(k+1,primeroLejos-1);
+        if(sig===k)sig=primeroLejos;
+        elegidos.push(sig);k=sig;
+        if(elegidos.length>=40)break;
       }
-      if(ultT!==tiempos[tiempos.length-1]){await ir(tiempos[tiempos.length-1]);out.push(capturar());}
+      var out=[];
+      for(var e=0;e<elegidos.length;e++){await ir(tiempos[elegidos[e]]);out.push(capturar());if(onProg)onProg('Preparando video ('+(80+Math.round((e+1)/elegidos.length*20))+'%)…');}
       return out;
     }finally{URL.revokeObjectURL(url);}
   }
@@ -106,8 +123,8 @@
     var imgs=payload.imagenes||[];if(!imgs.length)throw new Error('Cierre Flex sin imágenes');
     var hdr=await headersIA();
     var filas=[],idx={},fechaTxt='';
-    for(var i=0;i<imgs.length;i+=9){
-      var lote=imgs.slice(i,i+10).map(function(x){return String(x).replace(/^data:image\/\w+;base64,/,'');});
+    for(var i=0;i<imgs.length;i+=5){
+      var lote=imgs.slice(i,i+6).map(function(x){return String(x).replace(/^data:image\/\w+;base64,/,'');});
       var r;
       try{r=await fetch(LEER_URL,{method:'POST',headers:hdr,body:JSON.stringify({imagenes:lote})});}
       catch(e){throw new Error('network: '+(e&&e.message||'sin conexión'));}
@@ -116,7 +133,7 @@
       if(!r.ok)throw new Error(d.error||('Error '+r.status));
       if(d.fecha&&!fechaTxt)fechaTxt=d.fecha;
       (d.filas||[]).forEach(function(f){if(idx[f[0]]==null){idx[f[0]]=filas.length;filas.push(f);}else if(f[1]!=='P')filas[idx[f[0]]][1]=f[1];});
-      if(i+10>=imgs.length)break;
+      if(i+6>=imgs.length)break;
     }
     if(!filas.length)throw new Error('SIN_FILAS: no se encontró la lista de envíos en el video. Abre Mis viajes, entra al día y graba bajando por la lista.');
     var fecha=fechaDesdeTexto(fechaTxt,payload.creado)||fechaHoyCL(payload.creado);
