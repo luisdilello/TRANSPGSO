@@ -158,7 +158,7 @@
           var html='<div style="padding:12px 14px;border-radius:12px;background:rgba(46,125,79,0.15);border:1px solid rgba(46,125,79,0.5);margin-bottom:12px"><div style="font-weight:800;color:#7fd19b;font-size:14px">Cierre registrado · '+(x.fechaTxt||fechaBonita(x.fecha))+'</div><div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:4px">'+x.filas.length+' envíos en Flex: '+c.e+' entregados, '+c.n+' no entregados.</div></div>';
           res.innerHTML=html+'<div data-dif style="font-size:13px;color:rgba(255,255,255,0.6)">Revisando contra nuestra app…</div>';
           var rep=await db.rpc('reporte_cierre_flex',{p_fecha:x.fecha,p_mensajero:null});
-          var dif=((rep&&rep.data)||[]).filter(function(r){return r.categoria!=='ok'&&r.categoria!=='ok_fallido';});
+          var dif=((rep&&rep.data)||[]).filter(function(r){return r.categoria!=='ok'&&r.categoria!=='ok_fallido'&&r.categoria!=='sin_cierre';});
           var cont=res.querySelector('[data-dif]');
           if(!dif.length){cont.innerHTML='<div style="color:#7fd19b;font-weight:700">Todo cuadra con nuestra app.</div>';}
           else{
