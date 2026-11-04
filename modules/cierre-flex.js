@@ -170,6 +170,7 @@
               +dif.map(function(r){return '<div style="border:1px solid rgba(255,255,255,0.1);border-left:3px solid '+(nivel(r)>=2?'#e05050':'#e0a050')+';border-radius:0;padding:8px 10px;margin-bottom:6px;color:#fff"><div style="font-family:JetBrains Mono,monospace;font-size:13px">'+r.codigo+'</div><div style="font-size:12px;color:rgba(255,255,255,0.75);margin-top:2px">'+significado(r)+'</div></div>';}).join('');
           }
           toast('Cierre Flex registrado');
+          if(opts.onListo){try{opts.onListo(new Date().toLocaleTimeString('es-CL',{timeZone:'America/Santiago',hour:'2-digit',minute:'2-digit'}));}catch(_){}}
         }catch(e){
           prog.textContent='';
           var msg=String(e&&e.message||e).replace(/^SIN_FILAS:\s*/,'');
