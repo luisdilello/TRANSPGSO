@@ -536,6 +536,10 @@ function ReportesOperadorPanel(props){
   var _rows=useState([]),rows=_rows[0],setRows=_rows[1];
   var _carg=useState(true),cargando=_carg[0],setCargando=_carg[1];
   var _filtro=useState(''),filtroMotivo=_filtro[0],setFiltroMotivo=_filtro[1];
+  // 05-11-2026: filtro por quien reportó y por estado; los reportes no se borran, se marcan resueltos.
+  var _fpor=useState(''),filtroPor=_fpor[0],setFiltroPor=_fpor[1];
+  var _fest=useState('todos'),filtroEst=_fest[0],setFiltroEst=_fest[1];
+  var esSuper=!!(window.__app.perfil&&window.__app.perfil.esSuperAdmin);
   var desde=modo==='dia'?fecha:lunesDe(fecha), hasta=modo==='dia'?fecha:sumarDias(lunesDe(fecha),6);
   function cargar(){
     setCargando(true);
@@ -543,7 +547,9 @@ function ReportesOperadorPanel(props){
       .then(function(r){setRows((r&&r.data)||[]);setCargando(false);},function(){setCargando(false);});
   }
   useEffect(function(){cargar();var iv=setInterval(function(){if(!document.hidden)cargar();},60000);return function(){clearInterval(iv);};},[desde,hasta]);
-  var lista=filtroMotivo?rows.filter(function(r){return r.motivo===filtroMotivo;}):rows;
+  var lista=rows.filter(function(r){return (!filtroMotivo||r.motivo===filtroMotivo)&&(!filtroPor||(r.reportado_por||'Sin nombre')===filtroPor)&&(filtroEst==='todos'||(filtroEst==='resueltos'?r.resuelto:!r.resuelto));});
+  var porQuien={};rows.forEach(function(r){var q=r.reportado_por||'Sin nombre';porQuien[q]=(porQuien[q]||0)+1;});var quienesOrd=Object.keys(porQuien).sort(function(a,b){return porQuien[b]-porQuien[a];});
+  var nPend=rows.filter(function(r){return !r.resuelto;}).length,nRes=rows.length-nPend;
   var porMotivo={},porMens={},porDia={};
   rows.forEach(function(r){porMotivo[r.motivo]=(porMotivo[r.motivo]||0)+1;var m=(r.mensajero||'Sin mensajero').replace(/,\s*/g,' ');porMens[m]=(porMens[m]||0)+1;porDia[r.fecha]=(porDia[r.fecha]||0)+1;});
   var motivosOrd=Object.keys(porMotivo).sort(function(a,b){return porMotivo[b]-porMotivo[a];});
@@ -563,8 +569,8 @@ function ReportesOperadorPanel(props){
   function excel(){
     var ex=window.__app.exportToExcel;if(!ex){toast&&toast('Excel no disponible');return;}
     ex('Reportes_operador_'+desde+(modo==='semana'?'_a_'+hasta:''),[
-      {name:'Piezas reportadas',headers:['Fecha','Hora','Código','Mensajero','Cliente','Comuna','Estado','Motivo','Comentario','Reportado por'],
-        rows:lista.map(function(r){return[dmy(r.fecha),hora(r.created_at),r.codigo,(r.mensajero||'').replace(/,\s*/g,' '),r.cliente||'',r.comuna||'',r.estado||'',r.motivo,r.comentario||'',r.reportado_por||''];})},
+      {name:'Piezas reportadas',headers:['Fecha','Hora','Código','Mensajero','Cliente','Comuna','Estado envío','Motivo','Comentario','Reportado por','Estado reporte','Resolución','Resuelto por','Hora resolución'],
+        rows:lista.map(function(r){return[dmy(r.fecha),hora(r.created_at),r.codigo,(r.mensajero||'').replace(/,\s*/g,' '),r.cliente||'',r.comuna||'',r.estado||'',r.motivo,r.comentario||'',r.reportado_por||'',r.resuelto?'Resuelto':'Pendiente',r.resolucion||'',r.resuelto_por||'',r.resuelto_at?(dmy(String(r.resuelto_at).slice(0,10))+' '+hora(r.resuelto_at)):''];})},
       {name:'Por motivo',headers:['Motivo','Cantidad'],rows:motivosOrd.map(function(m){return[m,porMotivo[m]];})},
       {name:'Por mensajero',headers:['Mensajero','Cantidad'],rows:mensOrd.map(function(m){return[m,porMens[m]];})}
     ]);
@@ -584,8 +590,8 @@ function ReportesOperadorPanel(props){
       var det='';
       motO.forEach(function(m){
         var rs=lista.filter(function(r){return r.motivo===m;});
-        det+='<h3>'+e(m)+' ('+rs.length+')</h3>'+tabla(['Código'].concat(modo==='semana'?['Fecha']:[]).concat(['Hora','Mensajero','Cliente','Comuna','Comentario','Reportó']),
-          rs.map(function(r){return [r.codigo].concat(modo==='semana'?[dmy(r.fecha)]:[]).concat([hora(r.created_at),(r.mensajero||'—').replace(/,\s*/g,' '),r.cliente||'—',r.comuna||'—',r.comentario||'',r.reportado_por||'']);}));
+        det+='<h3>'+e(m)+' ('+rs.length+')</h3>'+tabla(['Código'].concat(modo==='semana'?['Fecha']:[]).concat(['Hora','Mensajero','Cliente','Comuna','Comentario','Reportó','Estado']),
+          rs.map(function(r){return [r.codigo].concat(modo==='semana'?[dmy(r.fecha)]:[]).concat([hora(r.created_at),(r.mensajero||'—').replace(/,\s*/g,' '),r.cliente||'—',r.comuna||'—',r.comentario||'',r.reportado_por||'',r.resuelto?('Resuelto: '+(r.resolucion||'')+' ('+(r.resuelto_por||'')+')'):'Pendiente']);}));
       });
       cuerpo+=sec(n++,'Detalle de piezas reportadas',det);
       cuerpo+=sec(n++,'Códigos reportados','<p style="font-family:JetBrains Mono,monospace;font-size:10.5px;line-height:1.8">'+e(codigosTxt()).replace(/\n/g,' · ')+'</p>');
@@ -601,8 +607,20 @@ function ReportesOperadorPanel(props){
       }));
     }).catch(function(err){try{w&&w.close();}catch(x){}toast&&toast('No se pudo generar el PDF: '+(err&&err.message||''));});
   }
+  // Marcar resuelto: pide cómo se resolvió (ventana propia, sin diálogos del navegador).
+  function resolver(r){
+    var f=document.createElement('div');f.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
+    f.innerHTML='<div style="background:#fff;border-radius:12px;max-width:420px;width:100%;padding:18px;font-family:inherit"><div style="font-weight:800;font-size:15px;margin-bottom:4px">Marcar resuelto · '+r.codigo+'</div><div style="font-size:12px;color:#777;margin-bottom:10px">'+String(r.motivo||'').replace(/</g,'&lt;')+'</div><textarea rows="3" placeholder="Cómo se resolvió" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #ccc;border-radius:8px;font-family:inherit;font-size:13px"></textarea><div data-err style="color:#b00020;font-size:12px;min-height:16px;margin-top:4px"></div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px"><button data-x="c" style="padding:8px 14px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer">Cancelar</button><button data-x="o" style="padding:8px 14px;border-radius:8px;border:none;background:#2e7d4f;color:#fff;font-weight:700;cursor:pointer">Marcar resuelto</button></div></div>';
+    document.body.appendChild(f);var ta=f.querySelector('textarea');ta.focus();
+    function cerrar(){if(f.parentNode)f.parentNode.removeChild(f);}
+    f.querySelector('[data-x=c]').onclick=cerrar;
+    f.querySelector('[data-x=o]').onclick=async function(){var v=(ta.value||'').trim();if(v.length<3){f.querySelector('[data-err]').textContent='Escribe cómo se resolvió.';return;}
+      var rr=await db.rpc('resolver_reporte_operador',{p_id:r.id,p_resolucion:v});
+      if(rr.error){f.querySelector('[data-err]').textContent=rr.error.message;return;}
+      cerrar();toast&&toast(r.codigo+' marcado como resuelto');cargar();};
+  }
   async function quitar(r){
-    if(!window.confirm('¿Quitar '+r.codigo+' del informe?'))return;
+    if(!window.confirm('¿Eliminar definitivamente '+r.codigo+' del informe? (solo Super Admin)'))return;
     var d=await db.from('reportes_operador').delete().eq('id',r.id);
     if(d.error){toast&&toast('No se pudo quitar: '+d.error.message);return;}
     setRows(function(p){return p.filter(function(x){return x.id!==r.id;});});
@@ -626,6 +644,14 @@ function ReportesOperadorPanel(props){
     rows.length>0&&React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}},
       chip('Todos',rows.length,!filtroMotivo,function(){setFiltroMotivo('');}),
       motivosOrd.map(function(m){return chip(m,porMotivo[m],filtroMotivo===m,function(){setFiltroMotivo(filtroMotivo===m?'':m);});})),
+    rows.length>0&&React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginBottom:10}},
+      React.createElement('span',{style:{fontSize:11,color:'var(--text-soft)',fontWeight:700,marginRight:2}},'Reportó:'),
+      chip('Todos ',rows.length,!filtroPor,function(){setFiltroPor('');}),
+      quienesOrd.map(function(q){return chip(q,porQuien[q],filtroPor===q,function(){setFiltroPor(filtroPor===q?'':q);});}),
+      React.createElement('span',{style:{fontSize:11,color:'var(--text-soft)',fontWeight:700,margin:'0 2px 0 12px'}},'Estado:'),
+      chip('Todos  ',rows.length,filtroEst==='todos',function(){setFiltroEst('todos');}),
+      chip('Pendientes',nPend,filtroEst==='pendientes',function(){setFiltroEst('pendientes');}),
+      chip('Resueltos',nRes,filtroEst==='resueltos',function(){setFiltroEst('resueltos');})),
     modo==='semana'&&rows.length>0&&React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))',gap:10,marginBottom:12}},
       React.createElement('div',{style:{border:'1px solid var(--border)',borderRadius:8,padding:10}},
         React.createElement('div',{style:{fontSize:10,letterSpacing:1,textTransform:'uppercase',color:'var(--text-soft)',marginBottom:6}},'Por día'),
@@ -642,9 +668,9 @@ function ReportesOperadorPanel(props){
     lista.length===0?React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',padding:'8px 0'}},cargando?'Cargando…':'Sin piezas reportadas '+titulo+'.'):
     React.createElement('div',{style:{maxHeight:420,overflow:'auto',border:'1px solid var(--border)',borderRadius:8}},
       React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',minWidth:820}},
-        React.createElement('thead',null,React.createElement('tr',null,[modo==='semana'?'Fecha':null,'Hora','Código','Mensajero','Cliente','Comuna','Motivo','Comentario','Reportó',''].filter(function(x){return x!==null;}).map(function(h,i){return React.createElement('th',{key:i,style:th},h);}))),
+        React.createElement('thead',null,React.createElement('tr',null,[modo==='semana'?'Fecha':null,'Hora','Código','Mensajero','Cliente','Comuna','Motivo','Comentario','Reportó','Estado',''].filter(function(x){return x!==null;}).map(function(h,i){return React.createElement('th',{key:i,style:th},h);}))),
         React.createElement('tbody',null,lista.map(function(r){
-          return React.createElement('tr',{key:r.id},
+          return React.createElement('tr',{key:r.id,style:r.resuelto?{background:'rgba(46,125,79,0.05)'}:undefined},
             modo==='semana'&&React.createElement('td',{style:Object.assign({},td,{whiteSpace:'nowrap'})},dmy(r.fecha)),
             React.createElement('td',{style:td},hora(r.created_at)),
             React.createElement('td',{style:Object.assign({},td,{fontFamily:'JetBrains Mono',fontWeight:700,userSelect:'all'})},r.codigo),
@@ -654,7 +680,10 @@ function ReportesOperadorPanel(props){
             React.createElement('td',{style:Object.assign({},td,{fontWeight:600})},r.motivo),
             React.createElement('td',{style:Object.assign({},td,{color:'var(--text-mid)'})},r.comentario||''),
             React.createElement('td',{style:Object.assign({},td,{whiteSpace:'nowrap',color:'var(--text-soft)'})},r.reportado_por||''),
-            React.createElement('td',{style:td},esAdmin&&React.createElement('button',{onClick:function(){quitar(r);},title:'Quitar del informe',style:{border:'none',background:'none',color:'var(--danger)',cursor:'pointer',fontWeight:700}},'✕')));
+            React.createElement('td',{style:Object.assign({},td,{minWidth:150})},r.resuelto?React.createElement('div',null,React.createElement('span',{style:{fontSize:11,fontWeight:800,color:'#2e7d4f'}},'Resuelto'),React.createElement('div',{style:{fontSize:11,color:'var(--text-mid)'}},r.resolucion||''),React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)'}},(r.resuelto_por||'')+(r.resuelto_at?' · '+hora(r.resuelto_at):''))):React.createElement('span',{style:{fontSize:11,fontWeight:800,color:'#c98a1f'}},'Pendiente')),
+            React.createElement('td',{style:Object.assign({},td,{whiteSpace:'nowrap'})},
+              !r.resuelto&&esAdmin&&React.createElement('button',{onClick:function(){resolver(r);},style:{padding:'4px 10px',borderRadius:6,border:'1px solid rgba(46,125,79,0.5)',background:'rgba(46,125,79,0.08)',color:'#2e7d4f',fontWeight:700,fontSize:11,cursor:'pointer'}},'Marcar resuelto'),
+              esSuper&&React.createElement('button',{onClick:function(){quitar(r);},title:'Eliminar (solo Super Admin)',style:{border:'none',background:'none',color:'var(--danger)',cursor:'pointer',fontWeight:700,marginLeft:6}},'✕')));
         }))))
   );
 }
