@@ -632,6 +632,47 @@ function ReportesOperadorPanel(props){
   }
   // 05-11-2026: tablero de Incidencias (vista acumulada): KPIs, ranking de mensajeros, días y motivos.
   var showTodosMens=useState(false),verTodosMens=showTodosMens[0],setVerTodosMens=showTodosMens[1];
+  // 05-11-2026: ver el envío reportado (historial + fotos de entrega) sin salir de Incidencias,
+  // con Anterior / Siguiente para revisar uno tras otro lo que reportaron los operadores.
+  var _ver=useState(null),ver=_ver[0],setVer=_ver[1]; // {ids:[...], i:n}
+  var _verEnv=useState(null),verEnvio=_verEnv[0],setVerEnvio=_verEnv[1];
+  var verId=ver?ver.ids[ver.i]:null;
+  var verRow=verId!=null?(rows.find(function(x){return x.id===verId;})||null):null;
+  useEffect(function(){
+    if(!verRow){setVerEnvio(null);return;}
+    var vivo=true;setVerEnvio('cargando');
+    db.from('envios').select('*').eq('codigo',verRow.codigo).maybeSingle().then(function(q){if(!vivo)return;setVerEnvio(q&&q.data?q.data:{codigo:verRow.codigo,_noExiste:true});});
+    return function(){vivo=false;};
+  },[verRow&&verRow.codigo]);
+  useEffect(function(){
+    if(!ver)return;
+    function k(e){if(document.querySelector('textarea:focus,input:focus'))return;if(e.key==='ArrowRight')mover(1);else if(e.key==='ArrowLeft')mover(-1);else if(e.key==='Escape')setVer(null);}
+    window.addEventListener('keydown',k);return function(){window.removeEventListener('keydown',k);};
+  },[ver]);
+  function abrirVer(r){var ids=lista.map(function(x){return x.id;});setVer({ids:ids,i:Math.max(0,ids.indexOf(r.id))});}
+  function mover(d){setVer(function(v){if(!v)return v;var ni=v.i+d;if(ni<0||ni>=v.ids.length)return v;return {ids:v.ids,i:ni};});}
+  function modalVerEnvio(){
+    if(!ver||!verRow)return null;
+    var h=React.createElement,M=window.__app.Modal,Card=window.__app.EnvioDetalleCard;
+    var r=verRow;var g='';for(var i=0;i<CATALOGO_FALTAS_REGLAMENTO.length;i++){if(CATALOGO_FALTAS_REGLAMENTO[i].label===r.motivo){g=CATALOGO_FALTAS_REGLAMENTO[i].grupo;break;}}
+    var cg={'Leve':'#2e7d4f','Grave':'#d9822b','Crítica':'#b03030','Otro':'#5b5f4a'};
+    var nb=function(lbl,d,dis){return h('button',{type:'button',className:'btn-secondary',disabled:dis,onClick:function(){mover(d);},style:{padding:'6px 14px',fontSize:12,opacity:dis?0.4:1}},lbl);};
+    return h(M,{title:'Incidencia · '+r.codigo,sub:(ver.i+1)+' de '+ver.ids.length+' en la lista · usa ← → para avanzar',wide:true,onClose:function(){setVer(null);}},
+      h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}},
+        h('div',{style:{display:'flex',gap:6}},nb('← Anterior',-1,ver.i===0),nb('Siguiente →',1,ver.i>=ver.ids.length-1)),
+        h('div',{style:{display:'flex',gap:6}},
+          !r.resuelto&&esAdmin&&h('button',{type:'button',onClick:function(){resolver(r);},style:{padding:'7px 14px',borderRadius:8,border:'1px solid rgba(46,125,79,0.5)',background:'rgba(46,125,79,0.1)',color:'#2e7d4f',fontWeight:800,fontSize:12,cursor:'pointer'}},'Marcar resuelto'),
+          h('button',{type:'button',className:'btn-secondary',style:{padding:'7px 14px',fontSize:12},onClick:function(){setVer(null);}},'Cerrar'))),
+      h('div',{style:{padding:'14px 16px',borderRadius:12,marginBottom:14,background:'linear-gradient(160deg,#ffffff,#fbf6ea)',border:'1px solid rgba(200,168,75,0.35)',borderLeft:'5px solid '+(cg[g]||'#c8a84b'),boxShadow:'0 8px 18px rgba(43,46,32,0.08)'}},
+        h('div',{style:{fontSize:10.5,letterSpacing:2,textTransform:'uppercase',color:'var(--text-soft)',fontWeight:700,marginBottom:4}},'Lo que se reportó'),
+        h('div',{style:{fontWeight:800,fontSize:15,color:'var(--dark)',marginBottom:4}},g&&h('span',{style:{display:'inline-block',padding:'1px 8px',borderRadius:8,fontSize:10,fontWeight:800,letterSpacing:1,textTransform:'uppercase',color:'#fff',background:cg[g],marginRight:8,verticalAlign:'2px'}},g),r.motivo),
+        r.comentario&&h('div',{style:{fontSize:13,color:'var(--text-mid)',marginBottom:6}},'“'+r.comentario+'”'),
+        h('div',{style:{fontSize:12,color:'var(--text-soft)'}},'Reportó ',h('b',{style:{color:'var(--dark)'}},r.reportado_por||'—'),' · '+dmy(r.fecha)+' '+hora(r.created_at)+' · Mensajero ',h('b',{style:{color:'var(--dark)'}},(r.mensajero||'—').replace(/,\s*/g,' '))),
+        h('div',{style:{marginTop:6,fontSize:12}},r.resuelto?h('span',{style:{color:'#2e7d4f',fontWeight:800}},'Resuelto'+(r.resuelto_por?' por '+r.resuelto_por:'')+(r.resolucion?': '+r.resolucion:'')):h('span',{style:{color:'#c98a1f',fontWeight:800}},'Pendiente'))),
+      verEnvio==='cargando'||!verEnvio?h('div',{style:{padding:30,textAlign:'center',color:'var(--text-soft)'}},'Cargando envío…'):
+      verEnvio._noExiste?h('div',{style:{padding:20,textAlign:'center',color:'var(--text-soft)'}},'Este código ya no existe en Envíos.'):
+      (Card?h(Card,{key:verEnvio.codigo,envio:verEnvio}):h('div',null,'No disponible')));
+  }
   function tableroIncidencias(){
     var h=React.createElement;
     var card={background:'linear-gradient(160deg,#ffffff 0%,#fbf6ea 100%)',border:'1px solid rgba(200,168,75,0.35)',borderRadius:16,boxShadow:'0 14px 30px rgba(43,46,32,0.10), 0 2px 6px rgba(43,46,32,0.06), inset 0 1px 0 #fff'};
@@ -756,7 +797,7 @@ function ReportesOperadorPanel(props){
       React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',minWidth:820}},
         React.createElement('thead',null,React.createElement('tr',null,[(modo!=='dia')?'Fecha':null,'Hora','Código','Mensajero','Cliente','Comuna','Motivo','Comentario','Reportó','Estado',''].filter(function(x){return x!==null;}).map(function(h,i){return React.createElement('th',{key:i,style:th},h);}))),
         React.createElement('tbody',null,lista.map(function(r){
-          return React.createElement('tr',{key:r.id,style:r.resuelto?{background:'rgba(46,125,79,0.05)'}:undefined},
+          return React.createElement('tr',{key:r.id,onClick:function(){abrirVer(r);},title:'Ver el envío y sus fotos',style:Object.assign({cursor:'pointer'},r.resuelto?{background:'rgba(46,125,79,0.05)'}:{})},
             (modo!=='dia')&&React.createElement('td',{style:Object.assign({},td,{whiteSpace:'nowrap'})},dmy(r.fecha)),
             React.createElement('td',{style:td},hora(r.created_at)),
             React.createElement('td',{style:Object.assign({},td,{fontFamily:'JetBrains Mono',fontWeight:700,userSelect:'all'})},r.codigo),
@@ -767,10 +808,12 @@ function ReportesOperadorPanel(props){
             React.createElement('td',{style:Object.assign({},td,{color:'var(--text-mid)'})},r.comentario||''),
             React.createElement('td',{style:Object.assign({},td,{whiteSpace:'nowrap',color:'var(--text-soft)'})},r.reportado_por||''),
             React.createElement('td',{style:Object.assign({},td,{minWidth:150})},r.resuelto?React.createElement('div',null,React.createElement('span',{style:{fontSize:11,fontWeight:800,color:'#2e7d4f'}},'Resuelto'),React.createElement('div',{style:{fontSize:11,color:'var(--text-mid)'}},r.resolucion||''),React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)'}},(r.resuelto_por||'')+(r.resuelto_at?' · '+hora(r.resuelto_at):''))):React.createElement('span',{style:{fontSize:11,fontWeight:800,color:'#c98a1f'}},'Pendiente')),
-            React.createElement('td',{style:Object.assign({},td,{whiteSpace:'nowrap'})},
+            React.createElement('td',{style:Object.assign({},td,{whiteSpace:'nowrap'}),onClick:function(ev){ev.stopPropagation();}},
+              React.createElement('button',{onClick:function(){abrirVer(r);},style:{padding:'4px 10px',borderRadius:6,border:'1px solid rgba(200,168,75,0.6)',background:'rgba(200,168,75,0.12)',color:'#7a6420',fontWeight:700,fontSize:11,cursor:'pointer',marginRight:6}},'Ver'),
               !r.resuelto&&esAdmin&&React.createElement('button',{onClick:function(){resolver(r);},style:{padding:'4px 10px',borderRadius:6,border:'1px solid rgba(46,125,79,0.5)',background:'rgba(46,125,79,0.08)',color:'#2e7d4f',fontWeight:700,fontSize:11,cursor:'pointer'}},'Marcar resuelto'),
               esSuper&&React.createElement('button',{onClick:function(){quitar(r);},title:'Eliminar (solo Super Admin)',style:{border:'none',background:'none',color:'var(--danger)',cursor:'pointer',fontWeight:700,marginLeft:6}},'✕')));
-        }))))
+        })))),
+    modalVerEnvio()
   );
 }
 function CierreDiario(props){
