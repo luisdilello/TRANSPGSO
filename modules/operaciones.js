@@ -1275,4 +1275,6 @@ window.Operaciones=Operaciones;
 // subsecciones de Informes (modules/informes.js) -- se exportan sueltas para eso.
 window.OperacionesNovedades=CierreDiario;
 window.OperacionesFirmasEnVivo=FirmasEnVivo;
+// 05-11-2026: el mismo botón Reportar se usa en la ficha del envío de Gestión de Envíos.
+window.OperacionesReportarModal=ReportarModal;
 })();
