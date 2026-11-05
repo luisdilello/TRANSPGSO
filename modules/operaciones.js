@@ -648,7 +648,7 @@ function ReportesOperadorPanel(props){
       h('div',{style:{fontSize:10.5,letterSpacing:2,textTransform:'uppercase',color:'var(--text-soft)',fontWeight:700}},label),
       h('div',{style:{fontFamily:'Bebas Neue',fontSize:44,lineHeight:1.05,color:color,textShadow:'0 2px 0 rgba(0,0,0,0.06)'}},valor),
       h('div',{style:{fontSize:11.5,color:'var(--text-soft)'}},sub));}
-    var PAL=['#1B3A6B','#c8a84b','#b03030','#2e7d4f','#7a4fa0','#d9822b','#2a8a9a','#5b5f4a','#c0507a','#8a6d3b'];
+    var PAL=['#d32f2f','#7b1fa2','#f57c00','#00897b','#1565c0','#c2185b','#689f38','#5d4037','#0097a7','#fbc02d'];
     var colorMot=function(m){var i=motivosOrd.indexOf(m);return PAL[(i<0?motivosOrd.length:i)%PAL.length];};
     var CAT=(window.__app&&window.__app.CATALOGO_FALTAS_REGLAMENTO)||[];
     var grupoMot=function(m){for(var i=0;i<CAT.length;i++){if(CAT[i].label===m)return CAT[i].grupo;}return '';};
