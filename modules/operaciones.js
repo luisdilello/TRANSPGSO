@@ -630,6 +630,64 @@ function ReportesOperadorPanel(props){
     if(d.error){toast&&toast('No se pudo quitar: '+d.error.message);return;}
     setRows(function(p){return p.filter(function(x){return x.id!==r.id;});});
   }
+  // 05-11-2026: tablero de Incidencias (vista acumulada): KPIs, ranking de mensajeros, días y motivos.
+  var showTodosMens=useState(false),verTodosMens=showTodosMens[0],setVerTodosMens=showTodosMens[1];
+  function tableroIncidencias(){
+    var h=React.createElement;
+    var card={background:'linear-gradient(160deg,#ffffff 0%,#fbf6ea 100%)',border:'1px solid rgba(200,168,75,0.35)',borderRadius:16,boxShadow:'0 14px 30px rgba(43,46,32,0.10), 0 2px 6px rgba(43,46,32,0.06), inset 0 1px 0 #fff'};
+    var tituloCard={fontFamily:'Bebas Neue',letterSpacing:2,fontSize:17,color:'var(--dark)'};
+    var pm={},pd={},pmo={};
+    lista.forEach(function(r){var m=(r.mensajero||'Sin mensajero').replace(/,\s*/g,' ');var x=pm[m]||(pm[m]={n:0,pend:0,mot:{}});x.n++;if(!r.resuelto)x.pend++;x.mot[r.motivo]=(x.mot[r.motivo]||0)+1;pd[r.fecha]=(pd[r.fecha]||0)+1;pmo[r.motivo]=(pmo[r.motivo]||0)+1;});
+    var ranking=Object.keys(pm).map(function(m){var x=pm[m];var top=Object.keys(x.mot).sort(function(a,b){return x.mot[b]-x.mot[a];})[0];return{m:m,n:x.n,pend:x.pend,top:top};}).sort(function(a,b){return b.n-a.n||a.m.localeCompare(b.m);});
+    var max=ranking.length?ranking[0].n:1;
+    var dias=Object.keys(pd).sort();var maxD=Math.max.apply(null,dias.map(function(d){return pd[d];}).concat([1]));
+    var motivos=Object.keys(pmo).sort(function(a,b){return pmo[b]-pmo[a];});
+    var pend=lista.filter(function(r){return !r.resuelto;}).length;
+    function kpi(label,valor,sub,color){return h('div',{style:Object.assign({},card,{padding:'16px 18px',position:'relative',overflow:'hidden'})},
+      h('div',{style:{position:'absolute',left:0,top:0,right:0,height:4,background:color}}),
+      h('div',{style:{fontSize:10.5,letterSpacing:2,textTransform:'uppercase',color:'var(--text-soft)',fontWeight:700}},label),
+      h('div',{style:{fontFamily:'Bebas Neue',fontSize:44,lineHeight:1.05,color:color,textShadow:'0 2px 0 rgba(0,0,0,0.06)'}},valor),
+      h('div',{style:{fontSize:11.5,color:'var(--text-soft)'}},sub));}
+    var medalla=['linear-gradient(145deg,#f3d27a,#c8a84b)','linear-gradient(145deg,#e6e6e6,#a9a9a9)','linear-gradient(145deg,#e7b07a,#b97a3d)'];
+    var visibles=verTodosMens?ranking:ranking.slice(0,12);
+    return h('div',{style:{marginBottom:16}},
+      h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:14,marginBottom:16}},
+        kpi('Incidencias',lista.length,titulo,'#2b2e20'),
+        kpi('Pendientes',pend,lista.length?Math.round(pend/lista.length*100)+'% del total':'—','#c98a1f'),
+        kpi('Resueltas',lista.length-pend,lista.length?Math.round((lista.length-pend)/lista.length*100)+'% del total':'—','#2e7d4f'),
+        kpi('Mensajeros',ranking.length,ranking.length?('Promedio '+(lista.length/ranking.length).toFixed(1)+' por mensajero'):'—','#1B3A6B')),
+      h('div',{style:{display:'grid',gridTemplateColumns:'minmax(0,2fr) minmax(300px,1fr)',gap:14,alignItems:'start'}},
+        // Ranking de mensajeros
+        h('div',{style:Object.assign({},card,{padding:'16px 18px',minWidth:0})},
+          h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:12}},
+            h('div',{style:tituloCard},'Ranking de mensajeros'),
+            h('div',{style:{fontSize:11,color:'var(--text-soft)'}},filtroMens?h('a',{href:'#',onClick:function(e){e.preventDefault();setFiltroMens('');},style:{color:'#a0842a',fontWeight:700}},'Quitar filtro: '+filtroMens):'Toca un mensajero para ver sus incidencias')),
+          visibles.map(function(x,i){var act=filtroMens===x.m;
+            return h('div',{key:x.m,onClick:function(){setFiltroMens(act?'':x.m);},style:{display:'grid',gridTemplateColumns:'38px minmax(140px,1.2fr) 3fr 64px',alignItems:'center',gap:12,padding:'9px 10px',marginBottom:6,borderRadius:12,cursor:'pointer',background:act?'rgba(200,168,75,0.16)':'rgba(255,255,255,0.7)',border:'1px solid '+(act?'rgba(200,168,75,0.6)':'rgba(43,46,32,0.06)'),boxShadow:act?'0 6px 14px rgba(200,168,75,0.25)':'0 2px 6px rgba(43,46,32,0.05)'}},
+              h('div',{style:{width:32,height:32,borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Bebas Neue',fontSize:17,color:i<3?'#2b2e20':'var(--text-soft)',background:i<3?medalla[i]:'rgba(43,46,32,0.06)',boxShadow:i<3?'0 4px 10px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.6)':'none'}},i+1),
+              h('div',{style:{minWidth:0}},
+                h('div',{style:{fontWeight:800,fontSize:13.5,color:'var(--dark)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},x.m),
+                h('div',{style:{fontSize:11,color:'var(--text-soft)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'},title:x.top},(x.pend?x.pend+' pendiente'+(x.pend>1?'s':''):'Todo resuelto')+' · '+x.top)),
+              h('div',{style:{height:14,borderRadius:8,background:'rgba(43,46,32,0.07)',overflow:'hidden',boxShadow:'inset 0 1px 3px rgba(0,0,0,0.12)'}},
+                h('div',{style:{height:'100%',width:Math.max(4,Math.round(x.n/max*100))+'%',borderRadius:8,background:i<3?'linear-gradient(90deg,#b03030,#e05555)':'linear-gradient(90deg,#c8a84b,#e6c76a)',boxShadow:'inset 0 1px 0 rgba(255,255,255,0.45)'}})),
+              h('div',{style:{textAlign:'right',fontFamily:'Bebas Neue',fontSize:26,color:i<3?'#b03030':'var(--dark)',lineHeight:1}},x.n));}),
+          ranking.length>12&&h('button',{type:'button',className:'btn-secondary',style:{marginTop:6,padding:'6px 12px',fontSize:12},onClick:function(){setVerTodosMens(!verTodosMens);}},verTodosMens?'Ver solo los 12 primeros':('Ver los '+ranking.length+' mensajeros'))),
+        // Columna derecha: por día + motivos
+        h('div',{style:{display:'flex',flexDirection:'column',gap:14,minWidth:0}},
+          h('div',{style:Object.assign({},card,{padding:'16px 18px'})},
+            h('div',{style:Object.assign({},tituloCard,{marginBottom:10})},'Incidencias por día'),
+            h('div',{style:{display:'flex',alignItems:'flex-end',gap:6,height:150,padding:'0 2px',overflowX:'auto'}},
+              dias.map(function(d){var n=pd[d];return h('div',{key:d,title:dmy(d)+': '+n,style:{flex:'1 0 26px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',height:'100%'}},
+                h('div',{style:{fontSize:11,fontWeight:800,color:'var(--dark)',marginBottom:3}},n),
+                h('div',{style:{width:'100%',maxWidth:34,height:Math.max(6,Math.round(n/maxD*110)),borderRadius:'8px 8px 3px 3px',background:'linear-gradient(180deg,#e6c76a,#a8842e)',boxShadow:'0 4px 8px rgba(168,132,46,0.35), inset 0 1px 0 rgba(255,255,255,0.5)'}}),
+                h('div',{style:{fontSize:10,color:'var(--text-soft)',marginTop:4,whiteSpace:'nowrap'}},dmy(d).slice(0,5)));}))),
+          h('div',{style:Object.assign({},card,{padding:'16px 18px'})},
+            h('div',{style:Object.assign({},tituloCard,{marginBottom:10})},'Motivos'),
+            motivos.map(function(m){var n=pmo[m];var pct=Math.round(n/lista.length*100);return h('div',{key:m,style:{marginBottom:10}},
+              h('div',{style:{display:'flex',justifyContent:'space-between',gap:8,fontSize:12,marginBottom:4}},h('span',{style:{fontWeight:700,color:'var(--dark)'}},m),h('span',{style:{fontWeight:800,whiteSpace:'nowrap'}},n+' · '+pct+'%')),
+              h('div',{style:{height:10,borderRadius:6,background:'rgba(43,46,32,0.07)',overflow:'hidden',boxShadow:'inset 0 1px 3px rgba(0,0,0,0.1)'}},h('div',{style:{height:'100%',width:pct+'%',background:'linear-gradient(90deg,#1B3A6B,#3b6fb5)',borderRadius:6}})));}))))
+    );
+  }
   var btn={padding:'6px 12px',fontSize:12};
   var th={textAlign:'left',padding:'7px 8px',fontSize:10,letterSpacing:1,textTransform:'uppercase',color:'var(--text-soft)',borderBottom:'2px solid var(--border)',whiteSpace:'nowrap',position:'sticky',top:0,background:'#fff'};
   var td={padding:'6px 8px',borderBottom:'1px solid var(--border)',fontSize:12,verticalAlign:'top'};
@@ -667,15 +725,7 @@ function ReportesOperadorPanel(props){
       React.createElement('select',{className:'form-input',value:filtroMens,onChange:function(e){setFiltroMens(e.target.value);},style:{width:260,padding:'4px 8px',fontSize:12}},
         React.createElement('option',{value:''},'Todos ('+rows.length+')'),
         mensOrd.map(function(m){return React.createElement('option',{key:m,value:m},m+' ('+porMens[m]+')');}))),
-    (modo!=='dia')&&rows.length>0&&React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))',gap:10,marginBottom:12}},
-      React.createElement('div',{style:{border:'1px solid var(--border)',borderRadius:8,padding:10}},
-        React.createElement('div',{style:{fontSize:10,letterSpacing:1,textTransform:'uppercase',color:'var(--text-soft)',marginBottom:6}},'Por día'),
-        (modo==='rango'?Object.keys(porDia).sort().reverse().map(function(f){return React.createElement('div',{key:f,style:{display:'flex',justifyContent:'space-between',fontSize:12,padding:'2px 0'}},React.createElement('span',null,dmy(f)),React.createElement('b',null,porDia[f]));}):null),
-        modo!=='rango'&&[0,1,2,3,4,5,6].map(function(i){var f=sumarDias(desde,i);var n=porDia[f]||0;var nombres=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
-          return React.createElement('div',{key:f,style:{display:'flex',justifyContent:'space-between',fontSize:12,padding:'2px 0',color:n?'var(--dark)':'#bbb'}},React.createElement('span',null,nombres[i]+' '+dmy(f).slice(0,5)),React.createElement('b',null,n));})),
-      React.createElement('div',{style:{border:'1px solid var(--border)',borderRadius:8,padding:10,maxHeight:200,overflow:'auto'}},
-        React.createElement('div',{style:{fontSize:10,letterSpacing:1,textTransform:'uppercase',color:'var(--text-soft)',marginBottom:6}},'Por mensajero'),
-        mensOrd.map(function(m){return React.createElement('div',{key:m,style:{display:'flex',justifyContent:'space-between',fontSize:12,padding:'2px 0'}},React.createElement('span',null,m),React.createElement('b',null,porMens[m]));}))),
+    (modo!=='dia')&&rows.length>0&&tableroIncidencias(),
     React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}},
       React.createElement('button',{className:'btn-primary',style:btn,disabled:!lista.length,onClick:function(){copiarTexto(codigosTxt(),toast,'Códigos copiados ('+lista.length+')');}},'Copiar códigos'),
       React.createElement('button',{className:'btn-secondary',style:btn,disabled:!lista.length,onClick:function(){copiarTexto(listadoTxt(),toast,'Listado copiado');}},'Copiar listado con motivos'),
