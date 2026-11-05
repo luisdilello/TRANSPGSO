@@ -532,22 +532,27 @@ function copiarTexto(txt,toast,msg){
 }
 function ReportesOperadorPanel(props){
   var fecha=props.fecha, toast=props.toast, esAdmin=props.esAdmin;
-  var _modo=useState('dia'),modo=_modo[0],setModo=_modo[1];
+  // 05-11-2026: historial=true -> pestaña Operaciones → Incidencias (acumula todos los días, con rango).
+  var historial=!!props.historial;
+  var _modo=useState(historial?'rango':'dia'),modo=_modo[0],setModo=_modo[1];
+  var _rd=useState(function(){return historial?sumarDias(fechaHoyCL(),-29):fecha;}),rDesde=_rd[0],setRDesde=_rd[1];
+  var _rh=useState(function(){return fechaHoyCL();}),rHasta=_rh[0],setRHasta=_rh[1];
   var _rows=useState([]),rows=_rows[0],setRows=_rows[1];
   var _carg=useState(true),cargando=_carg[0],setCargando=_carg[1];
   var _filtro=useState(''),filtroMotivo=_filtro[0],setFiltroMotivo=_filtro[1];
   // 05-11-2026: filtro por quien reportó y por estado; los reportes no se borran, se marcan resueltos.
   var _fpor=useState(''),filtroPor=_fpor[0],setFiltroPor=_fpor[1];
-  var _fest=useState('todos'),filtroEst=_fest[0],setFiltroEst=_fest[1];
+  var _fest=useState(historial?'pendientes':'todos'),filtroEst=_fest[0],setFiltroEst=_fest[1];
+  var _fm=useState(''),filtroMens=_fm[0],setFiltroMens=_fm[1];
   var esSuper=!!(window.__app.perfil&&window.__app.perfil.esSuperAdmin);
-  var desde=modo==='dia'?fecha:lunesDe(fecha), hasta=modo==='dia'?fecha:sumarDias(lunesDe(fecha),6);
+  var desde=modo==='rango'?rDesde:(modo==='dia'?fecha:lunesDe(fecha)), hasta=modo==='rango'?rHasta:(modo==='dia'?fecha:sumarDias(lunesDe(fecha),6));
   function cargar(){
     setCargando(true);
     db.from('reportes_operador').select('*').gte('fecha',desde).lte('fecha',hasta).order('created_at',{ascending:true}).limit(5000)
       .then(function(r){setRows((r&&r.data)||[]);setCargando(false);},function(){setCargando(false);});
   }
   useEffect(function(){cargar();var iv=setInterval(function(){if(!document.hidden)cargar();},60000);return function(){clearInterval(iv);};},[desde,hasta]);
-  var lista=rows.filter(function(r){return (!filtroMotivo||r.motivo===filtroMotivo)&&(!filtroPor||(r.reportado_por||'Sin nombre')===filtroPor)&&(filtroEst==='todos'||(filtroEst==='resueltos'?r.resuelto:!r.resuelto));});
+  var lista=rows.filter(function(r){return (!filtroMotivo||r.motivo===filtroMotivo)&&(!filtroPor||(r.reportado_por||'Sin nombre')===filtroPor)&&(filtroEst==='todos'||(filtroEst==='resueltos'?r.resuelto:!r.resuelto))&&(!filtroMens||(r.mensajero||'Sin mensajero').replace(/,\s*/g,' ')===filtroMens);});
   var porQuien={};rows.forEach(function(r){var q=r.reportado_por||'Sin nombre';porQuien[q]=(porQuien[q]||0)+1;});var quienesOrd=Object.keys(porQuien).sort(function(a,b){return porQuien[b]-porQuien[a];});
   var nPend=rows.filter(function(r){return !r.resuelto;}).length,nRes=rows.length-nPend;
   var porMotivo={},porMens={},porDia={};
@@ -555,20 +560,20 @@ function ReportesOperadorPanel(props){
   var motivosOrd=Object.keys(porMotivo).sort(function(a,b){return porMotivo[b]-porMotivo[a];});
   var mensOrd=Object.keys(porMens).sort(function(a,b){return porMens[b]-porMens[a];});
   var hora=function(d){try{return new Date(d).toLocaleTimeString('es-CL',{timeZone:'America/Santiago',hour:'2-digit',minute:'2-digit'});}catch(e){return '';}};
-  var titulo=modo==='dia'?('del '+dmy(fecha)):('semana '+dmy(desde)+' al '+dmy(hasta));
+  var titulo=modo==='dia'?('del '+dmy(fecha)):modo==='rango'?('del '+dmy(desde)+' al '+dmy(hasta)):('semana '+dmy(desde)+' al '+dmy(hasta));
   function codigosTxt(){var vistos={};return lista.filter(function(r){if(vistos[r.codigo])return false;vistos[r.codigo]=1;return true;}).map(function(r){return r.codigo;}).join('\n');}
   function listadoTxt(){
     var lineas=['Piezas reportadas '+titulo+' ('+lista.length+')'];
     var grupos={};lista.forEach(function(r){(grupos[r.motivo]=grupos[r.motivo]||[]).push(r);});
     Object.keys(grupos).sort(function(a,b){return grupos[b].length-grupos[a].length;}).forEach(function(mo){
       lineas.push('');lineas.push(mo+' ('+grupos[mo].length+')');
-      grupos[mo].forEach(function(r){lineas.push(r.codigo+' - '+(r.mensajero||'Sin mensajero').replace(/,\s*/g,' ')+(r.cliente?' - '+r.cliente:'')+(modo==='semana'?' - '+dmy(r.fecha):'')+(r.comentario?' - '+r.comentario:''));});
+      grupos[mo].forEach(function(r){lineas.push(r.codigo+' - '+(r.mensajero||'Sin mensajero').replace(/,\s*/g,' ')+(r.cliente?' - '+r.cliente:'')+((modo!=='dia')?' - '+dmy(r.fecha):'')+(r.comentario?' - '+r.comentario:''));});
     });
     return lineas.join('\n');
   }
   function excel(){
     var ex=window.__app.exportToExcel;if(!ex){toast&&toast('Excel no disponible');return;}
-    ex('Reportes_operador_'+desde+(modo==='semana'?'_a_'+hasta:''),[
+    ex('Reportes_operador_'+desde+((modo!=='dia')?'_a_'+hasta:''),[
       {name:'Piezas reportadas',headers:['Fecha','Hora','Código','Mensajero','Cliente','Comuna','Estado envío','Motivo','Comentario','Reportado por','Estado reporte','Resolución','Resuelto por','Hora resolución'],
         rows:lista.map(function(r){return[dmy(r.fecha),hora(r.created_at),r.codigo,(r.mensajero||'').replace(/,\s*/g,' '),r.cliente||'',r.comuna||'',r.estado||'',r.motivo,r.comentario||'',r.reportado_por||'',r.resuelto?'Resuelto':'Pendiente',r.resolucion||'',r.resuelto_por||'',r.resuelto_at?(dmy(String(r.resuelto_at).slice(0,10))+' '+hora(r.resuelto_at)):''];})},
       {name:'Por motivo',headers:['Motivo','Cantidad'],rows:motivosOrd.map(function(m){return[m,porMotivo[m]];})},
@@ -590,8 +595,8 @@ function ReportesOperadorPanel(props){
       var det='';
       motO.forEach(function(m){
         var rs=lista.filter(function(r){return r.motivo===m;});
-        det+='<h3>'+e(m)+' ('+rs.length+')</h3>'+tabla(['Código'].concat(modo==='semana'?['Fecha']:[]).concat(['Hora','Mensajero','Cliente','Comuna','Comentario','Reportó','Estado']),
-          rs.map(function(r){return [r.codigo].concat(modo==='semana'?[dmy(r.fecha)]:[]).concat([hora(r.created_at),(r.mensajero||'—').replace(/,\s*/g,' '),r.cliente||'—',r.comuna||'—',r.comentario||'',r.reportado_por||'',r.resuelto?('Resuelto: '+(r.resolucion||'')+' ('+(r.resuelto_por||'')+')'):'Pendiente']);}));
+        det+='<h3>'+e(m)+' ('+rs.length+')</h3>'+tabla(['Código'].concat((modo!=='dia')?['Fecha']:[]).concat(['Hora','Mensajero','Cliente','Comuna','Comentario','Reportó','Estado']),
+          rs.map(function(r){return [r.codigo].concat((modo!=='dia')?[dmy(r.fecha)]:[]).concat([hora(r.created_at),(r.mensajero||'—').replace(/,\s*/g,' '),r.cliente||'—',r.comuna||'—',r.comentario||'',r.reportado_por||'',r.resuelto?('Resuelto: '+(r.resolucion||'')+' ('+(r.resuelto_por||'')+')'):'Pendiente']);}));
       });
       cuerpo+=sec(n++,'Detalle de piezas reportadas',det);
       cuerpo+=sec(n++,'Códigos reportados','<p style="font-family:JetBrains Mono,monospace;font-size:10.5px;line-height:1.8">'+e(codigosTxt()).replace(/\n/g,' · ')+'</p>');
@@ -632,11 +637,16 @@ function ReportesOperadorPanel(props){
   return React.createElement('div',{className:'panel',style:{marginBottom:20}},
     React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:10}},
       React.createElement('div',null,
-        React.createElement('div',{className:'panel-title',style:{margin:0}},'Piezas reportadas por operadores'),
-        React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginTop:2}},'Se agregan desde Firmas en Vivo → Reportar → "Agregar al informe". '+(cargando?'Actualizando…':''))),
-      React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
-        React.createElement('button',{className:'filter-btn'+(modo==='dia'?' active':''),onClick:function(){setModo('dia');setFiltroMotivo('');}},'Del día'),
-        React.createElement('button',{className:'filter-btn'+(modo==='semana'?' active':''),onClick:function(){setModo('semana');setFiltroMotivo('');}},'Semana'))
+        React.createElement('div',{className:'panel-title',style:{margin:0}},historial?'Incidencias reportadas':'Piezas reportadas por operadores'),
+        React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginTop:2}},(historial?'Todas las piezas reportadas, día a día. Se agregan desde Firmas en Vivo o la ficha del envío → Reportar → "Agregar al informe". ':'Reportes del día. El acumulado está en Operaciones → Incidencias. ')+(cargando?'Actualizando…':''))),
+      historial&&React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}},
+        React.createElement('span',{style:{fontSize:11,color:'var(--text-soft)'}},'Desde'),
+        React.createElement('input',{type:'date',className:'form-input',value:rDesde,onChange:function(e){if(e.target.value)setRDesde(e.target.value);},style:{width:150}}),
+        React.createElement('span',{style:{fontSize:11,color:'var(--text-soft)'}},'hasta'),
+        React.createElement('input',{type:'date',className:'form-input',value:rHasta,onChange:function(e){if(e.target.value)setRHasta(e.target.value);},style:{width:150}}),
+        React.createElement('button',{className:'filter-btn',onClick:function(){setRDesde(fechaHoyCL());setRHasta(fechaHoyCL());}},'Hoy'),
+        React.createElement('button',{className:'filter-btn',onClick:function(){setRDesde(lunesDe(fechaHoyCL()));setRHasta(fechaHoyCL());}},'Esta semana'),
+        React.createElement('button',{className:'filter-btn',onClick:function(){setRDesde(sumarDias(fechaHoyCL(),-29));setRHasta(fechaHoyCL());}},'30 días'))
     ),
     React.createElement('div',{style:{display:'flex',alignItems:'baseline',gap:10,flexWrap:'wrap',marginBottom:10}},
       React.createElement('span',{style:{fontFamily:'Bebas Neue',fontSize:30,color:'var(--dark)',lineHeight:1}},rows.length),
@@ -652,10 +662,16 @@ function ReportesOperadorPanel(props){
       chip('Todos  ',rows.length,filtroEst==='todos',function(){setFiltroEst('todos');}),
       chip('Pendientes',nPend,filtroEst==='pendientes',function(){setFiltroEst('pendientes');}),
       chip('Resueltos',nRes,filtroEst==='resueltos',function(){setFiltroEst('resueltos');})),
-    modo==='semana'&&rows.length>0&&React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))',gap:10,marginBottom:12}},
+    historial&&rows.length>0&&React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginBottom:10}},
+      React.createElement('span',{style:{fontSize:11,color:'var(--text-soft)',fontWeight:700,marginRight:2}},'Mensajero:'),
+      React.createElement('select',{className:'form-input',value:filtroMens,onChange:function(e){setFiltroMens(e.target.value);},style:{width:260,padding:'4px 8px',fontSize:12}},
+        React.createElement('option',{value:''},'Todos ('+rows.length+')'),
+        mensOrd.map(function(m){return React.createElement('option',{key:m,value:m},m+' ('+porMens[m]+')');}))),
+    (modo!=='dia')&&rows.length>0&&React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))',gap:10,marginBottom:12}},
       React.createElement('div',{style:{border:'1px solid var(--border)',borderRadius:8,padding:10}},
         React.createElement('div',{style:{fontSize:10,letterSpacing:1,textTransform:'uppercase',color:'var(--text-soft)',marginBottom:6}},'Por día'),
-        [0,1,2,3,4,5,6].map(function(i){var f=sumarDias(desde,i);var n=porDia[f]||0;var nombres=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+        (modo==='rango'?Object.keys(porDia).sort().reverse().map(function(f){return React.createElement('div',{key:f,style:{display:'flex',justifyContent:'space-between',fontSize:12,padding:'2px 0'}},React.createElement('span',null,dmy(f)),React.createElement('b',null,porDia[f]));}):null),
+        modo!=='rango'&&[0,1,2,3,4,5,6].map(function(i){var f=sumarDias(desde,i);var n=porDia[f]||0;var nombres=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
           return React.createElement('div',{key:f,style:{display:'flex',justifyContent:'space-between',fontSize:12,padding:'2px 0',color:n?'var(--dark)':'#bbb'}},React.createElement('span',null,nombres[i]+' '+dmy(f).slice(0,5)),React.createElement('b',null,n));})),
       React.createElement('div',{style:{border:'1px solid var(--border)',borderRadius:8,padding:10,maxHeight:200,overflow:'auto'}},
         React.createElement('div',{style:{fontSize:10,letterSpacing:1,textTransform:'uppercase',color:'var(--text-soft)',marginBottom:6}},'Por mensajero'),
@@ -668,10 +684,10 @@ function ReportesOperadorPanel(props){
     lista.length===0?React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',padding:'8px 0'}},cargando?'Cargando…':'Sin piezas reportadas '+titulo+'.'):
     React.createElement('div',{style:{maxHeight:420,overflow:'auto',border:'1px solid var(--border)',borderRadius:8}},
       React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',minWidth:820}},
-        React.createElement('thead',null,React.createElement('tr',null,[modo==='semana'?'Fecha':null,'Hora','Código','Mensajero','Cliente','Comuna','Motivo','Comentario','Reportó','Estado',''].filter(function(x){return x!==null;}).map(function(h,i){return React.createElement('th',{key:i,style:th},h);}))),
+        React.createElement('thead',null,React.createElement('tr',null,[(modo!=='dia')?'Fecha':null,'Hora','Código','Mensajero','Cliente','Comuna','Motivo','Comentario','Reportó','Estado',''].filter(function(x){return x!==null;}).map(function(h,i){return React.createElement('th',{key:i,style:th},h);}))),
         React.createElement('tbody',null,lista.map(function(r){
           return React.createElement('tr',{key:r.id,style:r.resuelto?{background:'rgba(46,125,79,0.05)'}:undefined},
-            modo==='semana'&&React.createElement('td',{style:Object.assign({},td,{whiteSpace:'nowrap'})},dmy(r.fecha)),
+            (modo!=='dia')&&React.createElement('td',{style:Object.assign({},td,{whiteSpace:'nowrap'})},dmy(r.fecha)),
             React.createElement('td',{style:td},hora(r.created_at)),
             React.createElement('td',{style:Object.assign({},td,{fontFamily:'JetBrains Mono',fontWeight:700,userSelect:'all'})},r.codigo),
             React.createElement('td',{style:td},(r.mensajero||'—').replace(/,\s*/g,' ')),
@@ -1306,4 +1322,6 @@ window.OperacionesNovedades=CierreDiario;
 window.OperacionesFirmasEnVivo=FirmasEnVivo;
 // 05-11-2026: el mismo botón Reportar se usa en la ficha del envío de Gestión de Envíos.
 window.OperacionesReportarModal=ReportarModal;
+// 05-11-2026: Operaciones → Incidencias (acumulado de piezas reportadas, todos los días).
+window.OperacionesIncidencias=function(props){return React.createElement(ReportesOperadorPanel,{fecha:fechaHoyCL(),toast:props.toast,esAdmin:true,historial:true});};
 })();
