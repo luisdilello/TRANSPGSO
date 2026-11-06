@@ -116,7 +116,7 @@ function recomendaciones(Ns,M,esHoy){
   });
   if(esHoy){
     M.staff.forEach(function(s){var p=M.P[s.nombre];
-      if(p.estado==='ausente')R.push({sev:2,quien:s,txt:nombreCorto(s.nombre)+' tiene el panel abierto pero sin actividad '+(p.pulso?hace(p.pulso.ts):'')+'.',por:'Última sección: '+secLabel(p.pulso&&p.pulso.s)+'.'});
+      if(p.estado==='ausente')R.push({sev:2,quien:s,txt:nombreCorto(s.nombre)+' tiene el panel abierto en '+secLabel(p.pulso&&p.pulso.s)+' pero sin mover el mouse ni el teclado.',por:(p.pulso&&p.pulso.vis===false?'La ventana del sistema está minimizada o en otra pestaña.':'Sin actividad en el último minuto y medio.')});
       if(p.estado==='activo'&&p.accUltHora===0&&p.act>30)R.push({sev:1,quien:s,txt:nombreCorto(s.nombre)+' está activo en '+secLabel(p.pulso&&p.pulso.s)+' pero sin movimientos registrados en esta hora.',por:'Puede estar revisando sin dejar registro; vale la pena confirmar en qué está.'});
       if(p.prom7&&p.acc<p.prom7*0.4&&p.con>120)R.push({sev:1,quien:s,txt:nombreCorto(s.nombre)+' lleva '+fmt(p.acc)+' movimientos hoy, bajo su promedio de '+fmt(Math.round(p.prom7))+'.',por:'Conectado '+hhmm(p.con)+' hoy.'});
     });
@@ -159,6 +159,7 @@ function Oficina3D(props){
     var vivo=true,cleanup=null;
     cargarThree().then(function(T){if(!vivo)return;cleanup=montar(T);}).catch(function(){setErr('No se pudo cargar el motor 3D.');});
     function montar(T){
+      if(T.ColorManagement)T.ColorManagement.legacyMode=false;
       var el=ref.current;var W=el.clientWidth,H=el.clientHeight;
       var renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});
       renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));renderer.setSize(W,H);
@@ -379,6 +380,8 @@ function Panel(props){
   var M=useMemo(function(){return D?procesar(D,fecha,esHoy):null;},[D,tick]);
   var Ns=useMemo(function(){return D&&esHoy?necesidades(D.necesidad):[];},[D]);
   var Rs=useMemo(function(){return M?recomendaciones(Ns,M,esHoy):[];},[M,Ns]);
+  var fichaRef=useRef(null);
+  useEffect(function(){if(sel&&fichaRef.current){setTimeout(function(){try{fichaRef.current.scrollIntoView({behavior:'smooth',block:'start'});}catch(e){}},350);}},[sel]);
   if(error)return h('div',{className:'panel'},h('div',{style:{color:'var(--danger)'}},'No se pudo cargar Supervisión: '+error));
   if(!M)return h('div',{style:{padding:60,textAlign:'center',color:'var(--text-soft)'}},'Cargando supervisión…');
   var colorDe=function(n){var s=M.staff.find(function(x){return x.nombre===n;});return s?s.color:'#999';};
@@ -425,6 +428,7 @@ function Panel(props){
             r.quien?h('div',{style:{width:30,height:30,flex:'0 0 30px',borderRadius:'50%',background:r.quien.color,color:'#fff',fontWeight:800,fontSize:11,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 3px 8px '+r.quien.color+'66'}},inic(r.quien.nombre)):h('div',{style:{width:30,flex:'0 0 30px'}}),
             h('div',{style:{minWidth:0}},h('div',{style:{fontSize:12.5,fontWeight:700,color:'var(--dark)'}},h('span',{style:{color:sv[1]}},'● '),r.txt),r.por&&h('div',{style:{fontSize:11.5,color:'var(--text-soft)',marginTop:2}},r.por)));})))),
     // ficha individual
+    h('div',{ref:fichaRef,style:{scrollMarginTop:80}}),
     P&&h(Ficha,{P:P,M:M,feed:(D.feed||[]).filter(function(f){return f.a===sel;}),recs:Rs.filter(function(r){return r.quien&&r.quien.nombre===sel;}),fecha:fecha,esHoy:esHoy,onClose:function(){setSel(null);},onCodigo:setCod}),
     // comparativo
     h('div',{style:Object.assign({},card,{padding:'16px 18px',marginBottom:16})},
