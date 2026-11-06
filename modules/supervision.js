@@ -337,6 +337,13 @@ function Oficina3D(props){
       var matMalla=M_({color:'#2b3036',roughness:0.9});
       var matPiel=M_({color:'#e3b894',roughness:0.55});
       var matPelo=M_({color:'#1f1712',roughness:0.7});
+      var matCamisa=M_({color:'#bfa06c',roughness:0.78});
+      var matCamisaClara=M_({color:'#cfb383',roughness:0.75});
+      var matCamisaOsc=M_({color:'#a88c5a',roughness:0.8});
+      var matBoton=M_({color:'#6b5a3a',roughness:0.4});
+      var texLogo=new T.TextureLoader().load('vendor/logo-transparente.png');texLogo.encoding=T.sRGBEncoding;texLogo.anisotropy=8;
+      var matParche=new T.MeshStandardMaterial({color:'#2b2e20',roughness:0.6,polygonOffset:true,polygonOffsetFactor:-1});
+      var matLogoPecho=new T.MeshStandardMaterial({map:texLogo,transparent:true,roughness:0.5,metalness:0.3,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2});
       var puestos=[],clic=[];
       M.staff.forEach(function(s,i){
         var c=i%cols,r=Math.floor(i/cols);
@@ -371,8 +378,17 @@ function Oficina3D(props){
         // persona
         var colP=new T.Color(s.color);
         var per=new T.Group();per.position.set(0,0,0.9);g.add(per);
-        var matRopa=M_({color:colP,roughness:0.6});
+        // Uniforme TransPgso: camisa beige con cuello y el logo en el pecho (lado del corazón)
+        var matRopa=matCamisa;
         var torso=new T.Mesh(new T.CapsuleGeometry(0.22,0.38,8,16),matRopa);torso.position.y=1.02;torso.scale.set(1.15,1,0.85);torso.castShadow=true;per.add(torso);
+        var tirilla=new T.Mesh(new T.BoxGeometry(0.035,0.42,0.01),matCamisaOsc);tirilla.position.set(0,1.1,-0.188);per.add(tirilla);
+        [1.26,1.14,1.02].forEach(function(by){var bt=new T.Mesh(new T.SphereGeometry(0.009,8,6),matBoton);bt.position.set(0,by,-0.195);per.add(bt);});
+        var cuelloBanda=new T.Mesh(new T.TorusGeometry(0.085,0.022,8,20),matCamisa);cuelloBanda.rotation.x=Math.PI/2;cuelloBanda.position.y=1.355;per.add(cuelloBanda);
+        [-1,1].forEach(function(sd){var punta=new T.Mesh(new T.BoxGeometry(0.1,0.016,0.12),matCamisaClara);punta.position.set(sd*0.055,1.33,-0.125);punta.rotation.set(-0.55,sd*0.55,sd*0.35);punta.castShadow=true;per.add(punta);});
+        var fondoP=new T.Mesh(new T.CircleGeometry(0.06,24),matParche);fondoP.scale.set(1.25,0.95,1);fondoP.position.set(-0.1,1.22,-0.191);fondoP.rotation.y=Math.PI;fondoP.rotation.x=0.08;per.add(fondoP);
+        var parche=new T.Mesh(new T.PlaneGeometry(0.13,0.13*527/896),matLogoPecho);parche.position.set(-0.1,1.22,-0.194);parche.rotation.y=Math.PI;parche.rotation.x=0.08;per.add(parche);
+        var fondoE=new T.Mesh(new T.PlaneGeometry(0.34,0.22),matParche);fondoE.position.set(0,1.18,0.191);per.add(fondoE);
+        var espalda=new T.Mesh(new T.PlaneGeometry(0.3,0.3*527/896),matLogoPecho);espalda.position.set(0,1.18,0.195);espalda.rotation.x=-0.05;per.add(espalda);
         var cuelloP=new T.Mesh(new T.CylinderGeometry(0.07,0.08,0.1,12),matPiel);cuelloP.position.y=1.37;per.add(cuelloP);
         var cabeza=new T.Mesh(new T.SphereGeometry(0.17,32,24),matPiel);cabeza.position.y=1.55;cabeza.scale.set(1,1.12,1);cabeza.castShadow=true;per.add(cabeza);
         var pelo=new T.Mesh(new T.SphereGeometry(0.178,32,16,0,Math.PI*2,0,Math.PI/1.9),matPelo);pelo.position.y=1.585;pelo.rotation.x=0.35;per.add(pelo);
