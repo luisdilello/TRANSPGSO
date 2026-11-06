@@ -750,8 +750,8 @@ function ReportesOperadorPanel(props){
     );
   }
   var btn={padding:'6px 12px',fontSize:12};
-  var th={textAlign:'left',padding:'7px 8px',fontSize:10,letterSpacing:1,textTransform:'uppercase',color:'var(--text-soft)',borderBottom:'2px solid var(--border)',whiteSpace:'nowrap',position:'sticky',top:0,background:'#fff'};
-  var td={padding:'6px 8px',borderBottom:'1px solid var(--border)',fontSize:12,verticalAlign:'top'};
+  var th={textAlign:'left',padding:'11px 10px',fontFamily:'DM Sans, Inter, system-ui, sans-serif',fontSize:12.5,fontWeight:800,letterSpacing:0.6,textTransform:'uppercase',color:'#f6e7b8',textShadow:'none',borderBottom:'2px solid #c8a84b',whiteSpace:'nowrap',position:'sticky',top:0,zIndex:1,background:'linear-gradient(180deg,#34382a,#23261c)'};
+  var td={padding:'8px 10px',borderBottom:'1px solid var(--border)',fontSize:13,verticalAlign:'top'};
   var chip=function(label,n,act,onClick){return React.createElement('button',{key:label,type:'button',onClick:onClick,style:{padding:'4px 10px',borderRadius:14,border:'1px solid '+(act?'var(--gold)':'var(--border)'),background:act?'rgba(200,168,75,0.15)':'#fff',fontSize:11.5,cursor:'pointer',fontWeight:act?700:500}},label+' · '+n);};
   return React.createElement('div',{className:'panel',style:{marginBottom:20}},
     React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:10}},
