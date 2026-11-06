@@ -260,16 +260,17 @@ function Oficina3D(props){
   var ref=useRef(null),overlay=useRef(null),api=useRef(null),ultProps=useRef(props);ultProps.current=props;
   var _err=useState(null),err=_err[0],setErr=_err[1];
   var _vp=useState(false),verP=_vp[0],setVerP=_vp[1];
+  var _gen=useState(0),gen=_gen[0],setGen=_gen[1];
   var M=props.M;
   useEffect(function(){
     if(!webglOk()){setErr('Este equipo no soporta 3D; se muestra la vista simple.');return;}
     var vivo=true,cleanup=null;
-    cargarThree().then(function(T){if(!vivo)return;cleanup=montar(T);}).catch(function(){setErr('No se pudo cargar el motor 3D.');});
+    cargarThree().then(function(T){if(!vivo)return;try{cleanup=montar(T);}catch(e){console.warn('Oficina 3D:',e);setErr('El 3D no está disponible en este momento; se muestra la vista simple.');}}).catch(function(){setErr('No se pudo cargar el motor 3D.');});
     function montar(T){
       if(T.ColorManagement)T.ColorManagement.legacyMode=false;
       var el=ref.current;var W=el.clientWidth,H=el.clientHeight;
       var renderer=new T.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
-      renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));renderer.setSize(W,H);
+      renderer.setPixelRatio(Math.min(1.5,window.devicePixelRatio||1));renderer.setSize(Math.max(W,10),Math.max(H,10));
       renderer.outputEncoding=T.sRGBEncoding;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.0;renderer.physicallyCorrectLights=false;
       renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;
       el.appendChild(renderer.domElement);renderer.domElement.style.display='block';
@@ -425,8 +426,20 @@ function Oficina3D(props){
       api.current={aplicar:aplicar,verPantalla:function(){objDest.set(X0+1,2.6,0);az=Math.PI/2;elev=0.12;radioDest=Math.max(10,vwW*1.25);ultimoInput=Date.now()+20000;selPrevio='__pantalla__';}};
       aplicar(ultProps.current.M,ultProps.current.sel);
       var v3=new T.Vector3(),reloj=new T.Clock(),raf=0;
+      // 06-11-2026: si el navegador pierde el contexto 3D (pasa al cambiar de pestaña, con poca
+      // memoria de video o al volver de suspensión) la escena quedaba en blanco con solo las
+      // etiquetas. Ahora se detecta y se vuelve a armar sola. Además se pausa el dibujo cuando la
+      // sección no está a la vista o la pestaña está oculta (menos carga para la tarjeta de video).
+      var perdido=false,visible=true;
+      function alPerder(ev){ev.preventDefault();perdido=true;cancelAnimationFrame(raf);setTimeout(function(){setGen(function(g){return g+1;});},800);}
+      dom.addEventListener('webglcontextlost',alPerder,false);
+      var io=('IntersectionObserver' in window)?new IntersectionObserver(function(en){visible=en[0]&&en[0].isIntersecting;},{threshold:0.01}):null;if(io)io.observe(el);
       function frame(){
-        raf=requestAnimationFrame(frame);var dt=Math.min(0.05,reloj.getDelta()),t=reloj.elapsedTime;
+        raf=requestAnimationFrame(frame);
+        if(perdido)return;
+        if(document.visibilityState==='hidden'||!visible){reloj.getDelta();return;}
+        if(dom.width<20||dom.height<20){var w0=el.clientWidth,h0=el.clientHeight;if(w0>20&&h0>20){renderer.setSize(w0,h0);cam.aspect=w0/h0;cam.updateProjectionMatrix();}}
+        var dt=Math.min(0.05,reloj.getDelta()),t=reloj.elapsedTime;
         if(!arrastre&&Date.now()-ultimoInput>8000)az+=dt*0.04;
         objetivo.lerp(objDest,0.05);radio+=(radioDest-radio)*0.05;ubicarCam();
         halo.material.opacity=0.85+Math.sin(t*1.2)*0.15;
@@ -448,12 +461,12 @@ function Oficina3D(props){
         var ov=overlay.current;if(ov){var r=dom.getBoundingClientRect();puestos.forEach(function(pu,i){var d=ov.children[i];if(!d)return;v3.set(pu.g.position.x,2.35,pu.g.position.z+0.4).project(cam);var x=(v3.x*0.5+0.5)*r.width,y=(-v3.y*0.5+0.5)*r.height;d.style.transform='translate('+Math.round(x)+'px,'+Math.round(y)+'px) translate(-50%,-100%)';d.style.opacity=(v3.z<1&&x>-50&&x<r.width+50)?1:0;});}
       }
       frame();
-      return function(){cancelAnimationFrame(raf);ro.disconnect();dom.removeEventListener('pointerdown',down);dom.removeEventListener('pointermove',move);dom.removeEventListener('pointerup',up);dom.removeEventListener('wheel',wheel);
+      return function(){cancelAnimationFrame(raf);ro.disconnect();if(io)io.disconnect();dom.removeEventListener('webglcontextlost',alPerder,false);dom.removeEventListener('pointerdown',down);dom.removeEventListener('pointermove',move);dom.removeEventListener('pointerup',up);dom.removeEventListener('wheel',wheel);
         scene.traverse(function(o){if(o.geometry)o.geometry.dispose();if(o.material){[].concat(o.material).forEach(function(m){if(m.map)m.map.dispose();m.dispose();});}});
-        envRT.dispose();pm.dispose();renderer.dispose();if(dom.parentNode)dom.parentNode.removeChild(dom);api.current=null;};
+        envRT.dispose();pm.dispose();renderer.dispose();try{renderer.forceContextLoss();}catch(e){}if(dom.parentNode)dom.parentNode.removeChild(dom);api.current=null;};
     }
     return function(){vivo=false;cleanup&&cleanup();};
-  },[M.staff.map(function(s){return s.nombre;}).join('|')]);
+  },[M.staff.map(function(s){return s.nombre;}).join('|'),gen]);
   useEffect(function(){if(api.current)api.current.aplicar(M,props.sel);});
   var COLH={activo:'#39e58c',ausente:'#ffc93c',desconectado:'#8a8f82'};
   var TXT={activo:'Activo',ausente:'Sin actividad',desconectado:'Desconectado'};
