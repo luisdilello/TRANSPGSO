@@ -127,7 +127,7 @@ function necesidades(N){
   if(!N)return [];
   var L=[];
   function add(k,n,txt,sev,tipos,accion){if(n>0)L.push({k:k,n:n,txt:txt,sev:sev,tipos:tipos,accion:accion});}
-  add('bodega',N.en_bodega_hoy,'paquetes en bodega por asignar',N.en_bodega_hoy>60?3:N.en_bodega_hoy>15?2:1,['asignacion','estado_en_bodega','estado_en_ruta','masiva'],'Asignar a mensajeros');
+  add('bodega',N.en_bodega_hoy,'paquetes en bodega de días anteriores (no salieron a ruta)',N.en_bodega_hoy>20?3:N.en_bodega_hoy>5?2:1,['asignacion','estado_en_bodega','estado_en_ruta','masiva'],'Revisar por qué no salieron');
   add('sinmens',N.en_ruta_sin_mensajero,'envíos en ruta sin mensajero asignado',3,['asignacion','correccion'],'Asignar mensajero');
   add('atrasados',N.atrasados,'envíos atrasados (más de 1 día sin cerrar)',N.atrasados>40?3:2,['correccion','estado_reprogramado','estado_en_bodega_fecha','estado_siniestro'],'Revisar y gestionar');
   add('reprog',N.reprogramado,'reprogramados por volver a ruta',N.reprogramado>40?2:1,['estado_reprogramado','asignacion','estado_en_bodega_fecha'],'Reasignar');
@@ -630,7 +630,7 @@ function FormTarea(p){
   function enviar(){if(!t.trim()||!(p.asignado||a))return;p.onCrear(p.asignado||a,t.trim(),pr,v||null,'manual',d.trim()||null).then(function(ok){if(ok){setT('');setD('');setV('');}});}
   return h('div',{style:{display:'flex',flexWrap:'wrap',gap:8,alignItems:'center',marginBottom:10}},
     !p.asignado&&h('select',{value:a,onChange:function(e){setA(e.target.value);},style:Object.assign({},inp,{flex:'0 0 180px'})},h('option',{value:''},'Asignar a…'),p.staff.map(function(x){return h('option',{key:x.nombre,value:x.nombre},x.nombre);})),
-    h('input',{value:t,onChange:function(e){setT(e.target.value);},onKeyDown:function(e){if(e.key==='Enter')enviar();},placeholder:'Nueva tarea (ej. asignar los 123 paquetes en bodega antes de las 11:00)',style:Object.assign({},inp,{flex:'1 1 280px',minWidth:0})}),
+    h('input',{value:t,onChange:function(e){setT(e.target.value);},onKeyDown:function(e){if(e.key==='Enter')enviar();},placeholder:'Nueva tarea (ej. revisar los reprogramados de Puente Alto antes de las 12:00)',style:Object.assign({},inp,{flex:'1 1 280px',minWidth:0})}),
     h('select',{value:pr,onChange:function(e){setPr(e.target.value);},style:inp},h('option',{value:'normal'},'Normal'),h('option',{value:'alta'},'Alta'),h('option',{value:'urgente'},'Urgente')),
     h('input',{type:'date',value:v,onChange:function(e){setV(e.target.value);},title:'Vence (opcional)',style:inp}),
     h('button',{type:'button',onClick:enviar,disabled:!t.trim()||!(p.asignado||a),style:{padding:'8px 16px',borderRadius:8,border:'none',background:'linear-gradient(135deg,#c8a84b,#a87d2a)',color:'#1a1d13',fontWeight:800,fontSize:13,cursor:'pointer',opacity:(!t.trim()||!(p.asignado||a))?0.5:1}},'Agregar tarea'));
@@ -1004,7 +1004,7 @@ function PanelOperativo(props){
     h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12,marginBottom:16}},
       h(Kpi,{l:'Entregados hoy',v:fmt(N.entregados_hoy),s:fmt(N.riders_con_entregas_hoy)+' mensajeros con entregas',color:'#2e7d4f'}),
       h(Kpi,{l:'En ruta',v:fmt(N.en_ruta),s:N.en_ruta_sin_mensajero?fmt(N.en_ruta_sin_mensajero)+' sin mensajero':'todos con mensajero',color:'#c8a84b'}),
-      h(Kpi,{l:'En bodega por asignar',v:fmt(N.en_bodega_hoy),s:'con fecha de hoy o anterior',color:N.en_bodega_hoy>60?'#d32f2f':'#2b2e20'}),
+      h(Kpi,{l:'Bodega días anteriores',v:fmt(N.en_bodega_hoy),s:'no salieron a ruta',color:N.en_bodega_hoy>20?'#d32f2f':'#2b2e20'}),
       h(Kpi,{l:'Incidencias sin resolver',v:fmt(N.incidencias_pend),s:'de mensajeros',color:'#7b1fa2'}),
       h(Kpi,{l:'Tareas pendientes',v:fmt(pend),s:'del equipo',color:'#1565c0'})),
     h('div',{style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(0,1.2fr)',gap:16,marginBottom:16,alignItems:'start'}},
