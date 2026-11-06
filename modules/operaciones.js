@@ -711,17 +711,36 @@ function ReportesOperadorPanel(props){
           h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:12}},
             h('div',{style:tituloCard},'Ranking de mensajeros',filtroMotivo&&h('span',{style:{color:colorMot(filtroMotivo)}},' · por motivo')),
             h('div',{style:{fontSize:11,color:'var(--text-soft)'}},filtroMens?h('a',{href:'#',onClick:function(e){e.preventDefault();setFiltroMens('');},style:{color:'#a0842a',fontWeight:700}},'Quitar filtro: '+filtroMens):'Toca un mensajero para ver sus incidencias')),
-          motivosOrd.length>1&&h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(230px,1fr))',gap:10,marginBottom:14}},
-            [''].concat(motivosOrd).map(function(m){var act=filtroMotivo===m;var c=m?colorMot(m):'#2b2e20';var n=m?porMotivo[m]:rows.length;var pct=rows.length?Math.round(n/rows.length*100):0;var g=m?grupoMot(m):'';
-              return h('button',{key:m||'_todos',type:'button',title:m||'Todos los motivos',onClick:function(){setFiltroMotivo(m);},style:{position:'relative',display:'flex',flexDirection:'column',alignItems:'stretch',gap:6,textAlign:'left',padding:'12px 14px 12px 16px',borderRadius:14,cursor:'pointer',overflow:'hidden',border:act?'2px solid '+c:'1px solid rgba(43,46,32,0.10)',background:act?('linear-gradient(150deg,'+c+','+c+'d9)'):'linear-gradient(160deg,#ffffff,#fbf6ea)',color:act?'#fff':'var(--dark)',boxShadow:act?'0 10px 22px '+c+'55, inset 0 1px 0 rgba(255,255,255,0.3)':'0 6px 14px rgba(43,46,32,0.08), inset 0 1px 0 #fff',transform:act?'translateY(-1px)':'none',transition:'all .15s'}},
-                h('span',{style:{position:'absolute',left:0,top:0,bottom:0,width:5,background:act?'rgba(255,255,255,0.6)':c}}),
-                h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}},
-                  g?h('span',{style:{fontSize:9.5,fontWeight:800,letterSpacing:1,textTransform:'uppercase',padding:'2px 7px',borderRadius:6,color:'#fff',background:act?'rgba(255,255,255,0.25)':({'Leve':'#2e7d4f','Grave':'#d9822b','Crítica':'#b03030'}[g]||'#5b5f4a')}},g):h('span',{style:{fontSize:10,fontWeight:800,letterSpacing:1.5,textTransform:'uppercase',opacity:0.8}},m?'Motivo':'Vista general'),
-                  h('span',{style:{fontSize:11,fontWeight:800,opacity:0.85}},pct+'%')),
-                h('div',{style:{fontSize:13.5,fontWeight:800,lineHeight:1.25,minHeight:34}},m||'Todos los motivos'),
-                h('div',{style:{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:8}},
-                  h('span',{style:{fontFamily:'Bebas Neue',fontSize:34,lineHeight:0.9,color:act?'#fff':c}},n),
-                  h('span',{style:{flex:1,height:6,borderRadius:4,background:act?'rgba(255,255,255,0.3)':'rgba(43,46,32,0.08)',marginBottom:5,overflow:'hidden'}},h('span',{style:{display:'block',height:'100%',width:pct+'%',borderRadius:4,background:act?'#fff':c}}))));})),
+          motivosOrd.length>1&&h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(250px,1fr))',gap:14,marginBottom:16,perspective:'1200px'}},
+            [''].concat(motivosOrd).map(function(m){var act=filtroMotivo===m;var c=m?colorMot(m):'#c8a84b';var n=m?porMotivo[m]:rows.length;var pct=rows.length?Math.round(n/rows.length*100):0;var g=m?grupoMot(m):'';
+              var gc={'Leve':'#2e7d4f','Grave':'#d9822b','Crítica':'#b03030'}[g]||'#5b5f4a';
+              var R=24,C=2*Math.PI*R,off=C*(1-pct/100);var gid='gm'+(m?motivosOrd.indexOf(m):'t');
+              var oscuro=act||!m;
+              function tilt(e){var el=e.currentTarget,r=el.getBoundingClientRect();var x=(e.clientX-r.left)/r.width-0.5,y=(e.clientY-r.top)/r.height-0.5;el.style.transform='rotateX('+(-y*10).toFixed(2)+'deg) rotateY('+(x*12).toFixed(2)+'deg) translateY(-4px)';var sh=el.querySelector('[data-brillo]');if(sh)sh.style.background='radial-gradient(circle at '+((x+0.5)*100)+'% '+((y+0.5)*100)+'%, rgba(255,255,255,'+(oscuro?0.18:0.55)+'), transparent 55%)';}
+              function soltar(e){var el=e.currentTarget;el.style.transform=act?'translateY(-3px)':'none';var sh=el.querySelector('[data-brillo]');if(sh)sh.style.background='transparent';}
+              return h('button',{key:m||'_todos',type:'button',title:m||'Todos los motivos',onClick:function(){setFiltroMotivo(m);},onMouseMove:tilt,onMouseLeave:soltar,
+                style:{position:'relative',display:'flex',flexDirection:'column',alignItems:'stretch',gap:8,textAlign:'left',padding:'14px 16px 14px 18px',borderRadius:18,cursor:'pointer',overflow:'hidden',
+                  transformStyle:'preserve-3d',transition:'transform .18s ease-out, box-shadow .2s',transform:act?'translateY(-3px)':'none',
+                  border:'1px solid '+(act?c:(oscuro?'rgba(200,168,75,0.35)':'rgba(43,46,32,0.08)')),
+                  background:oscuro?('radial-gradient(120% 90% at 100% 0%, '+c+(act?'66':'33')+' 0%, transparent 55%), linear-gradient(155deg,#2f3326 0%,#1a1d14 100%)'):('radial-gradient(120% 90% at 100% 0%, '+c+'26 0%, transparent 55%), linear-gradient(160deg,#ffffff 0%,#f8f2e3 100%)'),
+                  color:oscuro?'#f4ead0':'var(--dark)',
+                  boxShadow:(act?'0 0 0 2px '+c+', 0 18px 36px '+c+'55':'0 14px 28px rgba(43,46,32,'+(oscuro?0.35:0.12)+')')+', 0 2px 4px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,'+(oscuro?0.08:0.9)+')'}},
+                h('span',{'data-brillo':1,style:{position:'absolute',inset:0,pointerEvents:'none',transition:'background .15s'}}),
+                h('span',{style:{position:'absolute',left:0,top:12,bottom:12,width:4,borderRadius:'0 4px 4px 0',background:'linear-gradient(180deg,'+c+','+c+'88)',boxShadow:'0 0 12px '+c}}),
+                h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,transform:'translateZ(18px)'}},
+                  g?h('span',{style:{fontSize:9.5,fontWeight:800,letterSpacing:1.2,textTransform:'uppercase',padding:'3px 8px',borderRadius:999,color:'#fff',background:'linear-gradient(135deg,'+gc+','+gc+'cc)',boxShadow:'0 3px 8px '+gc+'55'}},g)
+                   :h('span',{style:{fontSize:10,fontWeight:800,letterSpacing:2,textTransform:'uppercase',color:'#e6c76a'}},'Vista general'),
+                  h('span',{style:{fontSize:10.5,fontWeight:700,letterSpacing:0.5,opacity:0.7}},act?'Seleccionado':'')),
+                h('div',{style:{fontSize:14,fontWeight:800,lineHeight:1.28,minHeight:36,letterSpacing:0.1,transform:'translateZ(22px)',textShadow:oscuro?'0 1px 2px rgba(0,0,0,0.4)':'none'}},m||'Todos los motivos'),
+                h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,transform:'translateZ(30px)'}},
+                  h('div',null,
+                    h('div',{style:{fontFamily:'Bebas Neue',fontSize:46,lineHeight:0.85,letterSpacing:1,color:oscuro?'#ffffff':c,textShadow:oscuro?('0 0 18px '+c+'aa'):('0 6px 14px '+c+'44')}},n),
+                    h('div',{style:{fontSize:10.5,fontWeight:700,opacity:0.65,marginTop:4,letterSpacing:0.5}},n===1?'incidencia':'incidencias')),
+                  h('svg',{width:62,height:62,viewBox:'0 0 62 62',style:{flex:'0 0 62px',filter:'drop-shadow(0 4px 8px '+c+'55)'}},
+                    h('defs',null,h('linearGradient',{id:gid,x1:'0',y1:'0',x2:'1',y2:'1'},h('stop',{offset:'0%',stopColor:c}),h('stop',{offset:'100%',stopColor:c,stopOpacity:0.55}))),
+                    h('circle',{cx:31,cy:31,r:R,fill:'none',stroke:oscuro?'rgba(255,255,255,0.12)':'rgba(43,46,32,0.08)',strokeWidth:7}),
+                    h('circle',{cx:31,cy:31,r:R,fill:'none',stroke:'url(#'+gid+')',strokeWidth:7,strokeLinecap:'round',strokeDasharray:C.toFixed(1),strokeDashoffset:off.toFixed(1),transform:'rotate(-90 31 31)',style:{transition:'stroke-dashoffset .6s ease'}}),
+                    h('text',{x:31,y:35,textAnchor:'middle',fontSize:13,fontWeight:800,fill:oscuro?'#fff':'#2b2e20',fontFamily:'DM Sans, system-ui, sans-serif'},pct+'%'))));})),
           filtroMotivo&&h('div',{style:{fontSize:12,color:'var(--text-soft)',margin:'-4px 0 10px 4px'}},badgeGrupo(filtroMotivo),h('b',{style:{color:'var(--dark)'}},filtroMotivo),' · '+lista.length+' incidencia'+(lista.length===1?'':'s')+' en '+ranking.length+' mensajero'+(ranking.length===1?'':'s')),
           visibles.map(function(x,i){var act=filtroMens===x.m;
             return h('div',{key:x.m,onClick:function(){setFiltroMens(act?'':x.m);},style:{display:'grid',gridTemplateColumns:'38px minmax(140px,1.2fr) 3fr 64px',alignItems:'center',gap:12,padding:'9px 10px',marginBottom:6,borderRadius:12,cursor:'pointer',background:act?'rgba(200,168,75,0.16)':'rgba(255,255,255,0.7)',border:'1px solid '+(act?'rgba(200,168,75,0.6)':'rgba(43,46,32,0.06)'),boxShadow:act?'0 6px 14px rgba(200,168,75,0.25)':'0 2px 6px rgba(43,46,32,0.05)'}},
