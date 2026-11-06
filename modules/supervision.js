@@ -108,8 +108,10 @@ function recomendaciones(Ns,M,esHoy){
   var orden={activo:0,ausente:1,desconectado:2};
   Ns.forEach(function(nd){
     var cands=M.staff.map(function(s){var p=M.P[s.nombre];var sk=0;nd.tipos.forEach(function(t){sk+=(p.tipos7[t]||0);});return{p:p,sk:sk};}).filter(function(c){return c.sk>0||c.p.estado!=='desconectado';});
-    cands.sort(function(a,b){return (orden[a.p.estado]-orden[b.p.estado])||(b.sk-a.sk);});
-    var c=cands[0];
+    cands.sort(function(a,b){return (b.sk-a.sk)||(orden[a.p.estado]-orden[b.p.estado]);});
+    var top=cands[0];
+    var con=cands.filter(function(x){return x.p.estado!=='desconectado'&&x.sk>=Math.max(1,(top?top.sk:0)*0.2);}).sort(function(a,b){return (orden[a.p.estado]-orden[b.p.estado])||(b.sk-a.sk);})[0];
+    var c=con||top;
     if(!c){R.push({sev:nd.sev,quien:null,txt:nd.accion+': '+fmt(nd.n)+' '+nd.txt+'. Nadie del equipo lo ha trabajado esta semana.'});return;}
     var por=c.sk>0?(fmt(c.sk)+' movimientos de este tipo en 7 días'):'está conectado ahora';
     R.push({sev:nd.sev,quien:c.p.s,txt:nd.accion+' — '+fmt(nd.n)+' '+nd.txt+'.',por:nombreCorto(c.p.s.nombre)+' '+(c.p.estado==='activo'?'está activo':c.p.estado==='ausente'?'tiene el panel abierto':'no está conectado')+' y es quien más lo trabaja ('+por+').'});
@@ -382,7 +384,7 @@ function Panel(props){
   var Rs=useMemo(function(){return M?recomendaciones(Ns,M,esHoy):[];},[M,Ns]);
   var fichaRef=useRef(null);
   useEffect(function(){if(sel&&fichaRef.current){setTimeout(function(){try{fichaRef.current.scrollIntoView({behavior:'smooth',block:'start'});}catch(e){}},350);}},[sel]);
-  if(error)return h('div',{className:'panel'},h('div',{style:{color:'var(--danger)'}},'No se pudo cargar Supervisión: '+error));
+  if(error)return h('div',{className:'panel',style:{margin:'28px 32px'}},h('div',{style:{color:'var(--danger)'}},'No se pudo cargar Supervisión: '+error));
   if(!M)return h('div',{style:{padding:60,textAlign:'center',color:'var(--text-soft)'}},'Cargando supervisión…');
   var colorDe=function(n){var s=M.staff.find(function(x){return x.nombre===n;});return s?s.color:'#999';};
   var tot={acc:0,firmas:0,rep:0,con:0,act:0,on:0,activos:0,corr:0,asig:0};
@@ -395,7 +397,7 @@ function Panel(props){
     codEnv==='cargando'||!codEnv?h('div',{style:{padding:30,textAlign:'center'}},'Cargando…'):codEnv._no?h('div',null,'El envío ya no existe.'):h(A.EnvioDetalleCard,{key:cod,envio:codEnv}),
     h('div',{className:'modal-actions'},h('button',{className:'btn-secondary',onClick:function(){setCod(null);}},'Cerrar')));
 
-  return h('div',null,
+  return h('div',{style:{padding:'28px 32px',maxWidth:'100%',boxSizing:'border-box'}},
     h('div',{className:'section-head',style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10}},
       h('div',null,h('div',{className:'section-title'},'Super',h('span',null,'visión')),h('div',{style:{fontSize:12,color:'var(--text-soft)',marginTop:2}},esHoy?('En vivo · se actualiza cada 30 segundos · '+horaCL(D.generado)):('Día '+dmy(fecha)))),
       h('div',{style:{display:'flex',gap:6,alignItems:'center'}},
