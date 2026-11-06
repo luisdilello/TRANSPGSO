@@ -630,7 +630,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1793976769;
+window.__MODULES_VERSION=1793978180;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -726,7 +726,57 @@ function fetchConLimite(url,opts){
   if(opts.signal){if(opts.signal.aborted)ctrl.abort();else opts.signal.addEventListener('abort',function(){ctrl.abort();});}
   return fetch(url,Object.assign({},opts,{signal:ctrl.signal})).then(function(r){clearTimeout(t);return r;},function(e){clearTimeout(t);if(vencido)throw new TypeError('Failed to fetch (timeout sin respuesta)');throw e;});
 }
-const db=supabase.createClient(SUPA_URL,SUPA_KEY,{global:{fetch:fetchConLimite}});
+// 06-11-2026: mensajeros quedaban deslogueados cada pocos minutos (Gustavo Román: 56 inicios de
+// sesión en un día, 0 renovaciones de sesión). Causa: el almacenamiento local del celular (5 MB)
+// se llenaba con borradores de fotos en base64 ("rider_fotos_draft_*", que quedaban huérfanos si
+// la entrega se guardaba por otra vía) y cachés. Con el almacenamiento lleno, guardar la sesión
+// fallaba en silencio: al minimizar, Android recargaba la app, no encontraba la sesión y pedía
+// usuario y clave otra vez. Ahora: (1) los borradores de fotos van a IndexedDB (otra cuota, mucho
+// mayor), (2) al abrir se limpian borradores viejos y cachés que se pueden volver a bajar, y
+// (3) la sesión (Supabase + usuario) se guarda con reintento: si no cabe, se libera espacio y se
+// vuelve a intentar.
+function __lsUso(){var t=0;try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);t+=k.length+((localStorage.getItem(k)||'').length);}}catch(e){}return t;}
+function __liberarEspacioLocal(nivel){
+  var borrar=[];
+  try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(!k)continue;
+    if(/^rider_fotos_draft_/.test(k)||/^transpgso_v1_/.test(k)||k==='transpgso_v2_gestion_envios'||k==='transpgso_v2_envios_eliminados'||/^transpgso_v2_rider_envios_cache_/.test(k))borrar.push(k);
+    else if(nivel>=2&&(/^transpgso_v2_rider_envios_/.test(k)||k==='transpgso_v2_notificaciones'||k==='transpgso_v2_clientes'||k==='transpgso_v2_mensajeros'||/^transpgso_v2_notif_rider_/.test(k)||k==='transpgso_v2_kpi'))borrar.push(k);}}catch(e){}
+  borrar.forEach(function(k){try{localStorage.removeItem(k);}catch(e){}});
+  return borrar.length;
+}
+function __setItemSeguro(k,v){
+  try{localStorage.setItem(k,v);return true;}catch(e){}
+  __liberarEspacioLocal(1);try{localStorage.setItem(k,v);return true;}catch(e){}
+  __liberarEspacioLocal(2);try{localStorage.setItem(k,v);return true;}catch(e){}
+  return false;
+}
+window.__setItemSeguro=__setItemSeguro;
+// Borradores de fotos en IndexedDB (no en localStorage).
+window.__borradorFotos=(function(){
+  var dbp=null;
+  function abrir(){if(dbp)return dbp;dbp=new Promise(function(res,rej){try{var rq=indexedDB.open('transpgso_borradores',1);rq.onupgradeneeded=function(){rq.result.createObjectStore('fotos');};rq.onsuccess=function(){res(rq.result);};rq.onerror=function(){rej(rq.error);};}catch(e){rej(e);}});return dbp;}
+  function tx(modo,fn){return abrir().then(function(d){return new Promise(function(res,rej){var t=d.transaction('fotos',modo);var st=t.objectStore('fotos');var r=fn(st);t.oncomplete=function(){res(r&&r.result);};t.onerror=function(){rej(t.error);};});});}
+  return{
+    get:function(k){return tx('readonly',function(st){return st.get(k);}).then(function(v){return v&&v.fotos?v.fotos:null;}).catch(function(){return null;});},
+    set:function(k,fotos){return tx('readwrite',function(st){return st.put({fotos:fotos,ts:Date.now()},k);}).catch(function(){});},
+    del:function(k){return tx('readwrite',function(st){return st.delete(k);}).catch(function(){});},
+    limpiarViejos:function(dias){var lim=Date.now()-dias*86400000;return abrir().then(function(d){var t=d.transaction('fotos','readwrite');var st=t.objectStore('fotos');var c=st.openCursor();c.onsuccess=function(){var cur=c.result;if(!cur)return;if(!cur.value||!cur.value.ts||cur.value.ts<lim)cur.delete();cur.continue();};}).catch(function(){});}
+  };
+})();
+// Al abrir: pasar borradores de localStorage a IndexedDB y liberar espacio si está muy lleno.
+(function(){
+  try{
+    var claves=[];for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&/^rider_fotos_draft_/.test(k))claves.push(k);}
+    claves.forEach(function(k){try{var v=JSON.parse(localStorage.getItem(k)||'null');if(Array.isArray(v)&&v.length)window.__borradorFotos.set(k,v);}catch(e){}try{localStorage.removeItem(k);}catch(e){}});
+    if(__lsUso()>3500000)__liberarEspacioLocal(1);
+    window.__borradorFotos.limpiarViejos(3);
+  }catch(e){}
+})();
+const db=supabase.createClient(SUPA_URL,SUPA_KEY,{global:{fetch:fetchConLimite},auth:{persistSession:true,autoRefreshToken:true,storage:{
+  getItem:function(k){try{return localStorage.getItem(k);}catch(e){return null;}},
+  setItem:function(k,v){__setItemSeguro(k,v);},
+  removeItem:function(k){try{localStorage.removeItem(k);}catch(e){}}
+}}});
 const VAPID_PUBLIC_KEY='BAltUDXRSz5xgb922XN5ESppiCkXBCqMYDLtaPPzmOBqU-xztkqpW9GnGSW9z2uRM7PYD4RPqkqr1Jfj_4Wqc38';
 function urlBase64ToUint8Array(base64String){
   const padding='='.repeat((4-base64String.length%4)%4);
@@ -12084,19 +12134,24 @@ useEffect(()=>{
 // plano, etc.) antes de guardar, las fotos ya tomadas para ESTE envío se recuperan solas en
 // vez de perderse y tener que tomarlas de nuevo.
 const fotosDraftKey='rider_fotos_draft_'+envio.codigo;
+// 06-11-2026: el borrador va a IndexedDB (window.__borradorFotos), no a localStorage -- las fotos
+// en base64 llenaban el almacenamiento local y eso borraba la sesión del mensajero.
+const borradorCargado=useRef(false);
 useEffect(function(){
+  var vivo=true;
   try{
-    const guardado=JSON.parse(localStorage.getItem(fotosDraftKey)||'null');
-    if(Array.isArray(guardado)&&guardado.length>0)setFotos(guardado);
+    var legado=JSON.parse(localStorage.getItem(fotosDraftKey)||'null');
+    if(Array.isArray(legado)&&legado.length>0){setFotos(legado);borradorCargado.current=true;try{localStorage.removeItem(fotosDraftKey);}catch(e){}return;}
   }catch(e){}
+  if(window.__borradorFotos)window.__borradorFotos.get(fotosDraftKey).then(function(g){if(!vivo)return;if(Array.isArray(g)&&g.length>0)setFotos(function(prev){return prev.length?prev:g;});borradorCargado.current=true;});else borradorCargado.current=true;
+  return function(){vivo=false;};
 },[]);
 useEffect(function(){
-  try{
-    if(fotos.length>0)localStorage.setItem(fotosDraftKey,JSON.stringify(fotos.map(function(f){return{data:f.data};})));
-    else localStorage.removeItem(fotosDraftKey);
-  }catch(e){}
+  if(!window.__borradorFotos)return;
+  if(fotos.length>0)window.__borradorFotos.set(fotosDraftKey,fotos.map(function(f){return{data:f.data};}));
+  else if(borradorCargado.current)window.__borradorFotos.del(fotosDraftKey);
 },[fotos]);
-function limpiarBorradorFotos(){try{localStorage.removeItem(fotosDraftKey);}catch(e){}}
+function limpiarBorradorFotos(){try{localStorage.removeItem(fotosDraftKey);}catch(e){}if(window.__borradorFotos)window.__borradorFotos.del(fotosDraftKey);}
 // Guarda además una copia de las fotos en el dispositivo — antes las fotos solo vivían en
 // la nube, sin respaldo local para el mensajero. OJO: se probó con la Web Share API
 // (navigator.share) para esto, pero abre el selector nativo "Compartir" (Gmail/Mensajes/etc.)
@@ -12727,7 +12782,7 @@ if(typeof window!=='undefined'){
   window.addEventListener('online',function(){procesarColaOffline();});
 }
 
-const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localStorage.getItem(LS_KEY+'_'+key);return raw?JSON.parse(raw):fallback;}catch(e){return fallback;}}function lsSave(key,val){try{localStorage.setItem(LS_KEY+'_'+key,JSON.stringify(val));}catch(e){}}
+const LS_KEY='transpgso_v2';function lsLoad(key,fallback){try{const raw=localStorage.getItem(LS_KEY+'_'+key);return raw?JSON.parse(raw):fallback;}catch(e){return fallback;}}function lsSave(key,val){try{var v=JSON.stringify(val);if(window.__setItemSeguro)window.__setItemSeguro(LS_KEY+'_'+key,v);else localStorage.setItem(LS_KEY+'_'+key,v);}catch(e){}}
 // ── Traductor SOLO para la vista del Portal Cliente (Dashboard/Mis Envios/Mapa/Carga de
 // Envios) - NUNCA afecta el panel admin ni la app de mensajeros, que siguen 100% en español.
 // El idioma es solo de sesion (no se guarda) - el portal SIEMPRE abre en español y el cliente
