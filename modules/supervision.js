@@ -72,7 +72,7 @@ function procesar(D,fecha,esHoy,F){
   (D.presencia||[]).forEach(function(r){var p=P[r.u];if(!p)return;if(p.dias[r.d]){p.dias[r.d].con+=r.m;p.dias[r.d].act+=r.act;}if(r.d!==fecha)return;p.horas[r.h].con+=r.m;p.horas[r.h].act+=r.act;p.secc[r.s]=(p.secc[r.s]||0)+r.m;p.con+=r.m;p.act+=r.act;});
   (D.pulso||[]).forEach(function(r){if(P[r.u])P[r.u].pulso=r;});
   var ahoraMin=null;if(esHoy){var hc=new Date().toLocaleTimeString('en-GB',{timeZone:'America/Santiago',hour12:false}).split(':');ahoraMin=(+hc[0])*60+(+hc[1]);}
-  staff.forEach(function(s){var p=P[s.nombre];var t=tramos(((D.minutos||{})[s.nombre])||[],ahoraMin);p.tramos=t.L;p.inact=t.inact;p.oculto=t.oculto;p.desc=t.desc;p.pausas=t.pausas;p.pausaMax=t.pausaMax;});
+  staff.forEach(function(s){var p=P[s.nombre];var t=tramos(((D.minutos||{})[s.nombre])||[],ahoraMin);p.tramos=t.L;p.entrada=t.entrada;p.inact=t.inact;p.oculto=t.oculto;p.desc=t.desc;p.pausas=t.pausas;p.pausaMax=t.pausaMax;});
   staff.forEach(function(s){var p=P[s.nombre];
     for(var hr=0;hr<24;hr++){if(p.horas[hr].acc>0||p.horas[hr].con>0){if(p.primera==null)p.primera=hr;p.ultima=hr;}}
     var est='desconectado';
@@ -103,12 +103,14 @@ function tramos(arr,ahoraMin){
   arr.forEach(function(x,i){var mi=x[0],f=x[1],sec=x[2];var ult=L[L.length-1];
     if(f===2)inact++;if(f===3)oculto++;
     if(ult&&mi-ult.fin<=2&&ult.tipo===TIPO[f]){ult.fin=mi+1;return;}
-    if(ult&&mi-ult.fin>2){L.push({ini:ult.fin,fin:mi,tipo:'desconectado'});desc+=mi-ult.fin;}
+    if(ult&&mi-ult.fin>2){var gap=mi-ult.fin;L.push({ini:ult.fin,fin:mi,tipo:gap>240?'fuera':'desconectado'});if(gap<=240)desc+=gap;}
     else if(ult){ult.fin=Math.max(ult.fin,mi);}
     L.push({ini:mi,fin:mi+1,tipo:TIPO[f],s:sec});});
   if(ahoraMin!=null&&L.length){var u=L[L.length-1];if(ahoraMin-u.fin>3){L.push({ini:u.fin,fin:ahoraMin,tipo:'desconectado',actual:true});desc+=ahoraMin-u.fin;}}
-  L.forEach(function(t){var d=t.fin-t.ini;if((t.tipo==='inactivo'||t.tipo==='oculto')&&d>=3){pausas++;}if(t.tipo!=='activo'&&d>pausaMax)pausaMax=d;});
-  return {L:L,inact:inact,oculto:oculto,desc:desc,pausas:pausas,pausaMax:pausaMax};
+  L.forEach(function(t){var d=t.fin-t.ini;if((t.tipo==='inactivo'||t.tipo==='oculto')&&d>=3){pausas++;}if(t.tipo!=='activo'&&t.tipo!=='fuera'&&d>pausaMax)pausaMax=d;});
+  // entrada = inicio del primer tramo después del último corte largo (fuera de turno)
+  var entrada=L.length?L[0].ini:null;L.forEach(function(t,i){if(t.tipo==='fuera'&&L[i+1])entrada=L[i+1].ini;});
+  return {L:L,inact:inact,oculto:oculto,desc:desc,pausas:pausas,pausaMax:pausaMax,entrada:entrada};
 }
 function hm(mi){var hh=Math.floor(mi/60),mm=mi%60;return (hh<10?'0':'')+hh+':'+(mm<10?'0':'')+mm;}
 function durTxt(min){min=Math.round(min||0);if(min<1)return 'menos de 1 min';if(min<60)return min+' min';return Math.floor(min/60)+' h '+(min%60)+' min';}
@@ -186,7 +188,7 @@ function pantallaCanvas(T,p,col,modo){
   var g=x.createLinearGradient(0,0,w,hh);g.addColorStop(0,on?'#0c1f2a':'#07080a');g.addColorStop(1,on?'#061016':'#040506');x.fillStyle=g;x.fillRect(0,0,w,hh);
   if(on&&modo===2){
     x.fillStyle='#e8f4ff';x.font='bold 22px sans-serif';x.textBaseline='middle';x.fillText('JORNADA DE HOY',20,24);
-    var CT={activo:'#3dffa0',inactivo:'#ffcc4d',oculto:'#ff8a3d',desconectado:'#30363d'};var i0=7*60,i1=24*60;
+    var CT={activo:'#3dffa0',inactivo:'#ffcc4d',oculto:'#ff8a3d',desconectado:'#30363d',fuera:'#161b22'};var i0=7*60,i1=24*60;
     x.fillStyle='#161b22';x.fillRect(20,60,w-40,40);(p.tramos||[]).forEach(function(tr){var a=Math.max(i0,tr.ini),b=Math.min(i1,tr.fin);if(b<=a)return;x.fillStyle=CT[tr.tipo];x.fillRect(20+(a-i0)/(i1-i0)*(w-40),60,Math.max(2,(b-a)/(i1-i0)*(w-40)),40);});
     x.fillStyle='#8fb3c8';x.font='16px sans-serif';[8,12,16,20,24].forEach(function(hr){x.fillText(String(hr),20+(hr*60-i0)/(i1-i0)*(w-40)-6,118);});
     x.fillStyle='#ffffff';x.font='bold 40px sans-serif';x.fillText(hhmm(p.con),20,170);x.fillStyle='#8fb3c8';x.font='16px sans-serif';x.fillText('conectado',20,200);
@@ -511,19 +513,19 @@ function GraficoHoras(p){
       h('span',null,h('span',{style:{display:'inline-block',width:10,height:6,borderRadius:2,background:'#e0b84a',marginRight:4}}),'Conectado sin actividad')));
 }
 
-var CTR={activo:['Activo','#2e9d5b'],inactivo:['Abierto sin actividad','#e0a82e'],oculto:['Ventana minimizada / otra pestaña','#f57c00'],desconectado:['Desconectado','#9aa0a6']};
+var CTR={activo:['Activo','#2e9d5b'],inactivo:['Abierto sin actividad','#e0a82e'],oculto:['Ventana minimizada / otra pestaña','#f57c00'],desconectado:['Desconectado','#9aa0a6'],fuera:['Fuera de turno (más de 4 h sin conexión)','#e9ebed']};
 function Jornada(p){
   var L=p.tramos||[];if(!L.length)return h('div',{style:{fontSize:12,color:'var(--text-soft)'}},'Sin registro de conexión este día (el registro empezó el 05-11-2026).');
   var i0=Math.min(8*60,Math.floor(L[0].ini/60)*60),i1=Math.max(20*60,Math.ceil(L[L.length-1].fin/60)*60);var span=i1-i0;
   var hrs=[];for(var hr=i0/60;hr<=i1/60;hr++)hrs.push(hr);
   return h('div',null,
     h('div',{style:{position:'relative',height:34,borderRadius:10,background:'repeating-linear-gradient(90deg,rgba(43,46,32,0.05) 0 1px,transparent 1px '+(100/(hrs.length-1))+'%)',backgroundColor:'rgba(43,46,32,0.04)',overflow:'hidden',boxShadow:'inset 0 1px 3px rgba(0,0,0,0.12)'}},
-      L.map(function(t,i){var c=CTR[t.tipo];return h('div',{key:i,title:c[0]+' · '+hm(t.ini)+' a '+hm(t.fin)+' ('+durTxt(t.fin-t.ini)+')'+(t.s?' · '+secLabel(t.s):''),style:{position:'absolute',top:t.tipo==='desconectado'?14:3,bottom:t.tipo==='desconectado'?14:3,left:((t.ini-i0)/span*100)+'%',width:Math.max(0.25,(t.fin-t.ini)/span*100)+'%',background:t.tipo==='desconectado'?'repeating-linear-gradient(45deg,#c5c9cc 0 4px,#e3e5e7 4px 8px)':'linear-gradient(180deg,'+c[1]+','+c[1]+'cc)',borderRadius:4}});})),
+      L.map(function(t,i){var c=CTR[t.tipo];return h('div',{key:i,title:c[0]+' · '+hm(t.ini)+' a '+hm(t.fin)+' ('+durTxt(t.fin-t.ini)+')'+(t.s?' · '+secLabel(t.s):''),style:{position:'absolute',top:t.tipo==='desconectado'?14:3,bottom:t.tipo==='desconectado'?14:3,left:((t.ini-i0)/span*100)+'%',width:Math.max(0.25,(t.fin-t.ini)/span*100)+'%',background:t.tipo==='fuera'?'transparent':t.tipo==='desconectado'?'repeating-linear-gradient(45deg,#c5c9cc 0 4px,#e3e5e7 4px 8px)':'linear-gradient(180deg,'+c[1]+','+c[1]+'cc)',borderRadius:4}});})),
     h('div',{style:{position:'relative',height:16,marginTop:3}},hrs.map(function(hr){return h('span',{key:hr,style:{position:'absolute',left:((hr*60-i0)/span*100)+'%',transform:'translateX(-50%)',fontSize:10,color:'var(--text-soft)'}},hr+'h');})),
     h('div',{style:{display:'flex',gap:12,flexWrap:'wrap',fontSize:10.5,color:'var(--text-soft)',marginTop:6}},Object.keys(CTR).map(function(k){return h('span',{key:k},h('span',{style:{display:'inline-block',width:10,height:10,borderRadius:3,background:CTR[k][1],marginRight:4,verticalAlign:'-1px'}}),CTR[k][0]);})));
 }
 function RegistroInactividad(p){
-  var L=(p.tramos||[]).filter(function(t){return t.tipo!=='activo'&&(t.fin-t.ini)>=3;}).slice().reverse();
+  var L=(p.tramos||[]).filter(function(t){return t.tipo!=='activo'&&t.tipo!=='fuera'&&(t.fin-t.ini)>=3;}).slice().reverse();
   if(!L.length)return h('div',{style:{fontSize:12,color:'var(--text-soft)'}},'Sin pausas de 3 minutos o más.');
   return h('div',{style:{maxHeight:260,overflowY:'auto'}},L.map(function(t,i){var c=CTR[t.tipo];return h('div',{key:i,style:{display:'grid',gridTemplateColumns:'110px 1fr 90px',gap:10,alignItems:'center',padding:'7px 6px',borderBottom:'1px solid rgba(43,46,32,0.06)',fontSize:12}},
     h('span',{style:{fontFamily:'JetBrains Mono',fontSize:11.5,color:'var(--dark)'}},hm(t.ini)+' – '+(t.actual?'ahora':hm(t.fin))),
@@ -674,7 +676,7 @@ function Panel(props){
             h('td',{style:{padding:'9px 8px',borderBottom:'1px solid var(--border)'}},h('div',{style:{width:28,height:28,borderRadius:'50%',background:s.color,color:'#fff',fontWeight:800,fontSize:10.5,display:'flex',alignItems:'center',justifyContent:'center'}},inic(s.nombre))),
             h('td',{style:{padding:'9px 8px',borderBottom:'1px solid var(--border)',fontWeight:800}},s.nombre,h('div',{style:{fontSize:10.5,color:'var(--text-soft)',fontWeight:500}},p.esp)),
             h('td',{style:{padding:'9px 8px',borderBottom:'1px solid var(--border)',color:COL[p.estado],fontWeight:800,fontSize:11.5,whiteSpace:'nowrap'}},esHoy?T[p.estado]:(p.con>0?'Se conectó':'—'),esHoy&&p.estado==='ausente'?h('div',{style:{fontSize:10.5,fontWeight:600}},'hace '+durTxt(p.minSinAct)):null,esHoy&&p.estado==='desconectado'&&p.minDesc?h('div',{style:{fontSize:10.5,fontWeight:600}},'hace '+durTxt(p.minDesc)):null),
-            td(p.pulso&&p.pulso.ini?horaCL(p.pulso.ini):(p.primera!=null?p.primera+':00':'—')),td(p.con?hhmm(p.con):'—'),td(p.con?Math.round(p.act/p.con*100)+'%':'—'),td(p.con?hhmm(p.inact+p.oculto):'—'),td(p.desc?hhmm(p.desc):'—'),td(p.con?fmt(p.pausas):'—'),
+            td(p.entrada!=null?hm(p.entrada):(p.primera!=null?p.primera+':00':'—')),td(p.con?hhmm(p.con):'—'),td(p.con?Math.round(p.act/p.con*100)+'%':'—'),td(p.con?hhmm(p.inact+p.oculto):'—'),td(p.desc?hhmm(p.desc):'—'),td(p.con?fmt(p.pausas):'—'),
             td(fmt(p.acc),true),td(fmt(p.firmas)),td(fmt(p.asig)),td(fmt(p.estados)),td(fmt(p.rep)),td(fmt(p.res)),td(fmt(p.corr)),td(p.prod!=null?p.prod.toFixed(1):'—'));}))))),
     // feed general
     h('div',{style:Object.assign({},card,{padding:'16px 18px'})},
@@ -705,7 +707,7 @@ function Ficha(props){
           props.esHoy&&P.estado==='desconectado'&&P.pulso?h('span',{style:{color:'var(--text-mid)',fontWeight:500}},' · última señal '+horaCL(P.pulso.ts)):null)),
       h('button',{className:'btn-secondary',onClick:props.onClose,style:{padding:'6px 14px',fontSize:12}},'Cerrar ficha')),
     h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:10,marginBottom:16}},
-      mini('Entrada',P.pulso&&P.pulso.ini?horaCL(P.pulso.ini):(P.primera!=null?P.primera+':00':'—')),
+      mini('Entrada',P.entrada!=null?hm(P.entrada):(P.primera!=null?P.primera+':00':'—')),
       mini('Última señal',P.pulso?horaCL(P.pulso.ts):'—'),
       mini('Conectado',P.con?hhmm(P.con):'—'),
       mini('Activo',P.act?hhmm(P.act):'—',P.con?Math.round(P.act/P.con*100)+'% del tiempo conectado':null),
