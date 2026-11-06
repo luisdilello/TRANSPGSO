@@ -255,6 +255,9 @@ function videoWallCanvas(T,RD,logoImg){
   x.fillStyle='#5b5f55';x.font='24px sans-serif';x.textAlign='right';x.fillText('* firmado desde la cuenta por Soporte Firmas · Actualizado '+horaCL(new Date()),w-40,hh-36);
   var t=new T.CanvasTexture(c);t.encoding=T.sRGBEncoding;t.anisotropy=8;return t;
 }
+// Apariencia de cada administrativo en la oficina 3D (por nombre).
+var APARIENCIA={YOHANA:{fem:true,pelo:'#e6b85c'},LIZ:{fem:true,pelo:'#2a1a12'},HIRAM:{fem:false},FERNANDO:{fem:false}};
+function aparienciaDe(nombre){var k=String(nombre||'').trim().split(/\s+/)[0].toUpperCase();return APARIENCIA[k]||{fem:false};}
 function glowTex(T,color){var c=document.createElement('canvas');c.width=c.height=128;var x=c.getContext('2d');var g=x.createRadialGradient(64,64,0,64,64,64);g.addColorStop(0,color);g.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=g;x.fillRect(0,0,128,128);var t=new T.CanvasTexture(c);t.encoding=T.sRGBEncoding;return t;}
 
 function Oficina3D(props){
@@ -381,7 +384,8 @@ function Oficina3D(props){
         var per=new T.Group();per.position.set(0,0,0.9);g.add(per);
         // Uniforme TransPgso: camisa beige con cuello y el logo en el pecho (lado del corazón)
         var matRopa=matCamisa;
-        var torso=new T.Mesh(new T.CapsuleGeometry(0.22,0.38,8,16),matRopa);torso.position.y=1.02;torso.scale.set(1.15,1,0.85);torso.castShadow=true;per.add(torso);
+        var look=aparienciaDe(s.nombre);
+        var torso=new T.Mesh(new T.CapsuleGeometry(0.22,0.38,8,16),matRopa);torso.position.y=1.02;torso.scale.set(look.fem?1.0:1.15,1,look.fem?0.82:0.85);torso.castShadow=true;per.add(torso);
         var tirilla=new T.Mesh(new T.BoxGeometry(0.035,0.42,0.01),matCamisaOsc);tirilla.position.set(0,1.1,-0.188);per.add(tirilla);
         [1.26,1.14,1.02].forEach(function(by){var bt=new T.Mesh(new T.SphereGeometry(0.009,8,6),matBoton);bt.position.set(0,by,-0.195);per.add(bt);});
         var cuelloBanda=new T.Mesh(new T.TorusGeometry(0.085,0.022,8,20),matCamisa);cuelloBanda.rotation.x=Math.PI/2;cuelloBanda.position.y=1.355;per.add(cuelloBanda);
@@ -392,7 +396,17 @@ function Oficina3D(props){
         var espalda=new T.Mesh(new T.PlaneGeometry(0.3,0.3*527/896),matLogoPecho);espalda.position.set(0,1.18,0.195);espalda.rotation.x=-0.05;per.add(espalda);
         var cuelloP=new T.Mesh(new T.CylinderGeometry(0.07,0.08,0.1,12),matPiel);cuelloP.position.y=1.37;per.add(cuelloP);
         var cabeza=new T.Mesh(new T.SphereGeometry(0.17,32,24),matPiel);cabeza.position.y=1.55;cabeza.scale.set(1,1.12,1);cabeza.castShadow=true;per.add(cabeza);
-        var pelo=new T.Mesh(new T.SphereGeometry(0.178,32,16,0,Math.PI*2,0,Math.PI/1.9),matPelo);pelo.position.y=1.585;pelo.rotation.x=0.35;per.add(pelo);
+        var matPeloP=look.pelo?M_({color:look.pelo,roughness:0.55,metalness:0.05}):matPelo;
+        var pelo=new T.Mesh(new T.SphereGeometry(look.fem?0.183:0.178,32,16,0,Math.PI*2,0,Math.PI/1.9),matPeloP);pelo.position.y=1.585;pelo.rotation.x=look.fem?0.12:0.35;per.add(pelo);
+        // Pelo largo / aros para el personaje femenino (gira con la cabeza)
+        var peloL=new T.Group();peloL.position.set(0,1.55,0);per.add(peloL);
+        if(look.fem){
+          var melena=new T.Mesh(new T.CapsuleGeometry(0.16,0.26,8,16),matPeloP);melena.scale.set(1.12,1,0.5);melena.position.set(0,-0.13,0.09);melena.castShadow=true;peloL.add(melena);
+          [-1,1].forEach(function(sd){var mecha=new T.Mesh(new T.CapsuleGeometry(0.048,0.22,6,10),matPeloP);mecha.position.set(sd*0.155,-0.1,-0.01);mecha.rotation.z=sd*0.08;peloL.add(mecha);
+            var aro=new T.Mesh(new T.TorusGeometry(0.018,0.005,6,14),matOro);aro.position.set(sd*0.172,-0.07,-0.03);aro.rotation.y=Math.PI/2;peloL.add(aro);});
+          var flequillo=new T.Mesh(new T.SphereGeometry(0.13,20,10,0,Math.PI*2,0,Math.PI/4),matPeloP);flequillo.position.set(0,0.09,-0.06);flequillo.rotation.x=-1.0;peloL.add(flequillo);
+          var labios=new T.Mesh(new T.SphereGeometry(0.022,12,8),M_({color:'#b5475a',roughness:0.5}));labios.scale.set(1.6,0.6,0.6);labios.position.set(0,-0.075,-0.17);peloL.add(labios);
+        }
         var auric=new T.Mesh(new T.TorusGeometry(0.18,0.018,8,24,Math.PI),matMetal);auric.position.y=1.6;auric.rotation.y=Math.PI/2;per.add(auric);
         function brazoP(sx){var b=new T.Group();b.position.set(sx*0.27,1.22,0);per.add(b);var sup=new T.Mesh(new T.CapsuleGeometry(0.065,0.26,6,10),matRopa);sup.position.set(0,-0.15,0);sup.castShadow=true;b.add(sup);
           var codo=new T.Group();codo.position.set(0,-0.3,0);b.add(codo);var ant=new T.Mesh(new T.CapsuleGeometry(0.055,0.26,6,10),matRopa);ant.position.set(0,0,-0.17);ant.rotation.x=Math.PI/2;codo.add(ant);var mano=new T.Mesh(new T.SphereGeometry(0.055,12,10),matPiel);mano.position.set(0,0,-0.34);codo.add(mano);b.rotation.x=0.35;codo.rotation.x=-0.25;return {b:b,codo:codo};}
@@ -407,7 +421,7 @@ function Oficina3D(props){
         var lamp=new T.Mesh(new T.BoxGeometry(2.2,0.04,0.12),new T.MeshBasicMaterial({color:'#fff3d8',toneMapped:false}));lamp.position.set(0,5.2,0.3);g.add(lamp);
         var cable=new T.Mesh(new T.CylinderGeometry(0.006,0.006,1.2,4),matMetal);cable.position.set(0,5.8,0.3);g.add(cable);
         var hit=new T.Mesh(new T.BoxGeometry(3.4,2.4,3),new T.MeshBasicMaterial({visible:false}));hit.position.set(0,1,0.3);hit.userData.nombre=s.nombre;g.add(hit);clic.push(hit);
-        puestos.push({s:s,g:g,scrMats:scrMats,glowM:glowM,per:per,bI:bI,bD:bD,anillo:anillo,aura:aura,luz:luz,cabeza:cabeza,pelo:pelo,auric:auric,torso:torso,fase:Math.random()*6,estado:'desconectado',acc:0,parts:[]});
+        puestos.push({s:s,g:g,scrMats:scrMats,glowM:glowM,per:per,bI:bI,bD:bD,anillo:anillo,aura:aura,luz:luz,cabeza:cabeza,pelo:pelo,peloL:peloL,auric:auric,torso:torso,fase:Math.random()*6,estado:'desconectado',acc:0,parts:[]});
       });
       // partículas de datos
       var partGeo=new T.OctahedronGeometry(0.05,0);
@@ -467,7 +481,7 @@ function Oficina3D(props){
           if(pu.per.visible){
             var b=act?Math.sin(t*16+pu.fase)*0.08:0;pu.bI.codo.rotation.x=-0.25+b;pu.bD.codo.rotation.x=-0.25-b;
             pu.bI.b.rotation.x=act?0.35:0.0;pu.bD.b.rotation.x=act?0.35:0.0;
-            var gy=act?Math.sin(t*0.6+pu.fase)*0.22:Math.sin(t*0.35+pu.fase)*0.6;pu.cabeza.rotation.y=gy;pu.pelo.rotation.y=gy;pu.auric.rotation.y=Math.PI/2+gy;
+            var gy=act?Math.sin(t*0.6+pu.fase)*0.22:Math.sin(t*0.35+pu.fase)*0.6;pu.cabeza.rotation.y=gy;pu.pelo.rotation.y=gy;pu.peloL.rotation.y=gy;pu.auric.rotation.y=Math.PI/2+gy;
             var inc=act?0:0.25;pu.cabeza.rotation.x+=(inc-pu.cabeza.rotation.x)*0.05;
             pu.torso.position.y=1.02+Math.sin(t*1.8+pu.fase)*0.006;
           }
