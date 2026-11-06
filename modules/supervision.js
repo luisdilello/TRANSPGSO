@@ -148,10 +148,13 @@ function recomendaciones(Ns,M,esHoy){
     var por=c.sk>0?(fmt(c.sk)+' movimientos de este tipo en 7 días'):'está conectado ahora';
     R.push({sev:nd.sev,quien:c.p.s,txt:nd.accion+' — '+fmt(nd.n)+' '+nd.txt+'.',por:nombreCorto(c.p.s.nombre)+' '+(c.p.estado==='activo'?'está activo':c.p.estado==='ausente'?'tiene el panel abierto':'no está conectado')+' y es quien más lo trabaja ('+por+').'});
   });
+  var porOp={};
   (M.riders.resto.concat(M.riders.top)).forEach(function(r){
-    if(r.sop&&r.n>=3){var st=M.staff.find(function(x){return x.nombre===r.sop;});R.push({sev:2,quien:st||null,txt:fmt(r.n)+' entregas de '+r.u+' se firmaron desde la cuenta del mensajero, no desde el panel.',por:'Lo atiende '+nombreCorto(r.sop)+' (Soporte Firmas): debe firmarlas desde su propio usuario en Firmas Operadores.'});}
+    if(r.sop&&r.n>=3){(porOp[r.sop]=porOp[r.sop]||[]).push(r);}
     else if(!r.sop&&r.r30>=20)R.push({sev:2,quien:null,txt:r.u+' marcó '+r.r30+' entregas en 30 minutos.',por:'Firmas en serie: revisar si las hizo en terreno o si alguien firmó por él.'});
   });
+  Object.keys(porOp).forEach(function(op){var L=porOp[op];var tot=L.reduce(function(a,r){return a+r.n;},0);var st=M.staff.find(function(x){return x.nombre===op;});
+    R.push({sev:2,quien:st||null,txt:fmt(tot)+' entregas atendidas por '+nombreCorto(op)+' se firmaron desde la cuenta del mensajero, no desde su usuario.',por:L.map(function(r){return r.u+' '+r.n;}).join(' · ')+'. Debe firmarlas en Firmas Operadores con su propio usuario.'});});
   if(esHoy){
     M.staff.forEach(function(s){var p=M.P[s.nombre];
       if(p.estado==='ausente'&&p.minSinAct>=3)R.push({sev:p.minSinAct>=15?3:2,quien:s,txt:nombreCorto(s.nombre)+' lleva '+durTxt(p.minSinAct)+' con el sistema abierto sin mover nada.',por:'Última actividad '+(p.sinActDesde?horaCL(p.sinActDesde):'—')+' en '+secLabel(p.pulso&&p.pulso.s)+(p.pulso&&p.pulso.vis===false?' · la ventana está minimizada o en otra pestaña':'')+'.'});
