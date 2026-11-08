@@ -58,7 +58,7 @@ function ModalSemana(props){
   var row=props.row, bulk=props.bulk, onClose=props.onClose, onConfirm=props.onConfirm;
   var hoy=new Date();
   var lunes=new Date(hoy); lunes.setDate(hoy.getDate()-((hoy.getDay()+6)%7));
-  var sabado=new Date(lunes); sabado.setDate(lunes.getDate()+5);
+  var sabado=new Date(lunes); sabado.setDate(lunes.getDate()+6); // 08-11-2026: semana de pago lunes a domingo (Pago Semanal)
   var toInput=function(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
   var _d1=useState(toInput(lunes)), d1=_d1[0], setD1=_d1[1];
   var _d2=useState(toInput(sabado)), d2=_d2[0], setD2=_d2[1];

@@ -53,6 +53,28 @@ function calcular(nombre,cfg,porComuna,movs,cfgAll,saldoPrevio){
     t:t,totalSemana:totalSemana,descuentos:descuentos,total:total,saldoPrestamo:saldoPrestamo,saldoPrevio:saldoPrevio||0};
 }
 
+function SiniestrosEmbebido(props){
+  var _r=R.useState(!!window.Siniestros),listo=_r[0],setListo=_r[1];
+  R.useEffect(function(){if(!listo)loadScriptOnce('siniestros','modules/siniestros.js').then(function(){setListo(true);}).catch(function(){});},[]);
+  if(!listo)return h('div',{className:'info-banner'},'Cargando siniestros...');
+  var perfil=A.perfil||{};
+  return h('div',{className:'ps-siniestros'},h(window.Siniestros,{mensajeros:props.mensajeros||[],clientes:props.clientes||[],toast:props.toast,usuario:{nombre:perfil.nombre||'Admin'},esAdmin:props.esAdmin!=null?props.esAdmin:perfil.esAdmin,esSuperAdmin:props.esSuperAdmin!=null?props.esSuperAdmin:perfil.esSuperAdmin}));
+}
+function Vistas(props){
+  var v=props.vista,ops=[];if(props.puedePagos!==false)ops.push(['pagos','Tarjetas de pago']);if(props.puedeSiniestros!==false)ops.push(['siniestros','Siniestros']);
+  if(ops.length<2)return null;
+  return h('div',{style:{display:'inline-flex',gap:4,padding:4,marginBottom:16,borderRadius:14,background:'linear-gradient(180deg,#2f3325,#1c1f15)',boxShadow:'0 10px 20px -12px rgba(20,22,15,.6)'}},
+    ops.map(function(o){var a=v===o[0];return h('button',{key:o[0],type:'button',onClick:function(){props.onVista(o[0]);},style:{padding:'10px 20px',borderRadius:10,border:'none',cursor:'pointer',fontWeight:800,fontSize:13,letterSpacing:.4,background:a?'linear-gradient(135deg,#e8c766,#b08a2e)':'transparent',color:a?'#1a1d13':'#e9e4d2',boxShadow:a?'0 6px 14px rgba(200,168,75,.35)':'none'}},o[1]);}));
+}
+function PagoSemanalRaiz(props){
+  var _v=R.useState(props.vista||(props.puedePagos===false?'siniestros':'pagos')),vista=_v[0],setVista=_v[1];
+  R.useEffect(function(){if(props.vista)setVista(props.vista);},[props.vista]);
+  function cambiar(v){setVista(v);props.onVista&&props.onVista(v);}
+  if(props.puedePagos===false)vista='siniestros';
+  return h('div',null,
+    h('div',{style:{padding:'0 20px'}},h(Vistas,{vista:vista,onVista:cambiar,puedePagos:props.puedePagos,puedeSiniestros:props.puedeSiniestros})),
+    vista==='siniestros'?h(SiniestrosEmbebido,props):h(PagoSemanal,props));
+}
 function PagoSemanal(props){
   var toast=props.toast||function(){};
   var hoy=fechaHoyCL();
@@ -73,7 +95,8 @@ function PagoSemanal(props){
       db.from('mensajeros').select('nombre,tarifa,extra_periferia,periferia_paga_a,extra_comuna,extra_comuna_tarifa,activo'),
       db.from('movimientos_pago_mensajero').select('*').lte('semana',sem.desde).order('created_at',{ascending:true}),
       db.from('siniestros').select('id,codigo,mensajero,fecha_siniestro,nota,descontado_mensajero,descartado').or('descontado_mensajero.is.null,descontado_mensajero.eq.false').order('fecha_siniestro',{ascending:false}).limit(500),
-      db.from('configuracion').select('valor').eq('clave','pago_semanal_excluidos').maybeSingle()
+      db.from('configuracion').select('valor').eq('clave','pago_semanal_excluidos').maybeSingle(),
+      db.from('siniestros').select('id,codigo,mensajero,descontado_mensajero_valor,descontado_mensajero_fecha,descontado_mensajero_por').eq('descontado_mensajero',true).like('descontado_mensajero_semana',dmy(sem.desde)+'%')
     ]).then(function(r){
       if(!vivo)return;
       var err=r.slice(0,3).find(function(x){return x.error;});if(err){toast('Error cargando pago semanal: '+err.error.message);setData({error:true});return;}
@@ -84,6 +107,8 @@ function PagoSemanal(props){
         if(m.semana===sem.desde){(movsSem[n]=movsSem[n]||[]).push(m);}
         else{saldo[n]=(saldo[n]||0)+(m.tipo==='prestamo'?(+m.monto||0):m.tipo==='abono_prestamo'?-(+m.monto||0):0);}});
       var sinP={};(r[3].data||[]).forEach(function(s){if(s.descartado)return;var n=norm(s.mensajero);if(!n)return;(sinP[n]=sinP[n]||[]).push(s);});
+      // siniestros descontados desde la sección Siniestros para esta semana (si no tienen ya su movimiento)
+      (r[5]&&r[5].data||[]).forEach(function(s){var n=norm(s.mensajero);if(!n)return;var ya=(movsSem[n]||[]).some(function(m){return m.codigo===s.codigo;});if(ya)return;(movsSem[n]=movsSem[n]||[]).push({id:'s'+s.id,virtual:true,semana:sem.desde,mensajero:n,tipo:'siniestro',monto:+s.descontado_mensajero_valor||0,codigo:s.codigo,nota:'desde Siniestros',fecha:s.descontado_mensajero_fecha?String(s.descontado_mensajero_fecha).slice(0,10):sem.desde,creado_por:s.descontado_mensajero_por||''});});
       var excl=((r[4]&&r[4].data&&r[4].data.valor)||['ELY MENSAJERO','FERNANDOCHECK','FERNANDO CHECK']).map(norm);
       setData({porComuna:porComuna,cfg:cfg,movs:movsSem,saldo:saldo,siniestros:sinP,excluidos:excl});
     }).catch(function(e){if(vivo){toast('Error: '+(e&&e.message||e));setData({error:true});}});
@@ -104,6 +129,7 @@ function PagoSemanal(props){
   }
   function borrar(m){
     if(!window.confirm('¿Eliminar '+TIPOS[m.tipo].l.toLowerCase()+' de '+fmt(m.monto)+' a '+tit(m.mensajero)+'?'))return;
+    if(m.virtual){db.from('siniestros').update({descontado_mensajero:false,descontado_mensajero_fecha:null,descontado_mensajero_semana:null,descontado_mensajero_valor:null,descontado_mensajero_por:null}).eq('codigo',m.codigo).then(function(r){if(r.error){toast('No se pudo: '+r.error.message);return;}recargar();});return;}
     db.from('movimientos_pago_mensajero').delete().eq('id',m.id).then(function(r){if(r.error){toast('No se eliminó: '+r.error.message);return;}
       if(m.tipo==='siniestro'&&m.codigo){db.from('siniestros').update({descontado_mensajero:false,descontado_mensajero_fecha:null,descontado_mensajero_semana:null,descontado_mensajero_valor:null,descontado_mensajero_por:null}).eq('codigo',m.codigo).then(function(){});}
       recargar();});
@@ -245,5 +271,5 @@ function PagoSemanal(props){
               h('span',{style:{fontFamily:'Bebas Neue',fontSize:34,lineHeight:1,color:c.total<0?'#ff8f86':'#7ee0ad'}},fmt(c.total)))));
       })));
 }
-window.__pagoSemanal={PagoSemanal:PagoSemanal,calcular:calcular};
+window.__pagoSemanal={PagoSemanal:PagoSemanalRaiz,Tarjetas:PagoSemanal,calcular:calcular};
 })();
