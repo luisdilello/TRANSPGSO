@@ -1605,15 +1605,16 @@ function SoporteFirmasTab(props){
   function semanaDe(dia){var d=new Date(dia+'T12:00:00');d.setDate(d.getDate()-((d.getDay()+6)%7));return fechaISO(d);}
   function calcular(op){
     var set={};(op.mensajeros||[]).forEach(function(n){set[normNombreTarifa(n)]=true;});
-    var porSemana={},porMens={},total=0;
+    var porSemana={},porMens={},porSemMens={},total=0;
     (conteo||[]).forEach(function(r){
       var k=normNombreTarifa(r.mensajero);if(!set[k])return;
       var n=+r.n||0;total+=n;
       var w=semanaDe(r.dia);porSemana[w]=(porSemana[w]||0)+n;
       porMens[k]=(porMens[k]||0)+n;
+      var sm=porSemMens[w]||(porSemMens[w]={});sm[k]=(sm[k]||0)+n;
     });
     var tarifa=+op.tarifa_firma||0,sueldo=+op.sueldo||0;
-    return{firmas:total,porSemana:porSemana,porMens:porMens,monto:total*tarifa,sueldo:sueldo,total:total*tarifa+sueldo,tarifa:tarifa};
+    return{firmas:total,porSemana:porSemana,porMens:porMens,porSemMens:porSemMens,monto:total*tarifa,sueldo:sueldo,total:total*tarifa+sueldo,tarifa:tarifa};
   }
   function setCampo(op,campo,valor){
     setOps(function(prev){return prev.map(function(o){return o.id===op.id?Object.assign({},o,{[campo]:valor}):o;});});
@@ -1633,6 +1634,36 @@ function SoporteFirmasTab(props){
       if(r.error){toast&&toast('Error: '+r.error.message);return;}
       toast&&toast('Pago registrado');cargarHist();
     });
+  }
+  function reciboPago(op){
+    var c=calcular(op);var w=window.open('','_blank');
+    var e=function(x){return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+    var f=function(n){return '$'+Math.round(n||0).toLocaleString('es-CL');};
+    var d2=function(iso){return iso.split('-').reverse().join('-');};
+    var sec=function(n,t,html){return '<div class="sec"><h2>'+n+'. '+e(t)+'</h2>'+html+'</div>';};
+    var tabla=function(cols,filas,tot){return '<table class="tabla"><thead><tr>'+cols.map(function(x,i){return '<th'+(i>0?' style="text-align:right"':'')+'>'+e(x)+'</th>';}).join('')+'</tr></thead><tbody>'
+      +filas.map(function(r){return '<tr>'+r.map(function(x,i){return '<td'+(i>0?' style="text-align:right;font-family:JetBrains Mono,monospace"':'')+'>'+x+'</td>';}).join('')+'</tr>';}).join('')
+      +(tot?'<tr>'+tot.map(function(x,i){return '<td style="font-weight:800;background:#F5F0E0;border-top:2px solid #C8A84B'+(i>0?';text-align:right;font-family:JetBrains Mono,monospace':'')+'">'+x+'</td>';}).join('')+'</tr>':'')+'</tbody></table>';};
+    var mens=(op.mensajeros||[]).map(function(n){return normNombreTarifa(n);});
+    var sems=semanasEntre(periodo.desde,periodo.hasta);
+    var filasSem=sems.map(function(wk){var h=new Date(wk+'T12:00:00');h.setDate(h.getDate()+6);var n=c.porSemana[wk]||0;var st=estadoSem(wk);var sm=c.porSemMens[wk]||{};
+      return ['Del '+d2(wk)+' al '+d2(fechaISO(h))+' <span style="font-size:9px;font-weight:800;color:'+st[1]+';border:1px solid '+st[1]+';border-radius:9px;padding:0 6px;margin-left:6px">'+st[0]+'</span>']
+        .concat(mens.map(function(m){return sm[m]?String(sm[m]):'—';})).concat([n?String(n):'—',n?f(n*c.tarifa):'—']);});
+    var cuerpo='';var nn=1;
+    cuerpo+=sec(nn++,'Extra por firmas · detalle semanal',tabla(['Semana'].concat(mens).concat(['Firmas','Monto']),filasSem,['Total'].concat(mens.map(function(m){return String(c.porMens[m]||0);})).concat([String(c.firmas),f(c.monto)])));
+    cuerpo+=sec(nn++,'Resumen de pago',tabla(['Concepto','Detalle','Monto'],[
+      ['Sueldo base mensual','Mes de pago completo',f(c.sueldo)],
+      ['Extra por firmas',c.firmas.toLocaleString('es-CL')+' firmas × '+f(c.tarifa),f(c.monto)]],['Total a pagar','',f(c.total)]));
+    var abiertas=sems.filter(function(wk){return estadoSem(wk)[0]!=='Cerrada';}).length;
+    cuerpo+='<div class="resultado" style="border-color:#2E7D32;background:#F1F8F2"><div class="gr" style="color:#2E7D32">'+f(c.total)+'</div><div class="dt"><b>Total a pagar a '+e(op.operador)+'</b><br>Mes de pago '+e(periodo.mes||'')+' · semanas del '+d2(periodo.desde)+' al '+d2(periodo.hasta)+(abiertas?'<br>Incluye '+abiertas+' semana(s) aún no cerrada(s): el extra puede aumentar al cierre.':'')+'</div></div>';
+    loadScriptOnce('doc-pdf','modules/doc-pdf.js').then(function(){var D=window.__docPDF;
+      D.abrir(w,D.documentoHTML({tipo:'RECIBO DE PAGO',folio:'SF-'+periodo.hasta.slice(0,7).replace('-','')+'-'+String(op.operador||'').toUpperCase().replace(/[^A-Z]/g,'').slice(0,6),fechaDoc:d2(fechaHoyCL()),
+        titulo:'Recibo de pago — Soporte por firmas',subtitulo:'Mes de pago '+(periodo.mes||(d2(periodo.desde)+' al '+d2(periodo.hasta))),
+        metaPares:[['Operador(a)',op.operador],['Cargo','Operador(a) de teletrabajo · Soporte Firmas'],['Período','Semanas del '+d2(periodo.desde)+' al '+d2(periodo.hasta),2],['Mensajeros asignados',(op.mensajeros||[]).join(', '),2],['Sueldo base mensual',f(c.sueldo)],['Tarifa por firma',f(c.tarifa)]],
+        cuerpo:cuerpo,firmas:['TransPgso SpA · Empleador',op.operador+' · Recibí conforme'],
+        cierre:'Cada firma corresponde a una pieza entregada (estado Entregado, fecha real de entrega) por los mensajeros asignados. Las semanas van de lunes a domingo y pertenecen al mes en que terminan.',
+        nombreArchivo:'Recibo_Soporte_Firmas_'+op.operador+'_'+periodo.desde+'_al_'+periodo.hasta}));
+    }).catch(function(){try{w&&w.close();}catch(x){}toast&&toast('No se pudo generar el recibo');});
   }
   function exportar(){
     var hojas=(ops||[]).map(function(op){
@@ -1659,43 +1690,57 @@ function SoporteFirmasTab(props){
       React.createElement('button',{className:'btn-futurista btn-f-ghost',onClick:function(){setPeriodo(mesPagoDe(hoy,-1));}},'Mes anterior'),
       React.createElement('button',{className:'btn-futurista btn-f-ghost',onClick:exportar,disabled:!conteo},'Exportar Excel')
     ),
-    React.createElement('div',{style:{fontSize:13,color:'var(--text-soft)',margin:'-6px 0 16px'}},periodo.mes?React.createElement('span',null,'Mes de pago ',React.createElement('b',{style:{color:'var(--dark)',textTransform:'capitalize'}},periodo.mes),' · semanas del '+dmyC(periodo.desde)+' al '+dmyC(periodo.hasta)+'. Sueldo mensual una vez; el extra por firmas se cierra semana a semana.'):'Período personalizado del '+dmyC(periodo.desde)+' al '+dmyC(periodo.hasta)+'.'),
+    React.createElement('div',{style:{fontSize:13,color:'var(--text-soft)',margin:'-6px 0 16px'}},periodo.mes?React.createElement('span',null,'Mes de pago ',React.createElement('b',{style:{color:'var(--dark)'}},periodo.mes.charAt(0).toUpperCase()+periodo.mes.slice(1)),' · semanas del '+dmyC(periodo.desde)+' al '+dmyC(periodo.hasta)+'. Sueldo mensual una vez; el extra por firmas se cierra semana a semana.'):'Período personalizado del '+dmyC(periodo.desde)+' al '+dmyC(periodo.hasta)+'.'),
     ops===null?React.createElement('div',{className:'info-banner'},'Cargando...'):
     ops.length===0?React.createElement('div',{className:'info-banner'},'Sin operadoras configuradas.'):
-    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(340px,1fr))',gap:16,marginBottom:24}},
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(480px,1fr))',gap:22,marginBottom:24}},
       ops.map(function(op){
         var c=conteo?calcular(op):null;
-        return React.createElement('div',{key:op.id,className:'stat-card',style:{padding:'18px',borderTop:'4px solid var(--gold)'}},
-          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
-            React.createElement('div',{style:{fontWeight:800,fontSize:16}},op.operador),
-            dirty[op.id]?React.createElement('button',{className:'btn-futurista btn-f-success',style:{padding:'4px 12px',fontSize:11},onClick:function(){guardarOp(op);}},'Guardar'):null
-          ),
-          React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',textTransform:'uppercase',letterSpacing:0.5,marginBottom:4}},'Firma las entregas de'),
-          React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}},
-            (op.mensajeros||[]).map(function(n){return React.createElement('span',{key:n,style:{background:'rgba(200,168,75,0.15)',borderRadius:12,padding:'3px 10px',fontSize:11,fontWeight:700}},n,React.createElement('span',{onClick:function(){setCampo(op,'mensajeros',(op.mensajeros||[]).filter(function(x){return x!==n;}));},style:{marginLeft:6,cursor:'pointer',color:'var(--danger)'},title:'Quitar'},'×'));}),
-            React.createElement('select',{value:agregar[op.id]||'',onChange:function(e){var v=e.target.value;if(!v)return;if((op.mensajeros||[]).indexOf(v)===-1)setCampo(op,'mensajeros',(op.mensajeros||[]).concat([v]));setAgregar(Object.assign({},agregar,{[op.id]:''}));},style:{padding:'3px 6px',borderRadius:6,border:'1px solid var(--border)',fontSize:11}},
+        var maxSem=c?Math.max.apply(null,semanas.map(function(w){return c.porSemana[w]||0;}).concat([1])):1;
+        var lbl={fontSize:11,fontWeight:800,letterSpacing:1.4,textTransform:'uppercase',color:'var(--text-soft)'};
+        var inpG=Object.assign({},inp,{fontSize:15,padding:'9px 12px',width:140,borderRadius:10,background:'#fff',boxShadow:'inset 0 2px 4px rgba(0,0,0,.06)'});
+        return React.createElement('div',{key:op.id,style:{position:'relative',padding:'22px 24px 20px',borderRadius:22,background:'radial-gradient(130% 90% at 0% 0%,#ffffff,#fbf6ea 60%,#f2e8cf)',border:'1px solid rgba(200,168,75,.35)',borderTop:'1px solid #fff',boxShadow:'0 1px 0 #fff inset,0 -5px 0 #c8a84b inset,0 30px 50px -26px rgba(43,46,32,.45),0 8px 18px rgba(43,46,32,.08)'}},
+          // cabecera
+          React.createElement('div',{style:{display:'flex',alignItems:'center',gap:14,marginBottom:16}},
+            React.createElement('div',{style:{width:54,height:54,borderRadius:'50%',flex:'none',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Bebas Neue',fontSize:26,color:'#2b2e20',background:'radial-gradient(circle at 32% 28%,#fff6cf,#f0cd62 40%,#b8902e 85%)',boxShadow:'0 8px 16px rgba(168,132,46,.35),inset 0 -3px 6px rgba(0,0,0,.2),inset 0 3px 6px rgba(255,255,255,.7)'}},(op.operador||'?').charAt(0)),
+            React.createElement('div',{style:{flex:1,minWidth:0}},
+              React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:32,letterSpacing:2,lineHeight:1,color:'var(--dark)'}},op.operador),
+              React.createElement('div',{style:{fontSize:12.5,color:'var(--text-soft)',marginTop:3}},'Operador(a) de teletrabajo · Soporte Firmas')),
+            dirty[op.id]?React.createElement('button',{className:'btn-futurista btn-f-success',style:{padding:'8px 16px',fontSize:12},onClick:function(){guardarOp(op);}},'Guardar'):null,
+            React.createElement('button',{className:'btn-futurista btn-f-gold',disabled:!c,style:{padding:'9px 16px',fontSize:12.5},onClick:function(){reciboPago(op);}},'Recibo de pago')),
+          // mensajeros
+          React.createElement('div',{style:lbl},'Firma las entregas de'),
+          React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',margin:'8px 0 16px',alignItems:'center'}},
+            (op.mensajeros||[]).map(function(n){return React.createElement('span',{key:n,style:{background:'linear-gradient(180deg,#fff,#f3e7c4)',border:'1px solid rgba(200,168,75,.45)',borderRadius:999,padding:'6px 12px',fontSize:13,fontWeight:800,boxShadow:'0 3px 8px rgba(168,132,46,.15)'}},n,React.createElement('span',{onClick:function(){setCampo(op,'mensajeros',(op.mensajeros||[]).filter(function(x){return x!==n;}));},style:{marginLeft:8,cursor:'pointer',color:'var(--danger)',fontWeight:900},title:'Quitar'},'×'));}),
+            React.createElement('select',{value:agregar[op.id]||'',onChange:function(e){var v=e.target.value;if(!v)return;if((op.mensajeros||[]).indexOf(v)===-1)setCampo(op,'mensajeros',(op.mensajeros||[]).concat([v]));setAgregar(Object.assign({},agregar,{[op.id]:''}));},style:{padding:'7px 10px',borderRadius:999,border:'1px dashed rgba(200,168,75,.7)',fontSize:12.5,background:'#fff'}},
               React.createElement('option',{value:''},'+ Agregar mensajero'),
               activosNombres.filter(function(n){return (op.mensajeros||[]).indexOf(n)===-1;}).map(function(n){return React.createElement('option',{key:n,value:n},n);})
             )
           ),
-          React.createElement('div',{style:{display:'flex',gap:12,marginBottom:12,flexWrap:'wrap'}},
-            React.createElement('div',null,React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)'}},'Sueldo mensual'),React.createElement('input',{type:'number',value:op.sueldo,onChange:function(e){setCampo(op,'sueldo',e.target.value);},style:inp})),
-            React.createElement('div',null,React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)'}},'$ por firma'),React.createElement('input',{type:'number',value:op.tarifa_firma,onChange:function(e){setCampo(op,'tarifa_firma',e.target.value);},style:Object.assign({},inp,{width:70})}))
+          // parametros
+          React.createElement('div',{style:{display:'flex',gap:16,marginBottom:18,flexWrap:'wrap'}},
+            React.createElement('div',null,React.createElement('div',{style:lbl},'Sueldo mensual'),React.createElement('input',{type:'number',value:op.sueldo,onChange:function(e){setCampo(op,'sueldo',e.target.value);},style:Object.assign({},inpG,{marginTop:5})})),
+            React.createElement('div',null,React.createElement('div',{style:lbl},'$ por firma'),React.createElement('input',{type:'number',value:op.tarifa_firma,onChange:function(e){setCampo(op,'tarifa_firma',e.target.value);},style:Object.assign({},inpG,{width:90,marginTop:5})}))
           ),
-          !c?React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)'}},'Contando entregas...'):
+          !c?React.createElement('div',{style:{fontSize:14,color:'var(--text-soft)'}},'Contando entregas...'):
           React.createElement('div',null,
+            React.createElement('div',{style:Object.assign({},lbl,{marginBottom:6})},'Extra por firmas · semana a semana'),
             semanas.map(function(w){
-              var h=new Date(w+'T12:00:00');h.setDate(h.getDate()+6);var n=c.porSemana[w]||0;var st=estadoSem(w);
-              return React.createElement('div',{key:w,style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,fontSize:12,padding:'5px 0',borderBottom:'1px solid rgba(0,0,0,0.05)',opacity:st[0]==='Pendiente'?0.55:1}},
-                React.createElement('span',null,'Del '+dmyC(w)+' al '+dmyC(fechaISO(h)),React.createElement('span',{style:{marginLeft:8,fontSize:10,fontWeight:800,color:st[1],border:'1px solid '+st[1],borderRadius:999,padding:'1px 7px'}},st[0])),
-                React.createElement('span',{className:'mono'},n?(n+' firmas · '+fmt(n*c.tarifa)):'—'));
+              var h=new Date(w+'T12:00:00');h.setDate(h.getDate()+6);var n=c.porSemana[w]||0;var st=estadoSem(w);var pend=st[0]==='Pendiente';
+              return React.createElement('div',{key:w,style:{display:'grid',gridTemplateColumns:'150px 90px 1fr 150px',alignItems:'center',gap:12,padding:'10px 4px',borderBottom:'1px solid rgba(200,168,75,.18)',opacity:pend?0.5:1}},
+                React.createElement('span',{style:{fontSize:14.5,fontWeight:700}},'Del '+dmyC(w)+' al '+dmyC(fechaISO(h))),
+                React.createElement('span',{style:{justifySelf:'start',fontSize:11,fontWeight:800,color:st[1],background:st[1]+'18',border:'1px solid '+st[1],borderRadius:999,padding:'3px 10px'}},st[0]),
+                React.createElement('div',{className:'tubo',style:{height:12,borderRadius:8,background:'linear-gradient(180deg,#e2dccb,#f6f2e6 55%,#dcd4bf)',boxShadow:'inset 0 2px 4px rgba(0,0,0,.14)',overflow:'hidden'}},
+                  n?React.createElement('div',{style:{height:'100%',width:(n/maxSem*100)+'%',borderRadius:8,background:'linear-gradient(180deg,#f0d27a,#c8a84b 60%,#a8842e)',boxShadow:'inset 0 2px 0 rgba(255,255,255,.5)'}}):null),
+                React.createElement('span',{style:{textAlign:'right',fontSize:14}},n?React.createElement('span',null,React.createElement('b',{className:'mono'},n),' firmas · ',React.createElement('b',{className:'mono',style:{color:'var(--dark)'}},fmt(n*c.tarifa))):React.createElement('span',{style:{color:'var(--text-soft)'}},'—')));
             }),
-            React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',margin:'6px 0'}},Object.keys(c.porMens).sort().map(function(k){return k+': '+c.porMens[k];}).join(' · ')||'Sin entregas en el período'),
-            React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}},React.createElement('span',null,'Extra por firmas ('+c.firmas+' x $'+c.tarifa+')'),React.createElement('span',{className:'mono'},fmt(c.monto))),
-            React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}},React.createElement('span',null,'Sueldo base mensual'),React.createElement('span',{className:'mono'},fmt(c.sueldo))),
-            React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderTop:'1px solid var(--border)',marginTop:6}},
-              React.createElement('span',{style:{fontSize:11,fontWeight:700,textTransform:'uppercase'}},'Total del mes'),
-              React.createElement('span',{className:'mono',style:{fontSize:16,fontWeight:800,color:'var(--success)'}},fmt(c.total)))
+            React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',margin:'12px 0 16px'}},Object.keys(c.porMens).sort().map(function(k){return React.createElement('span',{key:k,style:{fontSize:12,fontWeight:700,padding:'4px 10px',borderRadius:8,background:'rgba(43,46,32,.06)'}},k+': ',React.createElement('b',{className:'mono'},c.porMens[k]));})),
+            React.createElement('div',{style:{borderRadius:16,padding:'16px 18px',background:'linear-gradient(160deg,#2f3325,#1c1f15)',color:'#f3ecd6',boxShadow:'inset 0 1px 0 rgba(255,255,255,.08),0 14px 26px -14px rgba(20,22,15,.7)'}},
+              React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:14.5,padding:'4px 0'}},React.createElement('span',null,'Extra por firmas ('+c.firmas.toLocaleString('es-CL')+' × $'+c.tarifa+')'),React.createElement('b',{className:'mono'},fmt(c.monto))),
+              React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:14.5,padding:'4px 0'}},React.createElement('span',null,'Sueldo base mensual'),React.createElement('b',{className:'mono'},fmt(c.sueldo))),
+              React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:10,paddingTop:12,borderTop:'1px solid rgba(232,199,102,.35)'}},
+                React.createElement('span',{style:{fontSize:13,fontWeight:800,letterSpacing:1.6,textTransform:'uppercase',color:'#e8c766'}},'Total del mes'),
+                React.createElement('span',{style:{fontFamily:'Bebas Neue',fontSize:44,lineHeight:1,color:'#7ee0ad',textShadow:'0 0 18px rgba(126,224,173,.35)'}},fmt(c.total))))
           )
         );
       })
