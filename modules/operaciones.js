@@ -217,7 +217,7 @@ function Checklist(props){
         var marcado=!!valores[it.key];
         return React.createElement('label',{key:it.key,style:{display:'flex',alignItems:'center',gap:10,fontSize:13,cursor:soloLectura?'default':'pointer',padding:'8px 12px',borderRadius:8,background:marcado?'rgba(176,48,48,0.06)':'rgba(46,125,79,0.06)',border:'1px solid '+(marcado?'rgba(176,48,48,0.3)':'rgba(46,125,79,0.2)')}},
           React.createElement('input',{type:'checkbox',checked:marcado,disabled:soloLectura,onChange:function(){if(soloLectura)return;var nuevo=Object.assign({},valores);nuevo[it.key]=!marcado;onChange(nuevo);},style:{width:16,height:16,cursor:soloLectura?'default':'pointer'}}),
-          React.createElement('span',{style:{color:marcado?'#b03030':'#2e7d4f',fontWeight:700,fontSize:11,minWidth:66}},marcado?'⚠ EXCEPCIÓN':'✓ SIN NOVEDAD'),
+          React.createElement('span',{style:{color:marcado?'#b03030':'#2e7d4f',fontWeight:700,fontSize:11,minWidth:66}},marcado?'EXCEPCIÓN':'SIN NOVEDAD'),
           React.createElement('span',null,it.label));
       })
     )
@@ -290,7 +290,7 @@ async function registrarExcepcionEnCierre(fecha,fila,toast,nombreUsuario){
     }
     return true;
   }catch(e){
-    toast&&toast('⚠ No se pudo registrar en el Cierre Diario: '+(e&&e.message?e.message:'error desconocido'));
+    toast&&toast('No se pudo registrar en el Cierre Diario: '+(e&&e.message?e.message:'error desconocido'));
     return false;
   }
 }
@@ -330,24 +330,24 @@ function ReportarModal(props){
     onClose();
   }
   async function ejecutar(conMulta){
-    if(!envio.mensajero){toast&&toast('⚠ Este envío no tiene mensajero asignado, no se puede reportar.');return;}
-    if(conMulta&&(+puntos||0)<=0){toast&&toast('⚠ Ingresa una cantidad de puntos/envíos mayor a 0 para poder multar.');return;}
+    if(!envio.mensajero){toast&&toast('Este envío no tiene mensajero asignado, no se puede reportar.');return;}
+    if(conMulta&&(+puntos||0)<=0){toast&&toast('Ingresa una cantidad de puntos/envíos mayor a 0 para poder multar.');return;}
     setEnviando(true);
     var monto=0, multaOk=false;
     if(conMulta){
       try{
         await loadScriptOnce('pagos-mensajeros','modules/pagos-mensajeros.js');
       }catch(e){
-        toast&&toast('⚠ No se pudo cargar el módulo de Pagos Mensajeros.');
+        toast&&toast('No se pudo cargar el módulo de Pagos Mensajeros.');
       }
       if(window.__app.aplicarMultaExterna){
         var rr=await window.__app.aplicarMultaExterna(envio.mensajero,faltaSel,puntos,accion,fechaHoyCL(),envio.codigo);
         if(rr.ok){monto=rr.monto;multaOk=true;}
-        else if(rr.motivo==='sin_semana')toast&&toast('⚠ No hay pagos calculados para esta semana todavía. Ve a Pagos Mensajeros → "Calcular Envíos Semana" y vuelve a intentar.');
-        else if(rr.motivo==='sin_mensajero')toast&&toast('⚠ '+envio.mensajero.split(',')[0]+' no aparece en los pagos de esta semana.');
-        else toast&&toast('⚠ Error al aplicar la multa: '+(rr.mensaje||'desconocido'));
+        else if(rr.motivo==='sin_semana')toast&&toast('No hay pagos calculados para esta semana todavía. Ve a Pagos Mensajeros → "Calcular Envíos Semana" y vuelve a intentar.');
+        else if(rr.motivo==='sin_mensajero')toast&&toast(''+envio.mensajero.split(',')[0]+' no aparece en los pagos de esta semana.');
+        else toast&&toast('Error al aplicar la multa: '+(rr.mensaje||'desconocido'));
       }else{
-        toast&&toast('⚠ No se pudo cargar el módulo de Pagos Mensajeros.');
+        toast&&toast('No se pudo cargar el módulo de Pagos Mensajeros.');
       }
     }
     var fila={
@@ -359,7 +359,7 @@ function ReportarModal(props){
     var ok=await registrarExcepcionEnCierre(fechaHoyCL(),fila,toast,nombreUsuario);
     setEnviando(false);
     if(ok){
-      toast&&toast(multaOk?'✓ Multa aplicada y registrada en el Cierre Diario':'✓ Registrado en el Cierre Diario de hoy');
+      toast&&toast(multaOk?'Multa aplicada y registrada en el Cierre Diario':'Registrado en el Cierre Diario de hoy');
       onDone&&onDone(fila);
       onClose();
     }
@@ -368,7 +368,7 @@ function ReportarModal(props){
   return React.createElement('div',{style:{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999},onClick:onClose},
     React.createElement('div',{style:{background:'#fff',borderRadius:14,padding:20,width:460,maxWidth:'92vw',maxHeight:'85vh',overflowY:'auto'},onClick:function(e){e.stopPropagation();}},
       React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}},
-        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1,color:'var(--dark)'}},'⚠ Reportar excepción'),
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1,color:'var(--dark)'}},'Reportar excepción'),
         React.createElement('button',{onClick:onClose,style:{border:'none',background:'none',fontSize:18,cursor:'pointer',color:'var(--text-soft)'}},'✕')
       ),
       React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginBottom:14}},(envio.mensajero||'Sin mensajero asignado').replace(/,\s*/g,' ')+' · Código '+envio.codigo),
@@ -391,8 +391,8 @@ function ReportarModal(props){
       React.createElement('textarea',{placeholder:'Acción / comentario (opcional)...',rows:2,value:accion,onChange:function(e){setAccion(e.target.value);},style:{width:'100%',padding:'7px 10px',borderRadius:7,border:'1px solid var(--border)',fontSize:12,outline:'none',marginBottom:14,boxSizing:'border-box',resize:'vertical'}}),
       React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'flex-end'}},
         React.createElement('button',{disabled:enviando,onClick:agregarAlInforme,title:'Agrega esta pieza y el motivo al informe de operadores del día (Informes → Novedades del día)',style:{padding:'8px 14px',borderRadius:8,border:'none',background:'var(--gold)',color:'#fff',fontWeight:700,fontSize:12,cursor:enviando?'default':'pointer',marginRight:'auto'}},'Agregar al informe'),
-        React.createElement('button',{disabled:enviando,onClick:function(){ejecutar(false);},style:{padding:'8px 14px',borderRadius:8,border:'1px solid var(--border)',background:'var(--cream)',color:'var(--text-main)',fontWeight:700,fontSize:12,cursor:enviando?'default':'pointer'}},'📋 Solo registrar incidencia'),
-        React.createElement('button',{disabled:enviando,onClick:function(){ejecutar(true);},style:{padding:'8px 14px',borderRadius:8,border:'none',background:'var(--danger)',color:'#fff',fontWeight:700,fontSize:12,cursor:enviando?'default':'pointer'}},enviando?'...':'🎯 Aplicar multa y registrar')
+        React.createElement('button',{disabled:enviando,onClick:function(){ejecutar(false);},style:{padding:'8px 14px',borderRadius:8,border:'1px solid var(--border)',background:'var(--cream)',color:'var(--text-main)',fontWeight:700,fontSize:12,cursor:enviando?'default':'pointer'}},'Solo registrar incidencia'),
+        React.createElement('button',{disabled:enviando,onClick:function(){ejecutar(true);},style:{padding:'8px 14px',borderRadius:8,border:'none',background:'var(--danger)',color:'#fff',fontWeight:700,fontSize:12,cursor:enviando?'default':'pointer'}},enviando?'...':'Aplicar multa y registrar')
       )
     )
   );
@@ -426,7 +426,7 @@ function tablaHTML(columnas,filas){
 function checklistHTML(items,valores){
   return '<div style="display:flex;flex-direction:column;gap:6px">'+items.map(function(it){
     var marcado=!!valores[it.key];
-    return '<div style="display:flex;align-items:center;gap:8px;font-size:12px"><span style="color:'+(marcado?'#C62828':'#2E7D32')+';font-weight:700;min-width:90px">'+(marcado?'⚠ EXCEPCIÓN':'✓ SIN NOVEDAD')+'</span><span>'+escHTML(it.label)+'</span></div>';
+    return '<div style="display:flex;align-items:center;gap:8px;font-size:12px"><span style="color:'+(marcado?'#C62828':'#2E7D32')+';font-weight:700;min-width:90px">'+(marcado?'EXCEPCIÓN':'SIN NOVEDAD')+'</span><span>'+escHTML(it.label)+'</span></div>';
   }).join('')+'</div>';
 }
 function descargarHTML(nombreArchivo,htmlContent){
@@ -443,29 +443,29 @@ function exportarCierreHTML(r){
   var html=estiloBaseHTML(titulo)
     +headerReciboHTML('Cierre de Ruta · Operaciones',r.estado_reporte==='cerrado'?'CERRADO':'BORRADOR')
     +'<div style="padding:16px;max-width:900px;margin:0 auto">'
-    +tarjetaHTML('Datos generales','🗓','<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    +tarjetaHTML('Datos generales','','<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
       +infoBoxHTML('Fecha',r.fecha)+infoBoxHTML('Turno',r.turno)
       +infoBoxHTML('Supervisor responsable',r.supervisor_responsable)+infoBoxHTML('Jefe / responsable de revisión',r.jefe_responsable)
       +'</div>')
-    +tarjetaHTML('A. Estado de la ruta por mensajero','🚚',tablaHTML([{key:'mensajero',label:'Mensajero'},{key:'entregadas',label:'Entregadas'},{key:'pendientes',label:'Pendientes'},{key:'incidencia',label:'Con incidencia'},{key:'reprogramacion',label:'Reprogramación / gestión'}],r.estado_ruta)
+    +tarjetaHTML('A. Estado de la ruta por mensajero','',tablaHTML([{key:'mensajero',label:'Mensajero'},{key:'entregadas',label:'Entregadas'},{key:'pendientes',label:'Pendientes'},{key:'incidencia',label:'Con incidencia'},{key:'reprogramacion',label:'Reprogramación / gestión'}],r.estado_ruta)
       +'<div style="margin-top:12px;font-weight:700;font-size:12px;color:#A0842A">Detalle de incidencias</div><div style="margin-top:6px">'+tablaHTML([{key:'mensajero',label:'Mensajero'},{key:'codigo',label:'Código'},{key:'tipo',label:'Tipo'},{key:'descripcion',label:'Descripción / gestión'}],r.incidencias)+'</div>')
-    +tarjetaHTML('B. Firmas','✍',checklistHTML(FIRMAS_CHECK_ITEMS,r.firmas_checklist||{})
+    +tarjetaHTML('B. Firmas','',checklistHTML(FIRMAS_CHECK_ITEMS,r.firmas_checklist||{})
       +'<div style="margin-top:12px;font-weight:700;font-size:12px;color:#A0842A">Excepciones detectadas</div><div style="margin-top:6px">'+tablaHTML([{key:'mensajero',label:'Mensajero'},{key:'codigo',label:'Código afectado'},{key:'falta',label:'Falta detectada'},{key:'accion',label:'Acción / comentario'}],r.firmas_excepciones)+'</div>')
-    +tarjetaHTML('C. Respaldos','📷',tablaHTML([{key:'mensajero',label:'Mensajero'},{key:'tipo',label:'Tipo'},{key:'codigo',label:'Código'},{key:'observacion',label:'Observación / falta detectada'}],r.respaldos)
+    +tarjetaHTML('C. Respaldos','',tablaHTML([{key:'mensajero',label:'Mensajero'},{key:'tipo',label:'Tipo'},{key:'codigo',label:'Código'},{key:'observacion',label:'Observación / falta detectada'}],r.respaldos)
       +'<div style="margin-top:12px;font-weight:700;font-size:12px;color:#A0842A">Control general</div><div style="margin-top:6px">'+checklistHTML(RESPALDOS_CHECK_ITEMS,r.respaldos_checklist||{})+'</div>')
-    +tarjetaHTML('D. Pendientes para el día siguiente','📌',tablaHTML([{key:'codigo',label:'Código'},{key:'mensajero',label:'Mensajero'},{key:'situacion',label:'Situación / motivo'},{key:'gestion',label:'Gestión pendiente'},{key:'responsable',label:'Responsable'}],r.pendientes))
-    +tarjetaHTML('E. Cierre de la revisión','✅','<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    +tarjetaHTML('D. Pendientes para el día siguiente','',tablaHTML([{key:'codigo',label:'Código'},{key:'mensajero',label:'Mensajero'},{key:'situacion',label:'Situación / motivo'},{key:'gestion',label:'Gestión pendiente'},{key:'responsable',label:'Responsable'}],r.pendientes))
+    +tarjetaHTML('E. Cierre de la revisión','','<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
       +infoBoxHTML('Resultado de la revisión',r.resultado_revision)
       +infoBoxHTML('Fecha / hora de cierre',r.fecha_hora_cierre?new Date(r.fecha_hora_cierre).toLocaleString('es-CL'):'—')
       +'<div style="grid-column:1/-1">'+infoBoxHTML('Observaciones generales',r.observaciones_generales)+'</div>'
       +infoBoxHTML('Creado por',r.creado_por)+infoBoxHTML('Cerrado por',r.cerrado_por)
       +'</div>')
-    +(r.ponderacion_economica?tarjetaHTML('Ponderación económica del día','💰','<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+    +(r.ponderacion_economica?tarjetaHTML('Ponderación económica del día','','<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
       +infoBoxHTML('Puntaje de gravedad',String(r.ponderacion_economica.puntosGravedadDia))
       +infoBoxHTML('Multas detectadas hoy','$'+Math.round(r.ponderacion_economica.montoMultasDia).toLocaleString('es-CL'))
       +infoBoxHTML('Costo del día (operador)','$'+Math.round(r.ponderacion_economica.costoDiarioOperador).toLocaleString('es-CL'))
       +'</div><div style="margin-top:10px;font-size:12px;font-weight:700;color:'+(r.ponderacion_economica.seRecuperoCosto?'#2E7D32':'#C62828')+'">'
-      +(r.ponderacion_economica.seRecuperoCosto?'✓ El trabajo de hoy se pagó solo.':'⚠ Por debajo del costo del día.')+'</div>'):'')
+      +(r.ponderacion_economica.seRecuperoCosto?'El trabajo de hoy se pagó solo.':'Por debajo del costo del día.')+'</div>'):'')
     +'</div></body></html>';
   descargarHTML('Cierre_Ruta_'+r.fecha+(r.turno?'_'+r.turno.replace(/\s+/g,'_'):'')+'.html',html);
 }
@@ -479,7 +479,7 @@ function exportarFirmasVivoHTML(filtrados,periodoLabel){
       +'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px"><span style="font-family:monospace;font-weight:700;font-size:13px">'+escHTML(e.codigo)+'</span><span style="font-size:11px;font-weight:700;color:#A0842A;text-transform:uppercase">'+escHTML(e.estado)+'</span></div>'
       +'<div style="font-size:13px;font-weight:700;margin-bottom:2px">'+escHTML(e.cliente||'—')+'</div>'
       +'<div style="font-size:12px;color:#666;margin-bottom:2px">'+escHTML(e.destinatario||'—')+' · '+escHTML(e.comuna||'—')+'</div>'
-      +'<div style="font-size:12px;color:#666;margin-bottom:8px">🏍 '+escHTML((e.mensajero||'Sin asignar').replace(/,\s*/g,' '))+'</div>'
+      +'<div style="font-size:12px;color:#666;margin-bottom:8px">'+escHTML((e.mensajero||'Sin asignar').replace(/,\s*/g,' '))+'</div>'
       +'<div style="display:flex;flex-wrap:wrap;gap:2px">'+imgsHtml+'</div></div>';
   }).join('');
   var html=estiloBaseHTML('Firmas en Vivo - '+periodoLabel)
@@ -895,7 +895,7 @@ function CierreDiario(props){
       diasLaborablesMes:+cfgBorrador.diasLaborablesMes||CFG_ECON_DEFAULT.diasLaborablesMes
     };
     setCfgEcon(limpio);setEditandoCfg(false);
-    db.from('configuracion').upsert({clave:'operaciones_valor_economico',valor:limpio,updated_at:new Date().toISOString()},{onConflict:'clave'}).then(function(){toast&&toast('✓ Parámetros de ponderación económica actualizados');}).catch(function(){});
+    db.from('configuracion').upsert({clave:'operaciones_valor_economico',valor:limpio,updated_at:new Date().toISOString()},{onConflict:'clave'}).then(function(){toast&&toast('Parámetros de ponderación económica actualizados');}).catch(function(){});
   }
 
   var _histOpen=useState(false), historialAbierto=_histOpen[0], setHistorialAbierto=_histOpen[1];
@@ -953,7 +953,7 @@ function CierreDiario(props){
   function abrirDesdeHistorial(id){
     db.from('cierres_ruta').select('*').eq('id',id).single().then(function(r){
       if(r&&r.data){abrirReporte(r.data);setHistorialAbierto(false);}
-    }).catch(function(){toast&&toast('⚠ No se pudo abrir ese reporte');});
+    }).catch(function(){toast&&toast('No se pudo abrir ese reporte');});
   }
   function cargarHistorialRango(){
     setCargandoHist(true);
@@ -984,7 +984,7 @@ function CierreDiario(props){
   }
   async function guardar(cerrar){
     if(guardando)return;
-    if(!fecha){toast&&toast('⚠ Falta la fecha');return;}
+    if(!fecha){toast&&toast('Falta la fecha');return;}
     if(cerrar&&!window.confirm('¿Cerrar esta revisión? Una vez cerrada, solo un administrador podrá reabrirla para editarla.'))return;
     setGuardando(true);
     var estadoFinal=cerrar?'cerrado':'borrador';
@@ -1000,9 +1000,9 @@ function CierreDiario(props){
       if(r.error)throw r.error;
       abrirReporte(r.data);
       cargarHistorialDia(fecha);
-      toast&&toast(cerrar?'✓ Revisión cerrada':'✓ Borrador guardado');
+      toast&&toast(cerrar?'Revisión cerrada':'Borrador guardado');
     }catch(e){
-      toast&&toast('⚠ Error al guardar: '+(e&&e.message?e.message:'desconocido'));
+      toast&&toast('Error al guardar: '+(e&&e.message?e.message:'desconocido'));
     }
     setGuardando(false);
   }
@@ -1014,8 +1014,8 @@ function CierreDiario(props){
       if(r.error)throw r.error;
       abrirReporte(r.data);
       cargarHistorialDia(fecha);
-      toast&&toast('🔓 Revisión reabierta');
-    }catch(e){toast&&toast('⚠ Error: '+(e&&e.message?e.message:'desconocido'));}
+      toast&&toast('Revisión reabierta');
+    }catch(e){toast&&toast('Error: '+(e&&e.message?e.message:'desconocido'));}
   }
 
   var totIncidencias=incidencias.length, totExcepFirmas=firmasExcepciones.length, totRespaldos=respaldos.length, totPendientes=pendientes.length;
@@ -1028,29 +1028,70 @@ function CierreDiario(props){
   var montoMultasDia=firmasExcepciones.reduce(function(a,x){return a+(x.multaAplicada?(+x.monto||0):0);},0);
   var costoDiarioOperador=Math.round((cfgEcon.sueldoOperadorUsdMensual*cfgEcon.valorDolarClp)/(cfgEcon.diasLaborablesMes||1));
   var seRecuperoCosto=montoMultasDia>=costoDiarioOperador&&costoDiarioOperador>0;
+  // Pasos de la revisión para la barra de avance (08-11-2026).
+  var pasos=[
+    {k:'G',l:'Datos generales',ok:!!(supervisorResponsable&&jefeResponsable),d:supervisorResponsable&&jefeResponsable?'Responsables listos':'Falta '+(!supervisorResponsable?'supervisor':'jefe')},
+    {k:'A',l:'Estado de la ruta',ok:estadoRuta.length>0,d:estadoRuta.length?estadoRuta.length+' mensajero'+(estadoRuta.length>1?'s':''):'Sin mensajeros'},
+    {k:'B',l:'Firmas',ok:true,d:totExcepFirmas?totExcepFirmas+' excepción'+(totExcepFirmas>1?'es':''):'Sin excepciones'},
+    {k:'C',l:'Respaldos',ok:true,d:totRespaldos?totRespaldos+' observado'+(totRespaldos>1?'s':''):'Sin observaciones'},
+    {k:'D',l:'Pendientes',ok:true,d:totPendientes?totPendientes+' para mañana':'Sin pendientes'},
+    {k:'E',l:'Cierre',ok:!!resultadoRevision&&soloLectura,d:soloLectura?'Revisión cerrada':(resultadoRevision?'Listo para cerrar':'Falta el resultado')}
+  ];
+  var pasosHechos=pasos.filter(function(x){return x.ok;}).length,avancePct=Math.round(pasosHechos/pasos.length*100);
+  function btnOsc(act){return{padding:'8px 14px',borderRadius:10,cursor:'pointer',fontWeight:800,fontSize:12,letterSpacing:.4,whiteSpace:'nowrap',border:'1px solid '+(act?'#e8c766':'rgba(255,255,255,.16)'),background:act?'linear-gradient(135deg,#e8c766,#b08a2e)':'rgba(255,255,255,.06)',color:act?'#1a1d13':'#e9e4d2'};}
+  function kpiOsc(lbl,val,col,sub){return React.createElement('div',{key:lbl,style:{flex:'1 1 150px',minWidth:0,padding:'11px 14px',borderRadius:14,background:'linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.03))',border:'1px solid rgba(255,255,255,.10)',boxShadow:'inset 0 1px 0 rgba(255,255,255,.08)'}},
+    React.createElement('div',{style:{fontSize:10,letterSpacing:1.5,textTransform:'uppercase',color:'rgba(233,228,210,.66)',fontWeight:800}},lbl),
+    React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:30,lineHeight:1.05,color:col,textShadow:'0 0 16px '+col+'55',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},val),
+    sub&&React.createElement('div',{style:{fontSize:11,color:'rgba(233,228,210,.66)'}},sub));}
+  function encSeccion(letra,titulo,estado,okE){return React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,margin:'26px 0 12px',paddingBottom:8,borderBottom:'1px solid rgba(200,168,75,.35)'}},
+    React.createElement('span',{style:{width:30,height:30,flex:'none',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Bebas Neue',fontSize:18,color:'#14170f',background:'linear-gradient(180deg,#ffe59a,#c8a84b 55%,#8a6a1c)',boxShadow:'0 4px 10px rgba(168,132,46,.45), inset 0 1px 0 rgba(255,255,255,.7)'}},letra),
+    React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:1.6,color:'var(--dark)',flex:1}},titulo),
+    estado&&React.createElement('span',{style:{padding:'3px 10px',borderRadius:999,fontSize:11,fontWeight:800,background:okE?'rgba(46,125,79,.10)':'rgba(176,48,48,.08)',color:okE?'#1f6b40':'#a02828',border:'1px solid '+(okE?'rgba(46,125,79,.3)':'rgba(176,48,48,.28)')}},estado));}
 
   return React.createElement('div',null,
     React.createElement('datalist',{id:'dl-mensajeros-operaciones'},mensajeros.map(function(m){return React.createElement('option',{key:m.id||m.nombre,value:m.nombre});})),
 
-    React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end',marginBottom:14}},
-      React.createElement('div',null,
-        React.createElement('label',{style:{fontSize:11,color:'var(--text-soft)',display:'block',marginBottom:4}},'Fecha'),
-        React.createElement('input',{type:'date',className:'form-input',style:{padding:'8px 10px'},value:fecha,onChange:function(e){limpiarFormulario();setFecha(e.target.value);}})),
-      React.createElement('div',null,
-        React.createElement('label',{style:{fontSize:11,color:'var(--text-soft)',display:'block',marginBottom:4}},'Turno (opcional)'),
-        React.createElement('input',{className:'form-input',style:{padding:'8px 10px',maxWidth:160},placeholder:'Ej: AM, PM...',value:turno,onChange:function(e){setTurno(e.target.value);},disabled:soloLectura})),
-      React.createElement('button',{className:'btn-secondary',onClick:function(){limpiarFormulario();}},'+ Nuevo reporte'),
-      React.createElement('button',{className:'btn-secondary',onClick:function(){setHistorialAbierto(function(v){return!v;});}},historialAbierto?'✕ Cerrar historial':'📚 Ver historial de cierres')
-    ),
-
-    historialDia.length>0&&React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:14}},
-      React.createElement('span',{style:{fontSize:11,color:'var(--text-soft)',alignSelf:'center'}},'Reportes de este día:'),
-      historialDia.map(function(h){
-        var activo=reporteId===h.id;
-        return React.createElement('button',{key:h.id,className:'btn-secondary',style:activo?{background:'rgba(200,168,75,0.18)',borderColor:'var(--gold)',color:'var(--gold)'}:undefined,onClick:function(){abrirDesdeHistorial(h.id);}},
-          (h.turno||'Turno único')+' · '+(h.estado_reporte==='cerrado'?'🔒 Cerrado':'📝 Borrador')+(h.creado_por?' · '+h.creado_por:''));
-      })
-    ),
+    // ── Cabecera (08-11-2026): controles, reportes del día, indicadores y avance de la revisión ──
+    React.createElement('div',{style:{position:'relative',borderRadius:20,overflow:'hidden',background:'radial-gradient(120% 90% at 30% 0%,#3a3f2b 0%,#22261a 45%,#14170f 100%)',border:'1px solid rgba(200,168,75,.35)',boxShadow:'0 24px 50px rgba(20,22,15,.30), inset 0 1px 0 rgba(255,255,255,.08)',color:'#e9e4d2',padding:'16px 20px 18px',marginBottom:16}},
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12,flexWrap:'wrap',marginBottom:14}},
+        React.createElement('div',null,
+          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:26,letterSpacing:2.2,color:'#fff',lineHeight:1}},'Novedades del día'),
+          React.createElement('div',{style:{fontSize:12,color:'rgba(233,228,210,.66)',marginTop:3}},'Revisión de ruta, firmas, respaldos y pendientes'+(creadoPor?' · creado por '+creadoPor:''))),
+        React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'flex-end'}},
+          React.createElement('div',null,
+            React.createElement('div',{style:{fontSize:10,letterSpacing:1.4,textTransform:'uppercase',color:'rgba(233,228,210,.66)',fontWeight:800,marginBottom:4}},'Fecha'),
+            React.createElement('input',{type:'date',className:'form-input',style:{padding:'7px 10px',background:'rgba(255,255,255,.92)'},value:fecha,onChange:function(e){limpiarFormulario();setFecha(e.target.value);}})),
+          React.createElement('div',null,
+            React.createElement('div',{style:{fontSize:10,letterSpacing:1.4,textTransform:'uppercase',color:'rgba(233,228,210,.66)',fontWeight:800,marginBottom:4}},'Turno'),
+            React.createElement('input',{className:'form-input',style:{padding:'7px 10px',maxWidth:130,background:'rgba(255,255,255,.92)'},placeholder:'AM, PM…',value:turno,onChange:function(e){setTurno(e.target.value);},disabled:soloLectura})),
+          React.createElement('button',{type:'button',onClick:function(){limpiarFormulario();},style:btnOsc(false)},'Nuevo reporte'),
+          React.createElement('button',{type:'button',onClick:function(){setHistorialAbierto(function(v){return!v;});},style:btnOsc(historialAbierto)},historialAbierto?'Cerrar historial':'Historial de cierres'))),
+      historialDia.length>0&&React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginBottom:12}},
+        React.createElement('span',{style:{fontSize:10.5,letterSpacing:1.2,textTransform:'uppercase',color:'rgba(233,228,210,.6)',fontWeight:800,marginRight:4}},'Reportes de este día'),
+        historialDia.map(function(hh){
+          var activo=reporteId===hh.id,cer=hh.estado_reporte==='cerrado';
+          return React.createElement('button',{key:hh.id,type:'button',onClick:function(){abrirDesdeHistorial(hh.id);},style:{padding:'5px 11px',borderRadius:999,cursor:'pointer',fontSize:11.5,fontWeight:700,border:'1px solid '+(activo?'#e8c766':'rgba(255,255,255,.16)'),background:activo?'rgba(232,199,102,.2)':'rgba(255,255,255,.05)',color:activo?'#ffe59a':'#e9e4d2'}},
+            React.createElement('span',{style:{display:'inline-block',width:7,height:7,borderRadius:'50%',background:cer?'#36c47f':'#f0b94a',marginRight:6,boxShadow:'0 0 6px '+(cer?'#36c47f':'#f0b94a')}}),
+            (hh.turno||'Turno único')+' · '+(cer?'Cerrado':'Borrador')+(hh.creado_por?' · '+hh.creado_por:''));
+        })),
+      React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:12}},
+        kpiOsc('Incidencias',totIncidencias,totIncidencias?'#ff7b70':'#36c47f','piezas a gestionar'),
+        kpiOsc('Excepciones de firma',totExcepFirmas,totExcepFirmas?'#ff7b70':'#36c47f',puntosGravedadDia?puntosGravedadDia+' pts de gravedad':'sección B'),
+        kpiOsc('Respaldos observados',totRespaldos,totRespaldos?'#f0b94a':'#36c47f','sección C'),
+        kpiOsc('Pendientes mañana',totPendientes,totPendientes?'#f0b94a':'#36c47f','sección D'),
+        kpiOsc('Estado del reporte',soloLectura?'Cerrado':(reporteId?'Borrador':'Sin guardar'),soloLectura?'#36c47f':'#e8c766',soloLectura&&cerradoPor?'por '+cerradoPor:(reporteId?'se puede editar':'aún no se guarda'))),
+      React.createElement('div',{style:{borderRadius:14,background:'linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.02))',border:'1px solid rgba(255,255,255,.10)',padding:'12px 14px'}},
+        React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:8,marginBottom:8,flexWrap:'wrap'}},
+          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:17,letterSpacing:1.3,color:'#fff'}},'Avance de la revisión'),
+          React.createElement('div',{style:{fontSize:11.5,fontWeight:800,color:avancePct>=100?'#36c47f':'#e8c766'}},pasosHechos+' de '+pasos.length+' pasos')),
+        React.createElement('div',{style:{height:8,borderRadius:6,background:'rgba(255,255,255,.08)',overflow:'hidden',marginBottom:10,boxShadow:'inset 0 1px 3px rgba(0,0,0,.5)'}},
+          React.createElement('div',{style:{height:'100%',width:avancePct+'%',borderRadius:6,background:'linear-gradient(90deg,#b08a2e,#e8c766'+(avancePct>=100?',#36c47f':'')+')',boxShadow:'0 0 10px rgba(232,199,102,.6)',transition:'width .8s cubic-bezier(.22,1,.36,1)'}})),
+        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:6}},
+          pasos.map(function(pz){return React.createElement('div',{key:pz.l,style:{display:'flex',gap:8,alignItems:'center',padding:'6px 9px',borderRadius:10,background:pz.ok?'rgba(54,196,127,.10)':'rgba(255,255,255,.04)',border:'1px solid '+(pz.ok?'rgba(54,196,127,.35)':'rgba(255,255,255,.08)')}},
+            React.createElement('span',{style:{width:22,height:22,flex:'none',borderRadius:7,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Bebas Neue',fontSize:14,background:pz.ok?'linear-gradient(135deg,#5fd39a,#2e7d4f)':'linear-gradient(135deg,#e8c766,#8a6a1c)',color:'#14170f'}},pz.k),
+            React.createElement('div',{style:{minWidth:0}},
+              React.createElement('div',{style:{fontSize:11.5,fontWeight:800,color:'#fff',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},pz.l),
+              React.createElement('div',{style:{fontSize:10.5,color:pz.ok?'#7ee0ad':'rgba(233,228,210,.6)'}},pz.d)));})))),
 
     historialAbierto&&React.createElement('div',{style:{border:'1px solid var(--border)',borderRadius:10,padding:14,marginBottom:18,background:'#fafaf7'}},
       React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end',marginBottom:10}},
@@ -1060,7 +1101,7 @@ function CierreDiario(props){
         React.createElement('div',null,
           React.createElement('label',{style:{fontSize:11,color:'var(--text-soft)',display:'block',marginBottom:4}},'Hasta'),
           React.createElement('input',{type:'date',className:'form-input',style:{padding:'6px 10px'},value:histHasta,onChange:function(e){setHistHasta(e.target.value);}})),
-        React.createElement('button',{className:'btn-secondary',disabled:cargandoHist,onClick:cargarHistorialRango},cargandoHist?'Cargando...':'↺ Actualizar')
+        React.createElement('button',{className:'btn-secondary',disabled:cargandoHist,onClick:cargarHistorialRango},cargandoHist?'Cargando...':'Actualizar')
       ),
       React.createElement('div',{className:'table-wrap'},
         React.createElement('table',null,
@@ -1073,7 +1114,7 @@ function CierreDiario(props){
               return React.createElement('tr',{key:h.id},
                 React.createElement('td',{style:{fontSize:12}},h.fecha),
                 React.createElement('td',{style:{fontSize:12}},h.turno||'—'),
-                React.createElement('td',{style:{fontSize:12}},h.estado_reporte==='cerrado'?'🔒 Cerrado':'📝 Borrador'),
+                React.createElement('td',{style:{fontSize:12}},h.estado_reporte==='cerrado'?'Cerrado':'Borrador'),
                 React.createElement('td',{style:{fontSize:12}},h.supervisor_responsable||'—'),
                 React.createElement('td',{style:{fontSize:12}},h.creado_por||'—'),
                 React.createElement('td',{style:{fontSize:12}},h.cerrado_por||'—'),
@@ -1084,22 +1125,12 @@ function CierreDiario(props){
       )
     ),
 
-    React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:18}},
-      miniStat('Incidencias',totIncidencias,true),
-      miniStat('Excepciones de firma',totExcepFirmas,true),
-      miniStat('Respaldos observados',totRespaldos,true),
-      miniStat('Pendientes mañana',totPendientes,true),
-      React.createElement('div',{style:{flex:'1 1 160px',background:soloLectura?'rgba(46,125,79,0.08)':'rgba(200,168,75,0.1)',border:'1px solid '+(soloLectura?'rgba(46,125,79,0.3)':'rgba(200,168,75,0.35)'),borderRadius:10,padding:'10px 14px'}},
-        React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',letterSpacing:0.5,textTransform:'uppercase',marginBottom:4}},'Estado del reporte'),
-        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,color:soloLectura?'#2e7d4f':'#8a6d1a'}},soloLectura?'🔒 CERRADO':'📝 BORRADOR'))
-    ),
-
     React.createElement(ReportesOperadorPanel,{fecha:fecha,toast:toast,esAdmin:true}),
     // ── Ponderación económica del día ──
     React.createElement('div',{style:{background:'#fff',border:'1.5px solid '+(seRecuperoCosto?'rgba(46,125,79,0.3)':'rgba(200,168,75,0.35)'),borderRadius:10,padding:14,marginBottom:20}},
       React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,marginBottom:10}},
-        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:15,letterSpacing:1,color:'var(--dark)'}},'💰 Ponderación económica del día'+(creadoPor?' — '+creadoPor:'')),
-        esAdmin&&React.createElement('button',{className:'btn-secondary',onClick:function(){setCfgBorrador(cfgEcon);setEditandoCfg(function(v){return!v;});}},editandoCfg?'✕ Cerrar':'⚙ Parámetros')
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:15,letterSpacing:1,color:'var(--dark)'}},'Ponderación económica del día'+(creadoPor?' — '+creadoPor:'')),
+        esAdmin&&React.createElement('button',{className:'btn-secondary',onClick:function(){setCfgBorrador(cfgEcon);setEditandoCfg(function(v){return!v;});}},editandoCfg?'Cerrar':'Parámetros')
       ),
       editandoCfg&&React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:8,padding:12,marginBottom:12}},
         React.createElement('div',null,
@@ -1111,7 +1142,7 @@ function CierreDiario(props){
         React.createElement('div',null,
           React.createElement('label',{style:{fontSize:10,color:'var(--text-soft)',display:'block',marginBottom:3}},'Días laborables al mes'),
           React.createElement('input',{type:'number',className:'form-input',style:{width:100,padding:'6px 8px'},value:cfgBorrador.diasLaborablesMes,onChange:function(e){setCfgBorrador(Object.assign({},cfgBorrador,{diasLaborablesMes:e.target.value}));}})),
-        React.createElement('button',{className:'btn-confirm',onClick:guardarCfgEcon},'💾 Guardar')
+        React.createElement('button',{className:'btn-confirm',onClick:guardarCfgEcon},'Guardar')
       ),
       React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:10}},
         miniStat('Puntaje de gravedad',puntosGravedadDia,puntosGravedadDia>0),
@@ -1124,17 +1155,17 @@ function CierreDiario(props){
       ),
       React.createElement('div',{style:{fontSize:12,fontWeight:600,padding:'8px 12px',borderRadius:8,background:seRecuperoCosto?'rgba(46,125,79,0.08)':'rgba(176,48,48,0.06)',color:seRecuperoCosto?'#2e7d4f':'#b03030'}},
         seRecuperoCosto
-          ?'✓ El trabajo de hoy se pagó solo: lo detectado ($'+montoMultasDia.toLocaleString('es-CL')+') cubre el costo del día ($'+costoDiarioOperador.toLocaleString('es-CL')+').'
-          :'⚠ Por debajo del costo del día: lo detectado ($'+montoMultasDia.toLocaleString('es-CL')+') no alcanza el costo del día ($'+costoDiarioOperador.toLocaleString('es-CL')+'). Faltan $'+Math.max(0,costoDiarioOperador-montoMultasDia).toLocaleString('es-CL')+'.'),
+          ?'El trabajo de hoy se pagó solo: lo detectado ($'+montoMultasDia.toLocaleString('es-CL')+') cubre el costo del día ($'+costoDiarioOperador.toLocaleString('es-CL')+').'
+          :'Por debajo del costo del día: lo detectado ($'+montoMultasDia.toLocaleString('es-CL')+') no alcanza el costo del día ($'+costoDiarioOperador.toLocaleString('es-CL')+'). Faltan $'+Math.max(0,costoDiarioOperador-montoMultasDia).toLocaleString('es-CL')+'.'),
       React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginTop:6,fontStyle:'italic'}},'Calculado solo con las excepciones registradas en este reporte (Sección B). El puntaje de gravedad suma aunque no se haya multado; el monto en pesos solo cuenta multas efectivamente aplicadas.')
     ),
 
     soloLectura&&React.createElement('div',{style:{background:'rgba(46,125,79,0.08)',border:'1px solid rgba(46,125,79,0.3)',borderRadius:8,padding:'10px 14px',marginBottom:16,fontSize:12,display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}},
-      React.createElement('span',null,'🔒 Esta revisión ya fue cerrada'+(cerradoPor?' por '+cerradoPor:'')+(fechaHoraCierre?' el '+new Date(fechaHoraCierre).toLocaleString('es-CL'):'')+'. No se puede editar.'),
-      esAdmin&&React.createElement('button',{className:'btn-secondary',onClick:reabrir},'🔓 Reabrir para editar')
+      React.createElement('span',null,'Esta revisión ya fue cerrada'+(cerradoPor?' por '+cerradoPor:'')+(fechaHoraCierre?' el '+new Date(fechaHoraCierre).toLocaleString('es-CL'):'')+'. No se puede editar.'),
+      esAdmin&&React.createElement('button',{className:'btn-secondary',onClick:reabrir},'Reabrir para editar')
     ),
 
-    React.createElement('div',{className:'section-title',style:{fontSize:16,marginBottom:10}},'Datos generales'),
+    encSeccion('G','Datos generales',supervisorResponsable&&jefeResponsable?'Completo':'Incompleto',!!(supervisorResponsable&&jefeResponsable)),
     React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:20}},
       React.createElement('div',{style:{flex:'1 1 220px'}},
         React.createElement('label',{style:{fontSize:11,color:'var(--text-soft)',display:'block',marginBottom:4}},'Supervisor responsable'),
@@ -1144,25 +1175,25 @@ function CierreDiario(props){
         React.createElement('input',{className:'form-input',value:jefeResponsable,disabled:soloLectura,onChange:function(e){setJefeResponsable(e.target.value);}}))
     ),
 
-    React.createElement('div',{className:'section-title',style:{fontSize:16,marginBottom:10}},'A. Estado de la ruta por mensajero'),
+    encSeccion('A','Estado de la ruta por mensajero',totIncidencias?totIncidencias+' incidencia'+(totIncidencias>1?'s':''):'Sin incidencias',!totIncidencias),
     React.createElement(TablaDinamica,{columnas:COLS_ESTADO_RUTA,filas:estadoRuta,onChange:setEstadoRuta,soloLectura:soloLectura,vacioTexto:'Sin mensajeros cargados en este reporte.'}),
     React.createElement('div',{style:{fontSize:12,fontWeight:700,color:'var(--text-soft)',margin:'14px 0 8px'}},'Detalle de incidencias / piezas a gestionar'),
     React.createElement(TablaDinamica,{columnas:COLS_INCIDENCIAS,filas:incidencias,onChange:setIncidencias,soloLectura:soloLectura,vacioTexto:'Sin incidencias registradas.'}),
 
-    React.createElement('div',{className:'section-title',style:{fontSize:16,margin:'22px 0 10px'}},'B. Firmas'),
+    encSeccion('B','Firmas',totExcepFirmas?totExcepFirmas+' excepción'+(totExcepFirmas>1?'es':''):'Sin excepciones',!totExcepFirmas),
     React.createElement(Checklist,{items:FIRMAS_CHECK_ITEMS,valores:firmasChecklist,onChange:setFirmasChecklist,soloLectura:soloLectura}),
     React.createElement('div',{style:{fontSize:12,fontWeight:700,color:'var(--text-soft)',margin:'14px 0 8px'}},'Excepciones detectadas'),
     React.createElement(TablaDinamica,{columnas:COLS_EXCEP_FIRMAS,filas:firmasExcepciones,onChange:setFirmasExcepciones,soloLectura:soloLectura,vacioTexto:'Sin excepciones de firma.'}),
 
-    React.createElement('div',{className:'section-title',style:{fontSize:16,margin:'22px 0 10px'}},'C. Respaldos'),
+    encSeccion('C','Respaldos',totRespaldos?totRespaldos+' observado'+(totRespaldos>1?'s':''):'Sin observaciones',!totRespaldos),
     React.createElement(TablaDinamica,{columnas:COLS_RESPALDOS,filas:respaldos,onChange:setRespaldos,soloLectura:soloLectura,vacioTexto:'Sin respaldos observados.'}),
     React.createElement('div',{style:{fontSize:12,fontWeight:700,color:'var(--text-soft)',margin:'14px 0 8px'}},'Control general'),
     React.createElement(Checklist,{items:RESPALDOS_CHECK_ITEMS,valores:respaldosChecklist,onChange:setRespaldosChecklist,soloLectura:soloLectura}),
 
-    React.createElement('div',{className:'section-title',style:{fontSize:16,margin:'22px 0 10px'}},'D. Pendientes para el día siguiente'),
+    encSeccion('D','Pendientes para el día siguiente',totPendientes?totPendientes+' pendiente'+(totPendientes>1?'s':''):'Sin pendientes',!totPendientes),
     React.createElement(TablaDinamica,{columnas:COLS_PENDIENTES,filas:pendientes,onChange:setPendientes,soloLectura:soloLectura,vacioTexto:'Sin pendientes para mañana.'}),
 
-    React.createElement('div',{className:'section-title',style:{fontSize:16,margin:'22px 0 10px'}},'E. Cierre de la revisión'),
+    encSeccion('E','Cierre de la revisión',soloLectura?'Cerrada':(resultadoRevision?'Lista para cerrar':'Pendiente'),soloLectura||!!resultadoRevision),
     React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:12}},
       React.createElement('div',{style:{flex:'1 1 260px'}},
         React.createElement('label',{style:{fontSize:11,color:'var(--text-soft)',display:'block',marginBottom:4}},'Resultado de la revisión'),
@@ -1178,8 +1209,8 @@ function CierreDiario(props){
       React.createElement('textarea',{className:'form-input',rows:3,style:{resize:'vertical'},value:observacionesGenerales,disabled:soloLectura,onChange:function(e){setObservacionesGenerales(e.target.value);}})),
 
     React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap'}},
-      !soloLectura&&React.createElement('button',{className:'btn-secondary',disabled:guardando,onClick:function(){guardar(false);}},guardando?'Guardando...':'💾 Guardar borrador'),
-      !soloLectura&&React.createElement('button',{className:'btn-confirm',disabled:guardando,onClick:function(){guardar(true);}},guardando?'Guardando...':'🔒 Cerrar revisión'),
+      !soloLectura&&React.createElement('button',{className:'btn-secondary',disabled:guardando,onClick:function(){guardar(false);}},guardando?'Guardando...':'Guardar borrador'),
+      !soloLectura&&React.createElement('button',{className:'btn-confirm',disabled:guardando,onClick:function(){guardar(true);}},guardando?'Guardando...':'Cerrar revisión'),
       reporteId&&React.createElement('button',{className:'btn-secondary',onClick:function(){exportarCierreHTML({fecha:fecha,turno:turno,supervisor_responsable:supervisorResponsable,jefe_responsable:jefeResponsable,estado_ruta:estadoRuta,incidencias:incidencias,firmas_checklist:firmasChecklist,firmas_excepciones:firmasExcepciones,respaldos:respaldos,respaldos_checklist:respaldosChecklist,pendientes:pendientes,resultado_revision:resultadoRevision,observaciones_generales:observacionesGenerales,fecha_hora_cierre:fechaHoraCierre,estado_reporte:estadoReporte,creado_por:creadoPor,cerrado_por:cerradoPor,ponderacion_economica:{puntosGravedadDia:puntosGravedadDia,montoMultasDia:montoMultasDia,costoDiarioOperador:costoDiarioOperador,seRecuperoCosto:seRecuperoCosto}});}},'⬇ Exportar a HTML')
     ),
     React.createElement(RetirosResumenDia,{fecha:fecha})
