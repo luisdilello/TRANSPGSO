@@ -61,7 +61,7 @@ function Resumen(props){
   var cfg=d.cfg,tarC=cfg.tarifasCliente||{};
   function tarifaCliente(c){if(tarC[c]!=null)return +tarC[c];var x=d.cli[c];if(!x)return 0;return x.paga_iva?(+x.tarifa||0)/1.19:(+x.tarifa||0);}
   var porCli={},porMen={},porDia={},comunas={},totE=0,totC=0,totP=0,secPer={n:0,p:0};
-  d.rows.forEach(function(x){var n=+x.n||0;var m=d.cfgM[x.mensajero]||{};var pu=d.excl.indexOf(x.mensajero)>=0?0:(+m.tarifa||0); // cuentas internas fuera del pago: no suman al pagadovar pc=tarifaCliente(x.cliente);
+  d.rows.forEach(function(x){var n=+x.n||0;var m=d.cfgM[x.mensajero]||{};var pu=d.excl.indexOf(x.mensajero)>=0?0:(+m.tarifa||0);var pc=tarifaCliente(x.cliente);
     totE+=n;totC+=n*pc;totP+=n*pu;comunas[x.comuna]=1;
     var c=porCli[x.cliente]||(porCli[x.cliente]={n:0,c:0,p:0,tar:pc});c.n+=n;c.c+=n*pc;c.p+=n*pu;
     var mm=porMen[x.mensajero]||(porMen[x.mensajero]={n:0,p:0,tar:pu,dias:{}});mm.n+=n;mm.p+=n*pu;mm.dias[x.dia]=1;
