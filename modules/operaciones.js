@@ -1127,9 +1127,9 @@ function CierreDiario(props){
 
     React.createElement(ReportesOperadorPanel,{fecha:fecha,toast:toast,esAdmin:true}),
     // ── Ponderación económica del día ──
-    React.createElement('div',{style:{background:'#fff',border:'1.5px solid '+(seRecuperoCosto?'rgba(46,125,79,0.3)':'rgba(200,168,75,0.35)'),borderRadius:10,padding:14,marginBottom:20}},
+    React.createElement('div',{className:'panel',style:{marginBottom:20}},
       React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,marginBottom:10}},
-        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:15,letterSpacing:1,color:'var(--dark)'}},'Ponderación económica del día'+(creadoPor?' — '+creadoPor:'')),
+        React.createElement('div',{className:'panel-title',style:{margin:0}},'Ponderación económica del día'+(creadoPor?' — '+creadoPor:'')),
         esAdmin&&React.createElement('button',{className:'btn-secondary',onClick:function(){setCfgBorrador(cfgEcon);setEditandoCfg(function(v){return!v;});}},editandoCfg?'Cerrar':'Parámetros')
       ),
       editandoCfg&&React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end',background:'var(--cream)',border:'1px solid var(--border)',borderRadius:8,padding:12,marginBottom:12}},

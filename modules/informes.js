@@ -444,7 +444,7 @@ function GraficoCortes(p){
   var t=p.t,dias=p.dias,multi=dias.length>1;
   var pts=HORAS_CORTE.map(function(hh,i){var pas=multi||cortePasado(dias[0].dia,hh);return{l:hh+':00',v:pas?pctNum(t.cortes[i],t.salida):null,n:t.cortes[i]};});
   pts.push({l:'Final',v:pctNum(t.ent,t.salida),n:t.ent});
-  var W=520,H=200,PL=38,PR=14,PT=16,PB=30;
+  var W=820,H=230,PL=40,PR=16,PT=20,PB=30;
   var vals=pts.filter(function(x){return x.v!=null;}).map(function(x){return x.v;});
   var yMin=vals.length?Math.max(0,Math.floor((Math.min.apply(null,vals)-5)/10)*10):0;
   var X=function(i){return PL+i*(W-PL-PR)/(pts.length-1);},Y=function(v){return PT+(1-(v-yMin)/(100-yMin||1))*(H-PT-PB);};
