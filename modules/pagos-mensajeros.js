@@ -1192,7 +1192,7 @@ function CobrosClientesTab(_ref4){
     if(tipoPeriodo==='semana'){
       var d=new Date(semSel+'T12:00:00');
       var lunes=new Date(d);lunes.setDate(d.getDate()-((d.getDay()+6)%7));
-      var sabado=new Date(lunes);sabado.setDate(lunes.getDate()+5);
+      var sabado=new Date(lunes);sabado.setDate(lunes.getDate()+6); // 08-11-2026: semana de lunes a domingo, igual que el pago
       var desde=fechaHoyCL(lunes),hasta=fechaHoyCL(sabado);
       return{desde:desde,hasta:hasta,label:'Semana '+fmtCorta(desde)+' al '+fmtCorta(hasta)};
     }
@@ -1371,107 +1371,139 @@ function CobrosClientesTab(_ref4){
   }
 
   var tiposPeriodo=[{val:'dia',label:'Día'},{val:'semana',label:'Semana'},{val:'mes',label:'Mes'},{val:'rango',label:'Rango'}];
+  // ── UI (08-11-2026: rediseño completo) ──
+  var h=React.createElement;
+  var _q=React.useState(''); var q=_q[0]; var setQ=_q[1];
+  var _ord=React.useState('monto'); var orden=_ord[0]; var setOrden=_ord[1];
+  var _vista=React.useState('tarjetas'); var vistaC=_vista[0]; var setVistaC=_vista[1];
+  var _abV=React.useState(false); var verVerif=_abV[0]; var setVerVerif=_abV[1];
+  var fmt=function(n){return '$'+Math.round(+n||0).toLocaleString('es-CL');};
+  var pctF=function(x){return (isFinite(x)?x*100:0).toFixed(1).replace('.',',')+'%';};
+  var tit=function(s){return String(s||'').toLowerCase().replace(/(^|\s)\S/g,function(m){return m.toUpperCase();});};
+  var retPor={};verificacionPiezas.forEach(function(v){retPor[v.nombre]=v;});
+  var cliPor={};(clientes||[]).forEach(function(c){cliPor[c.nombre]=c;});
+  var lista=resumen.filter(function(r){return !q||r.nombre.toUpperCase().indexOf(q.trim().toUpperCase())>=0;}).slice();
+  lista.sort(function(a,b){if(orden==='nombre')return a.nombre.localeCompare(b.nombre,'es');if(orden==='envios')return b.total-a.total;if(orden==='efectividad')return b.efectividad-a.efectividad;return b.montoTotal-a.montoTotal;});
+  var maxMonto=Math.max.apply(null,resumen.map(function(r){return r.montoTotal;}).concat([1]));
+  var top=resumen.slice().sort(function(a,b){return b.montoTotal-a.montoTotal;}).slice(0,8);
+  var colEf=function(x){return x>=0.97?'#2e7d4f':x>=0.9?'#c8a84b':'#b03030';};
+  var TIPOS=[['normal','Normal','tarifa'],['colina','Colina','tarifaColina'],['ph','Padre Hurtado','tarifaPH'],['d10kg','Más de 10 kg','tarifa10kg'],['d18kg','Más de 18 kg','tarifa18kg']];
+  var anillo=function(v,size,col){var r=size/2-5,c=2*Math.PI*r;return h('svg',{width:size,height:size,viewBox:'0 0 '+size+' '+size,style:{flex:'none'}},
+    h('circle',{cx:size/2,cy:size/2,r:r,fill:'none',stroke:'rgba(43,46,32,.1)',strokeWidth:6}),
+    h('circle',{cx:size/2,cy:size/2,r:r,fill:'none',stroke:col,strokeWidth:6,strokeLinecap:'round',strokeDasharray:c,strokeDashoffset:c*(1-Math.max(0,Math.min(1,v))),transform:'rotate(-90 '+size/2+' '+size/2+')'}),
+    h('text',{x:'50%',y:'54%',textAnchor:'middle',fontSize:size*0.24,fontWeight:800,fill:'#2b2e20',fontFamily:'DM Sans'},Math.round(v*100)+'%'));};
+  var kpi=function(l,v,c,s){return h('div',{style:{flex:'1 1 170px',padding:'14px 16px',borderRadius:16,background:'linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.03))',border:'1px solid rgba(255,255,255,.1)'}},
+    h('div',{style:{fontSize:10.5,fontWeight:800,letterSpacing:1.5,textTransform:'uppercase',color:'rgba(233,228,210,.65)'}},l),
+    h('div',{style:{fontFamily:'Bebas Neue',fontSize:32,lineHeight:1.05,color:c,textShadow:'0 0 16px '+c+'44'}},v),s?h('div',{style:{fontSize:11.5,color:'rgba(233,228,210,.7)'}},s):null);};
+  var pill=function(a,txt,on){return h('button',{type:'button',onClick:on,style:{padding:'8px 16px',borderRadius:10,border:'none',cursor:'pointer',fontWeight:800,fontSize:12.5,background:a?'linear-gradient(135deg,#e8c766,#b08a2e)':'transparent',color:a?'#1a1d13':'#e9e4d2',boxShadow:a?'0 6px 14px rgba(200,168,75,.35)':'none'}},txt);};
+  var chipO=function(v,l,st,set){var a=st===v;return h('button',{key:v,type:'button',onClick:function(){set(v);},style:{padding:'7px 13px',borderRadius:999,border:'1px solid '+(a?'#c8a84b':'var(--border)'),background:a?'rgba(200,168,75,.18)':'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}},l);};
+  var desplazar=function(n){if(tipoPeriodo==='dia'){var d=new Date(diaSel+'T12:00:00');d.setDate(d.getDate()+n);setDiaSel(fechaHoyCL(d));}else if(tipoPeriodo==='semana'){var s=new Date(semSel+'T12:00:00');s.setDate(s.getDate()+7*n);setSemSel(fechaHoyCL(s));}else if(tipoPeriodo==='mes'){var p=mesSel.split('-');var m=new Date(+p[0],+p[1]-1+n,1);setMesSel(m.getFullYear()+'-'+String(m.getMonth()+1).padStart(2,'0'));}};
+  var totalPiezasCobrar=verificacionTotales.aCobrar;
+  var sinTarifa=resumen.filter(function(r){return r.total>0&&!r.montoNeto;});
 
-  return /*#__PURE__*/React.createElement("div",{style:{padding:'0 20px 20px'}},
-    /*#__PURE__*/React.createElement("div",{className:"info-banner"},"💡 Resumen rápido de lo que se le cobraría a cada cliente en el período elegido, según sus entregas y su tarifa. Para emitir el Recibo de Cobro oficial de un cliente (con ajustes, siniestros y retiros incluidos), usa Calendario de Cobros."),
-    /*#__PURE__*/React.createElement("div",{style:{background:'#fff',border:'1px solid var(--border)',borderTop:'3px solid var(--gold)',borderRadius:10,padding:20,marginBottom:20,boxShadow:'0 2px 10px rgba(43,46,32,0.07)'}},
-      /*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}},
-        tiposPeriodo.map(function(t){return /*#__PURE__*/React.createElement("button",{key:t.val,onClick:function(){setTipoPeriodo(t.val);},style:{padding:'7px 16px',borderRadius:8,border:'1px solid '+(tipoPeriodo===t.val?'var(--gold)':'var(--border)'),background:tipoPeriodo===t.val?'rgba(200,168,75,0.12)':'#fff',color:tipoPeriodo===t.val?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer'}},t.label);})
-      ),
-      /*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end',marginBottom:4}},
-        tipoPeriodo==='dia'&&/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("label",{className:"form-label"},"Día"),/*#__PURE__*/React.createElement("input",{className:"form-input",type:"date",value:diaSel,onChange:function(e){setDiaSel(e.target.value);},style:{margin:0}})),
-        tipoPeriodo==='semana'&&/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("label",{className:"form-label"},"Cualquier día de la semana"),/*#__PURE__*/React.createElement("input",{className:"form-input",type:"date",value:semSel,onChange:function(e){setSemSel(e.target.value);},style:{margin:0}})),
-        tipoPeriodo==='mes'&&/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("label",{className:"form-label"},"Mes"),/*#__PURE__*/React.createElement("input",{className:"form-input",type:"month",value:mesSel,onChange:function(e){setMesSel(e.target.value);},style:{margin:0}})),
-        tipoPeriodo==='rango'&&/*#__PURE__*/React.createElement(React.Fragment,null,
-          /*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("label",{className:"form-label"},"Desde"),/*#__PURE__*/React.createElement("input",{className:"form-input",type:"date",value:rangoDesde,onChange:function(e){setRangoDesde(e.target.value);},style:{margin:0}})),
-          /*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("label",{className:"form-label"},"Hasta"),/*#__PURE__*/React.createElement("input",{className:"form-input",type:"date",value:rangoHasta,onChange:function(e){setRangoHasta(e.target.value);},style:{margin:0}}))
-        ),
-        /*#__PURE__*/React.createElement("div",{style:{marginLeft:'auto',display:'flex',gap:8}},
-          /*#__PURE__*/React.createElement("button",{className:'btn-futurista btn-f-ghost',onClick:exportarPDF},"📄 Exportar PDF"),
-          /*#__PURE__*/React.createElement("button",{className:'btn-futurista btn-f-ghost',onClick:exportarHTML},"📥 Exportar HTML")
-        )
-      ),
-      /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginTop:8}},"Período: ",/*#__PURE__*/React.createElement("strong",{style:{color:'var(--dark)'}},periodo.label))
-    ),
-    // Verificación de piezas Recibido vs. Retornado (ver comentario junto a 'verificacionPiezas'
-    // más arriba): Recibido por fecha de recepción, Retornado por fecha real en que quedó ese
-    // estado -- la lógica de cobro tal como la describió Luis, visible de entrada acá en vez de
-    // tener que ir a buscarla en Gestión de Envíos.
-    /*#__PURE__*/React.createElement("div",{style:{background:'#fff',border:'1px solid var(--border)',borderTop:'3px solid #3a5a40',borderRadius:10,padding:20,marginBottom:20,boxShadow:'0 2px 10px rgba(43,46,32,0.07)'}},
-      /*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,flexWrap:'wrap',gap:8}},
-        /*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1.5,color:'var(--dark)'}},"✅ Recibido vs. Retornado"),
-        /*#__PURE__*/React.createElement("button",{className:'btn-futurista btn-f-ghost',onClick:exportarVerificacionExcel},"📊 Exportar Excel")
-      ),
-      /*#__PURE__*/React.createElement("div",{style:{fontSize:12,color:'var(--text-soft)',marginBottom:14,lineHeight:1.5}},"Recibido = envíos despachados en el rango (fecha de recepción). Retornado = envíos que quedaron en estado Retorno DENTRO de este mismo rango (fecha real en que tomaron ese estado, no la de despacho). A cobrar (piezas) = Recibido − Retornado. Es un conteo de piezas para cuadrar rápido -- el monto en $ con tarifas está en la tabla de abajo, y el Recibo de Cobro oficial sigue siendo el de Calendario de Cobros."),
-      cargandoRetornos?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:16,color:'var(--text-soft)',fontSize:13}},"Calculando retornos del período..."):
-      verificacionPiezas.length===0?/*#__PURE__*/React.createElement("div",{className:"info-banner"},"No hay envíos ni retornos en este período."):
-      /*#__PURE__*/React.createElement("div",{className:"table-wrap"},/*#__PURE__*/React.createElement("table",null,
-        /*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,
-          /*#__PURE__*/React.createElement("th",null,"Cliente"),
-          /*#__PURE__*/React.createElement("th",{style:{textAlign:'center'}},"Recibido"),
-          /*#__PURE__*/React.createElement("th",{style:{textAlign:'center'}},"Retornado"),
-          /*#__PURE__*/React.createElement("th",{style:{textAlign:'center'}},"A cobrar (piezas)")
-        )),
-        /*#__PURE__*/React.createElement("tbody",null,verificacionPiezas.map(function(r){
-          return /*#__PURE__*/React.createElement("tr",{key:r.nombre},
-            /*#__PURE__*/React.createElement("td",{style:{fontWeight:700}},r.nombre),
-            /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center'}},r.recibido),
-            /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',color:r.retornado>0?'#b03030':'var(--text-soft)'}},r.retornado),
-            /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',fontWeight:700,color:'#3a5a40'}},r.aCobrar)
-          );
-        })),
-        /*#__PURE__*/React.createElement("tfoot",null,/*#__PURE__*/React.createElement("tr",{className:"totales-row"},
-          /*#__PURE__*/React.createElement("td",null,"TOTALES"),
-          /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',fontWeight:700}},verificacionTotales.recibido),
-          /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',fontWeight:700}},verificacionTotales.retornado),
-          /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',fontWeight:900,color:'#3a5a40'}},verificacionTotales.aCobrar)
-        ))
-      ))
-    ),
-    !cargando&&resumen.length>0&&/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:10,marginBottom:10,flexWrap:'wrap'}},
-      descargandoZip&&/*#__PURE__*/React.createElement("span",{style:{fontSize:11,color:'var(--text-soft)'}},"Generando "+zipProgreso+"…"),
-      /*#__PURE__*/React.createElement("button",{className:'btn-futurista btn-f-ghost',disabled:descargandoZip,onClick:descargarTodosZip,style:descargandoZip?{opacity:0.6,cursor:'wait'}:undefined},descargandoZip?"⏳ Generando...":"🗂️ Descargar todos (ZIP)")
-    ),
-    cargando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:30,color:'var(--text-soft)'}},"Cargando envíos del período..."):
-    resumen.length===0?/*#__PURE__*/React.createElement("div",{className:"info-banner"},"No hay envíos registrados en este período."):
-    /*#__PURE__*/React.createElement("div",{className:"table-wrap"},/*#__PURE__*/React.createElement("table",null,
-      /*#__PURE__*/React.createElement("thead",null,/*#__PURE__*/React.createElement("tr",null,
-        /*#__PURE__*/React.createElement("th",null,"Cliente"),
-        /*#__PURE__*/React.createElement("th",{style:{textAlign:'center'}},"Recibidos"),
-        /*#__PURE__*/React.createElement("th",{style:{textAlign:'center'}},"Entregados"),
-        /*#__PURE__*/React.createElement("th",{style:{textAlign:'center'}},"Efectividad"),
-        /*#__PURE__*/React.createElement("th",{style:{textAlign:'right'}},"Neto"),
-        /*#__PURE__*/React.createElement("th",{style:{textAlign:'right'}},"IVA"),
-        /*#__PURE__*/React.createElement("th",{style:{textAlign:'right'}},"Total a Cobrar"),
-        /*#__PURE__*/React.createElement("th",null,"Acciones")
-      )),
-      /*#__PURE__*/React.createElement("tbody",null,resumen.map(function(r){
-        return /*#__PURE__*/React.createElement("tr",{key:r.nombre},
-          /*#__PURE__*/React.createElement("td",{style:{fontWeight:700}},r.nombre),
-          /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center'}},r.total),
-          /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',color:'var(--success)',fontWeight:600}},r.entregados),
-          /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',color:colorEfectividadCobro(r.efectividad)}},r.total>0?(r.efectividad*100).toFixed(1)+'%':'—'),
-          /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'right'}},"$",Math.round(r.montoNeto).toLocaleString('es-CL')),
-          /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'right',color:'var(--text-soft)'}},"$",Math.round(r.iva).toLocaleString('es-CL')),
-          /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'right',fontWeight:700,color:'var(--gold)'}},"$",Math.round(r.montoTotal).toLocaleString('es-CL')),
-          /*#__PURE__*/React.createElement("td",null,/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:6}},
-            /*#__PURE__*/React.createElement("button",{onClick:function(){abrirDetalleCobro(r);},style:{padding:'5px 10px',borderRadius:6,border:'1px solid var(--gold)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',fontWeight:700,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}},"📋 Detalle de Cobro"),
-            /*#__PURE__*/React.createElement("button",{onClick:function(){descargarDetalleCobro(r);},style:{padding:'5px 10px',borderRadius:6,border:'1px solid var(--border)',background:'#fff',color:'var(--text-soft)',fontWeight:700,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}},"⬇ Descargar")
-          ))
-        );
-      })),
-      /*#__PURE__*/React.createElement("tfoot",null,/*#__PURE__*/React.createElement("tr",{className:"totales-row"},
-        /*#__PURE__*/React.createElement("td",null,"TOTALES"),
-        /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',fontWeight:700}},totales.total),
-        /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',fontWeight:700}},totales.entregados),
-        /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'center',fontWeight:700}},totales.total>0?((totales.entregados/totales.total)*100).toFixed(1)+'%':'—'),
-        /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'right',fontWeight:700}},"$",Math.round(totales.montoNeto).toLocaleString('es-CL')),
-        /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'right',fontWeight:700}},"$",Math.round(totales.iva).toLocaleString('es-CL')),
-        /*#__PURE__*/React.createElement("td",{className:"mono",style:{textAlign:'right',fontWeight:900,fontSize:13,color:'var(--gold)'}},"$",Math.round(totales.montoTotal).toLocaleString('es-CL')),
-        /*#__PURE__*/React.createElement("td",null)
-      ))
-    ))
-  );
+  return h('div',{style:{padding:'0 20px 24px'}},
+    // ── HERO ──
+    h('div',{style:{borderRadius:22,padding:'20px 22px',marginBottom:18,background:'radial-gradient(120% 120% at 15% 0%,#3e4430,#1a1d13 70%)',border:'1px solid rgba(200,168,75,.4)',boxShadow:'0 26px 50px -26px rgba(20,22,15,.75)'}},
+      h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:14,marginBottom:16}},
+        h('div',null,
+          h('div',{style:{fontFamily:'Bebas Neue',fontSize:32,letterSpacing:2.4,color:'#fff',lineHeight:1}},'Cobros a clientes'),
+          h('div',{style:{fontSize:13,color:'rgba(233,228,210,.78)',marginTop:5}},periodo.label+' · resumen de lo que corresponde cobrar según envíos y tarifa de cada cliente'),
+          h('div',{style:{display:'inline-flex',gap:4,padding:4,marginTop:12,borderRadius:12,background:'rgba(0,0,0,.25)',border:'1px solid rgba(255,255,255,.08)'}},tiposPeriodo.map(function(t){return h('span',{key:t.val},pill(tipoPeriodo===t.val,t.label,function(){setTipoPeriodo(t.val);}));}))),
+        h('div',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
+          tipoPeriodo!=='rango'?h('button',{type:'button',className:'btn-futurista btn-f-ghost',onClick:function(){desplazar(-1);},style:{padding:'8px 12px'}},'Anterior'):null,
+          tipoPeriodo==='dia'?h('input',{className:'form-input',type:'date',value:diaSel,onChange:function(e){setDiaSel(e.target.value);},style:{margin:0,width:155}}):null,
+          tipoPeriodo==='semana'?h('input',{className:'form-input',type:'date',value:semSel,onChange:function(e){setSemSel(e.target.value);},style:{margin:0,width:155},title:'Cualquier día de la semana'}):null,
+          tipoPeriodo==='mes'?h('input',{className:'form-input',type:'month',value:mesSel,onChange:function(e){setMesSel(e.target.value);},style:{margin:0,width:160}}):null,
+          tipoPeriodo==='rango'?h(React.Fragment,null,h('input',{className:'form-input',type:'date',value:rangoDesde,onChange:function(e){setRangoDesde(e.target.value);},style:{margin:0,width:150}}),h('span',{style:{color:'#e9e4d2'}},'a'),h('input',{className:'form-input',type:'date',value:rangoHasta,onChange:function(e){setRangoHasta(e.target.value);},style:{margin:0,width:150}})):null,
+          tipoPeriodo!=='rango'?h('button',{type:'button',className:'btn-futurista btn-f-ghost',onClick:function(){desplazar(1);},style:{padding:'8px 12px'}},'Siguiente'):null)),
+      h('div',{style:{display:'grid',gridTemplateColumns:'minmax(0,1.6fr) minmax(260px,1fr)',gap:14}},
+        h('div',{style:{display:'flex',gap:10,flexWrap:'wrap',alignContent:'flex-start'}},
+          kpi('Total a cobrar',cargando?'…':fmt(totales.montoTotal),'#7ee0ad','neto + IVA'),
+          kpi('Neto',cargando?'…':fmt(totales.montoNeto),'#ffe59a','IVA '+fmt(totales.iva)),
+          kpi('Piezas recibidas',cargando?'…':totales.total.toLocaleString('es-CL'),'#9fd3ea',totales.entregados.toLocaleString('es-CL')+' entregadas'),
+          kpi('Retornadas',cargandoRetornos?'…':verificacionTotales.retornado.toLocaleString('es-CL'),'#ff8f86','A cobrar: '+totalPiezasCobrar.toLocaleString('es-CL')+' piezas'),
+          kpi('Efectividad',totales.total?pctF(totales.entregados/totales.total):'—',totales.total&&totales.entregados/totales.total>=0.97?'#7ee0ad':'#ffe59a','entregadas / recibidas'),
+          kpi('Clientes',resumen.length,'#c9b7ff',sinTarifa.length?(sinTarifa.length+' sin tarifa cargada'):'todos con tarifa')),
+        h('div',{style:{padding:'12px 14px',borderRadius:16,background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.1)'}},
+          h('div',{style:{fontSize:10.5,fontWeight:800,letterSpacing:1.5,textTransform:'uppercase',color:'rgba(233,228,210,.65)',marginBottom:8}},'Participación en el cobro'),
+          top.map(function(r,i){var w=totales.montoTotal?r.montoTotal/totales.montoTotal:0;return h('div',{key:r.nombre,style:{marginBottom:7}},
+            h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:11.5,color:'#efe9d6',marginBottom:3}},h('span',{style:{fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},tit(r.nombre)),h('span',{style:{fontFamily:'JetBrains Mono'}},pctF(w))),
+            h('div',{style:{height:8,borderRadius:6,background:'rgba(255,255,255,.08)',overflow:'hidden'}},h('div',{className:'dx-rise',style:{height:'100%',width:(w*100)+'%',borderRadius:6,transformOrigin:'left',background:i===0?'linear-gradient(90deg,#7ee0ad,#2e9d62)':'linear-gradient(90deg,#f0d27a,#b08a2e)',boxShadow:'0 0 10px rgba(232,199,102,.35)'}})));}),
+          !top.length?h('div',{style:{fontSize:12,color:'rgba(233,228,210,.6)'}},'Sin datos en el período.'):null))),
+    // ── barra de herramientas ──
+    h('div',{style:{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',marginBottom:16}},
+      h('input',{className:'form-input',placeholder:'Buscar cliente',value:q,onChange:function(e){setQ(e.target.value);},style:{margin:0,maxWidth:260}}),
+      chipO('monto','Mayor cobro',orden,setOrden),chipO('envios','Más envíos',orden,setOrden),chipO('efectividad','Efectividad',orden,setOrden),chipO('nombre','Nombre',orden,setOrden),
+      h('div',{style:{display:'inline-flex',gap:2,padding:3,borderRadius:10,background:'rgba(43,46,32,.07)'}},[['tarjetas','Tarjetas'],['tabla','Tabla']].map(function(o){var a=vistaC===o[0];return h('button',{key:o[0],type:'button',onClick:function(){setVistaC(o[0]);},style:{padding:'6px 12px',borderRadius:8,border:'none',cursor:'pointer',fontWeight:800,fontSize:12,background:a?'#fff':'transparent',boxShadow:a?'0 2px 6px rgba(0,0,0,.1)':'none'}},o[1]);})),
+      h('div',{style:{flex:1}}),
+      descargandoZip?h('span',{style:{fontSize:11.5,color:'var(--text-soft)'}},'Generando '+zipProgreso+'…'):null,
+      h('button',{type:'button',className:'btn-futurista btn-f-ghost',onClick:exportarPDF,style:{padding:'8px 14px'}},'Exportar PDF'),
+      h('button',{type:'button',className:'btn-futurista btn-f-ghost',onClick:exportarHTML,style:{padding:'8px 14px'}},'Exportar HTML'),
+      h('button',{type:'button',className:'btn-futurista btn-f-gold',disabled:descargandoZip||!resumen.length,onClick:descargarTodosZip,style:{padding:'8px 14px'}},descargandoZip?'Generando...':'Descargar todos (ZIP)')),
+    h('div',{style:{fontSize:12,color:'var(--text-soft)',marginBottom:14}},'El Recibo de Cobro oficial (con ajustes, siniestros y retiros) se emite desde Calendario de Cobros; "Detalle de cobro" usa el mismo cálculo.'),
+    // ── clientes ──
+    cargando?h('div',{className:'info-banner'},'Cargando envíos del período...'):
+    !lista.length?h('div',{className:'info-banner'},resumen.length?'Ningún cliente coincide con la búsqueda.':'No hay envíos registrados en este período.'):
+    vistaC==='tarjetas'?h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(min(100%,380px),1fr))',gap:16,marginBottom:22}},
+      lista.map(function(r,idx){var cd=cliPor[r.nombre]||{};var v=retPor[r.nombre]||{retornado:0,aCobrar:r.total};var rank=resumen.indexOf(r)+1;
+        var tipos=TIPOS.filter(function(t){return r.grupos[t[0]];});var secs=Object.keys(r.gruposSeccion||{});var tsc=tarifasSeccionPorCliente[r.nombre]||{};
+        return h('div',{key:r.nombre,style:{position:'relative',display:'flex',flexDirection:'column',padding:'16px 16px 14px',borderRadius:20,background:'radial-gradient(130% 90% at 0% 0%,#ffffff,#fbf6ea 60%,#f2e8cf)',border:'1px solid rgba(200,168,75,.35)',borderTop:'1px solid #fff',boxShadow:'0 1px 0 #fff inset,0 -4px 0 '+(r.montoNeto?'#c8a84b':'#b03030')+' inset,0 24px 40px -26px rgba(43,46,32,.45),0 5px 12px rgba(43,46,32,.06)'}},
+          h('div',{style:{display:'flex',alignItems:'center',gap:12,marginBottom:12}},
+            h('div',{style:{width:44,height:44,borderRadius:12,flex:'none',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Bebas Neue',fontSize:20,color:'#2b2e20',background:rank<=3?'radial-gradient(circle at 32% 28%,#fff6cf,#f0cd62 40%,#b8902e 85%)':'linear-gradient(160deg,#fff,#ece4cc)',boxShadow:'0 6px 12px rgba(168,132,46,.25),inset 0 -3px 6px rgba(0,0,0,.12),inset 0 3px 6px rgba(255,255,255,.7)'}},'#'+rank),
+            h('div',{style:{flex:1,minWidth:0}},h('div',{style:{fontWeight:800,fontSize:15.5,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},r.nombre),
+              h('div',{style:{fontSize:11.5,color:'var(--text-soft)'}},(cd.pagaIVA?'Paga IVA':'Sin IVA')+' · tarifa '+fmt(cd.tarifa||0))),
+            anillo(r.efectividad,52,colEf(r.efectividad))),
+          h('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,marginBottom:10}},
+            [['Recibidas',r.total,'var(--dark)'],['Entregadas',r.entregados,'#2e7d4f'],['Retornadas',v.retornado,v.retornado?'#b03030':'var(--text-soft)'],['A cobrar',v.aCobrar,'#a0842a']].map(function(x){return h('div',{key:x[0],style:{padding:'8px 6px',borderRadius:10,background:'#fff',border:'1px solid rgba(200,168,75,.22)',textAlign:'center'}},
+              h('div',{style:{fontSize:9.5,fontWeight:800,letterSpacing:1,textTransform:'uppercase',color:'var(--text-soft)'}},x[0]),h('div',{style:{fontFamily:'Bebas Neue',fontSize:22,color:x[2],lineHeight:1.1}},(+x[1]||0).toLocaleString('es-CL')));})),
+          (tipos.length||secs.length)?h('div',{style:{marginBottom:10}},
+            h('div',{style:{fontSize:10,fontWeight:800,letterSpacing:1.3,textTransform:'uppercase',color:'var(--text-soft)',marginBottom:5}},'Detalle facturable'),
+            tipos.map(function(t){var n=r.grupos[t[0]];var tar=t[0]==='colina'?(cd.tarifaColina||cd.tarifa||0):t[0]==='ph'?(cd.tarifaPH||cd.tarifa||0):(cd[t[2]]||0);return h('div',{key:t[0],style:{display:'flex',justifyContent:'space-between',gap:8,fontSize:12.5,padding:'4px 0',borderBottom:'1px dashed rgba(200,168,75,.22)'}},
+              h('span',null,t[1],h('span',{style:{color:'var(--text-soft)',marginLeft:6}},n+' × '+fmt(tar))),h('b',{className:'mono',style:{color:tar?'var(--dark)':'#b03030'}},tar?fmt(n*tar):'sin tarifa'));}),
+            secs.map(function(s){var n=r.gruposSeccion[s];return h('div',{key:s,style:{display:'flex',justifyContent:'space-between',gap:8,fontSize:12.5,padding:'4px 0',borderBottom:'1px dashed rgba(200,168,75,.22)'}},h('span',null,'Sección '+s,h('span',{style:{color:'var(--text-soft)',marginLeft:6}},n+' × '+fmt(tsc[s]||0))),h('b',{className:'mono'},fmt(n*(tsc[s]||0))));})):null,
+          h('div',{style:{flex:1}}),
+          h('div',{style:{borderRadius:14,padding:'10px 14px',background:'linear-gradient(160deg,#2f3325,#1c1f15)',color:'#f3ecd6',marginBottom:10}},
+            h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12.5,opacity:.9}},h('span',null,'Neto'),h('b',{className:'mono'},fmt(r.montoNeto))),
+            h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12.5,opacity:.9}},h('span',null,'IVA'),h('b',{className:'mono'},fmt(r.iva))),
+            h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:6,paddingTop:6,borderTop:'1px solid rgba(232,199,102,.35)'}},
+              h('span',{style:{fontSize:11,fontWeight:800,letterSpacing:1.5,textTransform:'uppercase',color:'#e8c766'}},'Total a cobrar'),
+              h('span',{style:{fontFamily:'Bebas Neue',fontSize:30,lineHeight:1,color:'#7ee0ad'}},fmt(r.montoTotal))),
+            h('div',{style:{height:5,borderRadius:4,background:'rgba(255,255,255,.1)',marginTop:6,overflow:'hidden'}},h('div',{style:{height:'100%',width:(r.montoTotal/maxMonto*100)+'%',background:'linear-gradient(90deg,#f0d27a,#c8a84b)'}}))),
+          h('div',{style:{display:'flex',gap:8}},
+            h('button',{type:'button',className:'btn-futurista btn-f-gold',onClick:function(){abrirDetalleCobro(r);},style:{flex:1,padding:'9px 12px'}},'Detalle de cobro'),
+            h('button',{type:'button',className:'btn-futurista btn-f-ghost',onClick:function(){descargarDetalleCobro(r);},style:{padding:'9px 12px'}},'Descargar')));
+      })):
+    h('div',{className:'table-wrap',style:{marginBottom:22}},h('table',null,
+      h('thead',null,h('tr',null,['#','Cliente','Recibidas','Entregadas','Retornadas','A cobrar','Efectividad','Neto','IVA','Total a cobrar',''].map(function(c,i){return h('th',{key:i,style:i>1&&i<10?{textAlign:'right'}:null},c);}))),
+      h('tbody',null,lista.map(function(r){var v=retPor[r.nombre]||{retornado:0,aCobrar:r.total};return h('tr',{key:r.nombre},
+        h('td',{className:'mono'},resumen.indexOf(r)+1),h('td',{style:{fontWeight:700}},r.nombre),
+        h('td',{className:'mono',style:{textAlign:'right'}},r.total),h('td',{className:'mono',style:{textAlign:'right',color:'#2e7d4f'}},r.entregados),
+        h('td',{className:'mono',style:{textAlign:'right',color:v.retornado?'#b03030':'var(--text-soft)'}},v.retornado),h('td',{className:'mono',style:{textAlign:'right',fontWeight:700}},v.aCobrar),
+        h('td',{className:'mono',style:{textAlign:'right',color:colEf(r.efectividad)}},pctF(r.efectividad)),
+        h('td',{className:'mono',style:{textAlign:'right'}},fmt(r.montoNeto)),h('td',{className:'mono',style:{textAlign:'right',color:'var(--text-soft)'}},fmt(r.iva)),
+        h('td',{className:'mono',style:{textAlign:'right',fontWeight:800,color:'#a0842a'}},fmt(r.montoTotal)),
+        h('td',null,h('div',{style:{display:'flex',gap:6}},h('button',{type:'button',className:'btn-futurista btn-f-gold',onClick:function(){abrirDetalleCobro(r);},style:{padding:'5px 10px',fontSize:11}},'Detalle'),h('button',{type:'button',className:'btn-futurista btn-f-ghost',onClick:function(){descargarDetalleCobro(r);},style:{padding:'5px 10px',fontSize:11}},'Descargar'))));}),
+        h('tr',{style:{background:'var(--dark)'}},h('td',null),h('td',{style:{color:'#ffe59a',fontWeight:800}},'TOTALES'),
+          h('td',{className:'mono',style:{textAlign:'right',color:'#fff'}},totales.total),h('td',{className:'mono',style:{textAlign:'right',color:'#fff'}},totales.entregados),
+          h('td',{className:'mono',style:{textAlign:'right',color:'#fff'}},verificacionTotales.retornado),h('td',{className:'mono',style:{textAlign:'right',color:'#fff'}},verificacionTotales.aCobrar),
+          h('td',{className:'mono',style:{textAlign:'right',color:'#fff'}},totales.total?pctF(totales.entregados/totales.total):'—'),
+          h('td',{className:'mono',style:{textAlign:'right',color:'#fff'}},fmt(totales.montoNeto)),h('td',{className:'mono',style:{textAlign:'right',color:'#fff'}},fmt(totales.iva)),
+          h('td',{className:'mono',style:{textAlign:'right',color:'#7ee0ad',fontWeight:800}},fmt(totales.montoTotal)),h('td',null))))),
+    // ── Recibido vs retornado ──
+    h('div',{style:{borderRadius:20,padding:'16px 18px',background:'radial-gradient(130% 90% at 0% 0%,#ffffff,#fbf6ea 60%,#f2e8cf)',border:'1px solid rgba(200,168,75,.35)',boxShadow:'0 22px 40px -26px rgba(43,46,32,.4)'}},
+      h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10}},
+        h('div',null,h('div',{style:{fontFamily:'Bebas Neue',fontSize:22,letterSpacing:2,color:'var(--dark)'}},'Recibido vs. retornado'),
+          h('div',{style:{fontSize:12,color:'var(--text-soft)',maxWidth:820,lineHeight:1.45}},'Recibido = despachados en el período (fecha de recepción). Retornado = quedaron en Retorno dentro del período (fecha real del estado). A cobrar = recibido − retornado; es un conteo de piezas para cuadrar rápido.')),
+        h('div',{style:{display:'flex',gap:8}},
+          h('button',{type:'button',className:'btn-futurista btn-f-ghost',onClick:function(){setVerVerif(!verVerif);},style:{padding:'8px 14px'}},verVerif?'Ocultar detalle':'Ver detalle'),
+          h('button',{type:'button',className:'btn-futurista btn-f-ghost',onClick:exportarVerificacionExcel,style:{padding:'8px 14px'}},'Exportar Excel'))),
+      h('div',{style:{display:'flex',gap:10,flexWrap:'wrap',marginTop:12}},
+        [['Recibido',verificacionTotales.recibido,'#1565c0'],['Retornado',verificacionTotales.retornado,'#b03030'],['A cobrar',verificacionTotales.aCobrar,'#2e7d4f']].map(function(x){return h('div',{key:x[0],style:{flex:'1 1 160px',padding:'10px 14px',borderRadius:14,background:'#fff',border:'1px solid rgba(200,168,75,.3)',borderBottom:'4px solid '+x[2]}},
+          h('div',{style:{fontSize:10.5,fontWeight:800,letterSpacing:1.3,textTransform:'uppercase',color:'var(--text-soft)'}},x[0]),h('div',{style:{fontFamily:'Bebas Neue',fontSize:30,color:x[2]}},cargandoRetornos&&x[0]!=='Recibido'?'…':(+x[1]).toLocaleString('es-CL')));})),
+      verVerif?(cargandoRetornos?h('div',{className:'info-banner',style:{marginTop:12}},'Calculando retornos del período...'):
+        h('div',{className:'table-wrap',style:{marginTop:12}},h('table',null,
+          h('thead',null,h('tr',null,h('th',null,'Cliente'),h('th',{style:{textAlign:'right'}},'Recibido'),h('th',{style:{textAlign:'right'}},'Retornado'),h('th',{style:{textAlign:'right'}},'A cobrar (piezas)'))),
+          h('tbody',null,verificacionPiezas.map(function(r){return h('tr',{key:r.nombre},h('td',{style:{fontWeight:700}},r.nombre),h('td',{className:'mono',style:{textAlign:'right'}},r.recibido),h('td',{className:'mono',style:{textAlign:'right',color:r.retornado?'#b03030':'var(--text-soft)'}},r.retornado),h('td',{className:'mono',style:{textAlign:'right',fontWeight:700,color:'#2e7d4f'}},r.aCobrar));}))))):null));
 }
 
 // 12-10-2026: pestaña "Tarifas de Pago" -- ÚNICA fuente de tarifas de pago a mensajeros, armada
