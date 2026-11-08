@@ -663,7 +663,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1794171923;
+window.__MODULES_VERSION=1794172754;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -14798,7 +14798,7 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
     active:tab==='pagos'||tab==='calendario-cobros'||tab==='cierre',
     actual:tab==='pagos'?'pagos|'+(subSec.pagos||''):tab,
     items:[
-      ...(puedeVerSub('pagos','pagos')?[{id:'pagos|semanal',label:'Pago Semanal'}]:[]),
+      ...((puedeVerSub('pagos','pagos')||puedeVerSub('pagos','retiros')||puedeVerSub('pagos','consumo')||puedeVer('siniestros'))?[{id:'pagos|semanal',label:'Pago Semanal'}]:[]),
       ...(puedeVer('siniestros')?[{id:'pagos|siniestros',label:'Siniestros'}]:[]),
       ...(puedeVerSub('pagos','pagos')?[{id:'pagos|pagos',label:'Pagos'}]:[]),
       ...(puedeVerSub('pagos','tarifas')?[{id:'pagos|tarifas',label:'Tarifas de Pago'}]:[]),

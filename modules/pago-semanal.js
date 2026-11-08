@@ -64,7 +64,9 @@ function SiniestrosEmbebido(props){
 }
 function Vistas(props){
   var v=props.vista,ops=[];
-  if(props.puedePagos!==false){ops.push(['resumen','Resumen']);ops.push(['pagos','Tarjetas de pago']);ops.push(['retiros','Retiros']);ops.push(['consumo','Consumo del local']);}
+  if(props.puedePagos!==false){ops.push(['resumen','Resumen']);ops.push(['pagos','Tarjetas de pago']);}
+  if(props.puedeRetiros!==false)ops.push(['retiros','Retiros']);
+  if(props.puedeConsumo!==false)ops.push(['consumo','Consumo del local']);
   if(props.puedeSiniestros!==false)ops.push(['siniestros','Siniestros']);
   if(ops.length<2)return null;
   return h('div',{style:{display:'flex',flexWrap:'wrap',gap:4,padding:4,marginBottom:16,borderRadius:14,background:'linear-gradient(180deg,#2f3325,#1c1f15)',boxShadow:'0 10px 20px -12px rgba(20,22,15,.6)',width:'fit-content',maxWidth:'100%'}},
@@ -87,11 +89,13 @@ function ExtraLazy(props){
   return h(window.__pagoSemanalExtra[props.comp],props);
 }
 function PagoSemanalRaiz(props){
-  var _v=R.useState(props.vista==='siniestros'?'siniestros':(props.puedePagos===false?'siniestros':'pagos')),vista=_v[0],setVista=_v[1];
+  var primera=props.puedePagos!==false?'pagos':props.puedeRetiros!==false?'retiros':props.puedeConsumo!==false?'consumo':'siniestros';
+  var _v=R.useState(props.vista==='siniestros'?'siniestros':primera),vista=_v[0],setVista=_v[1];
   var _l=R.useState(lunesDe(fechaHoyCL())),lunes=_l[0],setLunes=_l[1];
-  R.useEffect(function(){if(props.vista==='siniestros')setVista('siniestros');else if(props.vista&&vista==='siniestros')setVista('pagos');},[props.vista]);
+  R.useEffect(function(){if(props.vista==='siniestros')setVista('siniestros');else if(props.vista&&vista==='siniestros')setVista(primera);},[props.vista]);
   function cambiar(v){setVista(v);props.onVista&&props.onVista(v);}
-  if(props.puedePagos===false)vista='siniestros';
+  var permitido={resumen:props.puedePagos!==false,pagos:props.puedePagos!==false,retiros:props.puedeRetiros!==false,consumo:props.puedeConsumo!==false,siniestros:props.puedeSiniestros!==false};
+  if(!permitido[vista])vista=primera;
   var sem=infoSemana(lunes);
   var cuerpo;
   if(vista==='siniestros')cuerpo=h(SiniestrosEmbebido,props);
@@ -99,7 +103,7 @@ function PagoSemanalRaiz(props){
   else if(vista==='retiros')cuerpo=h('div',{style:{padding:'0 20px 24px'}},h(ExtraLazy,Object.assign({},props,{comp:'Retiros',sem:sem})));
   else cuerpo=h('div',{style:{padding:'0 20px 24px'}},h(BarraSemana,{lunes:lunes,setLunes:setLunes}),h(ExtraLazy,Object.assign({},props,{comp:vista==='resumen'?'Resumen':'Consumo',sem:sem,key:vista+sem.desde})));
   return h('div',null,
-    h('div',{style:{padding:'0 20px'}},h(Vistas,{vista:vista,onVista:cambiar,puedePagos:props.puedePagos,puedeSiniestros:props.puedeSiniestros})),
+    h('div',{style:{padding:'0 20px'}},h(Vistas,{vista:vista,onVista:cambiar,puedePagos:props.puedePagos,puedeRetiros:props.puedeRetiros,puedeConsumo:props.puedeConsumo,puedeSiniestros:props.puedeSiniestros})),
     cuerpo);
 }
 function PagoSemanal(props){
