@@ -36,7 +36,7 @@ async function nucleo() {
       const m = src.match(/\/\*<NUCLEO_INFORME>\*\/([\s\S]*?)\/\*<\/NUCLEO_INFORME>\*\//);
       if (!m) throw new Error("No se encontró el bloque NUCLEO_INFORME en " + url);
       const fabrica = new Function("LOGO_B64", "HORAS_CORTE", "fechaHoyCL",
-        m[1] + "\nreturn {agregarDias:agregarDias,calcularAlertas:calcularAlertas,htmlInformeCierre:htmlInformeCierre,barraAccionesHTML:barraAccionesHTML,pct:pct,listaDias:listaDias,sumarDias:sumarDias,ymd:ymd,lunesDe:lunesDe,parseYMD:parseYMD,fmtDMY:fmtDMY,fmtDiaLargo:fmtDiaLargo,MESES:MESES};");
+        m[1] + "\nreturn {agregarDias:agregarDias,calcularAlertas:calcularAlertas,htmlInformeCierre:htmlInformeCierre,barraAccionesHTML:barraAccionesHTML,pct:pct,listaDias:listaDias,sumarDias:sumarDias,ymd:ymd,lunesDe:lunesDe,parseYMD:parseYMD,fmtDMY:fmtDMY,fmtDiaLargo:fmtDiaLargo,MESES:MESES,nombreArchivoInforme:(typeof nombreArchivoInforme==='function'?nombreArchivoInforme:null)};");
       // En un correo las imágenes en base64 se bloquean: el logo va como URL pública.
       NUC = fabrica("https://sistema.transpgso.cl/logo.jpg", [19, 20, 21, 22, 23], fechaHoyCL);
       NUC_TS = Date.now();
@@ -100,10 +100,12 @@ async function construirInforme(N, per) {
   const c = await admin.from("configuracion").select("valor").eq("clave", "informe_cierre_alertas").maybeSingle();
   const alertas = N.calcularAlertas(res, t, prevT, (c.data && c.data.valor) || {});
   const periodo = { desde: per.desde, hasta: per.hasta, label: per.label };
+  let extra = null;
+  try { const rx = await admin.rpc("informe_cierre_extra", { p_desde: per.desde, p_hasta: per.hasta }); if (!rx.error) extra = rx.data; } catch (_e) {}
   // Adjunto = informe completo (igual al del panel). Cuerpo del correo = versión compacta
   // (Gmail recorta los mensajes de más de ~100 KB).
-  const html = N.htmlInformeCierre(res, t, n.data || [], periodo, "Envío automático", alertas).replace(N.barraAccionesHTML(), "");
-  const cuerpo = N.htmlInformeCierre(res, t, n.data || [], periodo, "Envío automático", alertas, { compacto: true }).replace("position:sticky;top:0;z-index:100;", "");
+  const html = N.htmlInformeCierre(res, t, n.data || [], periodo, "Envío automático", alertas, { extra });
+  const cuerpo = N.htmlInformeCierre(res, t, n.data || [], periodo, "Envío automático", alertas, { compacto: true, extra }).replace("position:sticky;top:0;z-index:100;", "");
   const reales = alertas.filter((a) => a.nivel !== "info").length;
   return { html, cuerpo, t, reales };
 }
@@ -114,7 +116,7 @@ async function enviarCorreo(N, row, per, manual) {
   if (!RESEND) throw new Error("Falta configurar RESEND_API_KEY en Supabase.");
   const inf = await construirInforme(N, per);
   const asunto = "Informe de cierre · " + per.label + " · entrega " + N.pct(inf.t.ent, inf.t.salida) + (inf.reales ? " · " + inf.reales + " alerta" + (inf.reales > 1 ? "s" : "") : "");
-  const nombreArchivo = "Informe_Cierre_" + per.desde + (per.hasta !== per.desde ? "_" + per.hasta : "") + ".html";
+  const nombreArchivo = (N.nombreArchivoInforme ? N.nombreArchivoInforme("DE CIERRE", per.desde, per.hasta) : ("INFORME DE CIERRE " + per.desde + (per.hasta !== per.desde ? " AL " + per.hasta : ""))) + ".html";
   const bytes = new TextEncoder().encode(inf.html);
   let bin = ""; for (let k = 0; k < bytes.length; k += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(k, k + 8192));
   const r = await fetch("https://api.resend.com/emails", {

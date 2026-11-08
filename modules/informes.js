@@ -312,10 +312,76 @@ function svgTendenciaHTML(dias){
   pts.forEach(function(x,i){if(x.v!=null)o+='<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(x.v).toFixed(1)+'" r="3.8" fill="#fff" stroke="#A0842A" stroke-width="2"/>';});
   return '<div style="font-size:11px;color:#888;margin-bottom:6px">Línea dorada: % de entrega final de cada día · barras celestes: salida a ruta.</div><svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block">'+o+'</svg>';
 }
+// ── Secciones adicionales del cierre (08-11-2026): indicadores operacionales, incidencias de
+// operadores (resumen) y carga por comuna. Datos de la función SQL public.informe_cierre_extra.
+function ritmoFranjas(t,dias){
+  var multi=dias.length>1,out=[],prev=0;
+  HORAS_CORTE.forEach(function(hh,i){var pas=multi||cortePasado(dias[0].dia,hh);if(!pas)return;var v=t.cortes[i]||0;out.push({franja:(i===0?'Hasta las ':hh-1+':00 a ')+hh+':00',n:v-prev,acum:v});prev=v;});
+  if(!t.diaEnCurso)out.push({franja:'Después de las 23:00',n:Math.max(0,t.ent-prev),acum:t.ent});
+  return out;
+}
+function esFernando(n){return /^FERNANDO/i.test(String(n||''))&&!/CHECK/i.test(String(n||''));}
+function indicadoresOperacionHTML(t,dias,extra){
+  var nm=t.mensajeros.length||0,est=(extra&&extra.estados)||{};
+  var prom=function(a){return nm?(a/nm).toFixed(1).replace('.',','):'—';};
+  var cajas=[
+    infoBoxHTML('Mensajeros en ruta',String(nm),true),
+    infoBoxHTML('Piezas promedio por mensajero',prom(t.salida),true),
+    infoBoxHTML('Entregas promedio por mensajero',prom(t.ent),true),
+    infoBoxHTML('Carga del día que salió el mismo día',pct(t.salidaDia,t.llegada),true),
+    infoBoxHTML('Salida que venía de días anteriores',pct(t.salidaAnt,t.salida)+' ('+fmtN(t.salidaAnt)+')'),
+    infoBoxHTML('Reprogramados sobre salida',pct(t.rep,t.salida)+' ('+fmtN(t.rep)+')'),
+    infoBoxHTML('Cancelados sobre salida',pct(t.can,t.salida)+' ('+fmtN(t.can)+')'),
+    infoBoxHTML('Llegó y no salió a ruta',fmtN(t.noSalio)+' ('+pct(t.noSalio,t.llegada)+')'),
+    infoBoxHTML('Mensajeros activos sin salir',String(t.sinSalida.length)),
+    infoBoxHTML('Entregas marcadas por operador',fmtN(t.cal.panel)+' ('+pct(t.cal.panel,t.cal.ent)+')')
+  ];
+  if(extra&&extra.siniestros&&extra.siniestros.total)cajas.push(infoBoxHTML('Siniestros registrados',fmtN(extra.siniestros.total)+(extra.siniestros.por_mensajero&&extra.siniestros.por_mensajero.length?' · '+extra.siniestros.por_mensajero.slice(0,3).map(function(x){return x.mensajero+' '+x.n;}).join(', '):'')));
+  if(extra&&extra.retiros&&extra.retiros.registros)cajas.push(infoBoxHTML('Retiros',fmtN(extra.retiros.registros)+' retiros · '+fmtN(extra.retiros.piezas)+' piezas'));
+  if(extra&&extra.colectas&&extra.colectas.registros)cajas.push(infoBoxHTML('Colectas',fmtN(extra.colectas.registros)+' de '+fmtN(extra.colectas.clientes)+' clientes'));
+  var fr=ritmoFranjas(t,dias);
+  var ritmo=fr.length?'<div style="height:12px"></div><div style="font-size:11px;font-weight:700;color:#A0842A;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Ritmo de entrega por franja horaria</div>'
+    +tablaHTML([{key:'franja',label:'Franja'},{key:'n',label:'Entregas en la franja',num:true},{key:'acum',label:'Acumulado',num:true},{key:'p',label:'% de la salida',num:true}],fr.map(function(x){return{franja:x.franja,n:fmtN(x.n),acum:fmtN(x.acum),p:pct(x.acum,t.salida)};}),null,true):'';
+  var estados=Object.keys(est).length?'<div style="height:12px"></div><div style="font-size:11px;font-weight:700;color:#A0842A;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Estado actual de la carga recibida en el período</div>'
+    +gridHTML(130,['entregado','en_ruta','en_bodega','reprogramado','cancelado','siniestro','retorno','en_bodega_cancelado','en_bodega_fecha'].filter(function(k){return est[k];}).map(function(k){var tot=Object.keys(est).reduce(function(a,x){return a+(+est[x]||0);},0);return infoBoxHTML(nombreEstado(k),fmtN(est[k])+' ('+pct(est[k],tot)+')');})):'';
+  return tarjetaHTML('Indicadores de la operación',gridHTML(170,cajas)+ritmo+estados);
+}
+function incidenciasHTML(extra,compacto){
+  var I=extra&&extra.incidencias;if(!I)return '';
+  if(!I.total)return tarjetaHTML('Incidencias reportadas por operadores','<div style="font-size:12px;color:#2E7D32;font-weight:700">Sin incidencias reportadas por los operadores en el período.</div>');
+  var pend=I.total-I.resueltas;
+  var resFer=+I.resueltas_fernando||0;
+  var head=gridHTML(150,[infoBoxHTML('Reportadas',fmtN(I.total),true),infoBoxHTML('Piezas distintas',fmtN(I.codigos),true),infoBoxHTML('Resueltas',fmtN(I.resueltas)+' ('+pct(I.resueltas,I.total)+')',true),
+    infoBoxHTML('Resueltas por Fernando',pct(resFer,I.total)+' ('+fmtN(resFer)+' de '+fmtN(I.total)+')',true),infoBoxHTML('Pendientes de revisión',fmtN(pend),true)]);
+  var oper=(I.por_operador||[]).map(function(x){return x.nombre+': '+fmtN(x.n);}).join(' · ');
+  var men=(I.por_mensajero||[]).slice(0,compacto?5:12);
+  var filas=men.map(function(m){
+    var mot=(m.motivos||[]).map(function(x){return x.motivo+(x.n>1?' ('+x.n+')':'');}).join('; ');
+    var sol=(m.soluciones||[]).map(function(x){return x.resolucion+(x.n>1?' ('+x.n+')':'');}).join('; ');
+    return{mensajero:m.mensajero,n:fmtN(m.n),pq:mot,res:fmtN(m.resueltas)+' de '+fmtN(m.n),sol:sol||(m.resueltas?'Resuelta sin detalle':'Sin solución registrada')};});
+  var cols=[{key:'mensajero',label:'Mensajero'},{key:'n',label:'Reportes',num:true},{key:'pq',label:'Por qué'},{key:'res',label:'Resueltas',num:true},{key:'sol',label:'Solución dada'}];
+  var mot=(I.por_motivo||[]).map(function(x){return{motivo:x.motivo,n:fmtN(x.n),p:pct(x.n,I.total),r:fmtN(x.resueltas)};});
+  return tarjetaHTML('Incidencias reportadas por operadores (resumen)',
+    head
+    +'<div style="font-size:11px;color:#888;margin:8px 0 10px">Reportadas por: '+escHTML(oper)+'. La revisión y solución de cada incidencia corresponde a Fernando Zúñiga (Jefe de Operaciones).</div>'
+    +'<div style="font-size:11px;font-weight:700;color:#A0842A;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Mensajeros más reportados</div>'
+    +tablaHTML(cols,filas,null,true)
+    +((I.por_mensajero||[]).length>men.length?'<div style="font-size:11px;color:#888;margin-top:6px">'+fmtN(I.por_mensajero.length-men.length)+' mensajero(s) más con menos reportes.</div>':'')
+    +(compacto?'':'<div style="height:12px"></div><div style="font-size:11px;font-weight:700;color:#A0842A;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Motivos</div>'
+      +tablaHTML([{key:'motivo',label:'Motivo'},{key:'n',label:'Reportes',num:true},{key:'p',label:'% del total',num:true},{key:'r',label:'Resueltas',num:true}],mot,null,true)));
+}
+function comunasHTML(extra){
+  var C=(extra&&extra.comunas)||[];if(!C.length)return '';
+  var filas=C.slice(0,40).map(function(c){var base=c.total-(c.bodega_fecha||0);return{comuna:c.comuna,total:fmtN(c.total),ent:fmtN(c.entregado),p:pct(c.entregado,base),pend:c.pendiente?fmtN(c.pendiente):'—',rep:c.reprogramado?fmtN(c.reprogramado):'—',inc:(c.cancelado+c.siniestro+c.retorno+c.bodega_cancelado)?fmtN(c.cancelado+c.siniestro+c.retorno+c.bodega_cancelado):'—'};});
+  return tarjetaHTML('Carga por comuna (estado actual de lo recibido en el período)',
+    '<div style="font-size:11px;color:#888;margin-bottom:8px">% de entrega = entregados ÷ (recibidos − en bodega por fecha). "No entregados" suma cancelados, siniestros, retornos y bodega cancelado.</div>'
+    +tablaHTML([{key:'comuna',label:'Comuna'},{key:'total',label:'Recibidos',num:true},{key:'ent',label:'Entregados',num:true},{key:'p',label:'% entrega',num:true},{key:'pend',label:'Pendientes',num:true},{key:'rep',label:'Reprog.',num:true},{key:'inc',label:'No entregados',num:true}],filas,null,true)
+    +(C.length>40?'<div style="font-size:11px;color:#888;margin-top:6px">Se muestran 40 de '+C.length+' comunas.</div>':''));
+}
 // opciones.compacto = versión para el cuerpo de un correo (Gmail recorta los mensajes de más de
 // ~100 KB): deja alertas, resumen, cortes, clientes y notas; el informe completo va adjunto.
 function htmlInformeCierre(dias,t,notas,periodo,generadoPor,alertas,opciones){
-  var multi=dias.length>1;var compacto=!!(opciones&&opciones.compacto);
+  var multi=dias.length>1;var compacto=!!(opciones&&opciones.compacto);var extra=(opciones&&opciones.extra)||null;
   var F=construirFilasCierre(dias,t);
   var colsCortes=[{key:'corte',label:'Corte'},{key:'entregados',label:'Entregados acumulados',num:true},{key:'pct',label:'% sobre salida a ruta',num:true},{key:'porEntregar',label:'Sin entregar',num:true}];
   var colsCli=[{key:'cliente',label:'Cliente'},{key:'llegada',label:'Llegó',num:true},{key:'noSalio',label:'Llegó y no salió',num:true},{key:'salida',label:'Salió a ruta',num:true},{key:'ent',label:'Entregados',num:true},{key:'rep',label:'Reprog.',num:true},{key:'can',label:'Cancel.',num:true},{key:'pen',label:'Pend.',num:true},{key:'pct',label:'% entrega',num:true}];
@@ -345,6 +411,8 @@ function htmlInformeCierre(dias,t,notas,periodo,generadoPor,alertas,opciones){
       +gridHTML(150,[infoBoxHTML('Carga que llegó',fmtN(t.llegada),true),infoBoxHTML('Salió a ruta',fmtN(t.salida),true),infoBoxHTML('Entregados (final de ruta)',fmtN(t.ent),true),infoBoxHTML('% de entrega final',pct(t.ent,t.salida),true),infoBoxHTML('% operacional total',oper(t.ent,t.rep,t.can),true)])
       +'<div style="height:10px"></div>'
       +gridHTML(150,[infoBoxHTML('Salida: carga del día',fmtN(t.salidaDia)),infoBoxHTML('Salida: de días anteriores',fmtN(t.salidaAnt)),infoBoxHTML('Reprogramados',fmtN(t.rep)),infoBoxHTML('Cancelados',fmtN(t.can)),infoBoxHTML('Sin cierre (pendiente / otro)',fmtN(t.pen+t.otr)),infoBoxHTML('Entregados después de las 23:00',fmtN(t.tardias)),infoBoxHTML('Retenidas por operación (FERNANDOCHECK)',fmtN(t.retenidas)+(t.retenidas?' · '+fmtN(t.retenidasDia)+' del día · '+fmtN(t.retenidasEnt)+' entregadas después':''))]))
+    +(compacto?'':indicadoresOperacionHTML(t,dias,extra))
+    +(extra?incidenciasHTML(extra,compacto):'')
     +tarjetaHTML('Cortes horarios — avance de entrega sobre lo que salió a ruta',tablaHTML(colsCortes,F.cortes))
     +(compacto?tarjetaHTML('Carga que llegó y no salió a ruta ('+fmtN(t.noSalio)+')',t.noSalio?gridHTML(200,[infoBoxHTML('Por cliente',t.noSalioPorCliente.map(function(c){return c.cliente+': '+c.n;}).join('\n')),infoBoxHTML('Estado al cierre',t.noSalioPorEstado.map(function(c){return nombreEstado(c.estado)+': '+c.n;}).join('\n'))]):'<div style="font-size:12px;color:#2E7D32;font-weight:700">Toda la carga que llegó salió a ruta.</div>'):tarjetaHTML('Carga que llegó y no salió a ruta ('+fmtN(t.noSalio)+')',
        (t.noSalio===0?'<div style="font-size:12px;color:#2E7D32;font-weight:700">Toda la carga que llegó salió a ruta '+(multi?'el mismo día.':'ese día.')+'</div>':
@@ -353,6 +421,7 @@ function htmlInformeCierre(dias,t,notas,periodo,generadoPor,alertas,opciones){
         +tablaHTML((multi?[{key:'dia',label:'Día'}]:[]).concat([{key:'codigo',label:'Código'},{key:'cliente',label:'Cliente'},{key:'comuna',label:'Comuna'},{key:'destinatario',label:'Destinatario'},{key:'estado',label:'Estado al cierre'}]),F.noSalio.slice(0,300),null,true)
         +(F.noSalio.length>300?'<div style="font-size:11px;color:#888;margin-top:6px">Se muestran 300 de '+fmtN(F.noSalio.length)+'. La lista completa está en el Excel.</div>':''))))
     +tarjetaHTML('Carga por cliente',tablaHTML(colsCli,F.clientes,F.totCli))
+    +(compacto?'':comunasHTML(extra))
     +(compacto?tarjetaHTML('Mensajeros y calidad',gridHTML(170,[infoBoxHTML('Mensajeros en ruta',String(t.mensajeros.length),true),infoBoxHTML('No salieron (activos)',String(t.sinSalida.length),true),infoBoxHTML('Entregas con 2+ fotos',pct(t.cal.fotos2,t.cal.ent),true),infoBoxHTML('Marcadas por operador',fmtN(t.cal.panel)+' ('+pct(t.cal.panel,t.cal.ent)+')',true)])):'')
     +(compacto?'':tarjetaHTML('Mensajeros que salieron a ruta',tablaHTML(colsMen,F.mens,F.totMen,true)))
     +(compacto?'':tarjetaHTML('Calidad de entrega',
@@ -371,7 +440,7 @@ function htmlInformeCierre(dias,t,notas,periodo,generadoPor,alertas,opciones){
 }
 
 /*</NUCLEO_INFORME>*/
-function exportarCierreExcel(dias,t,notas,periodo){
+function exportarCierreExcel(dias,t,notas,periodo,extra){
   var multi=dias.length>1;
   var F=construirFilasCierre(dias,t);
   var hojas=[];
@@ -393,6 +462,10 @@ function exportarCierreExcel(dias,t,notas,periodo){
   hojas.push({name:'Sin cierre',headers:['Día','Código','Mensajero','Cliente','Estado registrado'],rows:t.sinCierreCodigos.map(function(c){return[fmtDMY(c.dia),c.codigo,c.mensajero,c.cliente,c.estado==='en_ruta'?'Sigue en ruta (sin gestión)':nombreEstado(c.estado)];})});
   hojas.push({name:'Sin 2 fotos',headers:['Día','Código','Mensajero','Cliente','Fotos'],rows:t.sinFotosCodigos.map(function(c){return[fmtDMY(c.dia),c.codigo,c.mensajero,c.cliente,c.fotos];})});
   hojas.push({name:'Sin salida',headers:['Mensajero','Días sin salir','Días del período','Entregas registradas'],rows:t.sinSalida.map(function(x){return[x.mensajero,x.dias,dias.length,x.entregas];})});
+  if(extra&&extra.incidencias&&extra.incidencias.total){var I=extra.incidencias;
+    hojas.push({name:'Incidencias',headers:['Mensajero','Reportes','Por qué','Resueltas','Solución dada'],rows:(I.por_mensajero||[]).map(function(m){return[m.mensajero,m.n,(m.motivos||[]).map(function(x){return x.motivo+' ('+x.n+')';}).join('; '),m.resueltas,(m.soluciones||[]).map(function(x){return x.resolucion+' ('+x.n+')';}).join('; ')];}),
+      totalsRow:['TOTAL',I.total,'',I.resueltas,'Resueltas por Fernando: '+(I.resueltas_fernando||0)+' ('+pct(I.resueltas_fernando||0,I.total)+')']});}
+  if(extra&&extra.comunas&&extra.comunas.length)hojas.push({name:'Comunas',headers:['Comuna','Recibidos','Entregados','% entrega','Pendientes','Reprogramados','Cancelados','Siniestros','Retornos','Bodega cancelado','Bodega por fecha'],rows:extra.comunas.map(function(c){return[c.comuna,c.total,c.entregado,pct(c.entregado,c.total-(c.bodega_fecha||0)),c.pendiente,c.reprogramado,c.cancelado,c.siniestro,c.retorno,c.bodega_cancelado,c.bodega_fecha];})});
   hojas.push({name:'Notas',headers:['Día','Autor','Hora','Nota'],rows:notas.map(function(n){return[fmtDMY(n.fecha),n.autor||'',horaCL(n.created_at),n.texto];})});
   exportToExcel(nombreArchivoInforme('DE CIERRE',periodo.desde,periodo.hasta),hojas);
 }
@@ -521,7 +594,7 @@ function TendenciaDias(p){
 }
 
 // Texto corto del cierre para pegar en WhatsApp o correo.
-function textoResumenCierre(dias,t,alertas,periodo){
+function textoResumenCierre(dias,t,alertas,periodo,extra){
   var multi=dias.length>1,L=[];
   L.push('*Informe de cierre TransPgso*');L.push(periodo.label);L.push('');
   L.push('Llegó: '+fmtN(t.llegada)+' · Salió a ruta: '+fmtN(t.salida));
@@ -531,6 +604,9 @@ function textoResumenCierre(dias,t,alertas,periodo){
   if(t.noSalio)L.push('Llegó y no salió: '+fmtN(t.noSalio));
   var cs=HORAS_CORTE.map(function(hh,i){return (multi||cortePasado(dias[0].dia,hh))?hh+'h '+pct(t.cortes[i],t.salida):null;}).filter(Boolean);
   if(cs.length)L.push('Cortes: '+cs.join(' · '));
+  var I=extra&&extra.incidencias;
+  if(I&&I.total){L.push('');L.push('*Incidencias de operadores*');L.push('Reportadas: '+fmtN(I.total)+' · Resueltas: '+fmtN(I.resueltas)+' ('+pct(I.resueltas,I.total)+') · Resueltas por Fernando: '+pct(I.resueltas_fernando||0,I.total));
+    (I.por_mensajero||[]).slice(0,5).forEach(function(m){L.push('- '+m.mensajero+': '+m.n+' ('+((m.motivos||[])[0]||{}).motivo+')');});}
   var al=(alertas||[]).filter(function(a){return a.nivel!=='info';});
   if(al.length){L.push('');L.push('*Alertas ('+al.length+')*');al.forEach(function(a){L.push('- '+a.texto);});}
   else{L.push('');L.push('Sin alertas: todo dentro de las metas.');}
@@ -575,7 +651,47 @@ function CockpitCierre(p){
         {l:'Entregas con 2+ fotos',v:pctNum(t.cal.fotos2,t.cal.ent),sub:fmtN(t.cal.fotos2)+'/'+fmtN(t.cal.ent)},
         {l:'Marcadas desde la app',v:pctNum(t.cal.ent-t.cal.panel,t.cal.ent),sub:fmtN(t.cal.panel)+' por operador'},
         {l:'Reprogramados con GPS',v:pctNum(t.cal.repGps,t.cal.rep),sub:fmtN(t.cal.repGps)+'/'+fmtN(t.cal.rep)},
-        {l:'Carga que salió a ruta',v:pctNum(t.llegada-t.noSalio,t.llegada),sub:fmtN(t.noSalio)+' no salió'}].filter(function(x){return x.v!=null;})}))));
+        {l:'Carga que salió a ruta',v:pctNum(t.llegada-t.noSalio,t.llegada),sub:fmtN(t.noSalio)+' no salió'}].filter(function(x){return x.v!=null;})}))),
+    p.datos.extra&&h(PanelIncidencias,{I:p.datos.extra.incidencias,panel:panel,t:t,dias:dias,extra:p.datos.extra}));
+}
+function PanelIncidencias(p){
+  var I=p.I||{total:0},t=p.t,panel=p.panel;
+  var men=(I.por_mensajero||[]).slice(0,8),maxN=men.length?men[0].n:1;
+  var resF=+I.resueltas_fernando||0,pF=pctNum(resF,I.total);
+  var fr=ritmoFranjas(t,p.dias),maxF=Math.max.apply(null,fr.map(function(x){return x.n;}).concat([1]));
+  var nm=t.mensajeros.length||0;
+  return h('div',{style:{display:'grid',gridTemplateColumns:'minmax(0,1.6fr) minmax(0,1fr)',gap:12,marginTop:12},className:'informes-grid'},
+    panel('Incidencias reportadas por operadores',I.total?fmtN(I.total)+' reportes · '+fmtN(I.codigos)+' piezas':'sin reportes',
+      !I.total?h('div',{style:{fontSize:12,color:IX.verde,fontWeight:700}},'Sin incidencias reportadas en el período.'):
+      h('div',null,
+        h('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}},
+          ixKpi('Reportadas',fmtN(I.total),{flex:'1 1 110px'}),
+          ixKpi('Resueltas',pct(I.resueltas,I.total),{color:I.resueltas>=I.total?IX.verde:IX.ambar,sub:fmtN(I.resueltas)+' de '+fmtN(I.total),flex:'1 1 110px'}),
+          ixKpi('Resueltas por Fernando',pF==null?'—':pct(resF,I.total),{color:pF>=90?IX.verde:pF>=50?IX.ambar:IX.rojo,sub:fmtN(resF)+' de '+fmtN(I.total),flex:'1 1 150px'}),
+          ixKpi('Pendientes',fmtN(I.total-I.resueltas),{color:(I.total-I.resueltas)?IX.rojo:IX.verde,flex:'1 1 110px'})),
+        h('div',{style:{fontSize:11,color:IX.suave,marginBottom:8}},'Reportadas por: '+(I.por_operador||[]).map(function(x){return x.nombre+' '+x.n;}).join(' · ')),
+        h('div',{style:{display:'flex',flexDirection:'column',gap:8}},men.map(function(m){
+          var mot=(m.motivos||[]).map(function(x){return x.motivo+(x.n>1?' ('+x.n+')':'');}).join(' · ');
+          var sol=(m.soluciones||[]).map(function(x){return x.resolucion;}).join(' · ');
+          return h('div',{key:m.mensajero,style:{padding:'8px 10px',borderRadius:10,background:'rgba(0,0,0,.18)',border:'1px solid rgba(255,255,255,.07)'}},
+            h('div',{style:{display:'flex',justifyContent:'space-between',gap:8,alignItems:'baseline'}},
+              h('b',{style:{color:'#fff',fontSize:12.5}},m.mensajero),
+              h('span',{style:{fontSize:11.5,fontWeight:800,color:m.resueltas>=m.n?IX.verde:IX.ambar}},m.n+' reporte'+(m.n>1?'s':'')+' · '+m.resueltas+' resuelto'+(m.resueltas===1?'':'s'))),
+            h('div',{style:{height:6,borderRadius:4,background:'rgba(255,255,255,.08)',margin:'5px 0',overflow:'hidden'}},h('div',{style:{height:'100%',width:(m.n/maxN*100)+'%',background:'linear-gradient(90deg,#ff7b70,#f0b94a)',borderRadius:4}})),
+            h('div',{style:{fontSize:11,color:IX.txt}},h('span',{style:{color:IX.suave}},'Por qué: '),mot),
+            h('div',{style:{fontSize:11,color:sol?IX.verde:IX.suave,marginTop:2}},h('span',{style:{color:IX.suave}},'Solución: '),sol||(m.resueltas?'resuelta sin detalle':'sin solución registrada')));})))),
+    panel('Pulso de la operación',nm+' mensajeros en ruta',
+      h('div',null,
+        h('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}},
+          ixKpi('Piezas por mensajero',nm?(t.salida/nm).toFixed(1).replace('.',','):'—',{flex:'1 1 120px'}),
+          ixKpi('Salió el mismo día',pct(t.salidaDia,t.llegada),{color:IX.oro,flex:'1 1 120px'})),
+        fr.length>0&&h('div',null,
+          h('div',{style:{fontSize:10.5,letterSpacing:1.4,textTransform:'uppercase',color:IX.suave,fontWeight:800,marginBottom:6}},'Entregas por franja horaria'),
+          h('div',{style:{display:'flex',alignItems:'flex-end',gap:6,height:120}},fr.map(function(x){var hh=Math.max(4,x.n/maxF*100);return h('div',{key:x.franja,title:x.franja+': '+fmtN(x.n)+' entregas',style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',height:'100%'}},
+            h('div',{style:{fontSize:10,fontWeight:800,color:'#fff',marginBottom:3}},fmtN(x.n)),
+            h('div',{style:{width:'100%',height:hh+'%',borderRadius:'6px 6px 2px 2px',background:'linear-gradient(180deg,#ffe59a,#c8a84b 60%,#8a6a1c)',boxShadow:'0 0 10px rgba(232,199,102,.4)'}}),
+            h('div',{style:{fontSize:9,color:IX.suave,marginTop:4,textAlign:'center',lineHeight:1.1}},x.franja.replace('Hasta las ','≤').replace('Después de las ','>').replace(':00 a ','-').replace(':00','h')));}))),
+        p.extra.siniestros&&p.extra.siniestros.total>0&&h('div',{style:{marginTop:10,fontSize:11.5,color:IX.txt}},h('b',{style:{color:IX.rojo}},fmtN(p.extra.siniestros.total)+' siniestros'),' · '+(p.extra.siniestros.por_mensajero||[]).slice(0,3).map(function(x){return x.mensajero+' '+x.n;}).join(', ')))));
 }
 
 // ── Encabezado de la sección (navegación entre los 4 tipos de informe) ──
@@ -648,7 +764,8 @@ function InformeCierre(props){
       var lista=conPrev?dias.concat([sumarDias(dias[0],-1)]):dias;
       var res=await traerDias(lista,function(a,b){if(b>2)setAvance(a+' de '+b+' días');});
       var prev=conPrev?res.pop():null;
-      setDatos({periodo:p,dias:res,total:agregarDias(res),prevTotal:prev?agregarDias([prev]):null});
+      var ex=null;try{var rx=await db.rpc('informe_cierre_extra',{p_desde:p.desde,p_hasta:(p.hasta>hoy?hoy:p.hasta)});if(!rx.error)ex=rx.data;}catch(_e){}
+      setDatos({periodo:p,dias:res,total:agregarDias(res),prevTotal:prev?agregarDias([prev]):null,extra:ex});
       setFechaNota(dias[dias.length-1]);
       await cargarNotas(p);
     }catch(err){toast('No se pudo generar el informe: '+(err&&err.message||err));}
@@ -686,7 +803,7 @@ function InformeCierre(props){
     setCfgAlertas(v);setCfgBorrador(null);toast('Metas de alertas guardadas');
   }
   var alertas=useMemo(function(){return datos?calcularAlertas(datos.dias,datos.total,datos.prevTotal,cfgAlertas):null;},[datos,cfgAlertas]);
-  var html=useMemo(function(){return datos?htmlInformeCierre(datos.dias,datos.total,notas,datos.periodo,nombreUsuario,alertas):'';},[datos,notas,nombreUsuario,alertas]);
+  var html=useMemo(function(){return datos?htmlInformeCierre(datos.dias,datos.total,notas,datos.periodo,nombreUsuario,alertas,{extra:datos.extra}):'';},[datos,notas,nombreUsuario,alertas]);
   var diasDatos=datos?datos.dias.map(function(d){return d.dia;}):[];
 
   var chip=function(v,label){return h('button',{key:v,className:'filter-btn',onClick:function(){setModo(v);},style:modo===v?{background:'var(--gold)',color:'var(--dark-deep)',borderColor:'var(--gold)',fontWeight:700}:{background:'#fff'}},label);};
@@ -705,9 +822,9 @@ function InformeCierre(props){
   var nombreArchivo=datos?nombreArchivoInforme('DE CIERRE',datos.periodo.desde,datos.periodo.hasta):'';
   var acciones=datos&&h('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
     ixBoton('Imprimir / PDF',function(){abrirVentanaHTML(null,html);},{prim:true,chico:true}),
-    ixBoton('Excel',function(){exportarCierreExcel(datos.dias,datos.total,notas,datos.periodo);},{chico:true}),
+    ixBoton('Excel',function(){exportarCierreExcel(datos.dias,datos.total,notas,datos.periodo,datos.extra);},{chico:true}),
     ixBoton('HTML',function(){descargarHTML(nombreArchivo+'.html',html);},{chico:true}),
-    ixBoton('Copiar resumen',function(){copiarAlPortapapeles(textoResumenCierre(datos.dias,datos.total,alertas,datos.periodo),toast,'Resumen copiado: pégalo en WhatsApp o correo');},{chico:true,title:'Texto corto con los números y alertas'}));
+    ixBoton('Copiar resumen',function(){copiarAlPortapapeles(textoResumenCierre(datos.dias,datos.total,alertas,datos.periodo,datos.extra),toast,'Resumen copiado: pégalo en WhatsApp o correo');},{chico:true,title:'Texto corto con los números y alertas'}));
   return h('div',null,
     h('div',{className:'panel',style:{marginBottom:14}},
       h('div',{style:{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginBottom:12}},
