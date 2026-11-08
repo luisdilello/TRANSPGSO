@@ -578,6 +578,30 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 .cc-ajuste-row input[type=text]{flex:1;min-width:160px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:#fff;font-size:12px;outline:none;}
 .cc-ajuste-row input[type=number]{width:130px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:#fff;font-size:12px;outline:none;font-family:'JetBrains Mono';}
 .cc-ajuste-row input:focus{border-color:var(--gold);}
+
+/* ── Dashboard 3D (08-11-2026) ── */
+.dashx .panel{position:relative;background:radial-gradient(120% 80% at 0% 0%,#ffffff 0%,#fbf7ec 55%,#f4ecd6 100%);border:1px solid rgba(200,168,75,.32);border-top:1px solid rgba(255,255,255,.9);border-radius:20px;box-shadow:0 1px 0 #fff inset,0 -2px 0 rgba(200,168,75,.18) inset,0 28px 50px -24px rgba(43,46,32,.35),0 8px 18px rgba(43,46,32,.08);overflow:visible}
+.dashx .panel:before{content:'';position:absolute;left:22px;right:22px;top:-1px;height:3px;border-radius:0 0 4px 4px;background:linear-gradient(90deg,transparent,#c8a84b 20%,#ffe59a 50%,#c8a84b 80%,transparent);box-shadow:0 0 14px rgba(232,199,102,.55)}
+.dashx .panel-title{font-size:21px!important;letter-spacing:2.6px!important;display:flex;align-items:center;gap:10px}
+.dashx .panel-title:before{content:'';width:10px;height:22px;border-radius:3px;background:linear-gradient(180deg,#ffe59a,#c8a84b 55%,#8a6a1c);box-shadow:0 3px 8px rgba(168,132,46,.45),inset 0 1px 0 rgba(255,255,255,.7);transform:skewY(-12deg);flex:none}
+.dashx .stat-card{background:radial-gradient(130% 90% at 20% 0%,#ffffff 0%,#faf5e8 60%,#efe5cb 100%)!important;border:1px solid rgba(200,168,75,.28)!important;border-top:1px solid #fff!important;border-radius:18px!important;box-shadow:0 1px 0 #fff inset,0 -5px 0 color-mix(in srgb,var(--card-accent,#c8a84b) 85%,#000) inset,0 22px 34px -14px color-mix(in srgb,var(--card-accent,#c8a84b) 55%,transparent),0 6px 12px rgba(43,46,32,.08)!important;transform-style:preserve-3d;transition:transform .35s cubic-bezier(.2,.8,.2,1),box-shadow .35s!important}
+.dashx .stat-card:hover{transform:perspective(700px) rotateX(10deg) translateY(-8px)!important}
+.dashx .stat-card:after{opacity:.16!important;width:120px!important;height:120px!important;right:-40px!important;bottom:-50px!important;filter:blur(6px)}
+.dashx .stat-card .stat-value{text-shadow:0 1px 0 #fff,0 3px 0 rgba(0,0,0,.10),0 8px 16px color-mix(in srgb,var(--card-accent,#c8a84b) 45%,transparent)}
+.dashx .bar-track{height:12px!important;border-radius:8px!important;background:linear-gradient(180deg,#e2dccb,#f6f2e6 55%,#dcd4bf)!important;box-shadow:inset 0 2px 4px rgba(0,0,0,.16),inset 0 -1px 0 rgba(255,255,255,.8)!important;overflow:hidden}
+.dashx .bar-fill,.dashx .tubo-fill{position:relative;border-radius:8px!important;box-shadow:0 0 10px rgba(0,0,0,.08)}
+.dashx .bar-fill:after,.dashx .tubo-fill:after{content:'';position:absolute;left:2px;right:2px;top:1px;height:45%;border-radius:8px 8px 50% 50%;background:linear-gradient(180deg,rgba(255,255,255,.7),rgba(255,255,255,0))}
+.dashx .tubo{height:12px;border-radius:8px;background:linear-gradient(180deg,#e2dccb,#f6f2e6 55%,#dcd4bf);box-shadow:inset 0 2px 4px rgba(0,0,0,.16),inset 0 -1px 0 rgba(255,255,255,.8);overflow:hidden}
+.dashx .tubo-fill{height:100%}
+.dashx table tbody tr{transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s}
+.dashx table tbody tr:hover{transform:translateY(-2px) scale(1.003);box-shadow:0 10px 22px -8px rgba(43,46,32,.28);position:relative;z-index:1}
+.dashx table tbody tr:hover td{background:linear-gradient(180deg,#fffaf0,#f6edd4)!important}
+.dashx .dx-card{transition:transform .3s cubic-bezier(.2,.8,.2,1),box-shadow .3s}
+.dashx .dx-card:not(:disabled):hover{transform:perspective(600px) rotateX(8deg) translateY(-6px)}
+.dashx .dx-col{cursor:pointer;transition:transform .25s,filter .25s}
+.dashx .dx-col:hover{transform:translateY(-6px);filter:brightness(1.1) drop-shadow(0 10px 12px rgba(0,0,0,.25))}
+@keyframes dxRise{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+.dashx .dx-rise{transform-origin:bottom;animation:dxRise .8s cubic-bezier(.2,.8,.2,1) both}
 </style>
 
 <style>
@@ -630,7 +654,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1794154207;
+window.__MODULES_VERSION=1794155066;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -2725,15 +2749,38 @@ function CargaPorComuna(){
       rows:g.lista.map(function(e){const mo=motivos[e.codigo];return[e.codigo,e.cliente||'',e._comuna,e.fecha||'',e._dias,estadoInfo(e.estado).label,e.mensajero||'',mo?mo.nota||'':''];})}]);
   }
 
-  const tarjeta=function(label,valor,color,sub){return React.createElement('div',{style:{flex:'1 1 130px',background:'#fff',border:'1px solid var(--border)',borderRadius:10,padding:'10px 12px'}},
-    React.createElement('div',{style:{fontSize:10,letterSpacing:1,textTransform:'uppercase',color:'var(--text-soft)'}},label),
-    React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:28,color:color,lineHeight:1.1}},valor),
+  const tarjeta=function(label,valor,color,sub){return React.createElement('div',{className:'stat-card',style:{flex:'1 1 150px','--card-accent':color.indexOf('var(')===0?'#c8a84b':color,padding:'14px 16px 16px'}},
+    React.createElement('div',{style:{fontSize:10.5,letterSpacing:1.6,fontWeight:800,textTransform:'uppercase',color:'var(--text-soft)'}},label),
+    React.createElement('div',{className:'stat-value',style:{fontFamily:'Bebas Neue',fontSize:40,color:color,lineHeight:1.05}},valor),
     sub&&React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)'}},sub));};
-  const th={textAlign:'right',padding:'7px 8px',fontSize:10,letterSpacing:1,textTransform:'uppercase',color:'var(--text-soft)',borderBottom:'2px solid var(--border)',whiteSpace:'nowrap',cursor:'pointer',position:'sticky',top:0,background:'#fff'};
+  const th={textAlign:'right',padding:'10px 9px',fontSize:11.5,fontWeight:800,letterSpacing:0.8,textTransform:'uppercase',color:'#f6e7b8',borderBottom:'2px solid #c8a84b',whiteSpace:'nowrap',cursor:'pointer',position:'sticky',top:0,zIndex:2,background:'linear-gradient(180deg,#34382a,#23261c)'};
   const td={textAlign:'right',padding:'7px 8px',fontSize:13,borderBottom:'1px solid var(--border)',fontFamily:'JetBrains Mono',whiteSpace:'nowrap'};
   const num=function(n,color){return React.createElement('span',{style:{color:n?color:'#c4c1b0',fontWeight:n?700:400}},n);};
   const tdT=Object.assign({},td,{fontWeight:800,background:'var(--cream)'});
 
+  const skyline=function(){
+    const SEG=[['enRuta','En ruta','#2e7d4f'],['porFecha','Por fecha','#7a5c1a'],['reprog','Reprog.','#9c27b0'],['bodega','En bodega','#1a6b8a']];
+    const cols=lista.slice().map(function(c){return Object.assign({_t:(c.bodega||0)+(c.reprog||0)+(c.porFecha||0)+(c.enRuta||0)},c);}).filter(function(c){return c._t>0;}).sort(function(a,b){return b._t-a._t;}).slice(0,20);
+    if(!cols.length)return null;
+    const mx=Math.max.apply(null,cols.map(function(c){return c._t;}));const H=150,W=26,D=10;
+    const pila=function(c,filtro){const hh=Math.max(6,Math.round(c._t/mx*H));return React.createElement('div',{style:{height:hh,display:'flex',flexDirection:'column-reverse',width:'100%',filter:filtro||'none'}},
+      SEG.map(function(s){const v=c[s[0]]||0;return v?React.createElement('div',{key:s[0],title:s[1]+': '+v,style:{flex:v,background:'linear-gradient(90deg,'+s[2]+','+s[2]+'dd)',borderTop:'1px solid rgba(255,255,255,.35)'}}):null;}));};
+    const topColor=function(c){for(let i=SEG.length-1;i>=0;i--){if(c[SEG[i][0]])return SEG[i][2];}return '#c8a84b';};
+    return React.createElement('div',{style:{position:'relative',margin:'4px 0 16px',padding:'18px 16px 10px',borderRadius:16,background:'radial-gradient(120% 100% at 50% 0%,#3a3f2b,#1c1f15)',border:'1px solid rgba(200,168,75,.35)',boxShadow:'inset 0 1px 0 rgba(255,255,255,.08),0 18px 30px -16px rgba(20,22,15,.6)'}},
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,marginBottom:6}},
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:19,letterSpacing:2,color:'#fff'}},'Pendiente por comuna'),
+        React.createElement('div',{style:{display:'flex',gap:12,flexWrap:'wrap'}},SEG.slice().reverse().map(function(s){return React.createElement('span',{key:s[0],style:{fontSize:11,fontWeight:700,color:'rgba(233,228,210,.85)'}},React.createElement('i',{style:{display:'inline-block',width:10,height:10,borderRadius:3,background:s[2],marginRight:5,verticalAlign:'-1px',boxShadow:'0 0 8px '+s[2]}}),s[1]);}))),
+      React.createElement('div',{style:{display:'flex',alignItems:'flex-end',gap:14,height:H+70,overflowX:'auto',padding:'0 6px',backgroundImage:'linear-gradient(180deg,transparent 0,transparent calc(100% - 44px),rgba(200,168,75,.18) calc(100% - 44px),transparent calc(100% - 20px))'}},
+        cols.map(function(c,j){const hh=Math.max(6,Math.round(c._t/mx*H));const sel=comunaSel===c.comuna;
+          return React.createElement('div',{key:c.comuna,className:'dx-col',onClick:function(){setComunaSel(sel?'':c.comuna);},title:c.comuna+' · '+c._t+' pendientes',style:{flex:'0 0 '+(W+D+8)+'px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',height:'100%'}},
+            React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:17,color:sel?'#ffe59a':'#fff',marginBottom:D+4,textShadow:'0 0 10px rgba(255,229,154,.5)'}},c._t),
+            React.createElement('div',{className:'dx-rise',style:{position:'relative',width:W,height:hh,marginRight:D,animationDelay:(j*0.03)+'s'}},
+              React.createElement('div',{style:{position:'absolute',left:0,bottom:0,width:W,height:hh,boxShadow:sel?'0 0 0 2px #ffe59a':'none'}},pila(c)),
+              React.createElement('div',{style:{position:'absolute',left:W,bottom:0,width:D,height:hh,transform:'skewY(-45deg)',transformOrigin:'left bottom'}},pila(c,'brightness(.62)')),
+              React.createElement('div',{style:{position:'absolute',left:0,top:-D,width:W,height:D,background:topColor(c),filter:'brightness(1.35)',transform:'skewX(-45deg)',transformOrigin:'left bottom'}}),
+              React.createElement('div',{style:{position:'absolute',left:-6,bottom:-7,width:W+D+12,height:10,borderRadius:'50%',background:'radial-gradient(ellipse,rgba(0,0,0,.45),transparent 70%)'}})),
+            React.createElement('div',{style:{fontSize:10,fontWeight:800,color:sel?'#ffe59a':'rgba(233,228,210,.8)',marginTop:10,width:W+D+8,textAlign:'center',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},c.comuna));})));
+  };
   const panel1=React.createElement('div',{className:'panel'},
     React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,flexWrap:'wrap',marginBottom:12}},
       React.createElement('div',null,
@@ -2762,6 +2809,7 @@ function CargaPorComuna(){
       tarjeta('En ruta ahora',tot.enRuta,'#2e7d4f'),
       tarjeta('Bodega por fecha',tot.porFecha,'#7a5c1a')
     ),
+    skyline(),
     React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',marginBottom:8}},
       React.createElement('input',{className:'form-input',value:busq,onChange:function(e){setBusq(e.target.value);},placeholder:'Buscar comuna',style:{maxWidth:260}}),
       React.createElement('span',{style:{fontSize:11,color:'var(--text-soft)'}},'Toca una comuna para ver sus códigos pendientes abajo.')),
@@ -2786,8 +2834,8 @@ function CargaPorComuna(){
             React.createElement('td',{style:Object.assign({},td,{fontWeight:800,fontSize:14})},c.ingresado),
             React.createElement('td',{style:Object.assign({},td,{textAlign:'left'})},
               React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8}},
-                React.createElement('div',{style:{flex:1,height:8,background:'var(--cream-dark)',borderRadius:4,overflow:'hidden'}},
-                  React.createElement('div',{style:{height:'100%',width:(c.ingresado/maxIng*100)+'%',background:'var(--gold)',borderRadius:4}})),
+                React.createElement('div',{className:'tubo',style:{flex:1}},
+                  React.createElement('div',{className:'tubo-fill',style:{width:(c.ingresado/maxIng*100)+'%',background:'linear-gradient(180deg,#f0d27a,#c8a84b 60%,#a8842e)'}})),
                 React.createElement('span',{style:{fontSize:11,minWidth:40,textAlign:'right'}},c.pct?(c.pct.toFixed(1)+'%'):'—'))),
             React.createElement('td',{style:td},num(c.entregadosDia,'#2e7d4f')),
             React.createElement('td',{style:Object.assign({},td,{fontWeight:800})},num(c.paraRuta,'var(--gold)')),
@@ -2822,11 +2870,13 @@ function CargaPorComuna(){
     ),
     React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(210px,1fr))',gap:8}},
       grupos.map(function(g){const act=grupoAbierto===g.k;const n=g.lista.length;
-        return React.createElement('button',{key:g.k,type:'button',onClick:function(){setGrupoAbierto(act?null:g.k);},disabled:!n,
-          style:{textAlign:'left',background:act?g.color+'14':'#fff',border:'1px solid '+(act?g.color:'var(--border)'),borderLeft:'4px solid '+(n?g.color:'#ddd'),borderRadius:10,padding:'10px 12px',cursor:n?'pointer':'default',opacity:n?1:0.55}},
-          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:6}},
-            React.createElement('span',{style:{fontSize:12,fontWeight:700,color:'var(--dark)'}},g.t),
-            React.createElement('span',{style:{fontFamily:'Bebas Neue',fontSize:26,color:n?g.color:'#bbb',lineHeight:1}},n)),
+        return React.createElement('button',{key:g.k,type:'button',className:'dx-card',onClick:function(){setGrupoAbierto(act?null:g.k);},disabled:!n,
+          style:{textAlign:'left',position:'relative',overflow:'hidden',background:act?'linear-gradient(160deg,#fff,'+g.color+'22)':'radial-gradient(130% 100% at 15% 0%,#ffffff,#f8f2e2 70%,#efe5cb)',border:'1px solid '+(act?g.color:'rgba(200,168,75,.28)'),borderTop:'1px solid #fff',borderRadius:16,padding:'12px 14px 14px',cursor:n?'pointer':'default',opacity:n?1:0.5,
+            boxShadow:n?('0 1px 0 #fff inset,0 -4px 0 '+g.color+' inset,0 18px 28px -14px '+g.color+'88,0 4px 10px rgba(43,46,32,.07)'):'0 1px 0 #fff inset,0 -3px 0 #ddd inset'}},
+          React.createElement('div',{style:{position:'absolute',right:-26,top:-26,width:90,height:90,borderRadius:'50%',background:'radial-gradient(circle,'+(n?g.color:'#ccc')+'33,transparent 70%)'}}),
+          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:6,position:'relative'}},
+            React.createElement('span',{style:{fontSize:12.5,fontWeight:800,color:'var(--dark)'}},g.t),
+            React.createElement('span',{style:{fontFamily:'Bebas Neue',fontSize:34,color:n?g.color:'#bbb',lineHeight:1,textShadow:n?('0 1px 0 #fff,0 3px 0 rgba(0,0,0,.10),0 8px 14px '+g.color+'66'):'none'}},n)),
           React.createElement('div',{style:{fontSize:10.5,color:'var(--text-soft)',marginTop:2}},g.d));
       })),
     abierto&&React.createElement('div',{style:{marginTop:14}},
@@ -3203,7 +3253,7 @@ function Dashboard(_ref7){
   const ESTADO_COLORS={en_bodega:'#1a6b8a',en_ruta:'#C8A84B',entregado:'#2e7d4f',reprogramado:'#9c27b0',cancelado:'#b03030',siniestro:'#e65100',retorno:'#7a5c1a',en_bodega_cancelado:'#a15c1a',en_bodega_fecha:'#2f6fbd'};
   const ESTADO_LABELS={en_bodega:'En Bodega',en_ruta:'En Ruta',entregado:'Entregado',reprogramado:'Reprogramado',cancelado:'Cancelado',siniestro:'Siniestro',retorno:'Retorno',en_bodega_cancelado:'En Bodega Cancelado',en_bodega_fecha:'En Bodega por Fecha'};
   const periodos=[{val:'hoy',label:'Hoy'},{val:'ayer',label:'Ayer'},{val:'semana',label:'Esta semana'},{val:'mes',label:'Mes'},{val:'rango',label:'Rango'}];
-  return React.createElement('div',null,
+  return React.createElement('div',{className:'dashx'},
     // ── SELECTOR PERÍODO ──
     React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',marginBottom:20,flexWrap:'wrap'}},
       React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:2,color:'var(--text-soft)',marginRight:4}},'PERÍODO:'),
@@ -3266,11 +3316,11 @@ function Dashboard(_ref7){
           ?React.createElement('div',{style:{color:'var(--text-soft)',fontSize:13,textAlign:'center',padding:'20px 0'}},'Sin datos. Asigna mensajeros.')
           :React.createElement('div',{style:{maxHeight:420,overflowY:'auto',paddingRight:4}},
             mensajerosLista.map((m,i)=>React.createElement('div',{key:m.nombre,style:{display:'flex',alignItems:'center',gap:10,marginBottom:10}},
-              React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,color:'var(--gold)',minWidth:24}},i+1),
+              React.createElement('div',{style:{width:30,height:30,flex:'none',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Bebas Neue',fontSize:16,color:'#2b2e20',background:i<3?['radial-gradient(circle at 32% 28%,#fff6cf,#f0cd62 40%,#b8902e 80%)','radial-gradient(circle at 32% 28%,#fff,#d9d9d9 40%,#9c9c9c 80%)','radial-gradient(circle at 32% 28%,#ffe2c4,#e0a368 40%,#a96a2f 80%)'][i]:'radial-gradient(circle at 32% 28%,#fff,#ece6d6 55%,#cfc7b0)',boxShadow:'0 4px 8px rgba(0,0,0,.18),inset 0 -2px 4px rgba(0,0,0,.18),inset 0 2px 4px rgba(255,255,255,.7)'}},i+1),
               React.createElement('div',{style:{flex:1,minWidth:0}},
-                React.createElement('div',{style:{fontSize:12,fontWeight:700,color:'var(--dark)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},m.nombre),
-                React.createElement('div',{style:{height:5,background:'var(--cream-dark)',borderRadius:3,marginTop:4,overflow:'hidden'}},
-                  React.createElement('div',{style:{height:'100%',width:(m.total>0?m.entregado/m.total*100:0)+'%',background:'#2e7d4f',borderRadius:3}})
+                React.createElement('div',{style:{fontSize:12.5,fontWeight:800,color:'var(--dark)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},m.nombre),
+                React.createElement('div',{className:'tubo',style:{height:10,marginTop:5}},
+                  React.createElement('div',{className:'tubo-fill',style:{width:(m.total>0?m.entregado/m.total*100:0)+'%',background:'linear-gradient(180deg,#5fd39a,#2e7d4f 60%,#1f5e3a)'}})
                 )
               ),
               React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:11,color:'var(--text-soft)',whiteSpace:'nowrap'}},
