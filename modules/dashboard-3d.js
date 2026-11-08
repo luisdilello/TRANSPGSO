@@ -1,6 +1,6 @@
 // Centro de control 3D del Dashboard (08-11-2026).
 // Dos vistas en Three.js sobre los envíos del período filtrado:
-//  - Mapa 3D de comunas: torres hexagonales ubicadas geográficamente; altura = envíos, color = efectividad operativa.
+//  - Mapa 3D de comunas: torres hexagonales ubicadas geográficamente; altura = envíos, color = efectividad total.
 //  - Flujo de estados: modelos 3D por estado (bodega, camión, casa, reloj, caja cancelada) con pila de cajas proporcional y partículas que viajan Bodega → En ruta → Entregado / Reprogramado / Cancelado.
 // Solo lectura: no escribe nada en la base.
 (function(){
@@ -100,7 +100,7 @@ function montarMapa(T,cont,datos,ui,geo){
         if(!d.total){tip.innerHTML='<div style="font-family:Bebas Neue;font-size:20px;letter-spacing:1px;color:#ffe59a">'+titulo(d.n)+'</div><div style="font-size:12px;opacity:.75">Provincia de '+d.prov+' · sin envíos en el período</div>';return;}
         tip.innerHTML='<div style="font-family:Bebas Neue;font-size:20px;letter-spacing:1px;color:#ffe59a">'+titulo(d.n)+'</div>'
           +'<div style="font-size:12px;opacity:.85;margin-bottom:6px">'+d.total.toLocaleString('es-CL')+' envíos · efectividad '+(d.ef==null?'—':(Math.round(d.ef*1000)/10)+'%')+'</div>'
-          +[['Entregados',d.entregado,'#36c47f'],['En ruta',d.en_ruta,'#e8b84a'],['Reprogramados',d.reprogramado,'#b06ad6'],['Cancelados',d.cancelado,'#e0473f'],['En bodega',d.en_bodega,'#4aa3c8']]
+          +[['Entregados',d.entregado,'#36c47f'],['En ruta',d.en_ruta,'#e8b84a'],['En bodega',d.en_bodega,'#4aa3c8'],['Reprogramados',d.reprogramado,'#b06ad6'],['Cancelados',d.cancelado,'#e0473f'],['Siniestros',d.siniestro,'#ff7a3d'],['Retornos',d.retorno,'#c49a4a'],['Bodega cancelado',d.en_bodega_cancelado,'#d08a4a'],['Bodega por fecha',d.en_bodega_fecha,'#5b8fd6']]
             .filter(function(x){return x[1];}).map(function(x){return '<div style="display:flex;justify-content:space-between;gap:18px;font-size:12px"><span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+x[2]+';margin-right:6px"></i>'+x[0]+'</span><b>'+x[1]+'</b></div>';}).join('');
       }else tip.style.display='none';},
     onLeave:function(){tip.style.display='none';}});
@@ -282,13 +282,21 @@ function CentroControl3D(props){
     envios.forEach(function(e){cnt[e.estado]=(cnt[e.estado]||0)+1;if(!e.comuna)return;var k=coordDe(e.comuna);
       if(!k){var nn=norm(e.comuna);sinCoord[nn]=(sinCoord[nn]||0)+1;return;}
       var d=pc[k.n]||(pc[k.n]={n:k.n,c:k.c,total:0});d.total++;d[e.estado]=(d[e.estado]||0)+1;});
-    var datos=Object.keys(pc).map(function(k){var d=pc[k];var den=(d.entregado||0)+(d.reprogramado||0)+(d.cancelado||0);d.ef=den?(d.entregado||0)/den:null;return d;});
-    var conEf=datos.filter(function(d){return d.ef!=null&&d.total>=10;});
-    var mejor=conEf.slice().sort(function(a,b){return b.ef-a.ef;})[0],peor=conEf.slice().sort(function(a,b){return a.ef-b.ef;})[0];
+    // Efectividad por comuna con la fórmula oficial (Efectividad Total): entregados / (total − en_bodega_fecha).
+    // Incluye siniestros, retornos y cancelados, que la operativa no ve.
+    var INC=['cancelado','siniestro','retorno','en_bodega_cancelado'];
+    var datos=Object.keys(pc).map(function(k){var d=pc[k];var den=d.total-(d.en_bodega_fecha||0);d.ef=den>0?(d.entregado||0)/den:null;
+      d.inc=INC.reduce(function(a,x){return a+(d[x]||0);},0);d.sinEnt=den-(d.entregado||0);return d;});
+    var conEf=datos.filter(function(d){return d.ef!=null&&d.total>=30;});
+    var mejor=conEf.slice().sort(function(a,b){return b.ef-a.ef||b.total-a.total;})[0];
+    var peor=conEf.slice().sort(function(a,b){return a.ef-b.ef||b.inc-a.inc;})[0];
+    var masInc=datos.slice().sort(function(a,b){return b.inc-a.inc||(b.siniestro||0)-(a.siniestro||0);})[0];
+    var sinComuna=0;envios.forEach(function(e){if(!e.comuna||!String(e.comuna).trim())sinComuna++;});
+    var nSinCoord=Object.keys(sinCoord).reduce(function(a,k){return a+sinCoord[k];},0);
     var top=datos.slice().sort(function(a,b){return b.total-a.total;})[0];
     var key=datos.map(function(d){return d.n+':'+d.total+':'+(d.entregado||0);}).join('|')+'#'+JSON.stringify(cnt);
     var lo=peor?peor.ef:0.9,hi=mejor?mejor.ef:1;if(hi-lo<0.01)lo=Math.max(0,hi-0.01);
-    return{datos:datos,cnt:cnt,mejor:mejor,peor:peor,top:top,key:key,nComunas:datos.length,lo:lo,hi:hi};
+    return{datos:datos,cnt:cnt,mejor:mejor,peor:peor,masInc:masInc,top:top,key:key,nComunas:datos.length,lo:lo,hi:hi,sinComuna:sinComuna,nSinCoord:nSinCoord,total:envios.length};
   },[envios]);
   R.useEffect(function(){
     var E=null,vivo=true;setErr('');
@@ -301,19 +309,19 @@ function CentroControl3D(props){
   },[modo,res.key,gen]);
   function cambiar(m){setModo(m);try{localStorage.setItem('dash3d_modo',m);}catch(e){}}
   var tab=function(v,l){var a=modo===v;return h('button',{key:v,type:'button',onClick:function(){cambiar(v);},style:{padding:'8px 16px',borderRadius:10,border:'1px solid '+(a?'#e8c766':'rgba(255,255,255,.14)'),background:a?'linear-gradient(135deg,#e8c766,#b08a2e)':'rgba(255,255,255,.05)',color:a?'#1a1d13':'#e9e4d2',fontWeight:800,fontSize:12.5,letterSpacing:.4,cursor:'pointer',boxShadow:a?'0 6px 16px rgba(200,168,75,.35)':'none'}},l);};
-  var ins=function(lbl,val,sub,col){return h('div',{style:{padding:'12px 14px',borderRadius:14,background:'linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.03))',border:'1px solid rgba(255,255,255,.10)',boxShadow:'inset 0 1px 0 rgba(255,255,255,.08)'}},
+  var ins=function(lbl,val,sub,col){return h('div',{key:lbl,style:{padding:'9px 12px',borderRadius:14,background:'linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.03))',border:'1px solid rgba(255,255,255,.10)',boxShadow:'inset 0 1px 0 rgba(255,255,255,.08)'}},
     h('div',{style:{fontSize:10.5,letterSpacing:1.6,textTransform:'uppercase',color:'rgba(233,228,210,.65)',fontWeight:800}},lbl),
-    h('div',{title:typeof val==='string'?val:'',style:{fontFamily:'Bebas Neue',fontSize:26,lineHeight:1.1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',color:col||'#fff',textShadow:'0 0 16px '+(col||'#fff')+'55'}},val),
-    sub&&h('div',{style:{fontSize:11.5,color:'rgba(233,228,210,.75)'}},sub));};
+    h('div',{title:typeof val==='string'?val:'',style:{fontFamily:'Bebas Neue',fontSize:24,lineHeight:1.05,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',color:col||'#fff',textShadow:'0 0 16px '+(col||'#fff')+'55'}},val),
+    sub&&h('div',{style:{fontSize:11,lineHeight:1.35,color:'rgba(233,228,210,.78)'}},sub));};
   var c=res.cnt,den=(c.entregado||0)+(c.reprogramado||0)+(c.cancelado||0);
   return h('div',{style:{position:'relative',marginBottom:20,borderRadius:20,overflow:'hidden',background:'radial-gradient(120% 90% at 30% 0%,#3a3f2b 0%,#22261a 45%,#14170f 100%)',border:'1px solid rgba(200,168,75,.35)',boxShadow:'0 24px 50px rgba(20,22,15,.35), inset 0 1px 0 rgba(255,255,255,.08)'}},
     h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10,padding:'16px 20px 0'}},
       h('div',null,
         h('div',{style:{fontFamily:'Bebas Neue',fontSize:28,letterSpacing:2.5,color:'#fff',lineHeight:1}},'Centro de control'),
-        h('div',{style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:3}},modo==='mapa'?'Región Metropolitana · altura = envíos del período · color = efectividad operativa (rojo la más baja, verde la más alta) · arrastra para girar, rueda para acercar':'Recorrido de los envíos del período: de bodega a ruta y su resultado final')),
+        h('div',{style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:3}},modo==='mapa'?'Región Metropolitana · altura = envíos del período · color = efectividad total (rojo la más baja, verde la más alta) · arrastra para girar, rueda para acercar':'Recorrido de los envíos del período: de bodega a ruta y su resultado final')),
       h('div',{style:{display:'flex',gap:6}},tab('mapa','Mapa 3D de la RM'),tab('flujo','Flujo de estados'))),
-    h('div',{style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 220px',gap:0}},
-      h('div',{style:{position:'relative',height:440,minWidth:0}},
+    h('div',{style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 250px',gap:0}},
+      h('div',{style:{position:'relative',height:500,minWidth:0}},
         h('div',{ref:refC,style:{position:'absolute',inset:0}}),
         h('div',{ref:refLab,style:{position:'absolute',inset:0,pointerEvents:'none',overflow:'hidden'}}),
         h('div',{ref:refTip,style:{position:'absolute',display:'none',pointerEvents:'none',zIndex:3,minWidth:190,padding:'10px 12px',borderRadius:12,background:'rgba(18,20,13,.92)',border:'1px solid rgba(200,168,75,.6)',color:'#fff',font:'12px DM Sans,system-ui,sans-serif',boxShadow:'0 14px 30px rgba(0,0,0,.45)',backdropFilter:'blur(6px)'}}),
@@ -321,12 +329,28 @@ function CentroControl3D(props){
         err&&h('div',{style:{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#ffb4a8',fontSize:13}},err),
         modo==='mapa'&&h('div',{style:{position:'absolute',left:16,bottom:14,display:'flex',alignItems:'center',gap:8,fontSize:11,color:'rgba(233,228,210,.8)',fontWeight:700}},
           'Efectividad',h('span',null,Math.floor(res.lo*1000)/10+'%'),h('span',{style:{width:120,height:8,borderRadius:6,background:'linear-gradient(90deg,#e0473f,#e8b84a,#36c47f)',boxShadow:'0 0 10px rgba(232,184,74,.4)'}}),h('span',null,Math.ceil(res.hi*1000)/10+'%'))),
-      h('div',{style:{display:'flex',flexDirection:'column',gap:10,padding:'14px 16px 16px 4px'}},
-        ins('Efectividad operativa',den?Math.round((c.entregado||0)/den*100)+'%':'—',(c.entregado||0).toLocaleString('es-CL')+' entregados de '+den.toLocaleString('es-CL')+' gestionados','#36c47f'),
-        ins('Comuna con más envíos',res.top?titulo(res.top.n):'—',res.top?res.top.total.toLocaleString('es-CL')+' envíos':'', '#ffe59a'),
-        ins('Mejor efectividad',res.mejor?titulo(res.mejor.n):'—',res.mejor?Math.round(res.mejor.ef*100)+'% · '+res.mejor.total+' envíos':'Mín. 10 envíos','#7ee0ad'),
-        ins('A revisar',res.peor?titulo(res.peor.n):'—',res.peor?Math.round(res.peor.ef*100)+'% · '+res.peor.total+' envíos':'','#ff8f86'),
-        ins('Cobertura',res.nComunas+' comunas',null,'#9fd3ea'))));
+      h('div',{style:{display:'flex',flexDirection:'column',gap:8,padding:'14px 16px 16px 4px'}},
+        (function(){
+          var tot=res.total,bf=c.en_bodega_fecha||0,denT=tot-bf,ent=c.entregado||0;
+          var pend=(c.en_bodega||0)+(c.en_ruta||0)+(c.reprogramado||0);
+          var inc=(c.cancelado||0)+(c.siniestro||0)+(c.retorno||0)+(c.en_bodega_cancelado||0);
+          var f=function(n){return (n||0).toLocaleString('es-CL');};
+          var p1=function(v){return (Math.round(v*1000)/10).toLocaleString('es-CL')+'%';};
+          var partes=function(arr){return arr.filter(function(x){return x[0];}).map(function(x){return f(x[0])+' '+x[1];}).join(' · ');};
+          var pe=res.peor,mi=res.masInc;
+          return [
+            ins('Efectividad total',denT>0?p1(ent/denT):'—',f(ent)+' entregados de '+f(denT)+(denT>0&&denT-ent>0?' · '+f(denT-ent)+' sin entregar':''),'#36c47f'),
+            ins('Pendientes ahora',f(pend),pend?partes([[c.en_ruta,'en ruta'],[c.en_bodega,'en bodega'],[c.reprogramado,'reprog.']]):'Todo resuelto','#e8b84a'),
+            ins('Incidencias',f(inc),inc?partes([[c.siniestro,'siniestros'],[c.retorno,'retornos'],[c.en_bodega_cancelado,'bodega canc.'],[c.cancelado,'cancel.']]):'Sin incidencias','#ff8f86'),
+            ins('Comuna a revisar',pe?titulo(pe.n):'—',pe?p1(pe.ef)+' · '+f(pe.sinEnt)+' sin entregar de '+f(pe.total-(pe.en_bodega_fecha||0))+(pe.siniestro?' · '+pe.siniestro+' siniestro'+(pe.siniestro>1?'s':''):''):'Mín. 30 envíos','#ff6b5e'),
+            mi&&mi.inc>0&&(!pe||mi.n!==pe.n)?ins('Más incidencias',titulo(mi.n),f(mi.inc)+' · '+partes([[mi.siniestro,'sin.'],[mi.retorno,'ret.'],[mi.en_bodega_cancelado,'bod. canc.'],[mi.cancelado,'canc.']]),'#ffb07a'):null,
+            ins('Mayor volumen',res.top?titulo(res.top.n):'—',res.top?f(res.top.total)+' envíos · '+p1(res.top.total/(tot||1))+' del total':'','#ffe59a'),
+            h('div',{key:'cob',style:{fontSize:11,color:'rgba(233,228,210,.7)',padding:'2px 4px',lineHeight:1.45}},
+              f(res.nComunas)+' comunas con envíos',
+              (res.sinComuna||res.nSinCoord)?h('div',{style:{color:'#ffcf8a',fontWeight:700}},
+                [res.sinComuna?f(res.sinComuna)+' envíos sin comuna':null,res.nSinCoord?f(res.nSinCoord)+' con comuna no reconocida':null].filter(Boolean).join(' · ')+' (fuera del mapa)'):null)
+          ];
+        })())));
 }
 window.__dash3d={CentroControl3D:CentroControl3D};
 })();
