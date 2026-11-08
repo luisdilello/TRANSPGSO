@@ -78,7 +78,7 @@ function PagoSemanal(props){
       if(!vivo)return;
       var err=r.slice(0,3).find(function(x){return x.error;});if(err){toast('Error cargando pago semanal: '+err.error.message);setData({error:true});return;}
       var porComuna={};(r[0].data||[]).forEach(function(x){var n=norm(x.mensajero);if(!n)return;(porComuna[n]=porComuna[n]||{})[x.comuna||'']=(+x.n||0);});
-      var cfg={};(r[1].data||[]).forEach(function(m){cfg[norm(m.nombre)]=m;});
+      var cfg={};(r[1].data||[]).forEach(function(m){var k=norm(m.nombre);if(cfg[k]&&cfg[k].activo!==false&&m.activo===false)return;cfg[k]=m;}); // si hay filas duplicadas manda la activa
       var movsSem={},saldo={};
       (r[2].data||[]).forEach(function(m){var n=norm(m.mensajero);
         if(m.semana===sem.desde){(movsSem[n]=movsSem[n]||[]).push(m);}
