@@ -26,9 +26,10 @@ var COORD={
 'RECOLETA':[-33.4060,-70.6400],'INDEPENDENCIA':[-33.4160,-70.6650],'COLINA':[-33.2030,-70.6750],'LAMPA':[-33.2850,-70.8760],
 'PADRE HURTADO':[-33.5670,-70.8150],'PENAFLOR':[-33.6060,-70.8760],'TALAGANTE':[-33.6650,-70.9300],'CALERA DE TANGO':[-33.6300,-70.7700],
 'PIRQUE':[-33.6350,-70.5500],'BUIN':[-33.7320,-70.7420],'SAN JOSE DE MAIPO':[-33.6420,-70.3520],'EL MONTE':[-33.6800,-71.0200],
-'ISLA DE MAIPO':[-33.7500,-70.9000],'TILTIL':[-33.0830,-70.9270],'PAINE':[-33.8070,-70.7400]};
+'ISLA DE MAIPO':[-33.7500,-70.9000],'ALHUE':[-34.0300,-71.1000],'CURACAVI':[-33.4030,-71.1330],'MARIA PINTO':[-33.5150,-71.1200],'MELIPILLA':[-33.6870,-71.2150],'SAN PEDRO':[-33.8950,-71.4600],'TILTIL':[-33.0830,-70.9270],'PAINE':[-33.8070,-70.7400]};
 var ALIAS={'STGO':'SANTIAGO','SANTIAGO CENTRO':'SANTIAGO','MAIPO':'MAIPU','EST CENTRAL':'ESTACION CENTRAL','PAC':'PEDRO AGUIRRE CERDA'};
-function coordDe(c){var n=norm(c);n=ALIAS[n]||n;return COORD[n]?{n:n,c:COORD[n]}:null;}
+function coordDe(c){var n=norm(c);n=ALIAS[n]||n;if(!COORD[n]&&/\s[-–]\s/.test(n)){n=n.split(/\s[-–]\s/)[0].trim();n=ALIAS[n]||n;}return COORD[n]?{n:n,c:COORD[n]}:null;}
+function cargarGeo(){if(window.__rmGeo)return Promise.resolve(window.__rmGeo);if(window.__rmGeoP)return window.__rmGeoP;window.__rmGeoP=fetch('vendor/rm-comunas.json').then(function(r){if(!r.ok)throw new Error('geo');return r.json();}).then(function(j){window.__rmGeo=j;return j;}).catch(function(e){window.__rmGeoP=null;throw e;});return window.__rmGeoP;}
 function efColor(T,ef,lo,hi){
   if(ef==null)return new T.Color('#8a8f78');
   var a=new T.Color('#e0473f'),b=new T.Color('#e8b84a'),c=new T.Color('#36c47f');
@@ -87,41 +88,66 @@ function suelo(T,sc,rad){
 }
 
 // ── Vista 1: mapa de comunas ──
-function montarMapa(T,cont,datos,ui){
+function montarMapa(T,cont,datos,ui,geo){
   var tip=ui.tip,labels=ui.labels;
   var meshes=[],ray=new T.Raycaster(),ptr=new T.Vector2(),hov=null;
-  var E=crearEscena(T,cont,{r:66,pol:0.9,az:-0.5,ty:2,rMin:24,rMax:120,onLost:ui.onLost,
+  var E=crearEscena(T,cont,{r:74,pol:0.84,az:-0.3,rMin:18,rMax:200,fogNear:110,fogFar:260,onLost:ui.onLost,
     onMove:function(e){var b=E.ren.domElement.getBoundingClientRect();ptr.x=(e.clientX-b.left)/b.width*2-1;ptr.y=-(e.clientY-b.top)/b.height*2+1;
-      ray.setFromCamera(ptr,E.cam);var hit=ray.intersectObjects(meshes)[0];var m=hit?hit.object:null;
-      if(hov&&hov!==m){hov.material.emissiveIntensity=hov.userData.ei;hov.scale.x=hov.scale.z=1;}
-      hov=m;if(m){m.material.emissiveIntensity=0.65;m.scale.x=m.scale.z=1.12;var d=m.userData.d;
-        tip.style.display='block';tip.style.left=(e.clientX-b.left+14)+'px';tip.style.top=(e.clientY-b.top+14)+'px';
+      ray.setFromCamera(ptr,E.cam);var hit=ray.intersectObjects(meshes,false)[0];var m=hit?hit.object:null;
+      if(hov&&hov!==m){hov.material.emissiveIntensity=hov.userData.ei;}
+      hov=m;if(m){m.material.emissiveIntensity=m.userData.losa?0.35:0.75;var d=m.userData.d;
+        tip.style.display='block';tip.style.left=Math.min(cont.clientWidth-210,e.clientX-b.left+14)+'px';tip.style.top=(e.clientY-b.top+14)+'px';
+        if(!d.total){tip.innerHTML='<div style="font-family:Bebas Neue;font-size:20px;letter-spacing:1px;color:#ffe59a">'+titulo(d.n)+'</div><div style="font-size:12px;opacity:.75">Provincia de '+d.prov+' · sin envíos en el período</div>';return;}
         tip.innerHTML='<div style="font-family:Bebas Neue;font-size:20px;letter-spacing:1px;color:#ffe59a">'+titulo(d.n)+'</div>'
-          +'<div style="font-size:12px;opacity:.85;margin-bottom:6px">'+d.total.toLocaleString('es-CL')+' envíos · efectividad '+(d.ef==null?'—':Math.round(d.ef*100)+'%')+'</div>'
+          +'<div style="font-size:12px;opacity:.85;margin-bottom:6px">'+d.total.toLocaleString('es-CL')+' envíos · efectividad '+(d.ef==null?'—':(Math.round(d.ef*1000)/10)+'%')+'</div>'
           +[['Entregados',d.entregado,'#36c47f'],['En ruta',d.en_ruta,'#e8b84a'],['Reprogramados',d.reprogramado,'#b06ad6'],['Cancelados',d.cancelado,'#e0473f'],['En bodega',d.en_bodega,'#4aa3c8']]
             .filter(function(x){return x[1];}).map(function(x){return '<div style="display:flex;justify-content:space-between;gap:18px;font-size:12px"><span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+x[2]+';margin-right:6px"></i>'+x[0]+'</span><b>'+x[1]+'</b></div>';}).join('');
       }else tip.style.display='none';},
     onLeave:function(){tip.style.display='none';}});
-  suelo(T,E.sc,40);
+  // suelo amplio y oscuro (la región completa se pierde en la niebla hacia la cordillera y la costa)
+  var piso=new T.Mesh(new T.CircleGeometry(260,96),new T.MeshStandardMaterial({color:0x1d2116,roughness:1}));piso.rotation.x=-Math.PI/2;piso.position.y=-0.05;piso.receiveShadow=true;E.sc.add(piso);
+  var grid=new T.PolarGridHelper(150,24,10,96,0xc8a84b,0xc8a84b);grid.material.transparent=true;grid.material.opacity=0.07;grid.position.y=-0.02;E.sc.add(grid);
+  var byN={};datos.forEach(function(d){byN[d.n]=d;});
   var max=Math.max.apply(null,datos.map(function(d){return d.total;}).concat([1]));
-  var geo=new T.CylinderGeometry(1.15,1.15,1,6,1);geo.translate(0,0.5,0);
-  var capGeo=new T.CylinderGeometry(1.18,1.18,0.12,6,1);
-  datos.forEach(function(d,i){
-    var x=(d.c[1]+70.66)*105,z=-(d.c[0]+33.48)*105;var hgt=0.4+15*Math.sqrt(d.total/max);var col=efColor(T,d.ef,ui.lo,ui.hi);
-    var mat=new T.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:0.18,roughness:0.35,metalness:0.25,transparent:true,opacity:0.94});
-    var m=new T.Mesh(geo,mat);m.position.set(x,0,z);m.scale.y=0.001;m.castShadow=true;m.receiveShadow=true;
-    m.userData={d:d,h:hgt,ei:0.18,delay:i*0.035};E.sc.add(m);meshes.push(m);
-    var cap=new T.Mesh(capGeo,new T.MeshBasicMaterial({color:col.clone().lerp(new T.Color(0xffffff),0.45)}));cap.position.set(x,0,z);m.userData.cap=cap;E.sc.add(cap);
+  var X=function(lng){return (lng+70.65)*105;},Y=function(lat){return (lat+33.47)*105;};
+  var lineMat=new T.LineBasicMaterial({color:0xe8c766,transparent:true,opacity:0.55});
+  var i=0,torres=[];
+  var geoT=new T.CylinderGeometry(1.0,1.0,1,6,1);geoT.translate(0,0.5,0);var capT=new T.CylinderGeometry(1.03,1.03,0.12,6,1);
+  geo.forEach(function(f){
+    var key=norm(f.n);var d=byN[key];
+    var shapes=f.r.map(function(ring){return new T.Shape(ring.map(function(p){return new T.Vector2(X(p[0]),Y(p[1]));}));});
+    var g=new T.ExtrudeGeometry(shapes,{depth:1,bevelEnabled:false});g.rotateX(-Math.PI/2);
+    var con=!!(d&&d.total);
+    // losa del mapa: tono crema/oliva, teñida suave según efectividad si tiene envíos
+    var colL=con?efColor(T,d.ef,ui.lo,ui.hi).lerp(new T.Color(0x8f8a6c),0.7):new T.Color(0x34392a);
+    var matL=new T.MeshStandardMaterial({color:colL,emissive:colL,emissiveIntensity:0.05,roughness:0.85,metalness:0.05});
+    var losa=new T.Mesh(g,matL);losa.receiveShadow=true;losa.castShadow=false;losa.scale.y=0.001;
+    var hl=con?0.9:0.45;
+    losa.userData={d:d||{n:key,total:0,prov:f.p},h:hl,ei:0.05,delay:0,losa:true};
+    if(d)d.prov=f.p;
+    losa.add(new T.LineSegments(new T.EdgesGeometry(g,25),con?lineMat:new T.LineBasicMaterial({color:0xc8a84b,transparent:true,opacity:0.25})));
+    E.sc.add(losa);meshes.push(losa);
+    if(con){
+      var c=COORD[key];var cx,cz;
+      if(c){cx=X(c[1]);cz=-Y(c[0]);}else{g.computeBoundingBox();var bb=g.boundingBox;cx=(bb.min.x+bb.max.x)/2;cz=(bb.min.z+bb.max.z)/2;}
+      var col=efColor(T,d.ef,ui.lo,ui.hi);
+      var mat=new T.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:0.2,roughness:0.32,metalness:0.25});
+      var tw=new T.Mesh(geoT,mat);tw.position.set(cx,0,cz);tw.castShadow=true;tw.scale.y=0.001;
+      tw.userData={d:d,h:1+13*Math.sqrt(d.total/max),ei:0.2,delay:0.35+i++*0.03,base:hl,cx:cx,cz:cz};
+      var cap=new T.Mesh(capT,new T.MeshBasicMaterial({color:col.clone().lerp(new T.Color(0xffffff),0.45)}));tw.userData.cap=cap;E.sc.add(cap);
+      E.sc.add(tw);meshes.push(tw);torres.push(tw);
+    }
   });
   // etiquetas HTML para las 8 comunas con más envíos
-  var top=meshes.slice().sort(function(a,b){return b.userData.d.total-a.userData.d.total;}).slice(0,8);
+  var top=torres.slice().sort(function(a,b){return b.userData.d.total-a.userData.d.total;}).slice(0,8);
   labels.innerHTML='';var lab=top.map(function(m){var el=document.createElement('div');
-    el.style.cssText='position:absolute;transform:translate(-50%,-100%);pointer-events:none;white-space:nowrap;padding:3px 9px;border-radius:999px;background:rgba(20,22,15,.78);border:1px solid rgba(200,168,75,.55);color:#fff;font:700 11px DM Sans,system-ui,sans-serif;box-shadow:0 6px 14px rgba(0,0,0,.35);backdrop-filter:blur(4px)';
+    el.style.cssText='position:absolute;transform:translate(-50%,-100%);pointer-events:none;white-space:nowrap;padding:3px 9px;border-radius:999px;background:rgba(20,22,15,.8);border:1px solid rgba(200,168,75,.6);color:#fff;font:700 11px DM Sans,system-ui,sans-serif;box-shadow:0 6px 14px rgba(0,0,0,.35);backdrop-filter:blur(4px)';
     el.innerHTML=titulo(m.userData.d.n)+' <span style="color:#ffe59a;font-family:Bebas Neue;font-size:14px;letter-spacing:.5px;margin-left:3px">'+m.userData.d.total.toLocaleString('es-CL')+'</span>';labels.appendChild(el);return{el:el,m:m};});
   var v=new T.Vector3();
   E.setTick(function(t){
-    meshes.forEach(function(m){var u=m.userData;var k=Math.max(0,Math.min(1,(t-u.delay)/0.9));var e=1-Math.pow(1-k,3);var hh=Math.max(0.001,u.h*e);m.scale.y=hh;u.cap.position.y=hh+0.06;});
-    lab.forEach(function(L){v.set(L.m.position.x,L.m.scale.y+1.2,L.m.position.z);var p=proyectar(E,v,cont);L.el.style.left=p.x+'px';L.el.style.top=p.y+'px';L.el.style.display=p.vis?'block':'none';});
+    meshes.forEach(function(m){var u=m.userData;var k=Math.max(0,Math.min(1,(t-u.delay)/0.9));var e=1-Math.pow(1-k,3);m.scale.y=Math.max(0.001,u.h*e);
+      if(!u.losa){m.position.y=(u.base||0)*Math.min(1,t/0.9)+(m===hov?0.35:0);u.cap.position.set(u.cx,m.position.y+m.scale.y+0.06,u.cz);}});
+    lab.forEach(function(L){v.set(L.m.userData.cx,L.m.scale.y+L.m.position.y+1.2,L.m.userData.cz);var p=proyectar(E,v,cont);L.el.style.left=p.x+'px';L.el.style.top=p.y+'px';L.el.style.display=p.vis?'block':'none';});
   });
   E.start();return E;
 }
@@ -262,9 +288,9 @@ function CentroControl3D(props){
   R.useEffect(function(){
     var E=null,vivo=true;setErr('');
     if(!envios.length)return;
-    cargarThree().then(function(T){if(!vivo||!refC.current)return;
+    Promise.all([cargarThree(),modo==='mapa'?cargarGeo():null]).then(function(rr){var T=rr[0],geo=rr[1];if(!vivo||!refC.current)return;
       var ui={lo:res.lo,hi:res.hi,tip:refTip.current,labels:refLab.current,onLost:function(){setTimeout(function(){setGen(function(g){return g+1;});},800);}};
-      try{E=modo==='flujo'?montarFlujo(T,refC.current,res.cnt,ui):montarMapa(T,refC.current,res.datos,ui);}catch(e){setErr('No se pudo dibujar la vista 3D en este equipo.');}
+      try{E=modo==='flujo'?montarFlujo(T,refC.current,res.cnt,ui):montarMapa(T,refC.current,res.datos,ui,geo);}catch(e){setErr('No se pudo dibujar la vista 3D en este equipo.');}
     }).catch(function(){setErr('No se pudo cargar el motor 3D.');});
     return function(){vivo=false;if(E)E.destroy();if(refLab.current)refLab.current.innerHTML='';};
   },[modo,res.key,gen]);
@@ -279,8 +305,8 @@ function CentroControl3D(props){
     h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10,padding:'16px 20px 0'}},
       h('div',null,
         h('div',{style:{fontFamily:'Bebas Neue',fontSize:28,letterSpacing:2.5,color:'#fff',lineHeight:1}},'Centro de control'),
-        h('div',{style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:3}},modo==='mapa'?'Altura = envíos del período · color = efectividad operativa (rojo la más baja del período, verde la más alta) · arrastra para girar, rueda para acercar':'Recorrido de los envíos del período: de bodega a ruta y su resultado final')),
-      h('div',{style:{display:'flex',gap:6}},tab('mapa','Mapa 3D de comunas'),tab('flujo','Flujo de estados'))),
+        h('div',{style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:3}},modo==='mapa'?'Región Metropolitana · altura = envíos del período · color = efectividad operativa (rojo la más baja, verde la más alta) · arrastra para girar, rueda para acercar':'Recorrido de los envíos del período: de bodega a ruta y su resultado final')),
+      h('div',{style:{display:'flex',gap:6}},tab('mapa','Mapa 3D de la RM'),tab('flujo','Flujo de estados'))),
     h('div',{style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 220px',gap:0}},
       h('div',{style:{position:'relative',height:440,minWidth:0}},
         h('div',{ref:refC,style:{position:'absolute',inset:0}}),
