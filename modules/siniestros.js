@@ -70,7 +70,7 @@ function ModalSemana(props){
     setGuardando(true);
     onConfirm(semana).finally(function(){setGuardando(false);});
   }
-  return React.createElement(Modal,{title:'🧾 Descontar a mensajero',
+  return React.createElement(Modal,{title:'Descontar a mensajero',
     sub:bulk?(bulk.cantidad+' código(s) seleccionados'):(row.codigo+' · '+(row.mensajero||'Sin mensajero')),onClose:onClose},
     bulk?
       React.createElement('div',{style:{fontSize:13,marginBottom:14,color:'var(--text-mid)'}},
@@ -86,7 +86,7 @@ function ModalSemana(props){
         React.createElement('input',{type:'date',className:'form-input',value:d2,onChange:function(e){setD2(e.target.value);},style:{margin:0}}))),
     React.createElement('div',{className:'modal-actions'},
       React.createElement('button',{className:'btn-secondary',onClick:onClose},'Cancelar'),
-      React.createElement('button',{className:'btn-confirm',disabled:guardando,onClick:confirmar},guardando?'Guardando...':'✓ Confirmar descuento')));
+      React.createElement('button',{className:'btn-confirm',disabled:guardando,onClick:confirmar},guardando?'Guardando...':'Confirmar descuento')));
 }
 
 // Modal para registrar manualmente un siniestro sobre un código existente, sin pasar por el
@@ -111,8 +111,8 @@ function ModalNuevo(props){
       });
     });
   }
-  return React.createElement(Modal,{title:'⚠ Registrar siniestro manual',sub:'Deja constancia de un siniestro sin depender del estado del envío',onClose:onClose},
-    error&&React.createElement('div',{style:{background:'rgba(176,48,48,0.08)',color:'var(--danger)',padding:'8px 12px',borderRadius:8,fontSize:12,marginBottom:12,fontWeight:600}},'⚠ ',error),
+  return React.createElement(Modal,{title:'Registrar siniestro manual',sub:'Deja constancia de un siniestro sin depender del estado del envío',onClose:onClose},
+    error&&React.createElement('div',{style:{background:'rgba(176,48,48,0.08)',color:'var(--danger)',padding:'8px 12px',borderRadius:8,fontSize:12,marginBottom:12,fontWeight:600}},'',error),
     React.createElement('label',{style:{fontSize:11,color:'var(--text-soft)',display:'block',marginBottom:4}},'Código del envío'),
     React.createElement('input',{className:'form-input',value:codigo,onChange:function(e){setCodigo(e.target.value);},placeholder:'Ej: PGSO000012345'}),
     React.createElement('label',{style:{fontSize:11,color:'var(--text-soft)',display:'block',margin:'12px 0 4px'}},'Mensajero (opcional)'),
@@ -123,11 +123,11 @@ function ModalNuevo(props){
     React.createElement('textarea',{className:'form-input',rows:3,value:nota,onChange:function(e){setNota(e.target.value);},placeholder:'¿Qué pasó?',style:{resize:'vertical'}}),
     React.createElement('div',{className:'modal-actions'},
       React.createElement('button',{className:'btn-secondary',onClick:onClose},'Cancelar'),
-      React.createElement('button',{className:'btn-confirm',disabled:guardando,onClick:guardar},guardando?'Guardando...':'✓ Registrar')));
+      React.createElement('button',{className:'btn-confirm',disabled:guardando,onClick:guardar},guardando?'Guardando...':'Registrar')));
 }
 
 // Modal para que un admin CONFIRME un reporte de "posible siniestro" que dejó un mensajero al
-// reprogramar (ver el checkbox "⚠️ Reportar posible siniestro" en EnvioAccion, index.html). Hasta
+// reprogramar (ver el checkbox "Reportar posible siniestro" en EnvioAccion, index.html). Hasta
 // este momento el envío sigue siendo un Reprogramado normal y NO tiene tuvo_siniestro=true --
 // recién al confirmar se aplica todo el tratamiento de siempre (estado 'siniestro', banner rojo,
 // aparece en Pagos Mensajeros/Analítica como siniestro, etc).
@@ -139,7 +139,7 @@ function ModalConfirmarPendiente(props){
     setGuardando(true);
     onConfirm(row,valor!==''?(parseFloat(valor)||0):null).finally(function(){setGuardando(false);});
   }
-  return React.createElement(Modal,{title:'✅ Confirmar siniestro',sub:row.codigo+' · '+(row.mensajero||'Sin mensajero'),onClose:onClose},
+  return React.createElement(Modal,{title:'Confirmar siniestro',sub:row.codigo+' · '+(row.mensajero||'Sin mensajero'),onClose:onClose},
     React.createElement('div',{style:{fontSize:13,marginBottom:14,color:'var(--text-mid)',background:'rgba(200,168,75,0.1)',padding:'10px 12px',borderRadius:8}},
       React.createElement('div',{style:{fontWeight:700,marginBottom:4}},'Reporte del mensajero:'),
       React.createElement('div',null,row.nota||'(sin nota)'),
@@ -150,7 +150,7 @@ function ModalConfirmarPendiente(props){
       'Al confirmar: el envío ',React.createElement('strong',null,row.codigo),' pasa a estado "Siniestro", queda marcado permanentemente y aparece en esta pantalla para gestionar el descuento al mensajero y la forma de pago al cliente, igual que cualquier otro siniestro.'),
     React.createElement('div',{className:'modal-actions'},
       React.createElement('button',{className:'btn-secondary',onClick:onClose},'Cancelar'),
-      React.createElement('button',{className:'btn-confirm',disabled:guardando,onClick:confirmar},guardando?'Guardando...':'✓ Confirmar siniestro')));
+      React.createElement('button',{className:'btn-confirm',disabled:guardando,onClick:confirmar},guardando?'Guardando...':'Confirmar siniestro')));
 }
 
 function Siniestros(props){
@@ -256,18 +256,18 @@ function Siniestros(props){
     }).then(function(){
       setModalConfirmarPend(null);
       cargar();
-      toast&&toast('✓ Siniestro confirmado — '+row.codigo);
+      toast&&toast('Siniestro confirmado — '+row.codigo);
     }).catch(function(e){
-      toast&&toast('⚠ Error confirmando: '+e.message);
+      toast&&toast('Error confirmando: '+e.message);
     });
   }
   function descartarPendiente(row){
     if(!window.confirm('¿Descartar el reporte de posible siniestro de '+row.codigo+'?\n\nEl envío se queda tal cual está (Reprogramado), sin ninguna marca de siniestro -- por ejemplo si el mensajero se equivocó de estado.'))return;
     var ts=new Date().toISOString();
     db.from('siniestros').update({descartado:true,descartado_fecha:ts,descartado_por:nombreUsuario}).eq('id',row.id).then(function(r){
-      if(r.error){toast&&toast('⚠ Error: '+r.error.message);return;}
+      if(r.error){toast&&toast('Error: '+r.error.message);return;}
       cargar();
-      toast&&toast('✓ Reporte descartado — '+row.codigo+' sigue como Reprogramado');
+      toast&&toast('Reporte descartado — '+row.codigo+' sigue como Reprogramado');
     });
   }
 
@@ -350,9 +350,9 @@ function Siniestros(props){
   // equivocado. Solo toca la tabla siniestros (no el envío en sí).
   function guardarMensajero(row,nuevoMensajero){
     db.from('siniestros').update({mensajero:nuevoMensajero}).eq('id',row.id).then(function(r){
-      if(r.error){toast&&toast('⚠ Error guardando mensajero: '+r.error.message);return;}
+      if(r.error){toast&&toast('Error guardando mensajero: '+r.error.message);return;}
       setRegistros(function(prev){return prev.map(function(x){return x.id===row.id?Object.assign({},x,{mensajero:nuevoMensajero}):x;});});
-      toast&&toast('✓ Mensajero corregido');
+      toast&&toast('Mensajero corregido');
     });
   }
 
@@ -361,10 +361,10 @@ function Siniestros(props){
     if(val==null)return;
     var num=parseFloat(val)||0;
     db.from('envios').update({valor_siniestro:num}).eq('codigo',row.codigo).then(function(r){
-      if(r.error){toast&&toast('⚠ Error guardando valor: '+r.error.message);return;}
+      if(r.error){toast&&toast('Error guardando valor: '+r.error.message);return;}
       setRegistros(function(prev){return prev.map(function(x){return x.id===row.id?Object.assign({},x,{valor_siniestro:num}):x;});});
       setValorEdit(function(prev){var n=Object.assign({},prev);delete n[row.id];return n;});
-      toast&&toast('✓ Valor actualizado');
+      toast&&toast('Valor actualizado');
     });
   }
 
@@ -372,10 +372,10 @@ function Siniestros(props){
     var val=notaEdit[row.id];
     if(val==null)return;
     db.from('siniestros').update({nota:val}).eq('id',row.id).then(function(r){
-      if(r.error){toast&&toast('⚠ Error guardando nota: '+r.error.message);return;}
+      if(r.error){toast&&toast('Error guardando nota: '+r.error.message);return;}
       setRegistros(function(prev){return prev.map(function(x){return x.id===row.id?Object.assign({},x,{nota:val}):x;});});
       setNotaEdit(function(prev){var n=Object.assign({},prev);delete n[row.id];return n;});
-      toast&&toast('✓ Nota actualizada');
+      toast&&toast('Nota actualizada');
     });
   }
 
@@ -406,10 +406,10 @@ function Siniestros(props){
   }
   function guardarEstadoMensajero(row,nuevo,semana){
     return db.from('siniestros').update(payloadMensajero(row,nuevo,semana)).eq('id',row.id).then(function(r){
-      if(r.error){toast&&toast('⚠ Error: '+r.error.message);return;}
+      if(r.error){toast&&toast('Error: '+r.error.message);return;}
       setModalMensajero(null);
       cargar();
-      toast&&toast('✓ '+row.codigo+' (mensajero) → '+estadoMensajeroInfo(nuevo).label);
+      toast&&toast(''+row.codigo+' (mensajero) → '+estadoMensajeroInfo(nuevo).label);
     });
   }
   function cambiarEstadoMensajero(row,nuevo){
@@ -446,9 +446,9 @@ function Siniestros(props){
   }
   function guardarPagoCliente(row,nuevo){
     return db.from('siniestros').update(payloadPagoCliente(row,nuevo)).eq('id',row.id).then(function(r){
-      if(r.error){toast&&toast('⚠ Error: '+r.error.message);return;}
+      if(r.error){toast&&toast('Error: '+r.error.message);return;}
       cargar();
-      toast&&toast('✓ '+row.codigo+' (cliente) → '+pagoClienteInfo(nuevo).label);
+      toast&&toast(''+row.codigo+' (cliente) → '+pagoClienteInfo(nuevo).label);
     });
   }
   function cambiarPagoCliente(row,nuevo){
@@ -501,8 +501,8 @@ function Siniestros(props){
       setModalMensajeroBulk(false);
       cargar();
       limpiarSeleccion();
-      if(errores.length>0)toast&&toast('⚠ '+errores.length+' de '+cand.length+' tuvieron error, revisa e intenta de nuevo');
-      else toast&&toast('✓ '+cand.length+' código(s) (mensajero) → '+estadoMensajeroInfo(nuevo).label);
+      if(errores.length>0)toast&&toast(''+errores.length+' de '+cand.length+' tuvieron error, revisa e intenta de nuevo');
+      else toast&&toast(''+cand.length+' código(s) (mensajero) → '+estadoMensajeroInfo(nuevo).label);
     });
   }
   function aplicarBulkMensajeroClick(){
@@ -527,8 +527,8 @@ function Siniestros(props){
       var errores=results.filter(function(r){return r&&r.error;});
       cargar();
       limpiarSeleccion();
-      if(errores.length>0)toast&&toast('⚠ '+errores.length+' de '+cand.length+' tuvieron error, revisa e intenta de nuevo');
-      else toast&&toast('✓ '+cand.length+' código(s) (cliente) → '+pagoClienteInfo(nuevo).label);
+      if(errores.length>0)toast&&toast(''+errores.length+' de '+cand.length+' tuvieron error, revisa e intenta de nuevo');
+      else toast&&toast(''+cand.length+' código(s) (cliente) → '+pagoClienteInfo(nuevo).label);
     });
   }
   function aplicarBulkClienteClick(){
@@ -569,13 +569,13 @@ function Siniestros(props){
       React.createElement('div',{className:'section-title'},'Siniestros'),
       React.createElement('div',{style:{display:'flex',gap:8}},
         React.createElement('button',{className:'btn-add',onClick:function(){setModalNuevo(true);}},'+ Registrar siniestro'),
-        React.createElement('button',{className:'action-btn btn-edit',disabled:filtrados.length===0,onClick:exportarExcel},'📊 Exportar Excel'))),
+        React.createElement('button',{className:'action-btn btn-edit',disabled:filtrados.length===0,onClick:exportarExcel},'Exportar Excel'))),
     React.createElement('div',{className:'info-banner'},
-      '⚠ Aquí quedan registrados todos los códigos que alguna vez pasaron por estado "Siniestro", ',
+      'Aquí quedan registrados todos los códigos que alguna vez pasaron por estado "Siniestro", ',
       'aunque después salgan a despacho o se entreguen. El estado con el mensajero y la forma de pago ',
       'al cliente son independientes entre sí, y se marcan manualmente, cuando tú decidas — nunca automático.'),
     // "Siniestro" ya no es un estado que el mensajero pueda marcar directo (ver ESTADOS_RIDER en
-    // index.html) -- ahora es una sub-opción de Reprogramado ("⚠️ Reportar posible siniestro") que
+    // index.html) -- ahora es una sub-opción de Reprogramado ("Reportar posible siniestro") que
     // deja un reporte acá, en esta pestaña, PENDIENTE hasta que un admin lo confirme (recién ahí
     // pasa a ser un siniestro real, con todo el tratamiento de siempre) o lo descarte (el envío
     // sigue como Reprogramado, sin ninguna marca).
@@ -583,18 +583,18 @@ function Siniestros(props){
       React.createElement('button',{onClick:function(){setVista('pendientes');},
         style:{padding:'10px 16px',borderRadius:20,border:'1px solid '+(vista==='pendientes'?'var(--gold)':'var(--border)'),
           background:vista==='pendientes'?'rgba(200,168,75,0.15)':'#fff',color:vista==='pendientes'?'#8a6d1a':'var(--text-mid)',
-          fontSize:13,fontWeight:700,cursor:'pointer'}},'⏳ Pendientes de revisión'+(pendientesRevision.length>0?' ('+pendientesRevision.length+')':'')),
+          fontSize:13,fontWeight:700,cursor:'pointer'}},'Pendientes de revisión'+(pendientesRevision.length>0?' ('+pendientesRevision.length+')':'')),
       React.createElement('button',{onClick:function(){setVista('confirmados');},
         style:{padding:'10px 16px',borderRadius:20,border:'1px solid '+(vista==='confirmados'?'var(--gold)':'var(--border)'),
           background:vista==='confirmados'?'rgba(200,168,75,0.15)':'#fff',color:vista==='confirmados'?'#8a6d1a':'var(--text-mid)',
-          fontSize:13,fontWeight:700,cursor:'pointer'}},'✓ Confirmados')),
+          fontSize:13,fontWeight:700,cursor:'pointer'}},'Confirmados')),
     vista==='pendientes'&&React.createElement('div',null,
       React.createElement('div',{className:'info-banner',style:{background:'rgba(200,168,75,0.1)'}},
-        '⏳ Estos códigos siguen como Reprogramado normal -- el mensajero marcó "posible siniestro" al reprogramar, pero todavía nadie lo revisó. ',
+        'Estos códigos siguen como Reprogramado normal -- el mensajero marcó "posible siniestro" al reprogramar, pero todavía nadie lo revisó. ',
         'Confirma solo si corresponde (ahí sí queda registrado como siniestro real) o descarta si fue un error del mensajero.'),
-      React.createElement('input',{type:'text',className:'form-input',placeholder:'🔍 Buscar por código, mensajero o cliente...',
+      React.createElement('input',{type:'text',className:'form-input',placeholder:'Buscar por código, mensajero o cliente...',
         value:busquedaPend,onChange:function(e){setBusquedaPend(e.target.value);},style:{marginBottom:16,maxWidth:420}}),
-      pendientesFiltrados.length===0?React.createElement('div',{style:{textAlign:'center',padding:'40px 20px',color:'var(--text-soft)'}},'No hay reportes pendientes de revisión 🎉'):
+      pendientesFiltrados.length===0?React.createElement('div',{style:{textAlign:'center',padding:'40px 20px',color:'var(--text-soft)'}},'No hay reportes pendientes de revisión '):
       React.createElement('div',{className:'table-wrap'},
         React.createElement('table',null,
           React.createElement('thead',null,React.createElement('tr',null,
@@ -615,8 +615,8 @@ function Siniestros(props){
               React.createElement('td',{style:{fontSize:12,maxWidth:220}},row.nota||'—'),
               React.createElement('td',null,
                 React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
-                  React.createElement('button',{className:'action-btn btn-edit',onClick:function(){setModalConfirmarPend(row);}},'✅ Confirmar'),
-                  React.createElement('button',{className:'action-btn btn-delete',onClick:function(){descartarPendiente(row);}},'🗑️ Descartar'))));
+                  React.createElement('button',{className:'action-btn btn-edit',onClick:function(){setModalConfirmarPend(row);}},'Confirmar'),
+                  React.createElement('button',{className:'action-btn btn-delete',onClick:function(){descartarPendiente(row);}},'Descartar'))));
           }))))),
     vista==='confirmados'&&React.createElement('div',null,
     React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',fontWeight:700,letterSpacing:1,textTransform:'uppercase',marginBottom:6}},'Período'),
@@ -656,7 +656,7 @@ function Siniestros(props){
             background:filtroCliente===f.val?'rgba(200,168,75,0.15)':'#fff',color:filtroCliente===f.val?'#8a6d1a':'var(--text-mid)',
             fontSize:12,fontWeight:700,cursor:'pointer'}},f.label);
       })),
-    React.createElement('input',{type:'text',className:'form-input',placeholder:'🔍 Buscar por código, mensajero, cliente o fecha (AAAA-MM-DD)...',
+    React.createElement('input',{type:'text',className:'form-input',placeholder:'Buscar por código, mensajero, cliente o fecha (AAAA-MM-DD)...',
       value:busqueda,onChange:function(e){setBusqueda(e.target.value);},style:{marginBottom:16,maxWidth:420}}),
     filasSeleccionadas().length>0&&React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:10,
       background:'rgba(200,168,75,0.12)',border:'1px solid var(--gold)',borderRadius:10,padding:'10px 14px',marginBottom:16}},
@@ -678,7 +678,7 @@ function Siniestros(props){
           ESTADOS_PAGO_CLIENTE.map(function(e){return React.createElement('option',{key:e.val,value:e.val},e.label);})),
         React.createElement('button',{className:'action-btn btn-edit',onClick:aplicarBulkClienteClick},'Aplicar'))),
     cargando?React.createElement('div',{style:{textAlign:'center',padding:'40px 20px',color:'var(--text-soft)'}},'Cargando siniestros...'):
-    filtrados.length===0?React.createElement('div',{style:{textAlign:'center',padding:'40px 20px',color:'var(--text-soft)'}},'No hay siniestros en este filtro 🎉'):
+    filtrados.length===0?React.createElement('div',{style:{textAlign:'center',padding:'40px 20px',color:'var(--text-soft)'}},'No hay siniestros en este filtro '):
     React.createElement('div',{className:'table-wrap'},
       React.createElement('table',null,
         React.createElement('thead',null,React.createElement('tr',null,
@@ -750,7 +750,7 @@ function Siniestros(props){
         var pend=candidatosBulkMensajero('mensajero');
         return{cantidad:pend.length,total:pend.reduce(function(a,r){return a+(parseFloat(r.valor_siniestro)||0);},0)};
       })(),onClose:function(){setModalMensajeroBulk(false);},onConfirm:function(semana){return aplicarEstadoMensajeroMasivo('mensajero',semana);}}),
-    modalNuevo&&React.createElement(ModalNuevo,{mensajeros:mensajeros,onClose:function(){setModalNuevo(false);},onCreado:function(){setModalNuevo(false);cargar();toast&&toast('✓ Siniestro registrado');}}),
+    modalNuevo&&React.createElement(ModalNuevo,{mensajeros:mensajeros,onClose:function(){setModalNuevo(false);},onCreado:function(){setModalNuevo(false);cargar();toast&&toast('Siniestro registrado');}}),
     modalConfirmarPend&&React.createElement(ModalConfirmarPendiente,{row:modalConfirmarPend,onClose:function(){setModalConfirmarPend(null);},onConfirm:confirmarPendiente}));
 }
 
