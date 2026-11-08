@@ -36,7 +36,8 @@ function efColor(T,ef,lo,hi){
   lo=lo==null?0.9:lo;hi=hi==null?1:hi;var t=Math.max(0,Math.min(1,(ef-lo)/Math.max(0.005,hi-lo)));
   return t<0.5?a.lerp(b,t*2):b.lerp(c,(t-0.5)*2);
 }
-function titulo(s){return s.toLowerCase().replace(/(^|\s)\S/g,function(x){return x.toUpperCase();});}
+var ACENTOS={'NUNOA':'Ñuñoa','MAIPU':'Maipú','CONCHALI':'Conchalí','PENALOLEN':'Peñalolén','ESTACION CENTRAL':'Estación Central','SAN JOAQUIN':'San Joaquín','SAN RAMON':'San Ramón','PENAFLOR':'Peñaflor','SAN JOSE DE MAIPO':'San José de Maipo','ALHUE':'Alhué','CURACAVI':'Curacaví','MARIA PINTO':'María Pinto','PEDRO AGUIRRE CERDA':'Pedro Aguirre Cerda','LO BARNECHEA':'Lo Barnechea','ISLA DE MAIPO':'Isla de Maipo','CALERA DE TANGO':'Calera de Tango','SAN JOSE':'San José'};
+function titulo(s){var k=String(s||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();if(ACENTOS[k])return ACENTOS[k];return s.toLowerCase().replace(/(^|\s)\S/g,function(x){return x.toUpperCase();}).replace(/ (De|Del|La|Las|Los|El) /g,function(x){return x.toLowerCase();});}
 
 // ── Motor común: renderer + cámara orbital + bucle con pausa ──
 function crearEscena(T,cont,opts){
