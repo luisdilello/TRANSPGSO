@@ -110,22 +110,27 @@ function montarMapa(T,cont,datos,ui,geo){
   var byN={};datos.forEach(function(d){byN[d.n]=d;});
   var max=Math.max.apply(null,datos.map(function(d){return d.total;}).concat([1]));
   var X=function(lng){return (lng+70.65)*105;},Y=function(lat){return (lat+33.47)*105;};
-  var lineMat=new T.LineBasicMaterial({color:0xe8c766,transparent:true,opacity:0.55});
+  var lineMat=new T.LineBasicMaterial({color:0xffe08a,transparent:true,opacity:0.9});
   var i=0,torres=[];
   var geoT=new T.CylinderGeometry(1.0,1.0,1,6,1);geoT.translate(0,0.5,0);var capT=new T.CylinderGeometry(1.03,1.03,0.12,6,1);
   geo.forEach(function(f){
     var key=norm(f.n);var d=byN[key];
     var shapes=f.r.map(function(ring){return new T.Shape(ring.map(function(p){return new T.Vector2(X(p[0]),Y(p[1]));}));});
     var g=new T.ExtrudeGeometry(shapes,{depth:1,bevelEnabled:false});g.rotateX(-Math.PI/2);
+    // separación entre comunas: cada losa se encoge levemente hacia su centro (deja una "calle" oscura entre comunas)
+    g.computeBoundingBox();var b0=g.boundingBox,ccx=(b0.min.x+b0.max.x)/2,ccz=(b0.min.z+b0.max.z)/2,tam=Math.max(1,Math.min(b0.max.x-b0.min.x,b0.max.z-b0.min.z));
+    var fs=Math.max(0.9,1-0.5/tam);g.translate(-ccx,0,-ccz);g.scale(fs,1,fs);g.translate(ccx,0,ccz);
     var con=!!(d&&d.total);
     // losa del mapa: tono crema/oliva, teñida suave según efectividad si tiene envíos
-    var colL=con?efColor(T,d.ef,ui.lo,ui.hi).lerp(new T.Color(0x8f8a6c),0.7):new T.Color(0x34392a);
-    var matL=new T.MeshStandardMaterial({color:colL,emissive:colL,emissiveIntensity:0.05,roughness:0.85,metalness:0.05});
+    var paleta=[0xe9dcae,0xd8c48a,0xf1e6c2,0xcdb877,0xe2d29f,0xc9b26b];
+    var vari=(f.n.length*7+f.n.charCodeAt(0)*3)%paleta.length;
+    var colL=con?efColor(T,d.ef,ui.lo,ui.hi).multiplyScalar([0.42,0.55,0.68,0.48,0.62,0.36][vari]):new T.Color([0x3a4030,0x323827,0x41472f][vari%3]);
+    var matL=new T.MeshStandardMaterial({color:colL,emissive:colL,emissiveIntensity:0.12,roughness:0.7,metalness:0.1});
     var losa=new T.Mesh(g,matL);losa.receiveShadow=true;losa.castShadow=false;losa.scale.y=0.001;
     var hl=con?0.9:0.45;
-    losa.userData={d:d||{n:key,total:0,prov:f.p},h:hl,ei:0.05,delay:0,losa:true};
+    losa.userData={d:d||{n:key,total:0,prov:f.p},h:hl,ei:0.12,delay:0,losa:true};
     if(d)d.prov=f.p;
-    losa.add(new T.LineSegments(new T.EdgesGeometry(g,25),con?lineMat:new T.LineBasicMaterial({color:0xc8a84b,transparent:true,opacity:0.25})));
+    losa.add(new T.LineSegments(new T.EdgesGeometry(g,25),con?lineMat:new T.LineBasicMaterial({color:0xc8a84b,transparent:true,opacity:0.55})));
     E.sc.add(losa);meshes.push(losa);
     if(con){
       var c=COORD[key];var cx,cz;
