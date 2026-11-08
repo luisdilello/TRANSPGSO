@@ -663,7 +663,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1794172954;
+window.__MODULES_VERSION=1794173212;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -14802,7 +14802,7 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
       ...(puedeVer('siniestros')?[{id:'pagos|siniestros',label:'Siniestros'}]:[]),
       ...(puedeVerSub('pagos','pagos')?[{id:'pagos|pagos',label:'Pagos'}]:[]),
       ...(puedeVerSub('pagos','tarifas')?[{id:'pagos|tarifas',label:'Tarifas de Pago'}]:[]),
-      ...((perfil&&perfil.esSuperAdmin)?[{id:'pagos|soporte',label:'Soporte Firmas'}]:[]),
+      ...((perfil&&perfil.esSuperAdmin)?[{id:'pagos|soporte',label:'Pago de Operadores'}]:[]),
       ...(puedeVerSub('pagos','cobros')?[{id:'pagos|cobros',label:'Cobros a Clientes'}]:[]),
       ...(puedeVerSub('pagos','retiros')?[{id:'pagos|retiros',label:'Planilla Retiros'}]:[]),
       ...(puedeVerSub('pagos','productos')?[{id:'pagos|productos',label:'Productos'}]:[]),
