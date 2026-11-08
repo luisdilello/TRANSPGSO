@@ -1601,7 +1601,8 @@ function SoporteFirmasTab(props){
   React.useEffect(function(){
     if(!periodo.desde||!periodo.hasta)return;
     setConteo(null);
-    db.rpc('entregados_por_mensajero_dia',{p_desde:periodo.desde,p_hasta:periodo.hasta}).then(function(r){
+    // paginado: el RPC devuelve máx. 1000 filas por llamada (mensajero x día de un mes completo lo supera)
+    (function todo(){var out=[];function pag(d){return db.rpc('entregados_por_mensajero_dia',{p_desde:periodo.desde,p_hasta:periodo.hasta}).range(d,d+999).then(function(r){if(r.error)return r;out=out.concat(r.data||[]);return (r.data||[]).length===1000?pag(d+1000):{data:out};});}return pag(0);})().then(function(r){
       if(r.error){toast&&toast('Error contando entregas: '+r.error.message);setConteo([]);return;}
       setConteo(r.data||[]);
     });

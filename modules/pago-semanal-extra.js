@@ -18,6 +18,8 @@ function norm(n){return String(n||'').replace(/,\s*/g,' ').replace(/\s+/g,' ').t
 function fmt(n){return (n<0?'-':'')+'$'+Math.abs(Math.round(n||0)).toLocaleString('es-CL');}
 function pct(x){return (isFinite(x)?(x*100):0).toFixed(1).replace('.',',')+'%';}
 function tit(s){return String(s||'').toLowerCase().replace(/(^|\s)\S/g,function(m){return m.toUpperCase();});}
+// Las funciones RPC devuelven como máximo 1000 filas por llamada: se piden en páginas hasta traer todo.
+function rpcTodo(nombre,args){var out=[];function pag(desde){return db.rpc(nombre,args).range(desde,desde+999).then(function(r){if(r.error)return r;out=out.concat(r.data||[]);if((r.data||[]).length===1000)return pag(desde+1000);return{data:out};});}return pag(0);}
 var DIAS=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 var quien=function(){return (A.perfil&&(A.perfil.nombre||A.perfil.usuario))||'Administrador';};
 
@@ -42,7 +44,7 @@ function Resumen(props){
   var _g=R.useState(0),gen=_g[0],setGen=_g[1];
   R.useEffect(function(){var vivo=true;setD(null);
     Promise.all([
-      db.rpc('entregados_semana_detalle',{p_desde:sem.desde,p_hasta:sem.hasta}),
+      rpcTodo('entregados_semana_detalle',{p_desde:sem.desde,p_hasta:sem.hasta}),
       db.from('mensajeros').select('nombre,tarifa,extra_periferia,periferia_paga_a,extra_comuna,extra_comuna_tarifa,activo'),
       db.from('configuracion').select('valor').eq('clave','resumen_semanal_cfg').maybeSingle(),
       db.from('clientes').select('nombre,tarifa,paga_iva,activo')

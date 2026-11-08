@@ -23,6 +23,8 @@ function tit(s){return String(s||'').toLowerCase().replace(/(^|\s)\S/g,function(
 function infoSemana(lunes){var dom=sumar(lunes,6);var d=new Date(dom+'T12:00:00');var y=d.getFullYear(),m=d.getMonth();
   var p=new Date(y,m,1);p.setDate(1+((7-p.getDay())%7));var n=Math.round((d-p)/(7*864e5))+1;
   return{num:n,mes:d.toLocaleDateString('es-CL',{month:'long'}),desde:lunes,hasta:dom};}
+// Las funciones RPC devuelven como máximo 1000 filas por llamada: se piden en páginas hasta traer todo.
+function rpcTodo(nombre,args){var out=[];function pag(desde){return db.rpc(nombre,args).range(desde,desde+999).then(function(r){if(r.error)return r;out=out.concat(r.data||[]);if((r.data||[]).length===1000)return pag(desde+1000);return{data:out};});}return pag(0);}
 var TIPOS={
   extra:{l:'Extra',s:1,c:'#2e7d4f'},
   adelanto:{l:'Adelanto',s:-1,c:'#c26a12'},
@@ -118,7 +120,7 @@ function PagoSemanal(props){
   R.useEffect(function(){
     var vivo=true;setData(null);
     Promise.all([
-      db.rpc('entregados_por_mensajero_comuna',{p_desde:sem.desde,p_hasta:sem.hasta}),
+      rpcTodo('entregados_por_mensajero_comuna',{p_desde:sem.desde,p_hasta:sem.hasta}),
       db.from('mensajeros').select('nombre,tarifa,extra_periferia,periferia_paga_a,extra_comuna,extra_comuna_tarifa,activo'),
       db.from('movimientos_pago_mensajero').select('*').lte('semana',sem.desde).order('created_at',{ascending:true}),
       db.from('siniestros').select('id,codigo,mensajero,fecha_siniestro,nota,descontado_mensajero,descartado').or('descontado_mensajero.is.null,descontado_mensajero.eq.false').order('fecha_siniestro',{ascending:false}).limit(500),
