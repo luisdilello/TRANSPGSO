@@ -323,11 +323,13 @@ function ritmoFranjas(t,dias){
 function esFernando(n){return /^FERNANDO/i.test(String(n||''))&&!/CHECK/i.test(String(n||''));}
 function indicadoresOperacionHTML(t,dias,extra){
   var nm=t.mensajeros.length||0,est=(extra&&extra.estados)||{};
-  var prom=function(a){return nm?(a/nm).toFixed(1).replace('.',','):'—';};
+  // Promedio por mensajero y por día trabajado (en períodos de varios días no se mezclan días).
+  var jornadas=t.mensajeros.reduce(function(a,m){return a+(m.dias||1);},0);
+  var prom=function(a){return jornadas?(a/jornadas).toFixed(1).replace('.',','):'—';};
   var cajas=[
     infoBoxHTML('Mensajeros en ruta',String(nm),true),
-    infoBoxHTML('Piezas promedio por mensajero',prom(t.salida),true),
-    infoBoxHTML('Entregas promedio por mensajero',prom(t.ent),true),
+    infoBoxHTML('Piezas por mensajero al día',prom(t.salida),true),
+    infoBoxHTML('Entregas por mensajero al día',prom(t.ent),true),
     infoBoxHTML('Carga del día que salió el mismo día',pct(t.salidaDia,t.llegada),true),
     infoBoxHTML('Salida que venía de días anteriores',pct(t.salidaAnt,t.salida)+' ('+fmtN(t.salidaAnt)+')'),
     infoBoxHTML('Reprogramados sobre salida',pct(t.rep,t.salida)+' ('+fmtN(t.rep)+')'),
@@ -659,7 +661,7 @@ function PanelIncidencias(p){
   var men=(I.por_mensajero||[]).slice(0,8),maxN=men.length?men[0].n:1;
   var resF=+I.resueltas_fernando||0,pF=pctNum(resF,I.total);
   var fr=ritmoFranjas(t,p.dias),maxF=Math.max.apply(null,fr.map(function(x){return x.n;}).concat([1]));
-  var nm=t.mensajeros.length||0;
+  var nm=t.mensajeros.length||0,jorn=t.mensajeros.reduce(function(a,m){return a+(m.dias||1);},0);
   return h('div',{style:{display:'grid',gridTemplateColumns:'minmax(0,1.6fr) minmax(0,1fr)',gap:12,marginTop:12},className:'informes-grid'},
     panel('Incidencias reportadas por operadores',I.total?fmtN(I.total)+' reportes · '+fmtN(I.codigos)+' piezas':'sin reportes',
       !I.total?h('div',{style:{fontSize:12,color:IX.verde,fontWeight:700}},'Sin incidencias reportadas en el período.'):
@@ -683,7 +685,7 @@ function PanelIncidencias(p){
     panel('Pulso de la operación',nm+' mensajeros en ruta',
       h('div',null,
         h('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}},
-          ixKpi('Piezas por mensajero',nm?(t.salida/nm).toFixed(1).replace('.',','):'—',{flex:'1 1 120px'}),
+          ixKpi('Piezas por mensajero al día',jorn?(t.salida/jorn).toFixed(1).replace('.',','):'—',{flex:'1 1 120px'}),
           ixKpi('Salió el mismo día',pct(t.salidaDia,t.llegada),{color:IX.oro,flex:'1 1 120px'})),
         fr.length>0&&h('div',null,
           h('div',{style:{fontSize:10.5,letterSpacing:1.4,textTransform:'uppercase',color:IX.suave,fontWeight:800,marginBottom:6}},'Entregas por franja horaria'),
