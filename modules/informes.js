@@ -492,7 +492,7 @@ function BarrasPct(p){
           h('div',{style:{position:'absolute',left:2,right:2,top:1,height:'40%',borderRadius:6,background:'linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,0))'}}))));}));
 }
 function TendenciaDias(p){
-  var dias=p.dias;var W=760,H=190,PL=40,PR=14,PT=16,PB=28;
+  var dias=p.dias;var W=1300,H=230,PL=44,PR=16,PT=18,PB=28;
   var pts=dias.map(function(d){var sal=+d.salida.total||0,f=d.final||{};return{d:d.dia,sal:sal,v:pctNum(+f.entregados||0,sal)};});
   var maxS=Math.max.apply(null,pts.map(function(x){return x.sal;}).concat([1]));
   var vals=pts.filter(function(x){return x.v!=null;}).map(function(x){return x.v;});
