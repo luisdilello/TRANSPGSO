@@ -656,7 +656,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1794156366;
+window.__MODULES_VERSION=1794156451;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3404,7 +3404,7 @@ function Dashboard(_ref7){
             setTimeout(()=>alert('✓ '+n+' manifiesto'+(n>1?'s':'')+' de colecta descargado'+(n>1?'s':'')+'.\nAbre cada archivo e imprime (Ctrl+P) para guardar como PDF.'),n*400+300);
           },
           style:{padding:'6px 14px',borderRadius:8,border:'1px solid var(--gold)',background:'rgba(200,168,75,0.08)',color:'var(--gold)',fontWeight:700,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}
-        },'📥 Descargar Todos ('+colectaSort.length+')')
+        },'Descargar todos ('+colectaSort.length+')')
       ),
       React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginBottom:10,marginTop:-6}},'💡 "Paquetes" = todo lo ingresado ese día por cualquier vía (Excel, Retiro, Colecta app, Etiqueta). "Turno 1/2" solo cuenta lo registrado con la función Colecta del celular — por eso puede ser menor que el total.'),
       colectaSort.length===0
