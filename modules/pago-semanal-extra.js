@@ -47,19 +47,21 @@ function Resumen(props){
       rpcTodo('entregados_semana_detalle',{p_desde:sem.desde,p_hasta:sem.hasta}),
       db.from('mensajeros').select('nombre,tarifa,extra_periferia,periferia_paga_a,extra_comuna,extra_comuna_tarifa,activo'),
       db.from('configuracion').select('valor').eq('clave','resumen_semanal_cfg').maybeSingle(),
-      db.from('clientes').select('nombre,tarifa,paga_iva,activo')
+      db.from('clientes').select('nombre,tarifa,paga_iva,activo'),
+      db.from('configuracion').select('valor').eq('clave','pago_semanal_excluidos').maybeSingle()
     ]).then(function(r){if(!vivo)return;if(r[0].error){toast('Error: '+r[0].error.message);setD({error:true});return;}
       var cfgM={};(r[1].data||[]).forEach(function(m){var k=norm(m.nombre);if(cfgM[k]&&cfgM[k].activo!==false&&m.activo===false)return;cfgM[k]=m;});
       var cfg=(r[2].data&&r[2].data.valor)||{tarifasCliente:{},costosRetiro:[],semanasMes:52/12};
       var cli={};(r[3].data||[]).forEach(function(c){cli[norm(c.nombre)]=c;});
-      setD({rows:r[0].data||[],cfgM:cfgM,cfg:cfg,cli:cli});
+      var excl=((r[4]&&r[4].data&&r[4].data.valor)||['ELY MENSAJERO','FERNANDOCHECK','FERNANDO CHECK']).map(norm);
+      setD({rows:r[0].data||[],cfgM:cfgM,cfg:cfg,cli:cli,excl:excl});
     });return function(){vivo=false;};},[sem.desde,gen]);
   if(!d)return h('div',{className:'info-banner'},'Calculando resumen...');
   if(d.error)return h('div',{className:'info-banner'},'No se pudo cargar.');
   var cfg=d.cfg,tarC=cfg.tarifasCliente||{};
   function tarifaCliente(c){if(tarC[c]!=null)return +tarC[c];var x=d.cli[c];if(!x)return 0;return x.paga_iva?(+x.tarifa||0)/1.19:(+x.tarifa||0);}
   var porCli={},porMen={},porDia={},comunas={},totE=0,totC=0,totP=0,secPer={n:0,p:0};
-  d.rows.forEach(function(x){var n=+x.n||0;var m=d.cfgM[x.mensajero]||{};var pu=+m.tarifa||0;var pc=tarifaCliente(x.cliente);
+  d.rows.forEach(function(x){var n=+x.n||0;var m=d.cfgM[x.mensajero]||{};var pu=d.excl.indexOf(x.mensajero)>=0?0:(+m.tarifa||0); // cuentas internas fuera del pago: no suman al pagadovar pc=tarifaCliente(x.cliente);
     totE+=n;totC+=n*pc;totP+=n*pu;comunas[x.comuna]=1;
     var c=porCli[x.cliente]||(porCli[x.cliente]={n:0,c:0,p:0,tar:pc});c.n+=n;c.c+=n*pc;c.p+=n*pu;
     var mm=porMen[x.mensajero]||(porMen[x.mensajero]={n:0,p:0,tar:pu,dias:{}});mm.n+=n;mm.p+=n*pu;mm.dias[x.dia]=1;
