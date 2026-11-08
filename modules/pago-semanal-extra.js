@@ -35,6 +35,44 @@ function Kpi(p){return h('div',{style:{flex:'1 1 180px',padding:'14px 16px',bord
 function Oscuro(p){return h('div',{style:{borderRadius:20,padding:'18px 20px',marginBottom:18,background:'radial-gradient(120% 120% at 20% 0%,#3b402c,#1a1d13)',border:'1px solid rgba(200,168,75,.38)',boxShadow:'0 22px 40px -22px rgba(20,22,15,.7)'}},p.children);}
 var thS={textAlign:'right'},tdR={textAlign:'right',fontFamily:'JetBrains Mono',fontSize:12.5};
 
+// ── Secciones especiales: periferias (Puente Alto destacada) y extras por comuna ──
+function SeccionesEsp(p){
+  var sp=p.secPer,dias=p.dias;
+  var coms=Object.keys(sp.com).sort(function(a,b){return sp.com[b].n-sp.com[a].n;});
+  var pa=sp.com['PUENTE ALTO'];var otros=coms.filter(function(c){return c!=='PUENTE ALTO';});
+  var maxDia=function(o){return Math.max.apply(null,dias.map(function(x){return o[x]||0;}).concat([1]));};
+  var mini=function(o,col){var mx=maxDia(o);return h('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:6,alignItems:'end',height:90}},dias.map(function(x,i){var v=o[x]||0;return h('div',{key:x,style:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',height:'100%'}},
+    h('div',{style:{fontSize:11,fontWeight:800}},v||''),h('div',{style:{width:'70%',height:Math.max(3,Math.round(v/mx*58)),borderRadius:'6px 6px 2px 2px',background:'linear-gradient(180deg,'+col+'cc,'+col+')',boxShadow:'inset 0 2px 0 rgba(255,255,255,.4)'}}),h('div',{style:{fontSize:10,color:'var(--text-soft)',marginTop:3}},DIAS[i]));}));};
+  var filaMen=function(m,n,extra){return h('div',{key:m,style:{display:'flex',justifyContent:'space-between',gap:8,fontSize:12.5,padding:'5px 0',borderBottom:'1px dashed rgba(200,168,75,.25)'}},h('span',{style:{fontWeight:700}},tit(m)),h('span',{className:'mono'},n+' pzs'+(extra!=null?' · '+fmt(extra):'')));};
+  var paMen=pa?Object.keys(pa.men).sort(function(a,b){return pa.men[b]-pa.men[a];}):[];
+  var men=Object.keys(sp.men).sort(function(a,b){return sp.men[b].n-sp.men[a].n;});
+  var clis=Object.keys(sp.cli).sort(function(a,b){return sp.cli[b]-sp.cli[a];});
+  return h(Panel,{titulo:'Secciones especiales',sub:'Entregas en comunas "- PERIFERIA" y extras por comuna; el extra se paga según el valor de periferia de cada mensajero'},
+    h('div',{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:16}},
+      [['Piezas en periferia',sp.n.toLocaleString('es-CL'),'#1565c0',pct(p.totE?sp.n/p.totE:0)+' de los envíos'],['Extra pagado periferia',fmt(sp.p),'#2e7d4f',sp.n?'promedio '+fmt(sp.p/sp.n)+' por pieza':''],['Comunas con periferia',coms.length,'#a0842a',pa?'Puente Alto: '+pct(sp.n?pa.n/sp.n:0)+' del total':''],['Mensajeros con periferia',men.length,'#5e35b1','']].map(function(k){return h('div',{key:k[0],style:{flex:'1 1 170px',padding:'12px 14px',borderRadius:14,background:'#fff',border:'1px solid rgba(200,168,75,.3)',borderBottom:'4px solid '+k[2]}},
+        h('div',{style:{fontSize:10.5,fontWeight:800,letterSpacing:1.3,textTransform:'uppercase',color:'var(--text-soft)'}},k[0]),h('div',{style:{fontFamily:'Bebas Neue',fontSize:30,lineHeight:1.05,color:k[2]}},k[1]),k[3]?h('div',{style:{fontSize:11.5,color:'var(--text-soft)'}},k[3]):null);})),
+    pa?h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,300px),1fr))',gap:16,padding:16,marginBottom:16,borderRadius:16,background:'linear-gradient(160deg,#2f3325,#1c1f15)',color:'#f3ecd6'}},
+      h('div',null,h('div',{style:{fontFamily:'Bebas Neue',fontSize:24,letterSpacing:1.6,color:'#ffe59a'}},'Puente Alto · Periferia'),
+        h('div',{style:{fontFamily:'Bebas Neue',fontSize:44,lineHeight:1,color:'#fff'}},pa.n+' piezas'),
+        h('div',{style:{fontSize:13,marginTop:4}},'Extra pagado ',h('b',{style:{color:'#7ee0ad'}},fmt(pa.p)),' · promedio ',h('b',null,Math.round(pa.n/(Object.keys(pa.dia).length||1))+' por día'))),
+      h('div',{style:{background:'rgba(255,255,255,.95)',borderRadius:12,padding:'10px 12px',color:'var(--dark)'}},h('div',{style:{fontSize:11,fontWeight:800,letterSpacing:1.2,color:'var(--text-soft)',marginBottom:4}},'POR DÍA'),mini(pa.dia,'#c8a84b')),
+      h('div',{style:{background:'rgba(255,255,255,.95)',borderRadius:12,padding:'10px 12px',color:'var(--dark)'}},h('div',{style:{fontSize:11,fontWeight:800,letterSpacing:1.2,color:'var(--text-soft)',marginBottom:4}},'MENSAJEROS'),
+        paMen.map(function(m){var sm=sp.men[m]||{};return filaMen(m,pa.men[m],pa.men[m]*(sm.tar||0));}))):null,
+    h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,320px),1fr))',gap:16}},
+      h('div',null,h('div',{style:{fontWeight:800,fontSize:13,marginBottom:6}},'Por mensajero'),
+        h('div',{className:'table-wrap'},h('table',null,h('thead',null,h('tr',null,h('th',null,'Mensajero'),h('th',{style:thS},'Piezas'),h('th',{style:thS},'Valor'),h('th',{style:thS},'Extra'),h('th',null,'Comunas'))),
+          h('tbody',null,men.map(function(m){var x=sp.men[m];return h('tr',{key:m},h('td',{style:{fontWeight:700}},tit(m),x.pagaA?h('div',{style:{fontSize:10.5,color:'var(--text-soft)'}},'se abona a '+tit(x.pagaA)):null),h('td',{style:tdR},x.n),h('td',{style:tdR},x.tar?fmt(x.tar):'—'),h('td',{style:Object.assign({},tdR,{fontWeight:700,color:x.p?'#2e7d4f':'var(--text-soft)'})},x.p?fmt(x.p):'sin extra'),h('td',{style:{fontSize:11.5}},Object.keys(x.com).map(function(c){return tit(c)+' '+x.com[c];}).join(', ')));}))))),
+      h('div',null,h('div',{style:{fontWeight:800,fontSize:13,marginBottom:6}},'Por comuna'),
+        h('div',{className:'table-wrap'},h('table',null,h('thead',null,h('tr',null,h('th',null,'Comuna'),h('th',{style:thS},'Piezas'),h('th',{style:thS},'Extra'),h('th',null,'Mensajeros'))),
+          h('tbody',null,coms.map(function(c){var x=sp.com[c];return h('tr',{key:c},h('td',{style:{fontWeight:700}},tit(c)+' - Periferia'),h('td',{style:tdR},x.n),h('td',{style:tdR},fmt(x.p)),h('td',{style:{fontSize:11.5}},Object.keys(x.men).map(function(m){return tit(m)+' '+x.men[m];}).join(', ')));})))),
+        clis.length?h('div',{style:{marginTop:12}},h('div',{style:{fontWeight:800,fontSize:13,marginBottom:6}},'Por cliente'),
+          h('div',{style:{display:'flex',flexWrap:'wrap',gap:6}},clis.map(function(c){return h('span',{key:c,style:{fontSize:12,padding:'4px 10px',borderRadius:999,background:'#fff',border:'1px solid rgba(200,168,75,.3)'}},h('b',null,c),' ',sp.cli[c]);}))):null)),
+    Object.keys(p.secCom).length?h('div',{style:{marginTop:16}},h('div',{style:{fontWeight:800,fontSize:13,marginBottom:6}},'Extras por comuna'),
+      h('div',{style:{display:'flex',gap:10,flexWrap:'wrap'}},Object.keys(p.secCom).map(function(c){var x=p.secCom[c];return h('div',{key:c,style:{flex:'1 1 240px',padding:'12px 14px',borderRadius:14,background:'#fff',border:'1px solid rgba(200,168,75,.3)',borderBottom:'4px solid #c26a12'}},
+        h('div',{style:{fontSize:10.5,fontWeight:800,letterSpacing:1.3,textTransform:'uppercase',color:'var(--text-soft)'}},tit(c)),h('div',{style:{fontFamily:'Bebas Neue',fontSize:26,color:'#c26a12'}},x.n+' piezas · '+fmt(x.p)),
+        Object.keys(x.men).map(function(m){return h('div',{key:m,style:{fontSize:12}},tit(m)+': '+x.men[m].n+' × '+fmt(x.men[m].tar));}));}))):null);
+}
+
 // ════════════════════════ RESUMEN ════════════════════════
 function Resumen(props){
   var sem=props.sem,toast=props.toast||function(){};
@@ -60,13 +98,17 @@ function Resumen(props){
   if(d.error)return h('div',{className:'info-banner'},'No se pudo cargar.');
   var cfg=d.cfg,tarC=cfg.tarifasCliente||{};
   function tarifaCliente(c){if(tarC[c]!=null)return +tarC[c];var x=d.cli[c];if(!x)return 0;return x.paga_iva?(+x.tarifa||0)/1.19:(+x.tarifa||0);}
-  var porCli={},porMen={},porDia={},comunas={},totE=0,totC=0,totP=0,secPer={n:0,p:0};
+  var porCli={},porMen={},porDia={},comunas={},totE=0,totC=0,totP=0,secPer={n:0,p:0,com:{},men:{},dia:{},cli:{}},secCom={};
   d.rows.forEach(function(x){var n=+x.n||0;var m=d.cfgM[x.mensajero]||{};var pu=d.excl.indexOf(x.mensajero)>=0?0:(+m.tarifa||0);var pc=tarifaCliente(x.cliente);
     totE+=n;totC+=n*pc;totP+=n*pu;comunas[x.comuna]=1;
     var c=porCli[x.cliente]||(porCli[x.cliente]={n:0,c:0,p:0,tar:pc});c.n+=n;c.c+=n*pc;c.p+=n*pu;
     var mm=porMen[x.mensajero]||(porMen[x.mensajero]={n:0,p:0,tar:pu,dias:{}});mm.n+=n;mm.p+=n*pu;mm.dias[x.dia]=1;
     var dd=porDia[x.dia]||(porDia[x.dia]={n:0,c:0,p:0});dd.n+=n;dd.c+=n*pc;dd.p+=n*pu;
-    if(/PERIFERIA/.test(x.comuna)){secPer.n+=n;secPer.p+=n*(+m.extra_periferia||0);}});
+    if(/PERIFERIA/.test(x.comuna)&&d.excl.indexOf(x.mensajero)<0){var ex=n*(+m.extra_periferia||0);secPer.n+=n;secPer.p+=ex;
+      var cb=x.comuna.replace(/\s*-\s*PERIFERIA\s*$/,'');var sc=secPer.com[cb]||(secPer.com[cb]={n:0,p:0,men:{},dia:{}});sc.n+=n;sc.p+=ex;sc.men[x.mensajero]=(sc.men[x.mensajero]||0)+n;sc.dia[x.dia]=(sc.dia[x.dia]||0)+n;
+      var sm=secPer.men[x.mensajero]||(secPer.men[x.mensajero]={n:0,p:0,tar:+m.extra_periferia||0,pagaA:m.periferia_paga_a||'',com:{}});sm.n+=n;sm.p+=ex;sm.com[cb]=(sm.com[cb]||0)+n;
+      secPer.dia[x.dia]=(secPer.dia[x.dia]||0)+n;secPer.cli[x.cliente]=(secPer.cli[x.cliente]||0)+n;}
+    if(m.extra_comuna&&x.comuna.indexOf(norm(m.extra_comuna))===0&&d.excl.indexOf(x.mensajero)<0){var k2=norm(m.extra_comuna);var e2=secCom[k2]||(secCom[k2]={n:0,p:0,men:{}});var mm2=e2.men[x.mensajero]||(e2.men[x.mensajero]={n:0,tar:+m.extra_comuna_tarifa||0});mm2.n+=n;e2.n+=n;e2.p+=n*(+m.extra_comuna_tarifa||0);}});
   var bruta=totC-totP;var sm=+cfg.semanasMes||52/12;
   var costos=(cfg.costosRetiro||[]).map(function(g){var envG=(g.clientes||[]).reduce(function(a,c){return a+((porCli[norm(c)]||{}).n||0);},0);return Object.assign({},g,{semanal:(+g.mensual||0)/sm,envios:envG});});
   var costoSem=costos.reduce(function(a,g){return a+g.semanal;},0);var neta=bruta-costoSem;
@@ -146,9 +188,7 @@ function Resumen(props){
         mens.map(function(m,i){return h('tr',{key:m.k},h('td',{style:tdR},i+1),h('td',{style:{fontWeight:700}},m.k||'(sin mensajero)'),h('td',{style:tdR},m.n),h('td',{style:tdR},fmt(m.tar)),h('td',{style:Object.assign({},tdR,{fontWeight:700})},fmt(m.p)),
           h('td',{style:Object.assign({},tdR,{minWidth:130})},h('div',{style:{display:'flex',alignItems:'center',gap:6,justifyContent:'flex-end'}},h('div',{className:'tubo',style:{width:70,height:8}},h('div',{className:'tubo-fill',style:{width:(totP?m.p/totP*100*4:0)+'%',maxWidth:'100%',background:'linear-gradient(180deg,#f0d27a,#c8a84b 60%,#a8842e)'}})),pct(totP?m.p/totP:0))),
           h('td',{style:tdR},m.dt),h('td',{style:tdR},m.dt?Math.round(m.n/m.dt):0));}))),
-    secPer.n?h(Panel,{titulo:'Secciones especiales'},
-      h('div',{style:{display:'flex',gap:12,flexWrap:'wrap'}},
-        h('div',{style:{padding:'10px 14px',borderRadius:12,background:'#fff',border:'1px solid rgba(200,168,75,.3)'}},h('div',{style:{fontSize:11,fontWeight:800,letterSpacing:1.2,color:'var(--text-soft)'}},'PERIFERIA'),h('div',{style:{fontFamily:'Bebas Neue',fontSize:24}},secPer.n+' envíos'),h('div',{style:{fontSize:12}},'Extra pagado: ',h('b',null,fmt(secPer.p)))))):null);
+    (secPer.n||Object.keys(secCom).length)?h(SeccionesEsp,{secPer:secPer,secCom:secCom,totE:totE,dias:dias}):null);
 }
 
 // ════════════════════════ RETIROS ════════════════════════
