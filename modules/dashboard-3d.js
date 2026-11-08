@@ -1,7 +1,7 @@
 // Centro de control 3D del Dashboard (08-11-2026).
 // Dos vistas en Three.js sobre los envíos del período filtrado:
 //  - Mapa 3D de comunas: torres hexagonales ubicadas geográficamente; altura = envíos, color = efectividad operativa.
-//  - Flujo de estados: silos por estado y partículas que viajan Bodega → En ruta → Entregado / Reprogramado / Cancelado.
+//  - Flujo de estados: modelos 3D por estado (bodega, camión, casa, reloj, caja cancelada) con pila de cajas proporcional y partículas que viajan Bodega → En ruta → Entregado / Reprogramado / Cancelado.
 // Solo lectura: no escribe nada en la base.
 (function(){
 if(window.__dash3d)return;
@@ -128,10 +128,10 @@ function montarMapa(T,cont,datos,ui){
 
 // ── Vista 2: flujo de estados ──
 function montarFlujo(T,cont,cnt,ui){
-  var E=crearEscena(T,cont,{r:58,pol:1.08,az:-0.35,ty:3.5,rMin:22,rMax:90,onLost:ui.onLost});
+  var E=crearEscena(T,cont,{r:47,pol:1.02,az:-0.35,ty:3,rMin:22,rMax:90,onLost:ui.onLost});
   suelo(T,E.sc,30);
   var nodos={
-    en_bodega:{p:[-17,0,0],c:'#4aa3c8',l:'En bodega'},
+    en_bodega:{p:[-18,0,0],c:'#4aa3c8',l:'En bodega'},
     en_ruta:{p:[-4,0,0],c:'#e8b84a',l:'En ruta'},
     entregado:{p:[14,0,-12],c:'#36c47f',l:'Entregado'},
     reprogramado:{p:[16,0,0],c:'#b06ad6',l:'Reprogramado'},
@@ -140,22 +140,78 @@ function montarFlujo(T,cont,cnt,ui){
   var salieron=(cnt.en_ruta||0)+finales.reduce(function(a,k){return a+(cnt[k]||0);},0);
   var vals={en_bodega:cnt.en_bodega||0,en_ruta:salieron,entregado:cnt.entregado||0,reprogramado:cnt.reprogramado||0,cancelado:cnt.cancelado||0};
   var max=Math.max.apply(null,Object.keys(vals).map(function(k){return vals[k];}).concat([1]));
+  // Modelos 3D según el estado: bodega, camión de reparto, casa con paquete entregado, reloj de reagenda
+  // y caja cancelada. Al lado, una pila de cajas cuya altura es proporcional a la cantidad.
+  function M(col,o){return new T.MeshStandardMaterial(Object.assign({color:col,roughness:0.55,metalness:0.1},o||{}));}
+  function caja(w,h,d,mat,x,y,z,par){var m=new T.Mesh(new T.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;par.add(m);return m;}
+  var carton=M(0xc79a5b,{roughness:0.85}),cinta=M(0xa87a3c,{roughness:0.7}),blanco=M(0xf3efe4),oscuro=M(0x23261c,{roughness:0.4,metalness:0.3}),vidrioM=M(0x1d2b33,{roughness:0.1,metalness:0.6});
+  function paquete(par,x,y,z,sz,rot){var g=new T.Group();caja(sz,sz*0.8,sz,carton,0,0,0,g);caja(sz*1.01,sz*0.12,sz*0.22,cinta,0,sz*0.35,0,g);g.position.set(x,y,z);g.rotation.y=rot||0;par.add(g);return g;}
+  var animables=[];
+  function mBodega(g,col){var c=new T.Color(col);
+    caja(4.6,2.6,3.4,M(0xe4ddc9),0,1.3,0,g);
+    var techo=new T.Mesh(new T.CylinderGeometry(2.45,2.45,3.6,32,1,false,0,Math.PI),M(c,{metalness:0.55,roughness:0.3}));techo.rotation.z=Math.PI/2;techo.rotation.y=Math.PI/2;techo.position.set(0,2.6,0);techo.castShadow=true;g.add(techo);
+    var tapa=new T.Mesh(new T.CircleGeometry(2.45,32,0,Math.PI),M(0xd6cdb4,{side:T.DoubleSide}));tapa.position.set(0,2.6,1.72);g.add(tapa);
+    var puerta=caja(2.2,1.9,0.08,M(0x8d949a,{metalness:0.6,roughness:0.35}),0,0.95,1.72,g);
+    for(var i=0;i<6;i++)caja(2.2,0.04,0.1,oscuro,0,0.25+i*0.3,1.77,g);
+    caja(2.6,0.45,0.08,M(c,{emissive:c,emissiveIntensity:0.4}),0,3.15,1.78,g);
+    paquete(g,-1.7,0.4,2.2,0.7,0.3);paquete(g,-1.65,1.0,2.15,0.55,-0.2);
+    return 4.9;}
+  function mCamion(g,col){var c=new T.Color(col);var cuerpo=new T.Group();g.add(cuerpo);
+    caja(3.8,2.2,2.2,blanco,-0.7,1.75,0,cuerpo);
+    caja(3.82,0.3,2.22,M(c,{metalness:0.3}),-0.7,1.2,0,cuerpo);
+    caja(1.5,1.7,2.1,M(c,{metalness:0.35,roughness:0.35}),1.95,1.5,0,cuerpo);
+    caja(0.06,0.8,1.8,vidrioM,2.72,1.85,0,cuerpo);
+    caja(0.9,0.5,0.06,vidrioM,1.95,1.9,1.06,cuerpo);caja(0.9,0.5,0.06,vidrioM,1.95,1.9,-1.06,cuerpo);
+    caja(0.08,0.22,0.4,M(0xfff6c8,{emissive:0xfff2b0,emissiveIntensity:1.2}),2.72,1.0,0.75,cuerpo);caja(0.08,0.22,0.4,M(0xfff6c8,{emissive:0xfff2b0,emissiveIntensity:1.2}),2.72,1.0,-0.75,cuerpo);
+    var ruedas=[];[[-1.8,1.1],[-1.8,-1.1],[1.9,1.1],[1.9,-1.1]].forEach(function(r){var w=new T.Mesh(new T.CylinderGeometry(0.45,0.45,0.35,24),oscuro);w.rotation.x=Math.PI/2;w.position.set(r[0],0.45,r[1]);w.castShadow=true;g.add(w);ruedas.push(w);
+      var aro=new T.Mesh(new T.CylinderGeometry(0.22,0.22,0.37,16),M(0xbfc4c8,{metalness:0.8,roughness:0.25}));aro.rotation.x=Math.PI/2;aro.position.copy(w.position);g.add(aro);});
+    animables.push(function(t){cuerpo.position.y=Math.sin(t*9)*0.03;ruedas.forEach(function(w){w.rotation.y=t*6;});});
+    return 3.4;}
+  function mCasa(g,col){var c=new T.Color(col);
+    caja(3.2,2.2,2.8,M(0xf4ecd8),0,1.1,0,g);
+    var techo=new T.Mesh(new T.ConeGeometry(2.75,1.6,4),M(c,{roughness:0.45}));techo.rotation.y=Math.PI/4;techo.position.set(0,3.0,0);techo.castShadow=true;g.add(techo);
+    caja(0.8,1.4,0.08,M(0x7a5232),0,0.7,1.42,g);
+    caja(0.7,0.6,0.08,vidrioM,-1.0,1.4,1.42,g);caja(0.7,0.6,0.08,vidrioM,1.0,1.4,1.42,g);
+    paquete(g,0.75,0.3,1.95,0.6,0.4);
+    var chk=new T.Group();var mc=M(c,{emissive:c,emissiveIntensity:0.9});
+    var a=caja(0.25,0.7,0.25,mc,-0.25,-0.1,0,chk);a.rotation.z=0.75;var b=caja(0.25,1.3,0.25,mc,0.22,0.15,0,chk);b.rotation.z=-0.65;
+    chk.position.set(0,4.6,0);g.add(chk);animables.push(function(t){chk.rotation.y=t*1.4;chk.position.y=4.6+Math.sin(t*2)*0.15;});
+    return 5.3;}
+  function mReloj(g,col){var c=new T.Color(col);
+    caja(0.35,1.6,0.35,oscuro,0,0.8,0,g);caja(1.6,0.2,1.0,oscuro,0,0.1,0,g);
+    var marco=new T.Mesh(new T.CylinderGeometry(1.75,1.75,0.45,48),M(c,{metalness:0.45,roughness:0.3}));marco.rotation.x=Math.PI/2;marco.position.set(0,3.2,0);marco.castShadow=true;g.add(marco);
+    var cara=new T.Mesh(new T.CircleGeometry(1.5,48),M(0xfbf8ef));cara.position.set(0,3.2,0.24);g.add(cara);
+    for(var i=0;i<12;i++){var m=caja(0.08,0.25,0.04,oscuro,Math.sin(i/12*Math.PI*2)*1.25,3.2+Math.cos(i/12*Math.PI*2)*1.25,0.27,g);m.rotation.z=-i/12*Math.PI*2;}
+    var hora=new T.Group();hora.position.set(0,3.2,0.3);caja(0.12,0.75,0.04,oscuro,0,0.32,0,hora);g.add(hora);
+    var min=new T.Group();min.position.set(0,3.2,0.33);caja(0.08,1.15,0.04,M(c),0,0.5,0,min);g.add(min);
+    var flecha=new T.Mesh(new T.TorusGeometry(2.2,0.09,8,48,Math.PI*1.4),M(c,{emissive:c,emissiveIntensity:0.6}));flecha.position.set(0,3.2,0);g.add(flecha);
+    animables.push(function(t){min.rotation.z=-t*1.6;hora.rotation.z=-t*0.14;flecha.rotation.z=t*0.8;});
+    return 5.6;}
+  function mCancelado(g,col){var c=new T.Color(col);
+    var p=paquete(g,0,0.85,0,2.0,0.35);p.rotation.z=0.06;
+    var x=new T.Group();var mx=M(c,{emissive:c,emissiveIntensity:0.9});
+    var a=caja(0.35,2.2,0.35,mx,0,0,0,x);a.rotation.z=Math.PI/4;var b=caja(0.35,2.2,0.35,mx,0,0,0,x);b.rotation.z=-Math.PI/4;
+    x.position.set(0,3.4,0);g.add(x);animables.push(function(t){x.rotation.y=t*1.2;var s=1+Math.sin(t*3)*0.06;x.scale.set(s,s,s);});
+    return 4.6;}
+  var CONSTR={en_bodega:mBodega,en_ruta:mCamion,entregado:mCasa,reprogramado:mReloj,cancelado:mCancelado};
   var silos={};
-  Object.keys(nodos).forEach(function(k,i){var n=nodos[k];var col=new T.Color(n.c);var hh=0.6+11*Math.sqrt(vals[k]/max);
-    var base=new T.Mesh(new T.CylinderGeometry(3.4,3.6,0.5,48),new T.MeshStandardMaterial({color:0x2f3424,roughness:0.6,metalness:0.4}));base.position.set(n.p[0],0.25,n.p[2]);base.receiveShadow=true;E.sc.add(base);
-    var g=new T.CylinderGeometry(2.4,2.4,1,48,1,true);g.translate(0,0.5,0);
-    var vidrio=new T.Mesh(g,new T.MeshPhysicalMaterial({color:col,transparent:true,opacity:0.22,roughness:0.05,metalness:0,side:T.DoubleSide,depthWrite:false}));vidrio.position.set(n.p[0],0.5,n.p[2]);vidrio.scale.y=12.2;E.sc.add(vidrio);
-    var g2=new T.CylinderGeometry(2.1,2.1,1,48);g2.translate(0,0.5,0);
-    var liq=new T.Mesh(g2,new T.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:0.35,roughness:0.25,metalness:0.2}));liq.position.set(n.p[0],0.5,n.p[2]);liq.scale.y=0.001;liq.castShadow=true;E.sc.add(liq);
-    var aro=new T.Mesh(new T.TorusGeometry(2.45,0.08,12,64),new T.MeshBasicMaterial({color:col}));aro.rotation.x=Math.PI/2;aro.position.set(n.p[0],0.5,n.p[2]);E.sc.add(aro);
-    silos[k]={liq:liq,aro:aro,h:hh,delay:i*0.12,n:n};
+  Object.keys(nodos).forEach(function(k,i){var n=nodos[k];var col=new T.Color(n.c);
+    var base=new T.Mesh(new T.CylinderGeometry(4.9,5.2,0.5,56),new T.MeshStandardMaterial({color:0x2f3424,roughness:0.6,metalness:0.4}));base.position.set(n.p[0],0.25,n.p[2]);base.receiveShadow=true;E.sc.add(base);
+    var aro=new T.Mesh(new T.TorusGeometry(4.95,0.09,12,72),new T.MeshBasicMaterial({color:col}));aro.rotation.x=Math.PI/2;aro.position.set(n.p[0],0.52,n.p[2]);E.sc.add(aro);
+    var g=new T.Group();g.position.set(n.p[0]-0.6,0.5,n.p[2]);g.scale.setScalar(0.001);E.sc.add(g);
+    var hm=CONSTR[k](g,n.c);
+    // pila de cajas = volumen
+    var pila=new T.Group();pila.position.set(n.p[0]+3.3,0.5,n.p[2]-1.6);E.sc.add(pila);
+    var niveles=vals[k]?Math.max(1,Math.round(9*Math.sqrt(vals[k]/max))):0,cajasP=[];
+    for(var j=0;j<niveles;j++){var pq=paquete(pila,(Math.random()-0.5)*0.14,0.42+j*0.8,(Math.random()-0.5)*0.14,1.0,(Math.random()-0.5)*0.5);pq.visible=false;cajasP.push(pq);}
+    silos[k]={g:g,cajas:cajasP,hm:hm,hp:niveles*0.8+0.5,delay:i*0.15,n:n};
   });
   // tubos + partículas
   var rutas=[['en_bodega','en_ruta',salieron]].concat(finales.map(function(k){return['en_ruta',k,vals[k]];}));
   var totalFlujo=rutas.reduce(function(a,r){return a+r[2];},0)||1;
   var curvas=[],N=0;
   rutas.forEach(function(r){var a=nodos[r[0]].p,b=nodos[r[1]].p;
-    var p0=new T.Vector3(a[0]+2.6,2.2,a[2]),p3=new T.Vector3(b[0]-2.6,2.2,b[2]);
+    var p0=new T.Vector3(a[0]+3.2,2.6,a[2]),p3=new T.Vector3(b[0]-3.6,2.6,b[2]);
     var cur=new T.CubicBezierCurve3(p0,new T.Vector3(p0.x+5,5.5,a[2]),new T.Vector3(p3.x-5,5.5,b[2]),p3);
     var grosor=0.18+0.55*Math.sqrt(r[2]/totalFlujo);
     E.sc.add(new T.Mesh(new T.TubeGeometry(cur,64,grosor,16,false),new T.MeshPhysicalMaterial({color:new T.Color(nodos[r[1]].c),transparent:true,opacity:0.18,roughness:0.1,depthWrite:false})));
@@ -174,10 +230,11 @@ function montarFlujo(T,cont,cnt,ui){
     ui.labels.appendChild(el);return{el:el,k:k};});
   var v=new T.Vector3(),tmp=new T.Vector3();
   E.setTick(function(t){
-    Object.keys(silos).forEach(function(k){var s=silos[k];var q=Math.max(0,Math.min(1,(t-s.delay)/1.1));var e=1-Math.pow(1-q,3);var hh=Math.max(0.001,s.h*e);s.liq.scale.y=hh;s.aro.position.y=0.5+hh;});
+    Object.keys(silos).forEach(function(k){var s=silos[k];var q=Math.max(0,Math.min(1,(t-s.delay)/0.9));var e=q<1?1-Math.pow(1-q,3)*Math.cos(q*5):1;s.g.scale.setScalar(Math.max(0.001,e*1.4));var vis=Math.floor(Math.max(0,t-s.delay-0.3)/0.07);s.cajas.forEach(function(c,ci){c.visible=ci<vis;});});
+    animables.forEach(function(f){f(t);});
     var i=0;curvas.forEach(function(c){for(var j=0;j<c.n;j++){var f=(fase[i]+t*vel[i])%1;c.cur.getPointAt(f,tmp);pos[i*3]=tmp.x+off[i][0];pos[i*3+1]=tmp.y+off[i][1];pos[i*3+2]=tmp.z+off[i][0]*0.6;i++;}});
     pg.attributes.position.needsUpdate=true;
-    labs.forEach(function(L){var s=silos[L.k];v.set(s.n.p[0],s.liq.scale.y+2.4,s.n.p[2]);var p=proyectar(E,v,cont);L.el.style.left=p.x+'px';L.el.style.top=p.y+'px';L.el.style.display=p.vis?'block':'none';});
+    labs.forEach(function(L){var s=silos[L.k];v.set(s.n.p[0]+0.6,Math.max(s.hm*1.4,s.hp)+1.6,s.n.p[2]);var p=proyectar(E,v,cont);L.el.style.left=p.x+'px';L.el.style.top=p.y+'px';L.el.style.display=p.vis?'block':'none';});
   });
   E.start();return E;
 }
