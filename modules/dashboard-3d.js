@@ -32,7 +32,7 @@ function coordDe(c){var n=norm(c);n=ALIAS[n]||n;return COORD[n]?{n:n,c:COORD[n]}
 function efColor(T,ef){
   if(ef==null)return new T.Color('#8a8f78');
   var a=new T.Color('#e0473f'),b=new T.Color('#e8b84a'),c=new T.Color('#36c47f');
-  var t=Math.max(0,Math.min(1,(ef-0.6)/0.35));
+  var t=Math.max(0,Math.min(1,(ef-0.9)/0.1));
   return t<0.5?a.lerp(b,t*2):b.lerp(c,(t-0.5)*2);
 }
 function titulo(s){return s.toLowerCase().replace(/(^|\s)\S/g,function(x){return x.toUpperCase();});}
@@ -221,7 +221,7 @@ function CentroControl3D(props){
     h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10,padding:'16px 20px 0'}},
       h('div',null,
         h('div',{style:{fontFamily:'Bebas Neue',fontSize:28,letterSpacing:2.5,color:'#fff',lineHeight:1}},'Centro de control'),
-        h('div',{style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:3}},modo==='mapa'?'Altura = envíos del período · color = efectividad operativa · arrastra para girar, rueda para acercar':'Recorrido de los envíos del período: de bodega a ruta y su resultado final')),
+        h('div',{style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:3}},modo==='mapa'?'Altura = envíos del período · color = efectividad operativa (rojo 90% · verde 100%) · arrastra para girar, rueda para acercar':'Recorrido de los envíos del período: de bodega a ruta y su resultado final')),
       h('div',{style:{display:'flex',gap:6}},tab('mapa','Mapa 3D de comunas'),tab('flujo','Flujo de estados'))),
     h('div',{style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 220px',gap:0}},
       h('div',{style:{position:'relative',height:440,minWidth:0}},
@@ -231,7 +231,7 @@ function CentroControl3D(props){
         !envios.length&&h('div',{style:{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(233,228,210,.7)',fontSize:13}},'Sin envíos en el período.'),
         err&&h('div',{style:{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#ffb4a8',fontSize:13}},err),
         modo==='mapa'&&h('div',{style:{position:'absolute',left:16,bottom:14,display:'flex',alignItems:'center',gap:8,fontSize:11,color:'rgba(233,228,210,.8)',fontWeight:700}},
-          'Efectividad',h('span',null,'60%'),h('span',{style:{width:120,height:8,borderRadius:6,background:'linear-gradient(90deg,#e0473f,#e8b84a,#36c47f)',boxShadow:'0 0 10px rgba(232,184,74,.4)'}}),h('span',null,'95%+'))),
+          'Efectividad',h('span',null,'90%'),h('span',{style:{width:120,height:8,borderRadius:6,background:'linear-gradient(90deg,#e0473f,#e8b84a,#36c47f)',boxShadow:'0 0 10px rgba(232,184,74,.4)'}}),h('span',null,'100%'))),
       h('div',{style:{display:'flex',flexDirection:'column',gap:10,padding:'14px 16px 16px 4px'}},
         ins('Efectividad operativa',den?Math.round((c.entregado||0)/den*100)+'%':'—',(c.entregado||0).toLocaleString('es-CL')+' entregados de '+den.toLocaleString('es-CL')+' gestionados','#36c47f'),
         ins('Comuna con más envíos',res.top?titulo(res.top.n):'—',res.top?res.top.total.toLocaleString('es-CL')+' envíos':'', '#ffe59a'),
