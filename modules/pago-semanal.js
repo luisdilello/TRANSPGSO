@@ -61,24 +61,50 @@ function SiniestrosEmbebido(props){
   return h('div',{className:'ps-siniestros'},h(window.Siniestros,{mensajeros:props.mensajeros||[],clientes:props.clientes||[],toast:props.toast,usuario:{nombre:perfil.nombre||'Admin'},esAdmin:props.esAdmin!=null?props.esAdmin:perfil.esAdmin,esSuperAdmin:props.esSuperAdmin!=null?props.esSuperAdmin:perfil.esSuperAdmin}));
 }
 function Vistas(props){
-  var v=props.vista,ops=[];if(props.puedePagos!==false)ops.push(['pagos','Tarjetas de pago']);if(props.puedeSiniestros!==false)ops.push(['siniestros','Siniestros']);
+  var v=props.vista,ops=[];
+  if(props.puedePagos!==false){ops.push(['resumen','Resumen']);ops.push(['pagos','Tarjetas de pago']);ops.push(['retiros','Retiros']);ops.push(['consumo','Consumo del local']);}
+  if(props.puedeSiniestros!==false)ops.push(['siniestros','Siniestros']);
   if(ops.length<2)return null;
-  return h('div',{style:{display:'inline-flex',gap:4,padding:4,marginBottom:16,borderRadius:14,background:'linear-gradient(180deg,#2f3325,#1c1f15)',boxShadow:'0 10px 20px -12px rgba(20,22,15,.6)'}},
-    ops.map(function(o){var a=v===o[0];return h('button',{key:o[0],type:'button',onClick:function(){props.onVista(o[0]);},style:{padding:'10px 20px',borderRadius:10,border:'none',cursor:'pointer',fontWeight:800,fontSize:13,letterSpacing:.4,background:a?'linear-gradient(135deg,#e8c766,#b08a2e)':'transparent',color:a?'#1a1d13':'#e9e4d2',boxShadow:a?'0 6px 14px rgba(200,168,75,.35)':'none'}},o[1]);}));
+  return h('div',{style:{display:'flex',flexWrap:'wrap',gap:4,padding:4,marginBottom:16,borderRadius:14,background:'linear-gradient(180deg,#2f3325,#1c1f15)',boxShadow:'0 10px 20px -12px rgba(20,22,15,.6)',width:'fit-content',maxWidth:'100%'}},
+    ops.map(function(o){var a=v===o[0];return h('button',{key:o[0],type:'button',onClick:function(){props.onVista(o[0]);},style:{padding:'10px 18px',borderRadius:10,border:'none',cursor:'pointer',fontWeight:800,fontSize:13,letterSpacing:.4,background:a?'linear-gradient(135deg,#e8c766,#b08a2e)':'transparent',color:a?'#1a1d13':'#e9e4d2',boxShadow:a?'0 6px 14px rgba(200,168,75,.35)':'none'}},o[1]);}));
+}
+function BarraSemana(props){
+  var sem=infoSemana(props.lunes),hoy=fechaHoyCL();
+  var b=function(t,on){return h('button',{type:'button',className:'btn-futurista btn-f-ghost',onClick:on,style:{padding:'7px 12px'}},t);};
+  return h('div',{style:{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:14}},
+    h('div',{style:{fontWeight:800,fontSize:14,marginRight:6}},'Semana '+String(sem.num).padStart(2,'0')+' · '+dm(sem.desde)+' al '+dm(sem.hasta)),
+    b('Anterior',function(){props.setLunes(sumar(props.lunes,-7));}),
+    h('input',{type:'date',className:'form-input',value:props.lunes,onChange:function(e){if(e.target.value)props.setLunes(lunesDe(e.target.value));},style:{margin:0,width:150}}),
+    b('Siguiente',function(){props.setLunes(sumar(props.lunes,7));}),
+    b('Actual',function(){props.setLunes(lunesDe(hoy));}));
+}
+function ExtraLazy(props){
+  var _r=R.useState(!!window.__pagoSemanalExtra),listo=_r[0],setListo=_r[1];
+  R.useEffect(function(){if(!listo)loadScriptOnce('pago-semanal-extra','modules/pago-semanal-extra.js').then(function(){setListo(true);}).catch(function(){});},[]);
+  if(!listo)return h('div',{className:'info-banner'},'Cargando...');
+  return h(window.__pagoSemanalExtra[props.comp],props);
 }
 function PagoSemanalRaiz(props){
-  var _v=R.useState(props.vista||(props.puedePagos===false?'siniestros':'pagos')),vista=_v[0],setVista=_v[1];
-  R.useEffect(function(){if(props.vista)setVista(props.vista);},[props.vista]);
+  var _v=R.useState(props.vista==='siniestros'?'siniestros':(props.puedePagos===false?'siniestros':'pagos')),vista=_v[0],setVista=_v[1];
+  var _l=R.useState(lunesDe(fechaHoyCL())),lunes=_l[0],setLunes=_l[1];
+  R.useEffect(function(){if(props.vista==='siniestros')setVista('siniestros');else if(props.vista&&vista==='siniestros')setVista('pagos');},[props.vista]);
   function cambiar(v){setVista(v);props.onVista&&props.onVista(v);}
   if(props.puedePagos===false)vista='siniestros';
+  var sem=infoSemana(lunes);
+  var cuerpo;
+  if(vista==='siniestros')cuerpo=h(SiniestrosEmbebido,props);
+  else if(vista==='pagos')cuerpo=h(PagoSemanal,Object.assign({},props,{lunes:lunes,setLunes:setLunes}));
+  else if(vista==='retiros')cuerpo=h('div',{style:{padding:'0 20px 24px'}},h(ExtraLazy,Object.assign({},props,{comp:'Retiros',sem:sem})));
+  else cuerpo=h('div',{style:{padding:'0 20px 24px'}},h(BarraSemana,{lunes:lunes,setLunes:setLunes}),h(ExtraLazy,Object.assign({},props,{comp:vista==='resumen'?'Resumen':'Consumo',sem:sem,key:vista+sem.desde})));
   return h('div',null,
     h('div',{style:{padding:'0 20px'}},h(Vistas,{vista:vista,onVista:cambiar,puedePagos:props.puedePagos,puedeSiniestros:props.puedeSiniestros})),
-    vista==='siniestros'?h(SiniestrosEmbebido,props):h(PagoSemanal,props));
+    cuerpo);
 }
 function PagoSemanal(props){
   var toast=props.toast||function(){};
   var hoy=fechaHoyCL();
-  var _l=R.useState(lunesDe(hoy)),lunes=_l[0],setLunes=_l[1];
+  var _l=R.useState(lunesDe(hoy)),lunesL=_l[0],setLunesL=_l[1];
+  var lunes=props.lunes||lunesL,setLunes=props.setLunes||setLunesL;
   var _d=R.useState(null),data=_d[0],setData=_d[1];
   var _q=R.useState(''),q=_q[0],setQ=_q[1];
   var _o=R.useState('total'),orden=_o[0],setOrden=_o[1];
@@ -86,6 +112,7 @@ function PagoSemanal(props){
   var _g=R.useState(0),gen=_g[0],setGen=_g[1];
   var _ab=R.useState(null),abierto=_ab[0],setAbierto=_ab[1];
   var sem=infoSemana(lunes);
+  var mesAnt=(function(){var d=new Date(sem.hasta+'T12:00:00');var a=new Date(d.getFullYear(),d.getMonth()-1,1),b=new Date(d.getFullYear(),d.getMonth(),0);return{desde:iso(a),hasta:iso(b),nombre:a.toLocaleDateString('es-CL',{month:'long'})};})();
   var quien=(A.perfil&&(A.perfil.nombre||A.perfil.usuario))||'Administrador';
 
   R.useEffect(function(){
@@ -96,7 +123,9 @@ function PagoSemanal(props){
       db.from('movimientos_pago_mensajero').select('*').lte('semana',sem.desde).order('created_at',{ascending:true}),
       db.from('siniestros').select('id,codigo,mensajero,fecha_siniestro,nota,descontado_mensajero,descartado').or('descontado_mensajero.is.null,descontado_mensajero.eq.false').order('fecha_siniestro',{ascending:false}).limit(500),
       db.from('configuracion').select('valor').eq('clave','pago_semanal_excluidos').maybeSingle(),
-      db.from('siniestros').select('id,codigo,mensajero,descontado_mensajero_valor,descontado_mensajero_fecha,descontado_mensajero_por').eq('descontado_mensajero',true).like('descontado_mensajero_semana',dmy(sem.desde)+'%')
+      db.from('siniestros').select('id,codigo,mensajero,descontado_mensajero_valor,descontado_mensajero_fecha,descontado_mensajero_por').eq('descontado_mensajero',true).like('descontado_mensajero_semana',dmy(sem.desde)+'%'),
+      db.from('consumos_mensajeros').select('mensajero_nombre,producto,cantidad,monto,fecha').gte('fecha',sem.desde).lte('fecha',sem.hasta),
+      sem.num===1?db.from('retiros').select('mensajero,pago_mensajero,fecha').gte('fecha',mesAnt.desde).lte('fecha',mesAnt.hasta).neq('mensajero',''):Promise.resolve({data:[]})
     ]).then(function(r){
       if(!vivo)return;
       var err=r.slice(0,3).find(function(x){return x.error;});if(err){toast('Error cargando pago semanal: '+err.error.message);setData({error:true});return;}
@@ -109,6 +138,12 @@ function PagoSemanal(props){
       var sinP={};(r[3].data||[]).forEach(function(s){if(s.descartado)return;var n=norm(s.mensajero);if(!n)return;(sinP[n]=sinP[n]||[]).push(s);});
       // siniestros descontados desde la sección Siniestros para esta semana (si no tienen ya su movimiento)
       (r[5]&&r[5].data||[]).forEach(function(s){var n=norm(s.mensajero);if(!n)return;var ya=(movsSem[n]||[]).some(function(m){return m.codigo===s.codigo;});if(ya)return;(movsSem[n]=movsSem[n]||[]).push({id:'s'+s.id,virtual:true,semana:sem.desde,mensajero:n,tipo:'siniestro',monto:+s.descontado_mensajero_valor||0,codigo:s.codigo,nota:'desde Siniestros',fecha:s.descontado_mensajero_fecha?String(s.descontado_mensajero_fecha).slice(0,10):sem.desde,creado_por:s.descontado_mensajero_por||''});});
+      // consumo del local (pestaña Consumo): un movimiento por persona con el detalle
+      var cons={};(r[6]&&r[6].data||[]).forEach(function(x){var n=norm(x.mensajero_nombre);var c=cons[n]||(cons[n]={m:0,p:{}});c.m+=+x.monto||0;c.p[x.producto]=(c.p[x.producto]||0)+(+x.cantidad||0);});
+      Object.keys(cons).forEach(function(n){var c=cons[n];if(!c.m)return;(movsSem[n]=movsSem[n]||[]).push({id:'c'+n,virtual:true,fuente:'consumo',semana:sem.desde,mensajero:n,tipo:'consumo',monto:c.m,nota:'Local: '+Object.keys(c.p).map(function(k){return c.p[k]+' '+tit(k);}).join(', '),fecha:sem.hasta,creado_por:''});});
+      // retiros del mes anterior: se pagan en la Semana 01
+      var ret={};(r[7]&&r[7].data||[]).forEach(function(x){var n=norm(x.mensajero);if(!n)return;var t=ret[n]||(ret[n]={n:0,p:0});t.n++;t.p+=+x.pago_mensajero||0;});
+      Object.keys(ret).forEach(function(n){var t=ret[n];if(!t.p)return;(movsSem[n]=movsSem[n]||[]).push({id:'r'+n,virtual:true,fuente:'retiros',semana:sem.desde,mensajero:n,tipo:'extra',monto:t.p,nota:'Retiros de '+mesAnt.nombre+' ('+t.n+')',fecha:sem.desde,creado_por:''});});
       var excl=((r[4]&&r[4].data&&r[4].data.valor)||['ELY MENSAJERO','FERNANDOCHECK','FERNANDO CHECK']).map(norm);
       setData({porComuna:porComuna,cfg:cfg,movs:movsSem,saldo:saldo,siniestros:sinP,excluidos:excl});
     }).catch(function(e){if(vivo){toast('Error: '+(e&&e.message||e));setData({error:true});}});
@@ -128,6 +163,7 @@ function PagoSemanal(props){
     });
   }
   function borrar(m){
+    if(m.virtual&&m.fuente){toast(m.fuente==='consumo'?'El consumo del local se edita en la pestaña Consumo del local':'Los retiros se editan en la pestaña Retiros');return;}
     if(!window.confirm('¿Eliminar '+TIPOS[m.tipo].l.toLowerCase()+' de '+fmt(m.monto)+' a '+tit(m.mensajero)+'?'))return;
     if(m.virtual){db.from('siniestros').update({descontado_mensajero:false,descontado_mensajero_fecha:null,descontado_mensajero_semana:null,descontado_mensajero_valor:null,descontado_mensajero_por:null}).eq('codigo',m.codigo).then(function(r){if(r.error){toast('No se pudo: '+r.error.message);return;}recargar();});return;}
     db.from('movimientos_pago_mensajero').delete().eq('id',m.id).then(function(r){if(r.error){toast('No se eliminó: '+r.error.message);return;}
