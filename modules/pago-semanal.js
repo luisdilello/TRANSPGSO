@@ -90,9 +90,10 @@ function ExtraLazy(props){
 }
 function PagoSemanalRaiz(props){
   var primera=props.puedePagos!==false?'pagos':props.puedeRetiros!==false?'retiros':props.puedeConsumo!==false?'consumo':'siniestros';
-  var _v=R.useState(props.vista==='siniestros'?'siniestros':primera),vista=_v[0],setVista=_v[1];
+  var VALIDAS={resumen:1,pagos:1,retiros:1,consumo:1,siniestros:1};
+  var _v=R.useState(VALIDAS[props.vista]?props.vista:primera),vista=_v[0],setVista=_v[1];
   var _l=R.useState(lunesDe(fechaHoyCL())),lunes=_l[0],setLunes=_l[1];
-  R.useEffect(function(){if(props.vista==='siniestros')setVista('siniestros');else if(props.vista&&vista==='siniestros')setVista(primera);},[props.vista]);
+  R.useEffect(function(){if(VALIDAS[props.vista]&&props.vista!==vista)setVista(props.vista);},[props.vista]);
   function cambiar(v){setVista(v);props.onVista&&props.onVista(v);}
   var permitido={resumen:props.puedePagos!==false,pagos:props.puedePagos!==false,retiros:props.puedeRetiros!==false,consumo:props.puedeConsumo!==false,siniestros:props.puedeSiniestros!==false};
   if(!permitido[vista])vista=primera;
@@ -102,8 +103,9 @@ function PagoSemanalRaiz(props){
   else if(vista==='pagos')cuerpo=h(PagoSemanal,Object.assign({},props,{lunes:lunes,setLunes:setLunes}));
   else if(vista==='retiros')cuerpo=h('div',{style:{padding:'0 20px 24px'}},h(ExtraLazy,Object.assign({},props,{comp:'Retiros',sem:sem})));
   else cuerpo=h('div',{style:{padding:'0 20px 24px'}},h(BarraSemana,{lunes:lunes,setLunes:setLunes}),h(ExtraLazy,Object.assign({},props,{comp:vista==='resumen'?'Resumen':'Consumo',sem:sem,key:vista+sem.desde})));
+  var btnProd=vista==='consumo'&&props.puedeProductos!==false&&props.onProductos?h('button',{type:'button',onClick:props.onProductos,style:{padding:'10px 16px',borderRadius:10,cursor:'pointer',fontWeight:800,fontSize:12.5,letterSpacing:.4,border:'1px solid '+(props.verProductos?'#b08a2e':'rgba(200,168,75,.5)'),background:props.verProductos?'linear-gradient(135deg,#e8c766,#b08a2e)':'#fff',color:'#1a1d13',marginBottom:16}},props.verProductos?'Ocultar productos':'Administrar productos'):null;
   return h('div',null,
-    h('div',{style:{padding:'0 20px'}},h(Vistas,{vista:vista,onVista:cambiar,puedePagos:props.puedePagos,puedeRetiros:props.puedeRetiros,puedeConsumo:props.puedeConsumo,puedeSiniestros:props.puedeSiniestros})),
+    h('div',{style:{padding:'0 20px',display:'flex',gap:10,alignItems:'flex-start',flexWrap:'wrap'}},h(Vistas,{vista:vista,onVista:cambiar,puedePagos:props.puedePagos,puedeRetiros:props.puedeRetiros,puedeConsumo:props.puedeConsumo,puedeSiniestros:props.puedeSiniestros}),btnProd),
     cuerpo);
 }
 function PagoSemanal(props){
