@@ -601,7 +601,10 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 .dashx .dx-card{transition:transform .3s cubic-bezier(.2,.8,.2,1),box-shadow .3s}
 .dashx .dx-card:not(:disabled):hover{transform:perspective(600px) rotateX(8deg) translateY(-6px)}
 .dashx .dx-col{cursor:pointer;transition:transform .25s,filter .25s}
-.dashx .dx-col:hover{transform:translateY(-6px);filter:brightness(1.1) drop-shadow(0 10px 12px rgba(0,0,0,.25))}
+.dashx .dx-col:hover{z-index:5}
+.dashx .dx-col:hover .dx-rise{filter:brightness(1.12) drop-shadow(0 10px 12px rgba(0,0,0,.35))}
+.dashx .dx-tip{display:none;position:absolute;bottom:calc(100% - 30px);left:50%;transform:translateX(-50%);min-width:170px;padding:10px 12px;border-radius:12px;background:rgba(18,20,13,.95);border:1px solid rgba(200,168,75,.6);color:#fff;box-shadow:0 14px 30px rgba(0,0,0,.45);pointer-events:none;z-index:10;text-align:left}
+.dashx .dx-col:hover .dx-tip{display:block}
 @keyframes dxRise{from{transform:scaleY(0)}to{transform:scaleY(1)}}
 .dashx .dx-rise{transform-origin:bottom;animation:dxRise .8s cubic-bezier(.2,.8,.2,1) both}
 </style>
@@ -656,7 +659,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1794162862;
+window.__MODULES_VERSION=1794163212;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -2761,27 +2764,46 @@ function CargaPorComuna(){
   const tdT=Object.assign({},td,{fontWeight:800,background:'var(--cream)'});
 
   const skyline=function(){
-    const SEG=[['enRuta','En ruta','#2e7d4f'],['porFecha','Por fecha','#7a5c1a'],['reprog','Reprog.','#9c27b0'],['bodega','En bodega','#1a6b8a']];
+    const SEG=[['enRuta','En ruta','#2e9d62'],['porFecha','Por fecha','#9a7426'],['reprog','Reprogramados','#a63cc0'],['bodega','En bodega','#1f86ad']];
     const cols=lista.slice().map(function(c){return Object.assign({_t:(c.bodega||0)+(c.reprog||0)+(c.porFecha||0)+(c.enRuta||0)},c);}).filter(function(c){return c._t>0;}).sort(function(a,b){return b._t-a._t;}).slice(0,20);
     if(!cols.length)return null;
-    const mx=Math.max.apply(null,cols.map(function(c){return c._t;}));const H=150,W=26,D=10;
+    const tit=function(x){return String(x||'').toLowerCase().replace(/(^|\s)\S/g,function(m){return m.toUpperCase();});};
+    const mxR=Math.max.apply(null,cols.map(function(c){return c._t;}));
+    const paso=mxR<=5?1:mxR<=10?2:mxR<=25?5:mxR<=50?10:Math.ceil(mxR/50)*10;const mx=Math.ceil(mxR/paso)*paso;
+    const H=170,W=34,D=12;
+    const totalPend=cols.reduce(function(a,c){return a+c._t;},0);
     const pila=function(c,filtro){const hh=Math.max(6,Math.round(c._t/mx*H));return React.createElement('div',{style:{height:hh,display:'flex',flexDirection:'column-reverse',width:'100%',filter:filtro||'none'}},
-      SEG.map(function(s){const v=c[s[0]]||0;return v?React.createElement('div',{key:s[0],title:s[1]+': '+v,style:{flex:v,background:'linear-gradient(90deg,'+s[2]+','+s[2]+'dd)',borderTop:'1px solid rgba(255,255,255,.35)'}}):null;}));};
+      SEG.map(function(s){const v=c[s[0]]||0;return v?React.createElement('div',{key:s[0],style:{flex:v,background:'linear-gradient(90deg,'+s[2]+','+s[2]+'cc)',borderTop:'1px solid rgba(255,255,255,.4)',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.92)',fontSize:10,fontWeight:800,overflow:'hidden'}},(!filtro&&v/c._t*hh>=16)?v:null):null;}));};
     const topColor=function(c){for(let i=SEG.length-1;i>=0;i--){if(c[SEG[i][0]])return SEG[i][2];}return '#c8a84b';};
-    return React.createElement('div',{style:{position:'relative',margin:'4px 0 16px',padding:'18px 16px 10px',borderRadius:16,background:'radial-gradient(120% 100% at 50% 0%,#3a3f2b,#1c1f15)',border:'1px solid rgba(200,168,75,.35)',boxShadow:'inset 0 1px 0 rgba(255,255,255,.08),0 18px 30px -16px rgba(20,22,15,.6)'}},
-      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,marginBottom:6}},
-        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:19,letterSpacing:2,color:'#fff'}},'Pendiente por comuna'),
-        React.createElement('div',{style:{display:'flex',gap:12,flexWrap:'wrap'}},SEG.slice().reverse().map(function(s){return React.createElement('span',{key:s[0],style:{fontSize:11,fontWeight:700,color:'rgba(233,228,210,.85)'}},React.createElement('i',{style:{display:'inline-block',width:10,height:10,borderRadius:3,background:s[2],marginRight:5,verticalAlign:'-1px',boxShadow:'0 0 8px '+s[2]}}),s[1]);}))),
-      React.createElement('div',{style:{display:'flex',alignItems:'flex-end',gap:14,height:H+70,overflowX:'auto',padding:'0 6px',backgroundImage:'linear-gradient(180deg,transparent 0,transparent calc(100% - 44px),rgba(200,168,75,.18) calc(100% - 44px),transparent calc(100% - 20px))'}},
-        cols.map(function(c,j){const hh=Math.max(6,Math.round(c._t/mx*H));const sel=comunaSel===c.comuna;
-          return React.createElement('div',{key:c.comuna,className:'dx-col',onClick:function(){setComunaSel(sel?'':c.comuna);},title:c.comuna+' · '+c._t+' pendientes',style:{flex:'0 0 '+(W+D+8)+'px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',height:'100%'}},
-            React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:17,color:sel?'#ffe59a':'#fff',marginBottom:D+4,textShadow:'0 0 10px rgba(255,229,154,.5)'}},c._t),
-            React.createElement('div',{className:'dx-rise',style:{position:'relative',width:W,height:hh,marginRight:D,animationDelay:(j*0.03)+'s'}},
-              React.createElement('div',{style:{position:'absolute',left:0,bottom:0,width:W,height:hh,boxShadow:sel?'0 0 0 2px #ffe59a':'none'}},pila(c)),
-              React.createElement('div',{style:{position:'absolute',left:W,bottom:0,width:D,height:hh,transform:'skewY(-45deg)',transformOrigin:'left bottom'}},pila(c,'brightness(.62)')),
-              React.createElement('div',{style:{position:'absolute',left:0,top:-D,width:W,height:D,background:topColor(c),filter:'brightness(1.35)',transform:'skewX(-45deg)',transformOrigin:'left bottom'}}),
-              React.createElement('div',{style:{position:'absolute',left:-6,bottom:-7,width:W+D+12,height:10,borderRadius:'50%',background:'radial-gradient(ellipse,rgba(0,0,0,.45),transparent 70%)'}})),
-            React.createElement('div',{style:{fontSize:10,fontWeight:800,color:sel?'#ffe59a':'rgba(233,228,210,.8)',marginTop:10,width:W+D+8,textAlign:'center',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},c.comuna));})));
+    const lineas=[];for(let v=0;v<=mx;v+=paso)lineas.push(v);
+    return React.createElement('div',{style:{position:'relative',margin:'6px 0 18px',padding:'18px 20px 14px',borderRadius:18,background:'radial-gradient(120% 120% at 50% 0%,#3b402c,#1a1d13)',border:'1px solid rgba(200,168,75,.38)',boxShadow:'inset 0 1px 0 rgba(255,255,255,.08),0 22px 36px -18px rgba(20,22,15,.65)'}},
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-end',flexWrap:'wrap',gap:10,marginBottom:14}},
+        React.createElement('div',null,
+          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:22,letterSpacing:2.2,color:'#fff',lineHeight:1}},'Pendiente por comuna'),
+          React.createElement('div',{style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:4}},totalPend+' piezas pendientes en '+cols.length+' comunas · toca una columna para ver sus códigos')),
+        React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},SEG.slice().reverse().map(function(s){return React.createElement('span',{key:s[0],style:{display:'inline-flex',alignItems:'center',gap:6,padding:'5px 11px',borderRadius:999,background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.12)',fontSize:11.5,fontWeight:700,color:'#efe9d6'}},React.createElement('i',{style:{width:10,height:10,borderRadius:3,background:s[2],boxShadow:'0 0 8px '+s[2]}}),s[1]);}))),
+      React.createElement('div',{style:{position:'relative',display:'flex',gap:0}},
+        // eje Y
+        React.createElement('div',{style:{position:'relative',width:30,height:H+D+26+50,flex:'none'}},
+          lineas.map(function(v){return React.createElement('div',{key:v,style:{position:'absolute',right:6,bottom:(v/mx*H)+50-7,fontSize:10.5,fontWeight:700,color:'rgba(233,228,210,.55)',fontFamily:'JetBrains Mono'}},v);})),
+        React.createElement('div',{style:{position:'relative',flex:1,minWidth:0,overflowX:'auto'}},
+          // líneas guía
+          React.createElement('div',{style:{position:'absolute',left:0,right:0,top:0,bottom:0,pointerEvents:'none'}},
+            lineas.map(function(v){return React.createElement('div',{key:v,style:{position:'absolute',left:0,right:0,bottom:(v/mx*H)+50,borderTop:v===0?'1px solid rgba(200,168,75,.45)':'1px dashed rgba(233,228,210,.12)'}});})),
+          React.createElement('div',{style:{position:'relative',display:'flex',alignItems:'flex-end',gap:6,height:H+D+26+50,minWidth:cols.length*62}},
+            cols.map(function(c,j){const hh=Math.max(6,Math.round(c._t/mx*H));const sel=comunaSel===c.comuna;
+              return React.createElement('div',{key:c.comuna,className:'dx-col',onClick:function(){setComunaSel(sel?'':c.comuna);},style:{position:'relative',flex:'1 1 0',minWidth:56,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',height:'100%'}},
+                React.createElement('div',{className:'dx-tip'},
+                  React.createElement('div',{style:{fontWeight:800,fontSize:12.5,marginBottom:4,color:'#ffe59a'}},tit(c.comuna)),
+                  SEG.slice().reverse().filter(function(s){return c[s[0]];}).map(function(s){return React.createElement('div',{key:s[0],style:{display:'flex',justifyContent:'space-between',gap:14,fontSize:11.5}},React.createElement('span',null,React.createElement('i',{style:{display:'inline-block',width:8,height:8,borderRadius:2,background:s[2],marginRight:6}}),s[1]),React.createElement('b',null,c[s[0]]));}),
+                  React.createElement('div',{style:{display:'flex',justifyContent:'space-between',gap:14,fontSize:11.5,marginTop:4,paddingTop:4,borderTop:'1px solid rgba(255,255,255,.15)'}},React.createElement('span',null,'Total'),React.createElement('b',null,c._t))),
+                React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:19,color:sel?'#ffe59a':'#fff',marginBottom:D+5,textShadow:'0 0 10px rgba(255,229,154,.45)'}},c._t),
+                React.createElement('div',{className:'dx-rise',style:{position:'relative',width:W,height:hh,marginRight:D,animationDelay:(j*0.03)+'s'}},
+                  React.createElement('div',{style:{position:'absolute',left:0,bottom:0,width:W,height:hh,boxShadow:sel?'0 0 0 2px #ffe59a, 0 0 18px rgba(255,229,154,.6)':'none'}},pila(c)),
+                  React.createElement('div',{style:{position:'absolute',left:W,bottom:0,width:D,height:hh,transform:'skewY(-45deg)',transformOrigin:'left bottom'}},pila(c,'brightness(.6)')),
+                  React.createElement('div',{style:{position:'absolute',left:0,top:-D,width:W,height:D,background:topColor(c),filter:'brightness(1.35)',transform:'skewX(-45deg)',transformOrigin:'left bottom'}}),
+                  React.createElement('div',{style:{position:'absolute',left:-6,bottom:-7,width:W+D+12,height:10,borderRadius:'50%',background:'radial-gradient(ellipse,rgba(0,0,0,.5),transparent 70%)'}})),
+                React.createElement('div',{title:c.comuna,style:{height:40,marginTop:10,width:'100%',display:'flex',alignItems:'flex-start',justifyContent:'center',textAlign:'center',fontSize:11,lineHeight:1.2,fontWeight:700,color:sel?'#ffe59a':'rgba(239,233,214,.88)',whiteSpace:'normal',wordBreak:'normal',overflowWrap:'anywhere',padding:'0 2px'}},tit(c.comuna)));})))));
   };
   const panel1=React.createElement('div',{className:'panel'},
     React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,flexWrap:'wrap',marginBottom:12}},
