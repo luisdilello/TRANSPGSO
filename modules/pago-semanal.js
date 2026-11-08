@@ -159,6 +159,16 @@ function PagoSemanal(props){
   },[lunes,gen]);
 
   function recargar(){setGen(function(g){return g+1;});}
+  // Productos del local (mismo catálogo de "Administrar productos"): en el tipo Consumo se eligen con
+  // un toque y el monto y la nota se completan solos (08-11-2026).
+  var _pv=R.useState([]),prodsVenta=_pv[0],setProdsVenta=_pv[1];
+  R.useEffect(function(){db.from('configuracion').select('valor').eq('clave','productos_venta').maybeSingle().then(function(r){var v=(r&&r.data&&r.data.valor)||[];setProdsVenta((Array.isArray(v)?v:[]).filter(function(p){return p.activo!==false&&(+p.precio||0)>0;}));}).catch(function(){});},[]);
+  function itemsConsumo(nombre,prod,delta){
+    var f=forms[nombre]||{};var it=Object.assign({},f.items||{});
+    it[prod.nombre]=Math.max(0,(it[prod.nombre]||0)+delta);if(!it[prod.nombre])delete it[prod.nombre];
+    var total=0,partes=[];Object.keys(it).forEach(function(k){var p=prodsVenta.find(function(x){return x.nombre===k;});var pr=p?(+p.precio||0):0;total+=it[k]*pr;partes.push(it[k]+' × '+tit(k));});
+    setForm(nombre,{items:it,monto:total?String(total):'',nota:partes.join(', ')});
+  }
   function setForm(n,o){setForms(function(p){var x=Object.assign({},p);x[n]=Object.assign({tipo:'adelanto',monto:'',nota:'',codigo:''},p[n]||{},o);return x;});}
   function agregar(nombre){
     var f=forms[nombre]||{};var monto=Math.round(+String(f.monto||'').replace(/[^\d]/g,'')||0);
@@ -167,7 +177,7 @@ function PagoSemanal(props){
     db.from('movimientos_pago_mensajero').insert({semana:sem.desde,mensajero:nombre,tipo:f.tipo||'adelanto',monto:monto,nota:(f.nota||'').trim()||null,codigo:(f.codigo||'').trim()||null,fecha:hoy,creado_por:quien}).then(function(r){
       if(r.error){toast('No se guardó: '+r.error.message);return;}
       if(f.tipo==='siniestro'&&f.sinId){db.from('siniestros').update({descontado_mensajero:true,descontado_mensajero_fecha:hoy,descontado_mensajero_semana:dmy(sem.desde)+' al '+dmy(sem.hasta),descontado_mensajero_valor:monto,descontado_mensajero_por:quien}).eq('id',f.sinId).then(function(){});}
-      toast(TIPOS[f.tipo||'adelanto'].l+' registrado a '+tit(nombre));setForm(nombre,{monto:'',nota:'',codigo:'',sinId:null});recargar();
+      toast(TIPOS[f.tipo||'adelanto'].l+' registrado a '+tit(nombre));setForm(nombre,{monto:'',nota:'',codigo:'',sinId:null,items:{}});recargar();
     });
   }
   function borrar(m){
@@ -295,8 +305,20 @@ function PagoSemanal(props){
               h('a',{href:'#',onClick:function(ev){ev.preventDefault();setAbierto(c.nombre);setForm(c.nombre,{tipo:'siniestro',codigo:s.codigo,sinId:s.id,nota:'Siniestro '+s.codigo});},style:{color:'#b03030',fontWeight:800}},'Descontar'));})):null,
           // agregar movimiento
           ab?h('div',{style:{margin:'10px 0 4px',padding:12,borderRadius:14,background:'#fff',border:'1px solid rgba(200,168,75,.4)'}},
-            h('div',{style:{display:'flex',flexWrap:'wrap',gap:5,marginBottom:8}},ORDEN_TIPOS.map(function(k){var a=(f.tipo||'adelanto')===k;var T0=TIPOS[k];return h('button',{key:k,type:'button',onClick:function(){setForm(c.nombre,{tipo:k});},style:{padding:'5px 10px',borderRadius:999,border:'1px solid '+(a?T0.c:'var(--border)'),background:a?T0.c:'#fff',color:a?'#fff':'var(--dark)',fontSize:11.5,fontWeight:800,cursor:'pointer'}},T0.l);})),
+            h('div',{style:{display:'flex',flexWrap:'wrap',gap:5,marginBottom:8}},ORDEN_TIPOS.map(function(k){var a=(f.tipo||'adelanto')===k;var T0=TIPOS[k];return h('button',{key:k,type:'button',onClick:function(){setForm(c.nombre,k==='consumo'?{tipo:k}:{tipo:k,items:{}});},style:{padding:'5px 10px',borderRadius:999,border:'1px solid '+(a?T0.c:'var(--border)'),background:a?T0.c:'#fff',color:a?'#fff':'var(--dark)',fontSize:11.5,fontWeight:800,cursor:'pointer'}},T0.l);})),
             h('div',{style:{fontSize:11.5,color:'var(--text-soft)',marginBottom:8}},AYUDA[f.tipo||'adelanto']),
+            (f.tipo==='consumo')?h('div',{style:{marginBottom:10}},
+              prodsVenta.length===0?h('div',{style:{fontSize:11.5,color:'var(--text-soft)'}},'No hay productos con precio. Agrégalos en Consumo del local › Administrar productos.'):
+              h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(118px,1fr))',gap:6}},prodsVenta.map(function(pv){var n=(f.items||{})[pv.nombre]||0;
+                return h('div',{key:pv.nombre,style:{position:'relative',borderRadius:12,border:'1px solid '+(n?'#8a5a2b':'rgba(200,168,75,.4)'),background:n?'linear-gradient(135deg,#fff3e2,#f3dcc0)':'radial-gradient(130% 90% at 20% 0%,#fff 0%,#faf5e8 70%)',boxShadow:n?'0 6px 14px -8px rgba(138,90,43,.6)':'0 4px 10px -8px rgba(110,84,20,.4)',overflow:'hidden'}},
+                  h('button',{type:'button',onClick:function(){itemsConsumo(c.nombre,pv,1);},style:{display:'block',width:'100%',textAlign:'left',padding:'8px 10px',border:'none',background:'transparent',cursor:'pointer'}},
+                    h('div',{style:{fontSize:11.5,fontWeight:800,color:'var(--dark)',lineHeight:1.2}},tit(pv.nombre)),
+                    h('div',{style:{fontFamily:'JetBrains Mono',fontSize:12,fontWeight:700,color:'#8a5a2b',marginTop:2}},fmt(+pv.precio||0))),
+                  n?h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'3px 6px',background:'rgba(138,90,43,.12)'}},
+                    h('button',{type:'button',onClick:function(){itemsConsumo(c.nombre,pv,-1);},style:{width:22,height:22,borderRadius:6,border:'1px solid #8a5a2b',background:'#fff',color:'#8a5a2b',fontWeight:900,cursor:'pointer',lineHeight:1}},'−'),
+                    h('b',{style:{fontSize:12,color:'#8a5a2b'}},n+' × '),
+                    h('button',{type:'button',onClick:function(){itemsConsumo(c.nombre,pv,1);},style:{width:22,height:22,borderRadius:6,border:'1px solid #8a5a2b',background:'#8a5a2b',color:'#fff',fontWeight:900,cursor:'pointer',lineHeight:1}},'+')):null);})),
+              Object.keys(f.items||{}).length?h('div',{style:{marginTop:6,fontSize:12,fontWeight:700,color:'#8a5a2b'}},'Total consumo: '+fmt(+f.monto||0)):null):null,
             h('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
               h('input',{className:'form-input',inputMode:'numeric',placeholder:'Monto',value:f.monto,onChange:function(e){setForm(c.nombre,{monto:e.target.value});},onKeyDown:function(e){if(e.key==='Enter')agregar(c.nombre);},style:{margin:0,width:120,fontFamily:'JetBrains Mono'}}),
               (f.tipo==='siniestro')?h('input',{className:'form-input',placeholder:'Código',value:f.codigo,onChange:function(e){setForm(c.nombre,{codigo:e.target.value});},style:{margin:0,width:140}}):null,
