@@ -40,7 +40,17 @@ function estiloBaseHTML(titulo){
     +'details.alerta-det summary::-webkit-details-marker{display:none}details.alerta-det[open] .ver-det{opacity:.6}'
     +'@media print{.barra-acciones{display:none}body{background:#fff}.encabezado{position:static!important;box-shadow:none!important}.tarjeta{break-inside:avoid;box-shadow:none!important}@page{margin:12mm}}</style></head><body>';
 }
-function barraAccionesHTML(){return '<div class="barra-acciones"><button onclick="window.print()">Imprimir / Guardar PDF</button></div>';}
+// Nombre de los archivos exportados (pedido de Luis 08-11-2026): "INFORME <tipo> <fecha>".
+function limpiarNombreArchivo(n){return String(n||'').replace(/[\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim();}
+function nombreArchivoInforme(tipo,desde,hasta){var f=fmtDMYn(desde)+(hasta&&hasta!==desde?' AL '+fmtDMYn(hasta):'');return limpiarNombreArchivo('INFORME '+tipo+(f?' '+f:''));}
+function fmtDMYn(s){var p=String(s||'').split('-');return p.length===3?p[2]+'-'+p[1]+'-'+p[0]:String(s||'');}
+function nombreArchivoLibre(inf){var t=String((inf&&inf.titulo)||'').trim().replace(/^informe(\s+(de|del|sobre))?\s*/i,'');return nombreArchivoInforme(t?t.toUpperCase():'LIBRE',inf&&inf.fecha_informe);}
+// Barra del documento: imprimir / PDF y descargar el mismo documento como .html con su nombre.
+function barraAccionesHTML(nombre){
+  if(!nombre)return '<div class="barra-acciones"><button onclick="window.print()">Imprimir / Guardar PDF</button></div>';
+  return '<div class="barra-acciones"><button onclick="window.print()">Imprimir / Guardar PDF</button><button onclick="descargarEsteHTML()" style="background:#2B2E20;color:#E8C766">Descargar HTML</button></div>'
+    +'<script>function descargarEsteHTML(){var b=new Blob(["<!DOCTYPE html>"+document.documentElement.outerHTML],{type:"text/html"});var a=document.createElement("a");a.href=URL.createObjectURL(b);a.download='+JSON.stringify(nombre+'.html')+';document.body.appendChild(a);a.click();a.remove();}<\/script>';
+}
 function headerReciboHTML(subtitulo,badge){
   return '<div class="encabezado" style="background:#fff;border-bottom:3px solid #C8A84B;padding:14px 16px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(168,132,48,.15)"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;max-width:980px;margin:0 auto"><div style="display:flex;align-items:center;gap:10px"><img src="'+LOGO_B64+'" style="height:42px;width:auto;object-fit:contain"/><div><div style="font-weight:900;font-size:16px;color:#A0842A">TransPgso SpA</div><div style="font-size:10px;color:#888;letter-spacing:1.5px;text-transform:uppercase">'+escHTML(subtitulo)+'</div></div></div>'+(badge?'<span style="background:#FDF8EC;border:1.5px solid #C8A84B;color:#A0842A;font-size:10px;font-weight:700;padding:4px 10px;border-radius:999px;white-space:nowrap">'+escHTML(badge)+'</span>':'')+'</div></div>';
 }
@@ -66,7 +76,7 @@ function piePaginaHTML(texto){
 }
 function abrirVentanaHTML(ventana,html){
   var w=ventana||window.open('','_blank');
-  if(!w){descargarHTML('Informe.html',html);return;}
+  if(!w){var mt=String(html).match(/<title>([^<]*)<\/title>/);descargarHTML(((mt&&mt[1])||'INFORME')+'.html',html);return;}
   w.document.open();w.document.write(html);w.document.close();
 }
 function descargarHTML(nombreArchivo,htmlContent){
@@ -318,10 +328,10 @@ function htmlInformeCierre(dias,t,notas,periodo,generadoPor,alertas,opciones){
   var notasHTML=notas.length===0?'<div style="font-size:12px;color:#999">Sin notas del personal para este período.</div>':notas.map(function(n){
     return '<div style="border-left:3px solid #C8A84B;background:#FDF8EC;border-radius:6px;padding:10px 12px;margin-bottom:8px"><div style="font-size:10px;color:#A0842A;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">'+escHTML(fmtDiaLargo(n.fecha))+' · '+escHTML(n.autor||'—')+' · '+escHTML(horaCL(n.created_at))+'</div><div style="font-size:13px;color:#333;white-space:pre-wrap;line-height:1.5">'+escHTML(n.texto)+'</div></div>';
   }).join('');
-  var titulo='Informe de Cierre - '+periodo.label;
+  var titulo=periodo.desde?nombreArchivoInforme('DE CIERRE',periodo.desde,periodo.hasta):limpiarNombreArchivo('INFORME DE CIERRE '+periodo.label);
   return estiloBaseHTML(titulo)
     +headerReciboHTML('Informe de Cierre · Operaciones',periodo.label)
-    +(compacto?'':barraAccionesHTML())
+    +(compacto?'':barraAccionesHTML(titulo))
     +'<div style="padding:16px;max-width:980px;margin:0 auto">'
     +(compacto?'<div style="background:#FDF8EC;border:1px solid #EDE3C8;border-radius:10px;padding:10px 14px;font-size:12px;color:#A0842A;font-weight:700;margin-bottom:16px">Resumen del informe. El informe completo (mensajeros, calidad, carga que no salió con sus códigos y detalle) va adjunto en este correo.</div>':'')
     +(t.diaEnCurso?'<div style="background:#FFF4E5;border:1px solid #E8B04B;color:#8a5a00;border-radius:10px;padding:10px 14px;font-size:12px;font-weight:700;margin-bottom:16px">El día de hoy todavía está en curso: los cortes que aún no llegan su hora y el final de ruta se completarán solos al volver a generar el informe.</div>':'')
@@ -384,7 +394,7 @@ function exportarCierreExcel(dias,t,notas,periodo){
   hojas.push({name:'Sin 2 fotos',headers:['Día','Código','Mensajero','Cliente','Fotos'],rows:t.sinFotosCodigos.map(function(c){return[fmtDMY(c.dia),c.codigo,c.mensajero,c.cliente,c.fotos];})});
   hojas.push({name:'Sin salida',headers:['Mensajero','Días sin salir','Días del período','Entregas registradas'],rows:t.sinSalida.map(function(x){return[x.mensajero,x.dias,dias.length,x.entregas];})});
   hojas.push({name:'Notas',headers:['Día','Autor','Hora','Nota'],rows:notas.map(function(n){return[fmtDMY(n.fecha),n.autor||'',horaCL(n.created_at),n.texto];})});
-  exportToExcel('Informe_Cierre_'+periodo.desde+(periodo.hasta!==periodo.desde?'_'+periodo.hasta:''),hojas);
+  exportToExcel(nombreArchivoInforme('DE CIERRE',periodo.desde,periodo.hasta),hojas);
 }
 
 // Trae los días en paralelo (de a 4 para no saturar la base). Cada día tarda ~0,5 s en el servidor.
@@ -692,7 +702,7 @@ function InformeCierre(props){
     generar(limitesPeriodo(m,fd,ms,desde,hasta));
   }
   var ATAJOS=[['hoy','Hoy'],['ayer','Ayer'],['semana','Esta semana'],['semana_ant','Semana pasada'],['mes','Este mes'],['mes_ant','Mes pasado']];
-  var nombreArchivo=datos?('Informe_Cierre_'+datos.periodo.desde+(datos.periodo.hasta!==datos.periodo.desde?'_'+datos.periodo.hasta:'')):'';
+  var nombreArchivo=datos?nombreArchivoInforme('DE CIERRE',datos.periodo.desde,datos.periodo.hasta):'';
   var acciones=datos&&h('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
     ixBoton('Imprimir / PDF',function(){abrirVentanaHTML(null,html);},{prim:true,chico:true}),
     ixBoton('Excel',function(){exportarCierreExcel(datos.dias,datos.total,notas,datos.periodo);},{chico:true}),
@@ -810,9 +820,9 @@ function cuerpoAHTML(texto){
 }
 function htmlInformeLibre(inf){
   var titulo=inf.titulo||'Informe';
-  return estiloBaseHTML(titulo)
+  return estiloBaseHTML(nombreArchivoLibre(inf))
     +headerReciboHTML('Informe',fmtDMY(inf.fecha_informe))
-    +barraAccionesHTML()
+    +barraAccionesHTML(nombreArchivoLibre(inf))
     +'<div style="padding:16px;max-width:900px;margin:0 auto">'
     +tarjetaHTML(titulo,gridHTML(160,[infoBoxHTML('Fecha',fmtDiaLargo(inf.fecha_informe)),infoBoxHTML('Elaborado por',inf.autor),infoBoxHTML('Dirigido a',inf.destinatario||'—')])
       +'<div style="height:16px"></div>'+cuerpoAHTML(inf.cuerpo))
@@ -821,7 +831,7 @@ function htmlInformeLibre(inf){
 
 // Documento profesional (modules/doc-pdf.js). Si no se puede cargar, se usa el formato anterior.
 async function verInformeLibre(w,inf){
-  try{await loadScriptOnce('doc-pdf','modules/doc-pdf.js');window.__docPDF.abrir(w,window.__docPDF.informeLibreHTML(inf));}
+  try{await loadScriptOnce('doc-pdf','modules/doc-pdf.js');window.__docPDF.abrir(w,window.__docPDF.informeLibreHTML(Object.assign({},inf,{nombreArchivo:nombreArchivoLibre(inf)})));}
   catch(e){abrirVentanaHTML(w,htmlInformeLibre(inf));}
 }
 // Plantillas del informe libre (08-11-2026): dejan la estructura lista para completar.
@@ -952,7 +962,7 @@ function InformeLibre(props){
   var nMes=lista.filter(function(i){return String(i.fecha_informe||'').slice(0,7)===mesAct;}).length;
   var set=function(k){return function(e){var v=e.target.value;setEd(function(p){var n=Object.assign({},p);n[k]=v;return n;});};};
   var palabras=(ed.cuerpo||'').replace(/\[imagen:[^\]]+\]/g,'').trim().split(/\s+/).filter(Boolean).length;
-  var htmlPrev=vista==='previa'?(docListo&&window.__docPDF?window.__docPDF.informeLibreHTML(Object.assign({},ed,{autor:ed.autor||nombreUsuario})):htmlInformeLibre(ed)):'';
+  var htmlPrev=vista==='previa'?(docListo&&window.__docPDF?window.__docPDF.informeLibreHTML(Object.assign({},ed,{autor:ed.autor||nombreUsuario,nombreArchivo:nombreArchivoLibre(ed)})):htmlInformeLibre(ed)):'';
   var nombreMes=function(m){var p=m.split('-');return MESES[+p[1]-1]+' '+p[0];};
   var tb=function(txt,on,tit){return h('button',{type:'button',onClick:on,title:tit,style:{padding:'6px 11px',borderRadius:8,border:'1px solid var(--border)',background:'#fff',fontSize:12,fontWeight:700,cursor:'pointer',color:'var(--text)'}},txt);};
   var snippet=function(c){return String(c||'').replace(/\[imagen:[^\]]+\][^\n]*/g,'').replace(/^#\s+/gm,'').replace(/^[-•]\s+/gm,'').replace(/\s+/g,' ').trim().slice(0,110);};

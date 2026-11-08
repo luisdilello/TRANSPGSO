@@ -124,7 +124,7 @@ function documentoHTML(o){
     +'<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">'
     +'<style>'+CSS+'</style>'
     +'<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script></head><body>'
-    +'<div class="acciones"><button id="btnPdf" onclick="descargarPDF()">Descargar PDF</button><button class="sec" onclick="window.print()">Imprimir</button><span id="estadoPdf"></span></div>'
+    +'<div class="acciones"><button id="btnPdf" onclick="descargarPDF()">Descargar PDF</button><button class="sec" onclick="descargarHTMLDoc()">Descargar HTML</button><button class="sec" onclick="window.print()">Imprimir</button><span id="estadoPdf"></span></div>'
     +'<div id="doc"><div class="pag">'
     +encabezadoHTML(o.tipo,o.folio,o.fechaDoc)
     +'<h1 class="titulo">'+esc(o.titulo)+'</h1>'+(o.subtitulo?'<div class="subt">'+esc(o.subtitulo)+'</div>':'<div style="height:10px"></div>')
@@ -135,7 +135,8 @@ function documentoHTML(o){
     +'<div class="pie"><span>'+EMPRESA.nombre+' · RUT '+EMPRESA.rut+' · '+EMPRESA.mail+'</span><span>Documento generado por el Sistema de Gestión TransPgso</span></div>'
     +'</div></div>'
     +'<script>'
-    +'var CH=0,PS=null;var NOMBRE='+JSON.stringify((o.nombreArchivo||'Documento_TransPgso').replace(/[^\wáéíóúñÁÉÍÓÚÑ\- ]/g,'').trim().replace(/\s+/g,'_')+'.pdf')+';'
+    +'var CH=0,PS=null;var BASE='+JSON.stringify((o.nombreArchivo||'Documento TransPgso').replace(/[\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim())+';var NOMBRE=BASE+".pdf";'
+    +'function descargarHTMLDoc(){var b=new Blob(["<!DOCTYPE html>"+document.documentElement.outerHTML],{type:"text/html"});var a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=BASE+".html";document.body.appendChild(a);a.click();a.remove();}'
     +'function descargarPDF(){var b=document.getElementById("btnPdf"),e=document.getElementById("estadoPdf");'
     +'if(typeof html2pdf==="undefined"){e.textContent="No se pudo cargar el generador. Usa Imprimir > Guardar como PDF.";return;}'
     +'b.disabled=true;e.textContent="Generando PDF...";'
@@ -169,7 +170,7 @@ function informeLibreHTML(inf){
     cuerpo:seccionHTML('', 'Desarrollo', cuerpoHTML(inf.cuerpo,cont)),
     firmas:[(inf.autor||'')+' — Elaborado por','Recibido por'],
     cierre:'Documento interno de '+EMPRESA.nombre+'. La información y las imágenes contenidas corresponden a los registros del sistema de gestión y a los respaldos aportados por el equipo a la fecha de emisión.',
-    nombreArchivo:(inf.titulo||'Informe')
+    nombreArchivo:(inf.nombreArchivo||inf.titulo||'Informe')
   });
 }
 

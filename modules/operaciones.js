@@ -439,9 +439,12 @@ function descargarHTML(nombreArchivo,htmlContent){
 }
 
 function exportarCierreHTML(r){
-  var titulo='Cierre de Ruta - '+r.fecha+(r.turno?' ('+r.turno+')':'');
+  var fp=String(r.fecha||'').split('-');var fDMY=fp.length===3?fp[2]+'-'+fp[1]+'-'+fp[0]:r.fecha;
+  var titulo=('INFORME NOVEDADES DEL DIA '+fDMY+(r.turno?' '+String(r.turno).toUpperCase():'')).replace(/[\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim();
   var html=estiloBaseHTML(titulo)
+    +'<style>.barra-acc{display:flex;gap:8px;justify-content:flex-end;max-width:900px;margin:12px auto 0;padding:0 16px}.barra-acc button{background:#C8A84B;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:700;font-size:12px;cursor:pointer}@media print{.barra-acc{display:none}}</style>'
     +headerReciboHTML('Cierre de Ruta · Operaciones',r.estado_reporte==='cerrado'?'CERRADO':'BORRADOR')
+    +'<div class="barra-acc"><button onclick="window.print()">Imprimir / Guardar PDF</button><button onclick="descargarEsteHTML()" style="background:#2B2E20;color:#E8C766">Descargar HTML</button></div><script>function descargarEsteHTML(){var b=new Blob(["<!DOCTYPE html>"+document.documentElement.outerHTML],{type:"text/html"});var a=document.createElement("a");a.href=URL.createObjectURL(b);a.download='+JSON.stringify(titulo+'.html')+';document.body.appendChild(a);a.click();a.remove();}<\/script>'
     +'<div style="padding:16px;max-width:900px;margin:0 auto">'
     +tarjetaHTML('Datos generales','','<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
       +infoBoxHTML('Fecha',r.fecha)+infoBoxHTML('Turno',r.turno)
@@ -467,7 +470,7 @@ function exportarCierreHTML(r){
       +'</div><div style="margin-top:10px;font-size:12px;font-weight:700;color:'+(r.ponderacion_economica.seRecuperoCosto?'#2E7D32':'#C62828')+'">'
       +(r.ponderacion_economica.seRecuperoCosto?'El trabajo de hoy se pagó solo.':'Por debajo del costo del día.')+'</div>'):'')
     +'</div></body></html>';
-  descargarHTML('Cierre_Ruta_'+r.fecha+(r.turno?'_'+r.turno.replace(/\s+/g,'_'):'')+'.html',html);
+  descargarHTML(titulo+'.html',html);
 }
 
 function exportarFirmasVivoHTML(filtrados,periodoLabel){
