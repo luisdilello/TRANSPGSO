@@ -1566,11 +1566,25 @@ function quincenaDe(fechaStr,desplazamiento){
   var desde=new Date(yy,mm,pp===0?1:16),hasta=pp===0?new Date(yy,mm,15):new Date(yy,mm+1,0);
   return{desde:fechaISO(desde),hasta:fechaISO(hasta)};
 }
+// 08-11-2026: Soporte Firmas se paga por MES DE PAGO, igual que el pago a mensajeros: semanas de
+// lunes a domingo y cada semana pertenece al mes donde termina (su domingo). Ej.: noviembre 2026 =
+// semanas del 26-10 al 29-11; octubre 2026 = del 28-09 al 25-10. El sueldo es mensual (una vez por
+// mes) y el extra por firmas se cierra semana a semana en orden de fechas.
+function mesPagoDe(fechaStr,desplazamiento){
+  var d=new Date(fechaStr+'T12:00:00');d.setDate(d.getDate()+((7-d.getDay())%7)); // domingo de su semana
+  var y=d.getFullYear(),m=d.getMonth()+(desplazamiento||0);
+  var ini=new Date(y,m,1);y=ini.getFullYear();m=ini.getMonth();
+  var primerDom=new Date(y,m,1);primerDom.setDate(1+((7-primerDom.getDay())%7));
+  var desde=new Date(primerDom);desde.setDate(desde.getDate()-6);
+  var ult=new Date(y,m+1,0);var hasta=new Date(ult);hasta.setDate(ult.getDate()-ult.getDay());
+  return{desde:fechaISO(desde),hasta:fechaISO(hasta),mes:ini.toLocaleDateString('es-CL',{month:'long',year:'numeric'})};
+}
+function semanasEntre(desde,hasta){var out=[],d=new Date(desde+'T12:00:00');d.setDate(d.getDate()-((d.getDay()+6)%7));var h=new Date(hasta+'T12:00:00');while(d<=h){out.push(fechaISO(d));d.setDate(d.getDate()+7);}return out;}
 function SoporteFirmasTab(props){
   var mensajeros=props.mensajeros||[], toast=props.toast;
   var hoy=fechaHoyCL();
   var _ops=React.useState(null); var ops=_ops[0]; var setOps=_ops[1];
-  var _per=React.useState(function(){return quincenaDe(hoy,0);}); var periodo=_per[0]; var setPeriodo=_per[1];
+  var _per=React.useState(function(){return mesPagoDe(hoy,0);}); var periodo=_per[0]; var setPeriodo=_per[1];
   var _cnt=React.useState(null); var conteo=_cnt[0]; var setConteo=_cnt[1];
   var _hist=React.useState([]); var hist=_hist[0]; var setHist=_hist[1];
   var _dirty=React.useState({}); var dirty=_dirty[0]; var setDirty=_dirty[1];
@@ -1623,8 +1637,8 @@ function SoporteFirmasTab(props){
   function exportar(){
     var hojas=(ops||[]).map(function(op){
       var c=calcular(op);
-      var rows=Object.keys(c.porSemana).sort().map(function(w){var h=new Date(w+'T12:00:00');h.setDate(h.getDate()+6);return['Semana del '+w+' al '+fechaISO(h),c.porSemana[w],c.tarifa,c.porSemana[w]*c.tarifa];});
-      rows.push(['Sueldo','','',c.sueldo]);
+      var rows=semanasEntre(periodo.desde,periodo.hasta).map(function(w){var h=new Date(w+'T12:00:00');h.setDate(h.getDate()+6);var n=c.porSemana[w]||0;return['Del '+w.split('-').reverse().join('-')+' al '+fechaISO(h).split('-').reverse().join('-'),n,c.tarifa,n*c.tarifa];});
+      rows.push(['Sueldo base mensual','','',c.sueldo]);
       return{name:op.operador.slice(0,31),headers:['Concepto','Firmas','$ por firma','Monto'],rows:rows,totalsRow:['TOTAL',c.firmas,'',c.total]};
     });
     exportToExcel('Soporte_Firmas_'+periodo.desde+'_al_'+periodo.hasta,hojas);
@@ -1633,15 +1647,19 @@ function SoporteFirmasTab(props){
   var activosNombres=mensajeros.filter(function(m){return m.activo!==false;}).map(function(m){return normNombreTarifa(m.nombre);}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort();
   var inp={padding:'5px 8px',borderRadius:6,border:'1px solid var(--border)',fontFamily:'JetBrains Mono',fontSize:12,textAlign:'right',outline:'none',background:'var(--cream)',width:100};
   var fmt=function(n){return '$'+Math.round(n||0).toLocaleString('es-CL');};
+  var dmyC=function(f){return f?f.slice(8,10)+'-'+f.slice(5,7):'';};
+  var semanas=periodo.desde&&periodo.hasta?semanasEntre(periodo.desde,periodo.hasta):[];
+  var estadoSem=function(w){var h=new Date(w+'T12:00:00');h.setDate(h.getDate()+6);var hs=fechaISO(h);return hs<hoy?['Cerrada','#2e7d4f']:(w<=hoy?['En curso','#c8a84b']:['Pendiente','#9a9a8a']);};
 
   return React.createElement('div',{style:{padding:'0 20px 20px'}},
     React.createElement('div',{style:{display:'flex',gap:10,alignItems:'flex-end',flexWrap:'wrap',marginBottom:16}},
       React.createElement('div',null,React.createElement('label',{className:'form-label'},'Desde'),React.createElement('input',{type:'date',className:'form-input',value:periodo.desde,onChange:function(e){setPeriodo({desde:e.target.value,hasta:periodo.hasta});},style:{margin:0}})),
       React.createElement('div',null,React.createElement('label',{className:'form-label'},'Hasta'),React.createElement('input',{type:'date',className:'form-input',value:periodo.hasta,onChange:function(e){setPeriodo({desde:periodo.desde,hasta:e.target.value});},style:{margin:0}})),
-      React.createElement('button',{className:'btn-futurista btn-f-ghost',onClick:function(){setPeriodo(quincenaDe(hoy,0));}},'Quincena actual'),
-      React.createElement('button',{className:'btn-futurista btn-f-ghost',onClick:function(){setPeriodo(quincenaDe(hoy,-1));}},'Quincena anterior'),
+      React.createElement('button',{className:'btn-futurista btn-f-ghost',onClick:function(){setPeriodo(mesPagoDe(hoy,0));}},'Mes actual'),
+      React.createElement('button',{className:'btn-futurista btn-f-ghost',onClick:function(){setPeriodo(mesPagoDe(hoy,-1));}},'Mes anterior'),
       React.createElement('button',{className:'btn-futurista btn-f-ghost',onClick:exportar,disabled:!conteo},'Exportar Excel')
     ),
+    React.createElement('div',{style:{fontSize:13,color:'var(--text-soft)',margin:'-6px 0 16px'}},periodo.mes?React.createElement('span',null,'Mes de pago ',React.createElement('b',{style:{color:'var(--dark)',textTransform:'capitalize'}},periodo.mes),' · semanas del '+dmyC(periodo.desde)+' al '+dmyC(periodo.hasta)+'. Sueldo mensual una vez; el extra por firmas se cierra semana a semana.'):'Período personalizado del '+dmyC(periodo.desde)+' al '+dmyC(periodo.hasta)+'.'),
     ops===null?React.createElement('div',{className:'info-banner'},'Cargando...'):
     ops.length===0?React.createElement('div',{className:'info-banner'},'Sin operadoras configuradas.'):
     React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(340px,1fr))',gap:16,marginBottom:24}},
@@ -1661,22 +1679,22 @@ function SoporteFirmasTab(props){
             )
           ),
           React.createElement('div',{style:{display:'flex',gap:12,marginBottom:12,flexWrap:'wrap'}},
-            React.createElement('div',null,React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)'}},'Sueldo fijo'),React.createElement('input',{type:'number',value:op.sueldo,onChange:function(e){setCampo(op,'sueldo',e.target.value);},style:inp})),
+            React.createElement('div',null,React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)'}},'Sueldo mensual'),React.createElement('input',{type:'number',value:op.sueldo,onChange:function(e){setCampo(op,'sueldo',e.target.value);},style:inp})),
             React.createElement('div',null,React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)'}},'$ por firma'),React.createElement('input',{type:'number',value:op.tarifa_firma,onChange:function(e){setCampo(op,'tarifa_firma',e.target.value);},style:Object.assign({},inp,{width:70})}))
           ),
           !c?React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)'}},'Contando entregas...'):
           React.createElement('div',null,
-            Object.keys(c.porSemana).sort().map(function(w){
-              var h=new Date(w+'T12:00:00');h.setDate(h.getDate()+6);
-              return React.createElement('div',{key:w,style:{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0',borderBottom:'1px solid rgba(0,0,0,0.05)'}},
-                React.createElement('span',null,'Semana '+new Date(w+'T12:00:00').toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit'})+' al '+h.toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit'})),
-                React.createElement('span',{className:'mono'},c.porSemana[w]+' firmas · '+fmt(c.porSemana[w]*c.tarifa)));
+            semanas.map(function(w){
+              var h=new Date(w+'T12:00:00');h.setDate(h.getDate()+6);var n=c.porSemana[w]||0;var st=estadoSem(w);
+              return React.createElement('div',{key:w,style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,fontSize:12,padding:'5px 0',borderBottom:'1px solid rgba(0,0,0,0.05)',opacity:st[0]==='Pendiente'?0.55:1}},
+                React.createElement('span',null,'Del '+dmyC(w)+' al '+dmyC(fechaISO(h)),React.createElement('span',{style:{marginLeft:8,fontSize:10,fontWeight:800,color:st[1],border:'1px solid '+st[1],borderRadius:999,padding:'1px 7px'}},st[0])),
+                React.createElement('span',{className:'mono'},n?(n+' firmas · '+fmt(n*c.tarifa)):'—'));
             }),
             React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',margin:'6px 0'}},Object.keys(c.porMens).sort().map(function(k){return k+': '+c.porMens[k];}).join(' · ')||'Sin entregas en el período'),
-            React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}},React.createElement('span',null,'Firmas ('+c.firmas+' x $'+c.tarifa+')'),React.createElement('span',{className:'mono'},fmt(c.monto))),
-            React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}},React.createElement('span',null,'Sueldo'),React.createElement('span',{className:'mono'},fmt(c.sueldo))),
+            React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}},React.createElement('span',null,'Extra por firmas ('+c.firmas+' x $'+c.tarifa+')'),React.createElement('span',{className:'mono'},fmt(c.monto))),
+            React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0'}},React.createElement('span',null,'Sueldo base mensual'),React.createElement('span',{className:'mono'},fmt(c.sueldo))),
             React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderTop:'1px solid var(--border)',marginTop:6}},
-              React.createElement('span',{style:{fontSize:11,fontWeight:700,textTransform:'uppercase'}},'Total a pagar'),
+              React.createElement('span',{style:{fontSize:11,fontWeight:700,textTransform:'uppercase'}},'Total del mes'),
               React.createElement('span',{className:'mono',style:{fontSize:16,fontWeight:800,color:'var(--success)'}},fmt(c.total)))
           )
         );
