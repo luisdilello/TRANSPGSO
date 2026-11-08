@@ -663,7 +663,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1794174739;
+window.__MODULES_VERSION=1794175541;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1892,6 +1892,190 @@ function TarjetaEfectividad(_refTE){let value=_refTE.value,label=_refTE.label,su
     hayTendencia?React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginTop:4}},'vs período anterior ('+pct(prevValue)+')'):null
   );
 }
+// ── Panel "Efectividad del período" (Dashboard) ──
+// Medidores 3D (arco de 270° con escala, disco en relieve y brillo), variación contra el período
+// anterior equivalente, composición del período en un tubo 3D apilado, tres indicadores de
+// resolución y la tendencia diaria de efectividad (solo cuando el período abarca 2+ días).
+// Fórmulas: Total = entregados / (total − en_bodega_fecha); Operativa = entregados / (entregados + reprogramados + cancelados).
+function MedidorEf3D(p){
+  const value=p.value,prev=p.prev,label=p.label,sub=p.sub,size=p.size||200;
+  const pv=Math.min(Math.max(isFinite(value)?value:0,0),1);
+  const _u=useState(0),anim=_u[0],setAnim=_u[1];
+  useEffect(()=>{const t=setTimeout(()=>setAnim(pv),90);return()=>clearTimeout(t);},[pv]);
+  const id=useRef('mef'+Math.random().toString(36).slice(2)).current;
+  const cx=size/2,cy=size/2,R=size*0.40,sw=size*0.075;
+  const A0=135,SPAN=270;
+  const pt=(ang,r)=>{const a=ang*Math.PI/180;return[cx+r*Math.cos(a),cy+r*Math.sin(a)];};
+  const arc=(r,a1,a2)=>{const s=pt(a1,r),e=pt(a2,r);const large=(a2-a1)>180?1:0;return'M'+s[0].toFixed(2)+' '+s[1].toFixed(2)+' A'+r+' '+r+' 0 '+large+' 1 '+e[0].toFixed(2)+' '+e[1].toFixed(2);};
+  const col=pv>=0.97?'#2e7d4f':pv>=0.93?'#5e9a3a':pv>=0.88?'#c8a84b':pv>=0.80?'#d17a22':'#b03030';
+  const ticks=[];
+  for(let i=0;i<=50;i++){const v=i/50,ang=A0+SPAN*v,mayor=i%5===0;const a=pt(ang,R+sw*0.5+3),b=pt(ang,R+sw*0.5+(mayor?11:6));
+    ticks.push(React.createElement('line',{key:'t'+i,x1:a[0],y1:a[1],x2:b[0],y2:b[1],stroke:mayor?'#8a6a1c':'rgba(138,106,28,.45)',strokeWidth:mayor?1.8:1,strokeLinecap:'round'}));
+    if(mayor&&i%10===0){const l=pt(ang,R+sw*0.5+21);ticks.push(React.createElement('text',{key:'l'+i,x:l[0],y:l[1]+3,textAnchor:'middle',fontSize:9,fontWeight:700,fill:'#9a8a5c',fontFamily:'DM Sans'},Math.round(v*100)));}}
+  const knob=pt(A0+SPAN*anim,R);
+  const hayPrev=typeof prev==='number'&&isFinite(prev);
+  const delta=hayPrev?(pv-prev)*100:0;
+  const prevPt=hayPrev?pt(A0+SPAN*Math.min(Math.max(prev,0),1),R):null;
+  return React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:6,minWidth:0}},
+    React.createElement('div',{style:{position:'relative',width:size,height:size*0.86}},
+      React.createElement('svg',{width:size,height:size,viewBox:'0 0 '+size+' '+size,style:{overflow:'visible',filter:'drop-shadow(0 10px 14px rgba(110,84,20,.22))'}},
+        React.createElement('defs',null,
+          React.createElement('linearGradient',{id:id+'g',x1:'0',y1:'1',x2:'1',y2:'0'},
+            React.createElement('stop',{offset:'0%',stopColor:'#8a6a1c'}),
+            React.createElement('stop',{offset:'45%',stopColor:'#e8c766'}),
+            React.createElement('stop',{offset:'100%',stopColor:col})),
+          React.createElement('linearGradient',{id:id+'t',x1:'0',y1:'0',x2:'0',y2:'1'},
+            React.createElement('stop',{offset:'0%',stopColor:'#d9d1bb'}),
+            React.createElement('stop',{offset:'55%',stopColor:'#f3eee0'}),
+            React.createElement('stop',{offset:'100%',stopColor:'#cfc6ac'})),
+          React.createElement('radialGradient',{id:id+'d',cx:'38%',cy:'30%',r:'75%'},
+            React.createElement('stop',{offset:'0%',stopColor:'#ffffff'}),
+            React.createElement('stop',{offset:'60%',stopColor:'#f8f2e2'}),
+            React.createElement('stop',{offset:'100%',stopColor:'#e6d9b6'})),
+          React.createElement('filter',{id:id+'f',x:'-30%',y:'-30%',width:'160%',height:'160%'},
+            React.createElement('feGaussianBlur',{stdDeviation:3.2,result:'b'}),
+            React.createElement('feMerge',null,React.createElement('feMergeNode',{in:'b'}),React.createElement('feMergeNode',{in:'SourceGraphic'})))
+        ),
+        ticks,
+        // pista hundida
+        React.createElement('path',{d:arc(R,A0,A0+SPAN),fill:'none',stroke:'url(#'+id+'t)',strokeWidth:sw+4,strokeLinecap:'round'}),
+        React.createElement('path',{d:arc(R,A0,A0+SPAN),fill:'none',stroke:'rgba(0,0,0,.10)',strokeWidth:sw,strokeLinecap:'round',transform:'translate(0,1.5)'}),
+        // arco de valor con brillo
+        React.createElement('path',{d:arc(R,A0,A0+SPAN),fill:'none',stroke:'url(#'+id+'g)',strokeWidth:sw,strokeLinecap:'round',pathLength:100,strokeDasharray:'100 200',strokeDashoffset:100-anim*100,filter:'url(#'+id+'f)',style:{transition:'stroke-dashoffset 1.3s cubic-bezier(.22,1,.36,1)'}}),
+        React.createElement('path',{d:arc(R-sw*0.22,A0,A0+SPAN),fill:'none',stroke:'rgba(255,255,255,.55)',strokeWidth:sw*0.22,strokeLinecap:'round',pathLength:100,strokeDasharray:'100 200',strokeDashoffset:100-anim*100,style:{transition:'stroke-dashoffset 1.3s cubic-bezier(.22,1,.36,1)'}}),
+        // marca del período anterior
+        prevPt?React.createElement('circle',{cx:prevPt[0],cy:prevPt[1],r:3.2,fill:'#fff',stroke:'#5a4a20',strokeWidth:1.4},React.createElement('title',null,'Período anterior: '+pct(prev))):null,
+        // perilla
+        React.createElement('circle',{cx:knob[0],cy:knob[1],r:sw*0.62,fill:'#fff',stroke:col,strokeWidth:2.4,style:{transition:'cx 1.3s cubic-bezier(.22,1,.36,1), cy 1.3s cubic-bezier(.22,1,.36,1)',filter:'drop-shadow(0 2px 3px rgba(0,0,0,.3))'}}),
+        // disco central en relieve
+        React.createElement('circle',{cx:cx,cy:cy,r:R-sw*1.05,fill:'url(#'+id+'d)',stroke:'rgba(200,168,75,.55)',strokeWidth:1.2,style:{filter:'drop-shadow(0 6px 8px rgba(110,84,20,.25))'}}),
+        React.createElement('ellipse',{cx:cx-(R-sw)*0.18,cy:cy-(R-sw)*0.42,rx:(R-sw)*0.5,ry:(R-sw)*0.2,fill:'rgba(255,255,255,.7)'})
+      ),
+      React.createElement('div',{style:{position:'absolute',left:0,right:0,top:0,height:size,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',pointerEvents:'none'}},
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:size*0.205,lineHeight:1,color:'#1c1a12',letterSpacing:.5,filter:'drop-shadow(0 2px 0 rgba(255,255,255,.9)) drop-shadow(0 4px 8px '+col+'55)'}},pct(value)),
+        React.createElement('div',{style:{marginTop:3,fontSize:9.5,fontWeight:800,letterSpacing:1.6,color:col,textTransform:'uppercase'}},pv>=0.97?'Excelente':pv>=0.93?'Muy buena':pv>=0.88?'Aceptable':pv>=0.80?'En riesgo':'Crítica')
+      )
+    ),
+    React.createElement('div',{style:{textAlign:'center',marginTop:-4}},
+      React.createElement('div',{style:{fontSize:12.5,fontWeight:800,color:'#1c1a12',letterSpacing:1.2,textTransform:'uppercase'}},label),
+      React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginTop:1}},sub)
+    ),
+    hayPrev?React.createElement('div',{title:'Período anterior equivalente: '+pct(prev),style:{display:'inline-flex',alignItems:'center',gap:6,padding:'4px 11px',borderRadius:999,fontSize:11,fontWeight:800,
+      color:Math.abs(delta)<0.05?'#6b6146':delta>0?'#1f6b40':'#a02828',
+      background:Math.abs(delta)<0.05?'rgba(120,110,80,.10)':delta>0?'rgba(46,125,79,.12)':'rgba(176,48,48,.10)',
+      border:'1px solid '+(Math.abs(delta)<0.05?'rgba(120,110,80,.25)':delta>0?'rgba(46,125,79,.35)':'rgba(176,48,48,.32)')}},
+      Math.abs(delta)<0.05?'= sin variación':(delta>0?'▲ +':'▼ −')+Math.abs(delta).toFixed(1)+' pts',
+      React.createElement('span',{style:{fontWeight:600,color:'var(--text-soft)'}},'vs anterior '+pct(prev))
+    ):React.createElement('div',{style:{fontSize:10.5,color:'var(--text-soft)',height:22,display:'flex',alignItems:'center'}},'Sin comparación disponible')
+  );
+}
+function EfectividadPeriodoPanel(p){
+  const porEstado=p.porEstado,total=p.total,ef=p.ef,efOp=p.efOp,prev=p.prev,filtrados=p.filtrados||[],COL=p.colores,LAB=p.labels;
+  const _uH=useState(null),hov=_uH[0],setHov=_uH[1];
+  const _uA=useState(false),listo=_uA[0],setListo=_uA[1];
+  useEffect(()=>{const t=setTimeout(()=>setListo(true),60);return()=>clearTimeout(t);},[]);
+  const fmt=n=>Number(n||0).toLocaleString('es-CL');
+  const segs=[
+    {k:'entregado'},{k:'reprogramado'},{k:'cancelado'},{k:'en_ruta'},{k:'en_bodega'},{k:'en_bodega_fecha'},{k:'siniestro'},{k:'retorno'},{k:'en_bodega_cancelado'}
+  ].map(s=>Object.assign(s,{n:porEstado[s.k]||0,c:COL[s.k]||'#999',l:LAB[s.k]||s.k})).filter(s=>s.n>0);
+  const porResolver=(porEstado.en_ruta||0)+(porEstado.en_bodega||0)+(porEstado.reprogramado||0);
+  const fallidos=(porEstado.cancelado||0)+(porEstado.siniestro||0)+(porEstado.retorno||0)+(porEstado.en_bodega_cancelado||0);
+  // Tendencia diaria
+  const dias=useMemo(()=>{
+    const m={};
+    filtrados.forEach(e=>{const f=(e.fecha||'').slice(0,10);if(!f)return;if(!m[f])m[f]={f:f,t:0,ent:0,rep:0,can:0,bf:0};const d=m[f];d.t++;
+      if(e.estado==='entregado')d.ent++;else if(e.estado==='reprogramado')d.rep++;else if(e.estado==='cancelado')d.can++;else if(e.estado==='en_bodega_fecha')d.bf++;});
+    return Object.values(m).sort((a,b)=>a.f<b.f?-1:1).map(d=>{const den=d.t-d.bf;const dOp=d.ent+d.rep+d.can;return Object.assign(d,{ef:den>0?d.ent/den:null,efOp:dOp>0?d.ent/dOp:null});}).filter(d=>d.ef!==null);
+  },[filtrados]);
+  const mejor=dias.length?dias.reduce((a,b)=>b.ef>a.ef?b:a):null,peor=dias.length?dias.reduce((a,b)=>b.ef<a.ef?b:a):null;
+  const nomDia=f=>{const d=new Date(f+'T12:00:00');return['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d.getDay()]+' '+f.slice(8,10)+'/'+f.slice(5,7);};
+  // Escala del gráfico: se ajusta al rango real para que la variación se lea
+  const vals=dias.map(d=>d.ef);
+  const yMin=vals.length?Math.max(0,Math.floor((Math.min.apply(null,vals)*100-3)/5)*5)/100:0;
+  const yMax=1;
+  const W=520,H=150,PL=34,PR=10,PT=12,PB=26;
+  const X=i=>PL+(dias.length<=1?(W-PL-PR)/2:i*(W-PL-PR)/(dias.length-1));
+  const Y=v=>PT+(1-(v-yMin)/(yMax-yMin||1))*(H-PT-PB);
+  const linea=dias.map((d,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(d.ef).toFixed(1)).join(' ');
+  const area=dias.length>1?linea+' L'+X(dias.length-1).toFixed(1)+' '+(H-PB)+' L'+X(0).toFixed(1)+' '+(H-PB)+' Z':'';
+  const lineaOp=dias.filter(d=>d.efOp!==null).length>1?dias.map((d,i)=>d.efOp===null?'':((i?'L':'M')+X(i).toFixed(1)+' '+Y(Math.max(d.efOp,yMin)).toFixed(1))).join(' '):'';
+  const gridVals=[];for(let v=yMin;v<=1.0001;v+=(1-yMin)>0.3?0.1:0.05)gridVals.push(+v.toFixed(2));
+  const mini=(t,v,s,c)=>React.createElement('div',{className:'dx-card',style:{flex:'1 1 0',minWidth:120,padding:'12px 14px',borderRadius:14,background:'radial-gradient(130% 90% at 20% 0%,#fff 0%,#faf5e8 60%,#efe5cb 100%)',border:'1px solid rgba(200,168,75,.3)',borderTop:'1px solid #fff',boxShadow:'0 1px 0 #fff inset,0 8px 16px -8px rgba(110,84,20,.35)',position:'relative',overflow:'hidden'}},
+    React.createElement('div',{style:{position:'absolute',left:0,top:10,bottom:10,width:3,borderRadius:3,background:c}}),
+    React.createElement('div',{style:{fontSize:9.5,fontWeight:800,letterSpacing:1.4,color:'var(--text-soft)',textTransform:'uppercase'}},t),
+    React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:30,lineHeight:1.05,color:c}},v),
+    React.createElement('div',{style:{fontSize:10.5,color:'var(--text-soft)'}},s));
+  const hs=hov!==null&&segs[hov]?segs[hov]:null;
+  return React.createElement('div',{className:'panel',style:{display:'flex',flexDirection:'column'}},
+    React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6,flexWrap:'wrap',gap:8}},
+      React.createElement('div',{className:'panel-title',style:{margin:0}},'Efectividad del período'),
+      React.createElement('div',{style:{fontSize:11,fontWeight:700,color:'var(--text-soft)',padding:'4px 10px',borderRadius:999,background:'rgba(200,168,75,.12)',border:'1px solid rgba(200,168,75,.3)'}},fmt(total)+' envíos en el período')
+    ),
+    // Medidores
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:10,justifyItems:'center',padding:'6px 0 10px'}},
+      React.createElement(MedidorEf3D,{value:ef,prev:prev&&prev.ef,label:'Efectividad Total',sub:'entregados / total del período'}),
+      React.createElement(MedidorEf3D,{value:efOp,prev:prev&&prev.efOp,label:'Efectividad Operativa',sub:'entregados / (entreg. + reprog. + cancel.)'})
+    ),
+    // Indicadores
+    React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:16}},
+      mini('Entregados',fmt(porEstado.entregado),total>0?(porEstado.entregado/total*100).toFixed(1)+'% del total':'—','#2e7d4f'),
+      mini('Por resolver',fmt(porResolver),'en ruta · bodega · reprog.','#C8A84B'),
+      mini('No entregados',fmt(fallidos),'cancel. · siniestro · retorno','#b03030')
+    ),
+    // Composición
+    React.createElement('div',{style:{marginBottom:dias.length>1?18:4}},
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}},
+        React.createElement('div',{style:{fontSize:11,fontWeight:800,letterSpacing:1.6,textTransform:'uppercase',color:'#5a4a20'}},'Composición del período'),
+        React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',minHeight:15}},hs?React.createElement('span',null,React.createElement('b',{style:{color:hs.c}},hs.l),' · '+fmt(hs.n)+' ('+(hs.n/(total||1)*100).toFixed(1)+'%)'):'Pasa el cursor por cada tramo')
+      ),
+      React.createElement('div',{style:{display:'flex',height:22,borderRadius:12,overflow:'hidden',background:'linear-gradient(180deg,#e2dccb,#f6f2e6 55%,#dcd4bf)',boxShadow:'inset 0 2px 4px rgba(0,0,0,.16),0 6px 12px -6px rgba(110,84,20,.35)'}},
+        segs.map((s,i)=>React.createElement('div',{key:s.k,onMouseEnter:()=>setHov(i),onMouseLeave:()=>setHov(null),title:s.l+': '+fmt(s.n),
+          style:{position:'relative',width:listo?(s.n/(total||1)*100)+'%':'0%',minWidth:listo&&s.n>0?3:0,background:'linear-gradient(180deg,'+s.c+'dd,'+s.c+' 55%,'+s.c+'aa)',transition:'width 1.2s cubic-bezier(.22,1,.36,1) '+(i*0.06)+'s, filter .2s',filter:hov===i?'brightness(1.18) saturate(1.1)':hov!==null?'saturate(.55) opacity(.75)':'none',cursor:'pointer',borderRight:i<segs.length-1?'1px solid rgba(255,255,255,.55)':'none'}},
+          React.createElement('div',{style:{position:'absolute',left:2,right:2,top:2,height:'40%',borderRadius:8,background:'linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,0))'}})
+        ))
+      ),
+      React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:'6px 14px',marginTop:10}},
+        segs.map((s,i)=>React.createElement('div',{key:s.k,onMouseEnter:()=>setHov(i),onMouseLeave:()=>setHov(null),style:{display:'flex',alignItems:'center',gap:6,fontSize:11,color:'var(--text)',cursor:'default',opacity:hov!==null&&hov!==i?.5:1,transition:'opacity .2s'}},
+          React.createElement('span',{style:{width:10,height:10,borderRadius:3,background:s.c,boxShadow:'0 1px 3px '+s.c+'88'}}),
+          React.createElement('span',{style:{fontWeight:600}},s.l),
+          React.createElement('span',{style:{color:'var(--text-soft)'}},fmt(s.n))
+        ))
+      )
+    ),
+    // Tendencia diaria
+    dias.length>1?React.createElement('div',null,
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:6,flexWrap:'wrap',gap:6}},
+        React.createElement('div',{style:{fontSize:11,fontWeight:800,letterSpacing:1.6,textTransform:'uppercase',color:'#5a4a20'}},'Tendencia diaria'),
+        React.createElement('div',{style:{display:'flex',gap:12,fontSize:10.5,color:'var(--text-soft)',alignItems:'center'}},
+          React.createElement('span',{style:{display:'flex',alignItems:'center',gap:5}},React.createElement('span',{style:{width:14,height:3,borderRadius:2,background:'#a8842e'}}),'Total'),
+          lineaOp?React.createElement('span',{style:{display:'flex',alignItems:'center',gap:5}},React.createElement('span',{style:{width:14,height:0,borderTop:'2px dashed #2e7d4f'}}),'Operativa'):null)
+      ),
+      React.createElement('div',{style:{position:'relative'}},
+        React.createElement('svg',{viewBox:'0 0 '+W+' '+H,width:'100%',style:{display:'block',overflow:'visible'}},
+          React.createElement('defs',null,
+            React.createElement('linearGradient',{id:'efTrA',x1:0,y1:0,x2:0,y2:1},
+              React.createElement('stop',{offset:'0%',stopColor:'#e8c766',stopOpacity:.55}),
+              React.createElement('stop',{offset:'100%',stopColor:'#e8c766',stopOpacity:0}))),
+          gridVals.map(v=>React.createElement('g',{key:'g'+v},
+            React.createElement('line',{x1:PL,x2:W-PR,y1:Y(v),y2:Y(v),stroke:'rgba(138,106,28,.16)',strokeDasharray:v===1?'':'3 4'}),
+            React.createElement('text',{x:PL-6,y:Y(v)+3,textAnchor:'end',fontSize:9,fill:'#9a8a5c',fontFamily:'DM Sans',fontWeight:700},Math.round(v*100)+'%'))),
+          React.createElement('path',{d:area,fill:'url(#efTrA)'}),
+          lineaOp?React.createElement('path',{d:lineaOp,fill:'none',stroke:'#2e7d4f',strokeWidth:1.6,strokeDasharray:'4 4',opacity:.8}):null,
+          React.createElement('path',{d:linea,fill:'none',stroke:'#a8842e',strokeWidth:2.6,strokeLinejoin:'round',strokeLinecap:'round',style:{filter:'drop-shadow(0 3px 4px rgba(110,84,20,.35))'}}),
+          dias.map((d,i)=>React.createElement('g',{key:d.f},
+            React.createElement('circle',{cx:X(i),cy:Y(d.ef),r:d===mejor||d===peor?4.6:3.2,fill:'#fff',stroke:d===peor&&peor!==mejor?'#b03030':d===mejor?'#2e7d4f':'#a8842e',strokeWidth:2},
+              React.createElement('title',null,nomDia(d.f)+' — Total '+pct(d.ef)+(d.efOp!==null?' · Operativa '+pct(d.efOp):'')+' · '+fmt(d.ent)+' de '+fmt(d.t-d.bf)+' entregados')),
+            (dias.length<=10||i%Math.ceil(dias.length/10)===0||i===dias.length-1)?React.createElement('text',{x:X(i),y:H-PB+15,textAnchor:'middle',fontSize:9,fill:'#7a6d48',fontFamily:'DM Sans',fontWeight:600},d.f.slice(8,10)+'/'+d.f.slice(5,7)):null
+          ))
+        )
+      ),
+      React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap',marginTop:6,fontSize:11}},
+        mejor?React.createElement('span',{style:{padding:'3px 10px',borderRadius:999,background:'rgba(46,125,79,.10)',border:'1px solid rgba(46,125,79,.3)',color:'#1f6b40',fontWeight:700}},'Mejor día: '+nomDia(mejor.f)+' · '+pct(mejor.ef)):null,
+        peor&&peor!==mejor?React.createElement('span',{style:{padding:'3px 10px',borderRadius:999,background:'rgba(176,48,48,.08)',border:'1px solid rgba(176,48,48,.28)',color:'#a02828',fontWeight:700}},'Día más bajo: '+nomDia(peor.f)+' · '+pct(peor.ef)):null
+      )
+    ):null
+  );
+}
 function Badge(_ref3){let type=_ref3.type,children=_ref3.children;return/*#__PURE__*/React.createElement("span",{className:`badge ${type}`},children);}function Toast(_ref4){let msg=_ref4.msg,onClose=_ref4.onClose;useEffect(()=>{const t=setTimeout(onClose,2800);return()=>clearTimeout(t);},[]);return/*#__PURE__*/React.createElement("div",{className:"toast"},"\u2713 ",msg);}function Modal(_ref5){let title=_ref5.title,sub=_ref5.sub,onClose=_ref5.onClose,wide=_ref5.wide,children=_ref5.children,blockBackdropClose=_ref5.blockBackdropClose;return/*#__PURE__*/React.createElement("div",{className:"modal-overlay",onClick:e=>{if(blockBackdropClose)return;if(e.target===e.currentTarget)onClose();}},/*#__PURE__*/React.createElement("div",{className:`modal${wide?' modal-wide':''}`},/*#__PURE__*/React.createElement("div",{className:"modal-title"},title),sub&&/*#__PURE__*/React.createElement("div",{className:"modal-sub"},sub),children));}function ImportarExcel(_ref6){let mensajeros=_ref6.mensajeros,setMensajeros=_ref6.setMensajeros,setMensajerosDia=_ref6.setMensajerosDia,setKpi=_ref6.setKpi,toast=_ref6.toast;const _useState=useState(false),drag=_useState[0],setDrag=_useState[1];const _useState2=useState(null),preview=_useState2[0],setPreview=_useState2[1];const _useState3=useState(null),editPreview=_useState3[0],setEditPreview=_useState3[1];const _useState4=useState(false),importado=_useState4[0],setImportado=_useState4[1];const _useState5=useState(null),error=_useState5[0],setError=_useState5[1];const _useState6=useState([]),importedRows=_useState6[0],setImportedRows=_useState6[1];const fileRef=useRef();function leerArchivo(file){if(!file)return;const ext=file.name.split('.').pop().toLowerCase();if(ext==='htm'||ext==='html'){const r2=new FileReader();r2.onload=ev=>{try{const parser=new DOMParser();const doc=parser.parseFromString(ev.target.result,'text/html');const table=doc.querySelector('table');if(!table){setError('No se encontró tabla en el archivo HTM.');return;}const filas=Array.from(table.querySelectorAll('tr'));const headers=Array.from(filas[0].querySelectorAll('th,td')).map(c=>c.textContent.replace(/[ \t\n\r]+/g,' ').trim());const rows2=filas.slice(1).map(tr=>{const cells=Array.from(tr.querySelectorAll('td')).map(c=>c.textContent.replace(/[ \t\n\r]+/g,' ').trim());const obj={};headers.forEach((h,i)=>{obj[h]=cells[i]||'';});return obj;}).filter(r=>Object.values(r).some(v=>v));procesarFilasImport(rows2);}catch(err){setError('Error leyendo HTM: '+err.message);}};r2.readAsText(file,'windows-1252');return;}const reader=new FileReader();reader.onload=e=>{try{let wb;try{wb=XLSX.read(e.target.result,{type:'array',cellDates:true,raw:false});}catch(e1){try{wb=XLSX.read(e.target.result,{type:'array'});}catch(e2){// Check if it's a frameset XLS
 const txt=new TextDecoder().decode(e.target.result.slice(0,500));if(txt.includes('frameset')||txt.includes('shLink')){throw new Error('Este archivo Excel usa formato de carpeta. Ábrelo en Excel y guárdalo como .xlsx (Archivo → Guardar como → Excel Workbook .xlsx), luego súbelo aquí.');}throw new Error('Formato no soportado. Guarda el archivo como .xlsx desde Excel e inténtalo de nuevo.');}}const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});if(!rows.length){setError('El archivo está vacío o no tiene datos.');return;}// Normalizar nombres de columnas — aceptar variaciones
 const normalizeRows=rows.map(r=>{const n={};Object.keys(r).forEach(k=>{const kn=k.trim().toLowerCase();// Mapear variantes de columnas
@@ -2957,7 +3141,7 @@ function Dashboard(_ref7){
   // extra a Supabase si el usuario nunca lo usa).
   const _uEfAnt=useState(null),efectividadAnterior=_uEfAnt[0],setEfectividadAnterior=_uEfAnt[1];
   useEffect(()=>{
-    if(!db||estiloEfectividad!=='tarjetas'){setEfectividadAnterior(null);return;}
+    if(!db){setEfectividadAnterior(null);return;}
     let cancelado=false;
     (async()=>{
       try{
@@ -2987,7 +3171,7 @@ function Dashboard(_ref7){
         }
         const datosAnt=await fetchPorDiasParalelo(desdeAnt,hastaAnt,(fecha,cursor,limite)=>db.from('envios').select('id,estado').neq('estado','eliminado').eq('fecha',fecha).gt('id',cursor).order('id',{ascending:true}).limit(limite));
         if(cancelado)return;
-        const totalAnt=datosAnt.length;
+        const totalAnt=datosAnt.filter(e=>e.estado!=='en_bodega_fecha').length;
         const entAnt=datosAnt.filter(e=>e.estado==='entregado').length;
         const repAnt=datosAnt.filter(e=>e.estado==='reprogramado').length;
         const canAnt=datosAnt.filter(e=>e.estado==='cancelado').length;
@@ -2996,7 +3180,7 @@ function Dashboard(_ref7){
       }catch(e){console.warn('Efectividad período anterior: error',e.message);if(!cancelado)setEfectividadAnterior(null);}
     })();
     return()=>{cancelado=true;};
-  },[periodo,mesFiltro,desde,hasta,db,estiloEfectividad]);
+  },[periodo,mesFiltro,desde,hasta,db]);
   // FIX (03-10-2026): el sync global (App, más abajo en este archivo) solo trae los envíos de los
   // últimos 8 días, Y ADEMÁS tiene un tope de 8000 filas ordenadas por 'updated_at' DESCENDENTE
   // -- si en esos 8 días hay más de 8000 envíos, los que no se volvieron a tocar recientemente
@@ -3310,33 +3494,7 @@ function Dashboard(_ref7){
     ),
     // ── EFECTIVIDAD ──
     (cargandoExtra||cargandoRango||cargandoTodos)?React.createElement('div',{style:{padding:'20px 0',textAlign:'center',color:'var(--text-soft)',fontSize:13,marginBottom:20}},'⏳ Cargando historial completo del período...'):React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:20}},
-      React.createElement('div',{className:'panel'},
-        React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14,flexWrap:'wrap',gap:8}},
-          React.createElement('div',{className:'panel-title',style:{margin:0}},'Efectividad del período'),
-          React.createElement('div',{style:{display:'flex',gap:3,background:'var(--cream)',padding:3,borderRadius:9,border:'1px solid var(--border)'}},
-            [{val:'anillos',label:'◔ Anillos'},{val:'barras',label:'▬ Barras'},{val:'tarjetas',label:'▦ Tarjetas'}].map(o=>
-              React.createElement('button',{key:o.val,onClick:()=>setEstiloEfectividad(o.val),style:{padding:'5px 11px',borderRadius:6,border:'none',background:estiloEfectividad===o.val?'var(--gold)':'transparent',color:estiloEfectividad===o.val?'#fff':'var(--text-soft)',fontSize:11,fontWeight:700,cursor:'pointer',transition:'all 0.15s',whiteSpace:'nowrap'}},o.label)
-            )
-          )
-        ),
-        (()=>{
-          const metrics=[
-            {label:'Efectividad Total',val:ef,sub:'entregados / total',prevVal:efectividadAnterior&&efectividadAnterior.ef},
-            {label:'Efectividad Operativa',val:efOp,sub:'excluye en_bodega / en_ruta',prevVal:efectividadAnterior&&efectividadAnterior.efOp},
-          ];
-          if(estiloEfectividad==='anillos'){
-            return React.createElement('div',{style:{display:'flex',justifyContent:'space-around',flexWrap:'wrap',gap:16,padding:'8px 0'}},
-              metrics.map(k=>React.createElement(AnilloEfectividad,{key:k.label,value:k.val,label:k.label,sub:k.sub}))
-            );
-          }
-          if(estiloEfectividad==='tarjetas'){
-            return React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}},
-              metrics.map(k=>React.createElement(TarjetaEfectividad,{key:k.label,value:k.val,label:k.label,sub:k.sub,prevValue:k.prevVal}))
-            );
-          }
-          return metrics.map(k=>React.createElement(BarraEfectividad,{key:k.label,value:k.val,label:k.label,sub:k.sub}));
-        })()
-      ),
+      React.createElement(EfectividadPeriodoPanel,{porEstado:porEstado,total:total,ef:ef,efOp:efOp,prev:efectividadAnterior,filtrados:filtrados,colores:ESTADO_COLORS,labels:ESTADO_LABELS}),
       // ── MENSAJEROS EN RUTA (lista completa) ──
       React.createElement('div',{className:'panel'},
         React.createElement('div',{className:'panel-title'},'Mensajeros — envíos '+fraseMensajerosPeriodo+' ('+mensajerosLista.length+')'),
