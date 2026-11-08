@@ -663,7 +663,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1794175646;
+window.__MODULES_VERSION=1794175888;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3496,11 +3496,11 @@ function Dashboard(_ref7){
     (cargandoExtra||cargandoRango||cargandoTodos)?React.createElement('div',{style:{padding:'20px 0',textAlign:'center',color:'var(--text-soft)',fontSize:13,marginBottom:20}},'⏳ Cargando historial completo del período...'):React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:20}},
       React.createElement(EfectividadPeriodoPanel,{porEstado:porEstado,total:total,ef:ef,efOp:efOp,prev:efectividadAnterior,filtrados:filtrados,colores:ESTADO_COLORS,labels:ESTADO_LABELS}),
       // ── MENSAJEROS EN RUTA (lista completa) ──
-      React.createElement('div',{className:'panel'},
+      React.createElement('div',{className:'panel',style:{display:'flex',flexDirection:'column'}},
         React.createElement('div',{className:'panel-title'},'Mensajeros — envíos '+fraseMensajerosPeriodo+' ('+mensajerosLista.length+')'),
         mensajerosLista.length===0
           ?React.createElement('div',{style:{color:'var(--text-soft)',fontSize:13,textAlign:'center',padding:'20px 0'}},'Sin datos. Asigna mensajeros.')
-          :React.createElement('div',{style:{maxHeight:420,overflowY:'auto',paddingRight:4}},
+          :React.createElement('div',{style:{position:'relative',flex:'1 1 auto',minHeight:360}},React.createElement('div',{style:{position:'absolute',inset:0,overflowY:'auto',paddingRight:4}},
             mensajerosLista.map((m,i)=>React.createElement('div',{key:m.nombre,style:{display:'flex',alignItems:'center',gap:10,marginBottom:10}},
               React.createElement('div',{style:{width:30,height:30,flex:'none',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Bebas Neue',fontSize:16,color:'#2b2e20',background:i<3?['radial-gradient(circle at 32% 28%,#fff6cf,#f0cd62 40%,#b8902e 80%)','radial-gradient(circle at 32% 28%,#fff,#d9d9d9 40%,#9c9c9c 80%)','radial-gradient(circle at 32% 28%,#ffe2c4,#e0a368 40%,#a96a2f 80%)'][i]:'radial-gradient(circle at 32% 28%,#fff,#ece6d6 55%,#cfc7b0)',boxShadow:'0 4px 8px rgba(0,0,0,.18),inset 0 -2px 4px rgba(0,0,0,.18),inset 0 2px 4px rgba(255,255,255,.7)'}},i+1),
               React.createElement('div',{style:{flex:1,minWidth:0}},
@@ -3513,7 +3513,7 @@ function Dashboard(_ref7){
                 React.createElement('span',{style:{color:'#2e7d4f',fontWeight:700}},m.entregado),'/'+m.total
               )
             ))
-          )
+          ))
       )
     ),
     React.createElement(CargaPorComuna,null),
