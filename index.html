@@ -663,7 +663,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1794175541;
+window.__MODULES_VERSION=1794175646;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1898,7 +1898,7 @@ function TarjetaEfectividad(_refTE){let value=_refTE.value,label=_refTE.label,su
 // resolución y la tendencia diaria de efectividad (solo cuando el período abarca 2+ días).
 // Fórmulas: Total = entregados / (total − en_bodega_fecha); Operativa = entregados / (entregados + reprogramados + cancelados).
 function MedidorEf3D(p){
-  const value=p.value,prev=p.prev,label=p.label,sub=p.sub,size=p.size||200;
+  const value=p.value,prev=p.prev,label=p.label,sub=p.sub,size=p.size||230;
   const pv=Math.min(Math.max(isFinite(value)?value:0,0),1);
   const _u=useState(0),anim=_u[0],setAnim=_u[1];
   useEffect(()=>{const t=setTimeout(()=>setAnim(pv),90);return()=>clearTimeout(t);},[pv]);
@@ -1917,7 +1917,7 @@ function MedidorEf3D(p){
   const delta=hayPrev?(pv-prev)*100:0;
   const prevPt=hayPrev?pt(A0+SPAN*Math.min(Math.max(prev,0),1),R):null;
   return React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:6,minWidth:0}},
-    React.createElement('div',{style:{position:'relative',width:size,height:size*0.86}},
+    React.createElement('div',{style:{position:'relative',width:size,height:size*0.97}},
       React.createElement('svg',{width:size,height:size,viewBox:'0 0 '+size+' '+size,style:{overflow:'visible',filter:'drop-shadow(0 10px 14px rgba(110,84,20,.22))'}},
         React.createElement('defs',null,
           React.createElement('linearGradient',{id:id+'g',x1:'0',y1:'1',x2:'1',y2:'0'},
@@ -1956,7 +1956,7 @@ function MedidorEf3D(p){
         React.createElement('div',{style:{marginTop:3,fontSize:9.5,fontWeight:800,letterSpacing:1.6,color:col,textTransform:'uppercase'}},pv>=0.97?'Excelente':pv>=0.93?'Muy buena':pv>=0.88?'Aceptable':pv>=0.80?'En riesgo':'Crítica')
       )
     ),
-    React.createElement('div',{style:{textAlign:'center',marginTop:-4}},
+    React.createElement('div',{style:{textAlign:'center',marginTop:0}},
       React.createElement('div',{style:{fontSize:12.5,fontWeight:800,color:'#1c1a12',letterSpacing:1.2,textTransform:'uppercase'}},label),
       React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginTop:1}},sub)
     ),
@@ -1993,7 +1993,7 @@ function EfectividadPeriodoPanel(p){
   const vals=dias.map(d=>d.ef);
   const yMin=vals.length?Math.max(0,Math.floor((Math.min.apply(null,vals)*100-3)/5)*5)/100:0;
   const yMax=1;
-  const W=520,H=150,PL=34,PR=10,PT=12,PB=26;
+  const W=760,H=190,PL=40,PR=14,PT=12,PB=26;
   const X=i=>PL+(dias.length<=1?(W-PL-PR)/2:i*(W-PL-PR)/(dias.length-1));
   const Y=v=>PT+(1-(v-yMin)/(yMax-yMin||1))*(H-PT-PB);
   const linea=dias.map((d,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(d.ef).toFixed(1)).join(' ');
@@ -2012,7 +2012,7 @@ function EfectividadPeriodoPanel(p){
       React.createElement('div',{style:{fontSize:11,fontWeight:700,color:'var(--text-soft)',padding:'4px 10px',borderRadius:999,background:'rgba(200,168,75,.12)',border:'1px solid rgba(200,168,75,.3)'}},fmt(total)+' envíos en el período')
     ),
     // Medidores
-    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:10,justifyItems:'center',padding:'6px 0 10px'}},
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(230px,1fr))',gap:10,justifyItems:'center',padding:'6px 0 10px'}},
       React.createElement(MedidorEf3D,{value:ef,prev:prev&&prev.ef,label:'Efectividad Total',sub:'entregados / total del período'}),
       React.createElement(MedidorEf3D,{value:efOp,prev:prev&&prev.efOp,label:'Efectividad Operativa',sub:'entregados / (entreg. + reprog. + cancel.)'})
     ),
