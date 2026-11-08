@@ -1693,7 +1693,7 @@ function SoporteFirmasTab(props){
     React.createElement('div',{style:{fontSize:13,color:'var(--text-soft)',margin:'-6px 0 16px'}},periodo.mes?React.createElement('span',null,'Mes de pago ',React.createElement('b',{style:{color:'var(--dark)'}},periodo.mes.charAt(0).toUpperCase()+periodo.mes.slice(1)),' · semanas del '+dmyC(periodo.desde)+' al '+dmyC(periodo.hasta)+'. Sueldo mensual una vez; el extra por firmas se cierra semana a semana.'):'Período personalizado del '+dmyC(periodo.desde)+' al '+dmyC(periodo.hasta)+'.'),
     ops===null?React.createElement('div',{className:'info-banner'},'Cargando...'):
     ops.length===0?React.createElement('div',{className:'info-banner'},'Sin operadoras configuradas.'):
-    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(480px,1fr))',gap:22,marginBottom:24}},
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,520px),1fr))',gap:24,marginBottom:24}},
       ops.map(function(op){
         var c=conteo?calcular(op):null;
         var maxSem=c?Math.max.apply(null,semanas.map(function(w){return c.porSemana[w]||0;}).concat([1])):1;
