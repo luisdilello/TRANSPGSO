@@ -29,10 +29,10 @@ var COORD={
 'ISLA DE MAIPO':[-33.7500,-70.9000],'TILTIL':[-33.0830,-70.9270],'PAINE':[-33.8070,-70.7400]};
 var ALIAS={'STGO':'SANTIAGO','SANTIAGO CENTRO':'SANTIAGO','MAIPO':'MAIPU','EST CENTRAL':'ESTACION CENTRAL','PAC':'PEDRO AGUIRRE CERDA'};
 function coordDe(c){var n=norm(c);n=ALIAS[n]||n;return COORD[n]?{n:n,c:COORD[n]}:null;}
-function efColor(T,ef){
+function efColor(T,ef,lo,hi){
   if(ef==null)return new T.Color('#8a8f78');
   var a=new T.Color('#e0473f'),b=new T.Color('#e8b84a'),c=new T.Color('#36c47f');
-  var t=Math.max(0,Math.min(1,(ef-0.9)/0.1));
+  lo=lo==null?0.9:lo;hi=hi==null?1:hi;var t=Math.max(0,Math.min(1,(ef-lo)/Math.max(0.005,hi-lo)));
   return t<0.5?a.lerp(b,t*2):b.lerp(c,(t-0.5)*2);
 }
 function titulo(s){return s.toLowerCase().replace(/(^|\s)\S/g,function(x){return x.toUpperCase();});}
@@ -107,7 +107,7 @@ function montarMapa(T,cont,datos,ui){
   var geo=new T.CylinderGeometry(1.15,1.15,1,6,1);geo.translate(0,0.5,0);
   var capGeo=new T.CylinderGeometry(1.18,1.18,0.12,6,1);
   datos.forEach(function(d,i){
-    var x=(d.c[1]+70.66)*105,z=-(d.c[0]+33.48)*105;var hgt=0.4+15*Math.sqrt(d.total/max);var col=efColor(T,d.ef);
+    var x=(d.c[1]+70.66)*105,z=-(d.c[0]+33.48)*105;var hgt=0.4+15*Math.sqrt(d.total/max);var col=efColor(T,d.ef,ui.lo,ui.hi);
     var mat=new T.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:0.18,roughness:0.35,metalness:0.25,transparent:true,opacity:0.94});
     var m=new T.Mesh(geo,mat);m.position.set(x,0,z);m.scale.y=0.001;m.castShadow=true;m.receiveShadow=true;
     m.userData={d:d,h:hgt,ei:0.18,delay:i*0.035};E.sc.add(m);meshes.push(m);
@@ -199,13 +199,14 @@ function CentroControl3D(props){
     var mejor=conEf.slice().sort(function(a,b){return b.ef-a.ef;})[0],peor=conEf.slice().sort(function(a,b){return a.ef-b.ef;})[0];
     var top=datos.slice().sort(function(a,b){return b.total-a.total;})[0];
     var key=datos.map(function(d){return d.n+':'+d.total+':'+(d.entregado||0);}).join('|')+'#'+JSON.stringify(cnt);
-    return{datos:datos,cnt:cnt,mejor:mejor,peor:peor,top:top,key:key,nComunas:datos.length};
+    var lo=peor?peor.ef:0.9,hi=mejor?mejor.ef:1;if(hi-lo<0.01)lo=Math.max(0,hi-0.01);
+    return{datos:datos,cnt:cnt,mejor:mejor,peor:peor,top:top,key:key,nComunas:datos.length,lo:lo,hi:hi};
   },[envios]);
   R.useEffect(function(){
     var E=null,vivo=true;setErr('');
     if(!envios.length)return;
     cargarThree().then(function(T){if(!vivo||!refC.current)return;
-      var ui={tip:refTip.current,labels:refLab.current,onLost:function(){setTimeout(function(){setGen(function(g){return g+1;});},800);}};
+      var ui={lo:res.lo,hi:res.hi,tip:refTip.current,labels:refLab.current,onLost:function(){setTimeout(function(){setGen(function(g){return g+1;});},800);}};
       try{E=modo==='flujo'?montarFlujo(T,refC.current,res.cnt,ui):montarMapa(T,refC.current,res.datos,ui);}catch(e){setErr('No se pudo dibujar la vista 3D en este equipo.');}
     }).catch(function(){setErr('No se pudo cargar el motor 3D.');});
     return function(){vivo=false;if(E)E.destroy();if(refLab.current)refLab.current.innerHTML='';};
@@ -221,7 +222,7 @@ function CentroControl3D(props){
     h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10,padding:'16px 20px 0'}},
       h('div',null,
         h('div',{style:{fontFamily:'Bebas Neue',fontSize:28,letterSpacing:2.5,color:'#fff',lineHeight:1}},'Centro de control'),
-        h('div',{style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:3}},modo==='mapa'?'Altura = envíos del período · color = efectividad operativa (rojo 90% · verde 100%) · arrastra para girar, rueda para acercar':'Recorrido de los envíos del período: de bodega a ruta y su resultado final')),
+        h('div',{style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:3}},modo==='mapa'?'Altura = envíos del período · color = efectividad operativa (rojo la más baja del período, verde la más alta) · arrastra para girar, rueda para acercar':'Recorrido de los envíos del período: de bodega a ruta y su resultado final')),
       h('div',{style:{display:'flex',gap:6}},tab('mapa','Mapa 3D de comunas'),tab('flujo','Flujo de estados'))),
     h('div',{style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 220px',gap:0}},
       h('div',{style:{position:'relative',height:440,minWidth:0}},
@@ -231,7 +232,7 @@ function CentroControl3D(props){
         !envios.length&&h('div',{style:{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(233,228,210,.7)',fontSize:13}},'Sin envíos en el período.'),
         err&&h('div',{style:{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#ffb4a8',fontSize:13}},err),
         modo==='mapa'&&h('div',{style:{position:'absolute',left:16,bottom:14,display:'flex',alignItems:'center',gap:8,fontSize:11,color:'rgba(233,228,210,.8)',fontWeight:700}},
-          'Efectividad',h('span',null,'90%'),h('span',{style:{width:120,height:8,borderRadius:6,background:'linear-gradient(90deg,#e0473f,#e8b84a,#36c47f)',boxShadow:'0 0 10px rgba(232,184,74,.4)'}}),h('span',null,'100%'))),
+          'Efectividad',h('span',null,Math.floor(res.lo*1000)/10+'%'),h('span',{style:{width:120,height:8,borderRadius:6,background:'linear-gradient(90deg,#e0473f,#e8b84a,#36c47f)',boxShadow:'0 0 10px rgba(232,184,74,.4)'}}),h('span',null,Math.ceil(res.hi*1000)/10+'%'))),
       h('div',{style:{display:'flex',flexDirection:'column',gap:10,padding:'14px 16px 16px 4px'}},
         ins('Efectividad operativa',den?Math.round((c.entregado||0)/den*100)+'%':'—',(c.entregado||0).toLocaleString('es-CL')+' entregados de '+den.toLocaleString('es-CL')+' gestionados','#36c47f'),
         ins('Comuna con más envíos',res.top?titulo(res.top.n):'—',res.top?res.top.total.toLocaleString('es-CL')+' envíos':'', '#ffe59a'),
