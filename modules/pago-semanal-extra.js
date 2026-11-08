@@ -97,7 +97,7 @@ function Resumen(props){
   if(!d)return h('div',{className:'info-banner'},'Calculando resumen...');
   if(d.error)return h('div',{className:'info-banner'},'No se pudo cargar.');
   var cfg=d.cfg,tarC=cfg.tarifasCliente||{};
-  function tarifaCliente(c){if(tarC[c]!=null)return +tarC[c];var x=d.cli[c];if(!x)return 0;return x.paga_iva?(+x.tarifa||0)/1.19:(+x.tarifa||0);}
+  function tarifaCliente(c){if(tarC[c]!=null)return +tarC[c];var x=d.cli[c];if(!x)return 0;return +x.tarifa||0;} // la ficha del cliente guarda la tarifa NETA (sin IVA)
   var porCli={},porMen={},porDia={},comunas={},totE=0,totC=0,totP=0,secPer={n:0,p:0,com:{},men:{},dia:{},cli:{}},secCom={};
   d.rows.forEach(function(x){var n=+x.n||0;var m=d.cfgM[x.mensajero]||{};var pu=d.excl.indexOf(x.mensajero)>=0?0:(+m.tarifa||0);var pc=tarifaCliente(x.cliente);
     totE+=n;totC+=n*pc;totP+=n*pu;comunas[x.comuna]=1;
@@ -149,7 +149,7 @@ function Resumen(props){
         h(Kpi,{l:'Ganancia neta final',v:fmt(neta),c:'#36c47f',s:'bruta − costos fijos'}),
         h(Kpi,{l:'Margen neto',v:pct(totC?neta/totC:0),c:'#7ee0ad'}),
         h(Kpi,{l:'Clientes / mensajeros',v:clientes.length+' / '+mens.length,c:'#c9b7ff',s:Object.keys(comunas).length+' comunas atendidas'}))),
-    edit&&cfgEd?h(Panel,{titulo:'Tarifas cobradas y costos fijos de retiro',sub:'Tarifa neta por envío que usa este resumen (si un cliente no está aquí, se usa la de su ficha sin IVA). Los costos fijos son mensuales y se reparten por semana ('+(Math.round((+cfgEd.semanasMes||0)*100)/100)+' semanas por mes).',acciones:h('button',{type:'button',className:'btn-futurista btn-f-success',onClick:guardarCfg,style:{padding:'8px 16px'}},'Guardar')},
+    edit&&cfgEd?h(Panel,{titulo:'Tarifas cobradas y costos fijos de retiro',sub:'Por defecto se usa la tarifa neta de la ficha de cada cliente; un valor aquí la reemplaza solo en este resumen. Los costos fijos son mensuales y se reparten por semana ('+(Math.round((+cfgEd.semanasMes||0)*100)/100)+' semanas por mes).',acciones:h('button',{type:'button',className:'btn-futurista btn-f-success',onClick:guardarCfg,style:{padding:'8px 16px'}},'Guardar')},
       h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(230px,1fr))',gap:8,marginBottom:16}},
         clientes.map(function(c){return c.k;}).concat(Object.keys(cfgEd.tarifasCliente||{}).filter(function(k){return !porCli[k];})).map(function(k){return h('label',{key:k,style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,fontSize:12.5,padding:'6px 10px',borderRadius:10,background:'#fff',border:'1px solid rgba(200,168,75,.25)'}},
           h('span',{style:{fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},k),

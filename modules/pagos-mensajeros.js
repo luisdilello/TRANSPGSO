@@ -1100,7 +1100,7 @@ function calcularResumenCobrosClientes(envios,clientes,tarifasSeccionPorCliente)
     // Colina y Padre Hurtado: si el cliente no tiene tarifa especial cargada para esos tipos,
     // se cobran igual que Flex normal (mismo criterio que en generarReciboCobro, index.html) --
     // antes quedaban en $0 en este resumen rápido.
-    var tar={normal:cliData.tarifa||0,d10kg:cliData.tarifa10kg||0,d18kg:cliData.tarifa18kg||0,colina:cliData.tarifaColina||cliData.tarifa||0,ph:cliData.tarifaPH||cliData.tarifa||0};
+    var tar={normal:cliData.tarifa||0,d10kg:cliData.tarifa10kg||cliData.tarifa||0,d18kg:cliData.tarifa18kg||cliData.tarifa10kg||cliData.tarifa||0,colina:cliData.tarifaColina||cliData.tarifa||0,ph:cliData.tarifaPH||cliData.tarifa||0};
     var montoNeto=g.grupos.normal*tar.normal+g.grupos.d10kg*tar.d10kg+g.grupos.d18kg*tar.d18kg+g.grupos.colina*tar.colina+g.grupos.ph*tar.ph;
     // Secciones: se suman aparte, ya con su propia tarifa de cliente (ya reemplazaron la
     // clasificación normal arriba, así que acá solo se agregan, nunca se duplican).

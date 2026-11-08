@@ -663,7 +663,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1794173523;
+window.__MODULES_VERSION=1794174739;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -2046,7 +2046,7 @@ const n=nuevosEnSistema.length;const msgNuevos=n>0?` · ${n} mensajero${n>1?'s':
                       const grupos={normal:[],d10kg:[],d18kg:[],colina:[],ph:[]};
                       const gruposSeccion={};
                       facturables.forEach(e=>{const sec=seccionPorCodigo[e.codigo];if(sec&&tarifasSeccionCliente[sec]!==undefined){if(!gruposSeccion[sec])gruposSeccion[sec]=[];gruposSeccion[sec].push(e);return;}const t=getTipo(e);if(t==='10kg')grupos.d10kg.push(e);else if(t==='18kg')grupos.d18kg.push(e);else if(t==='colina')grupos.colina.push(e);else if(t==='ph')grupos.ph.push(e);else grupos.normal.push(e);});
-                      const tar={normal:cliData.tarifa||0,d10kg:cliData.tarifa10kg||0,d18kg:cliData.tarifa18kg||0,colina:cliData.tarifaColina||cliData.tarifa||0,ph:cliData.tarifaPH||cliData.tarifa||0};// Colina y Padre Hurtado: si el cliente no tiene tarifa especial cargada para esos tipos, se cobran igual que Flex normal (confirmado por Luis 2026-09-08) -- antes quedaban en $0.
+                      const tar={normal:cliData.tarifa||0,d10kg:cliData.tarifa10kg||cliData.tarifa||0,d18kg:cliData.tarifa18kg||cliData.tarifa10kg||cliData.tarifa||0,colina:cliData.tarifaColina||cliData.tarifa||0,ph:cliData.tarifaPH||cliData.tarifa||0};// Colina y Padre Hurtado: si el cliente no tiene tarifa especial cargada para esos tipos, se cobran igual que Flex normal (confirmado por Luis 2026-09-08) -- antes quedaban en $0.
                       const tipoLabel={normal:'Flex',d10kg:'Flex sobre 10kg',d18kg:'Flex sobre 18kg',colina:'Flex Colina',ph:'Flex Padre Hurtado'};
                       const servicios=[{tipo:'normal',label:tipoLabel.normal,cant:grupos.normal.length,tarifa:tar.normal},{tipo:'d10kg',label:tipoLabel.d10kg,cant:grupos.d10kg.length,tarifa:tar.d10kg},{tipo:'d18kg',label:tipoLabel.d18kg,cant:grupos.d18kg.length,tarifa:tar.d18kg},{tipo:'colina',label:tipoLabel.colina,cant:grupos.colina.length,tarifa:tar.colina},{tipo:'ph',label:tipoLabel.ph,cant:grupos.ph.length,tarifa:tar.ph}];
                       // Un servicio más por cada sección efectivamente usada en este recibo (ver
@@ -14473,7 +14473,7 @@ useEffect(()=>{
   // Sincronizar clientes desde Supabase al iniciar (si la tabla existe y tiene datos)
   function cargarClientesDB(){db.from('clientes').select('*').order('nombre').then(function(res){
     if(res.data&&res.data.length){
-      var normCli=res.data.map(function(c){return{...c,pagaIVA:c.paga_iva,tarifa10kg:c.tarifa_10kg,tarifa18kg:c.tarifa_18kg,tarifaColina:c.tarifa_colina,tarifaPH:c.tarifa_ph};});
+      var normCli=res.data.map(function(c){return{...c,tarifa:+c.tarifa||0,pagaIVA:c.paga_iva,tarifa10kg:+c.tarifa_10kg||0,tarifa18kg:+c.tarifa_18kg||0,tarifaColina:+c.tarifa_colina||0,tarifaPH:+c.tarifa_ph||0};});
       setClientes(normCli);
       lsSave('clientes',normCli);
     }
