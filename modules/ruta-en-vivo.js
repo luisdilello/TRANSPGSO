@@ -99,7 +99,7 @@ function RutaEnVivo(props){
             h('div',{style:{fontFamily:'Bebas Neue',fontSize:28,letterSpacing:2.2,color:'#fff',lineHeight:1}},esHoy?'Ruta en vivo':'Ruta del día')),
           h('div',{style:{fontSize:12,color:COL.suave,marginTop:4}},(ultima?'Actualizado '+ultima.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'Cargando…')+(esHoy?(pausa?' · actualización en pausa':' · se actualiza sola cada 30 segundos'):' · día cerrado'))),
         h('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}},
-          h('input',{type:'date',className:'form-input',value:dia,max:hoyCL(),onChange:function(e){if(e.target.value)setDia(e.target.value);},style:{margin:0,padding:'7px 10px',background:'rgba(255,255,255,.92)'}}),
+          h('input',{type:'date',className:'form-input',value:dia,max:hoyCL(),onChange:function(e){if(e.target.value)setDia(e.target.value);},style:{margin:0,padding:'7px 10px',width:150,background:'rgba(255,255,255,.92)'}}),
           !esHoy&&btnO('Hoy',function(){setDia(hoyCL());}),
           esHoy&&btnO(pausa?'Reanudar':'Pausar',function(){setPausa(!pausa);},pausa),
           btnO(cargando?'Actualizando…':'Actualizar',cargar,true))),
