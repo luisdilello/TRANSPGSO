@@ -3,8 +3,8 @@
 //   Total semana = entregas de la semana (lunes a domingo, fecha real de entrega) x tarifa del mensajero
 //   + extra por periferia (piezas en comunas "... - PERIFERIA" x su extra; si tiene "paga a", se le abona a esa persona)
 //   + extra por comuna (ej. Yosbel: $500 por pieza en Padre Hurtado)
-//   + movimientos de la semana: extra (+), adelanto / consumo / descuento / siniestro / abono a préstamo (-).
-// Un "préstamo" NO se descuenta solo: queda como saldo pendiente y se rebaja con "abono a préstamo".
+//   + movimientos de la semana: extra (+), consumo / descuento / siniestro / descuento de adelanto (-).
+// Un adelanto NO se descuenta solo: queda como adelanto pendiente y se rebaja con "Descuento de adelanto".
 // Nada se descuenta automáticamente: todo descuento lo ingresa un administrador en la tarjeta.
 // Los movimientos viven en la tabla movimientos_pago_mensajero (RLS: solo administradores).
 (function(){
@@ -27,14 +27,20 @@ function infoSemana(lunes){var dom=sumar(lunes,6);var d=new Date(dom+'T12:00:00'
 function rpcTodo(nombre,args){var out=[];function pag(desde){return db.rpc(nombre,args).range(desde,desde+999).then(function(r){if(r.error)return r;out=out.concat(r.data||[]);if((r.data||[]).length===1000)return pag(desde+1000);return{data:out};});}return pag(0);}
 var TIPOS={
   extra:{l:'Extra',s:1,c:'#2e7d4f'},
-  adelanto:{l:'Adelanto',s:-1,c:'#c26a12'},
+  adelanto:{l:'Adelanto',s:0,c:'#c26a12'},
   consumo:{l:'Consumo',s:-1,c:'#8a5a2b'},
   descuento:{l:'Descuento',s:-1,c:'#b03030'},
   siniestro:{l:'Siniestro',s:-1,c:'#d32f2f'},
-  prestamo:{l:'Préstamo',s:0,c:'#1565c0'},
-  abono_prestamo:{l:'Abono préstamo',s:-1,c:'#5e35b1'}};
+  prestamo:{l:'Adelanto',s:0,c:'#c26a12'},
+  abono_prestamo:{l:'Descuento de adelanto',s:-1,c:'#9a4d0c'}};
+// 08-11-2026 (pedido de Luis): el adelanto ya no se descuenta completo en la semana. Queda como saldo
+// pendiente en la tarjeta y se descuenta cuando y cuanto se quiera con "Descuento de adelanto"
+// (todo, la mitad o una parte); el resto sigue pendiente semana a semana. "Préstamo" y "Abono préstamo"
+// se fusionaron con esto (las filas antiguas tipo 'prestamo' se leen como adelanto).
+var FALTAS=(A.CATALOGO_FALTAS_REGLAMENTO||[]).map(function(x){return x&&x.label;}).filter(function(x){return x&&!/^Otro/.test(x);});
+var TIPOS_UI=['adelanto','abono_prestamo','consumo','extra','siniestro','descuento'];
 var ORDEN_TIPOS=['adelanto','consumo','extra','descuento','siniestro','prestamo','abono_prestamo'];
-var AYUDA={adelanto:'Dinero entregado en la semana; se descuenta completo de este pago.',consumo:'Consumo de productos; se descuenta de este pago.',extra:'Pago adicional (retiros, apoyo, bonos); se suma.',descuento:'Descuento manual (penalización u otro); se resta.',siniestro:'Descuento por un paquete siniestrado; indica el código.',prestamo:'Préstamo entregado; NO se descuenta solo, queda como saldo pendiente.',abono_prestamo:'Cuota que se descuenta del préstamo pendiente en este pago.'};
+var AYUDA={abono_prestamo:'Se resta de este pago y baja el adelanto pendiente. Puedes descontar todo o solo una parte.',adelanto:'Dinero entregado al mensajero. NO se descuenta solo: queda como adelanto pendiente en la tarjeta hasta que lo descuentes.',consumo:'Consumo de productos; se descuenta de este pago.',extra:'Pago adicional (retiros, apoyo, bonos); se suma.',descuento:'Descuento manual (penalización u otro); se resta.',siniestro:'Descuento por un paquete siniestrado; indica el código.',prestamo:'Préstamo entregado; NO se descuenta solo, queda como saldo pendiente.',abono_prestamo:'Cuota que se descuenta del préstamo pendiente en este pago.'};
 
 function calcular(nombre,cfg,porComuna,movs,cfgAll,saldoPrevio){
   var c=cfg||{},ent=0,per=0,exC=0;var rows=porComuna[nombre]||{};
@@ -47,9 +53,9 @@ function calcular(nombre,cfg,porComuna,movs,cfgAll,saldoPrevio){
   var extraCom=exC*(+c.extra_comuna_tarifa||0);
   var t={};ORDEN_TIPOS.forEach(function(k){t[k]=0;});(movs||[]).forEach(function(m){t[m.tipo]=(t[m.tipo]||0)+(+m.monto||0);});
   var totalSemana=base+extraPer+perRecibidas+extraCom;
-  var descuentos=t.adelanto+t.consumo+t.descuento+t.siniestro+t.abono_prestamo;
+  var descuentos=t.consumo+t.descuento+t.siniestro+t.abono_prestamo;
   var total=totalSemana+t.extra-descuentos;
-  var saldoPrestamo=(saldoPrevio||0)+t.prestamo-t.abono_prestamo;
+  var saldoPrestamo=(saldoPrevio||0)+t.adelanto+t.prestamo-t.abono_prestamo;
   return{entregas:ent,tarifa:tarifa,base:base,periferias:per,extraPer:extraPer,perRecibidas:perRecibidas,detRecib:detRecib,extraComuna:extraCom,nComuna:exC,
     comunaExtra:c.extra_comuna||'',tarifaComuna:+c.extra_comuna_tarifa||0,tarifaPer:+c.extra_periferia||0,pagaA:c.periferia_paga_a||'',
     t:t,totalSemana:totalSemana,descuentos:descuentos,total:total,saldoPrestamo:saldoPrestamo,saldoPrevio:saldoPrevio||0};
@@ -142,7 +148,7 @@ function PagoSemanal(props){
       var movsSem={},saldo={};
       (r[2].data||[]).forEach(function(m){var n=norm(m.mensajero);
         if(m.semana===sem.desde){(movsSem[n]=movsSem[n]||[]).push(m);}
-        else{saldo[n]=(saldo[n]||0)+(m.tipo==='prestamo'?(+m.monto||0):m.tipo==='abono_prestamo'?-(+m.monto||0):0);}});
+        else{saldo[n]=(saldo[n]||0)+((m.tipo==='prestamo'||m.tipo==='adelanto')?(+m.monto||0):m.tipo==='abono_prestamo'?-(+m.monto||0):0);}});
       var sinP={};(r[3].data||[]).forEach(function(s){if(s.descartado)return;var n=norm(s.mensajero);if(!n)return;(sinP[n]=sinP[n]||[]).push(s);});
       // siniestros descontados desde la sección Siniestros para esta semana (si no tienen ya su movimiento)
       (r[5]&&r[5].data||[]).forEach(function(s){var n=norm(s.mensajero);if(!n)return;var ya=(movsSem[n]||[]).some(function(m){return m.codigo===s.codigo;});if(ya)return;(movsSem[n]=movsSem[n]||[]).push({id:'s'+s.id,virtual:true,semana:sem.desde,mensajero:n,tipo:'siniestro',monto:+s.descontado_mensajero_valor||0,codigo:s.codigo,nota:'desde Siniestros',fecha:s.descontado_mensajero_fecha?String(s.descontado_mensajero_fecha).slice(0,10):sem.desde,creado_por:s.descontado_mensajero_por||''});});
@@ -170,10 +176,36 @@ function PagoSemanal(props){
     setForm(nombre,{items:it,monto:total?String(total):'',nota:partes.join(', ')});
   }
   function setForm(n,o){setForms(function(p){var x=Object.assign({},p);x[n]=Object.assign({tipo:'adelanto',monto:'',nota:'',codigo:''},p[n]||{},o);return x;});}
+  // Siniestro anotado desde la tarjeta: queda en la hoja de Siniestros (confirmado) y en la tarjeta
+  // como pendiente hasta descontarlo. Devuelve el id del siniestro (existente o nuevo).
+  function asegurarSiniestro(nombre,codigo,nota){
+    var cod=String(codigo||'').trim();
+    return db.from('siniestros').select('id,descontado_mensajero').eq('codigo',cod).eq('descartado',false).order('id',{ascending:false}).limit(1).then(function(r){
+      var ex=(r&&r.data||[])[0];if(ex)return ex.id;
+      return db.from('siniestros').insert({codigo:cod,mensajero:nombre,nota:nota||'Registrado desde Pago Semanal',fecha_siniestro:hoy,confirmado:true,confirmado_fecha:new Date().toISOString(),confirmado_por:quien}).select('id').single().then(function(x){
+        if(x.error)throw x.error;db.from('envios').update({tuvo_siniestro:true}).eq('codigo',cod).then(function(){});return x.data.id;});
+    });
+  }
+  function soloAnotarSiniestro(nombre){
+    var f=forms[nombre]||{};var cod=String(f.codigo||'').trim();
+    if(!cod){toast('Indica el código del paquete siniestrado');return;}
+    asegurarSiniestro(nombre,cod,(f.nota||'').trim()).then(function(){toast('Siniestro '+cod+' anotado en la hoja de Siniestros. Queda pendiente de descontar.');setForm(nombre,{monto:'',nota:'',codigo:'',sinId:null});recargar();})
+      .catch(function(e){toast('No se pudo anotar: '+(e&&e.message||e));});
+  }
   function agregar(nombre){
     var f=forms[nombre]||{};var monto=Math.round(+String(f.monto||'').replace(/[^\d]/g,'')||0);
-    if(!monto){toast('Ingresa un monto');return;}
-    if(f.tipo==='siniestro'&&!f.codigo){toast('Indica el código del paquete siniestrado');return;}
+    if(f.tipo==='siniestro'&&!String(f.codigo||'').trim()){toast('Indica el código del paquete siniestrado');return;}
+    if(!monto){toast(f.tipo==='siniestro'?'Ingresa el monto a descontar, o usa "Solo anotar"':'Ingresa un monto');return;}
+    if(f.tipo==='descuento'&&!(f.nota||'').trim()){toast('Indica el motivo del descuento');return;}
+    if(f.tipo==='abono_prestamo'){var cc=filas.find(function(x){return x.nombre===nombre;});var pend=cc?cc.saldoPrestamo:0;
+      if(pend<=0){toast(tit(nombre)+' no tiene adelanto pendiente');return;}
+      if(monto>pend){toast('El adelanto pendiente es '+fmt(pend)+'; no puedes descontar más');return;}}
+    if(f.tipo==='siniestro'&&!f.sinId){var cod0=String(f.codigo).trim();
+      asegurarSiniestro(nombre,cod0,(f.nota||'').trim()).then(function(id){var ff=Object.assign({},f,{sinId:id,codigo:cod0});setForm(nombre,{sinId:id,codigo:cod0});guardarMov(nombre,ff,monto);}).catch(function(e){toast('No se pudo registrar el siniestro: '+(e&&e.message||e));});
+      return;}
+    guardarMov(nombre,f,monto);
+  }
+  function guardarMov(nombre,f,monto){
     db.from('movimientos_pago_mensajero').insert({semana:sem.desde,mensajero:nombre,tipo:f.tipo||'adelanto',monto:monto,nota:(f.nota||'').trim()||null,codigo:(f.codigo||'').trim()||null,fecha:hoy,creado_por:quien}).then(function(r){
       if(r.error){toast('No se guardó: '+r.error.message);return;}
       if(f.tipo==='siniestro'&&f.sinId){db.from('siniestros').update({descontado_mensajero:true,descontado_mensajero_fecha:hoy,descontado_mensajero_semana:dmy(sem.desde)+' al '+dmy(sem.hasta),descontado_mensajero_valor:monto,descontado_mensajero_por:quien}).eq('id',f.sinId).then(function(){});}
@@ -207,10 +239,10 @@ function PagoSemanal(props){
   var T=filas.reduce(function(a,c){a.ent+=c.entregas;a.sem+=c.totalSemana;a.ex+=c.t.extra;a.de+=c.descuentos;a.tot+=c.total;a.pr+=c.saldoPrestamo;a.ade+=c.t.adelanto+c.t.abono_prestamo;return a;},{ent:0,sem:0,ex:0,de:0,tot:0,pr:0,ade:0});
 
   function exportar(){
-    var rows=filas.slice().sort(function(a,b){return a.nombre.localeCompare(b.nombre);}).map(function(c){return[c.nombre,c.entregas,c.tarifa,c.base,c.extraPer+c.perRecibidas,c.extraComuna,c.t.extra,c.t.adelanto,c.t.consumo,c.t.descuento+c.t.siniestro,c.t.abono_prestamo,c.saldoPrestamo,c.total];});
+    var rows=filas.slice().sort(function(a,b){return a.nombre.localeCompare(b.nombre);}).map(function(c){return[c.nombre,c.entregas,c.tarifa,c.base,c.extraPer+c.perRecibidas,c.extraComuna,c.t.extra,c.t.adelanto+c.t.prestamo,c.t.consumo,c.t.descuento+c.t.siniestro,c.t.abono_prestamo,c.saldoPrestamo,c.total];});
     var det=[];filas.forEach(function(c){c.movs.forEach(function(m){det.push([c.nombre,dmy(m.fecha),TIPOS[m.tipo].l,(TIPOS[m.tipo].s<0?-1:1)*m.monto,m.codigo||'',m.nota||'',m.creado_por||'']);});});
     A.exportToExcel('Pago_semanal_'+sem.desde+'_al_'+sem.hasta,[
-      {name:'Pago semanal',headers:['Mensajero','Entregas','Tarifa','Total semana','Periferia','Extra comuna','Extra','Adelanto','Consumo','Descuento/Siniestro','Abono préstamo','Préstamo pendiente','Total a pagar'],rows:rows,totalsRow:['TOTAL',T.ent,'',filas.reduce(function(a,c){return a+c.base;},0),filas.reduce(function(a,c){return a+c.extraPer+c.perRecibidas;},0),filas.reduce(function(a,c){return a+c.extraComuna;},0),T.ex,filas.reduce(function(a,c){return a+c.t.adelanto;},0),filas.reduce(function(a,c){return a+c.t.consumo;},0),filas.reduce(function(a,c){return a+c.t.descuento+c.t.siniestro;},0),filas.reduce(function(a,c){return a+c.t.abono_prestamo;},0),T.pr,T.tot]},
+      {name:'Pago semanal',headers:['Mensajero','Entregas','Tarifa','Total semana','Periferia','Extra comuna','Extra','Adelanto entregado','Consumo','Descuento/Siniestro','Descuento de adelanto','Adelanto pendiente','Total a pagar'],rows:rows,totalsRow:['TOTAL',T.ent,'',filas.reduce(function(a,c){return a+c.base;},0),filas.reduce(function(a,c){return a+c.extraPer+c.perRecibidas;},0),filas.reduce(function(a,c){return a+c.extraComuna;},0),T.ex,filas.reduce(function(a,c){return a+c.t.adelanto;},0),filas.reduce(function(a,c){return a+c.t.consumo;},0),filas.reduce(function(a,c){return a+c.t.descuento+c.t.siniestro;},0),filas.reduce(function(a,c){return a+c.t.abono_prestamo;},0),T.pr,T.tot]},
       {name:'Movimientos',headers:['Mensajero','Fecha','Tipo','Monto','Código','Nota','Ingresado por'],rows:det}]);
   }
   function recibo(c){
@@ -221,10 +253,10 @@ function PagoSemanal(props){
     if(c.extraPer)lin+=fila('Extra periferia',c.periferias+' × '+fmt(c.tarifaPer),c.extraPer);
     if(c.perRecibidas)lin+=fila('Periferia abonada',c.detRecib.join(', '),c.perRecibidas);
     if(c.extraComuna)lin+=fila('Extra '+tit(c.comunaExtra),c.nComuna+' × '+fmt(c.tarifaComuna),c.extraComuna);
-    c.movs.forEach(function(m){if(m.tipo==='prestamo')return;lin+=fila(TIPOS[m.tipo].l+(m.codigo?' · '+e(m.codigo):'')+(m.nota?' <span style="color:#888">('+e(m.nota)+')</span>':''),dmy(m.fecha),m.monto,TIPOS[m.tipo].s<0);});
+    c.movs.forEach(function(m){if((TIPOS[m.tipo]||{}).s===0)return;lin+=fila(TIPOS[m.tipo].l+(m.codigo?' · '+e(m.codigo):'')+(m.nota?' <span style="color:#888">('+e(m.nota)+')</span>':''),dmy(m.fecha),m.monto,TIPOS[m.tipo].s<0);});
     var cuerpo='<div class="sec"><h2>1. Detalle del pago</h2><table class="tabla"><thead><tr><th>Concepto</th><th style="text-align:right">Detalle</th><th style="text-align:right">Monto</th></tr></thead><tbody>'+lin
       +'<tr><td style="font-weight:800;background:#F5F0E0;border-top:2px solid #C8A84B">Total a pagar</td><td style="background:#F5F0E0;border-top:2px solid #C8A84B"></td><td style="text-align:right;font-weight:800;background:#F5F0E0;border-top:2px solid #C8A84B;font-family:JetBrains Mono,monospace">'+fmt(c.total)+'</td></tr></tbody></table></div>';
-    if(c.saldoPrestamo||c.t.prestamo)cuerpo+='<div class="sec"><h2>2. Préstamo</h2><table class="tabla"><tbody>'+fila('Saldo anterior','',c.saldoPrevio)+fila('Préstamos nuevos esta semana','',c.t.prestamo)+fila('Abonado esta semana','',c.t.abono_prestamo,true)+fila('<b>Saldo pendiente</b>','',c.saldoPrestamo)+'</tbody></table></div>';
+    if(c.saldoPrestamo||c.saldoPrevio||c.t.adelanto||c.t.prestamo)cuerpo+='<div class="sec"><h2>2. Adelantos</h2><table class="tabla"><tbody>'+fila('Adelanto pendiente anterior','',c.saldoPrevio)+fila('Adelantos entregados esta semana','',c.t.adelanto+c.t.prestamo)+fila('Descontado esta semana','',c.t.abono_prestamo,true)+fila('<b>Adelanto pendiente</b>','',c.saldoPrestamo)+'</tbody></table></div>';
     cuerpo+='<div class="resultado" style="border-color:#2E7D32;background:#F1F8F2"><div class="gr" style="color:#2E7D32">'+fmt(c.total)+'</div><div class="dt"><b>Total a pagar a '+e(tit(c.nombre))+'</b><br>Semana '+String(sem.num).padStart(2,'0')+' de '+sem.mes+' · del '+dmy(sem.desde)+' al '+dmy(sem.hasta)+'</div></div>';
     loadScriptOnce('doc-pdf','modules/doc-pdf.js').then(function(){var D=window.__docPDF;
       D.abrir(w,D.documentoHTML({tipo:'RECIBO DE PAGO',folio:'PS-'+sem.desde.replace(/-/g,'').slice(2)+'-'+c.nombre.replace(/[^A-Z]/g,'').slice(0,6),fechaDoc:dmy(hoy),
@@ -260,9 +292,9 @@ function PagoSemanal(props){
         kpi('Entregas',T.ent.toLocaleString('es-CL'),'#9fd3ea',filas.length+' mensajeros'),
         kpi('Pago total semana',fmt(T.sem),'#ffe59a','entregas × tarifa + periferias'),
         kpi('Extras',fmt(T.ex),'#7ee0ad'),
-        kpi('Descuentos',fmt(T.de),'#ff8f86','adelantos, consumos, descuentos'),
+        kpi('Descuentos',fmt(T.de),'#ff8f86','adelantos descontados, consumos, siniestros'),
         kpi('Total a pagar',fmt(T.tot),'#7ee0ad','con descuentos'),
-        kpi('Préstamos pendientes',fmt(T.pr),'#b39ddb'))),
+        kpi('Adelantos pendientes',fmt(T.pr),'#f0b467','quedan para próximas semanas'))),
     h('div',{style:{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',marginBottom:16}},
       h('input',{className:'form-input',placeholder:'Buscar mensajero',value:q,onChange:function(e){setQ(e.target.value);},style:{margin:0,maxWidth:280}}),
       h('div',{style:{display:'flex',gap:6}},[['total','Mayor pago'],['nombre','Nombre']].map(function(o){var a=orden===o[0];return h('button',{key:o[0],type:'button',onClick:function(){setOrden(o[0]);},style:{padding:'7px 12px',borderRadius:999,border:'1px solid '+(a?'#c8a84b':'var(--border)'),background:a?'rgba(200,168,75,.18)':'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}},o[1]);})),
@@ -292,20 +324,24 @@ function PagoSemanal(props){
             c.movs.map(function(m){var T0=TIPOS[m.tipo]||TIPOS.descuento;return h('div',{key:m.id,style:{display:'grid',gridTemplateColumns:'auto 1fr auto auto',alignItems:'center',gap:8,padding:'7px 10px',marginBottom:6,borderRadius:10,background:'#fff',border:'1px solid rgba(200,168,75,.22)',borderLeft:'4px solid '+T0.c}},
               h('span',{style:{fontSize:10.5,fontWeight:800,color:T0.c,background:T0.c+'14',border:'1px solid '+T0.c+'55',borderRadius:999,padding:'2px 8px',whiteSpace:'nowrap'}},T0.l),
               h('span',{style:{fontSize:11.5,color:'var(--text-soft)',minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'},title:(m.nota||'')+' · '+(m.creado_por||'')},dm(m.fecha)+(m.codigo?' · '+m.codigo:'')+(m.nota?' · '+m.nota:'')+(m.creado_por?' · '+m.creado_por:'')),
-              h('b',{className:'mono',style:{fontSize:13,color:T0.s>0?'#2e7d4f':T0.s<0?'#b03030':'#1565c0'}},(T0.s>0?'+':T0.s<0?'-':'')+fmt(m.monto)),
+              h('b',{className:'mono',style:{fontSize:13,color:T0.s>0?'#2e7d4f':T0.s<0?'#b03030':'#c26a12'}},(T0.s>0?'+':T0.s<0?'-':'')+fmt(m.monto)),
               h('span',{onClick:function(){borrar(m);},title:'Eliminar',style:{cursor:'pointer',color:'#b03030',fontWeight:900,padding:'0 4px'}},'×'));})):null,
-          (c.saldoPrestamo||c.saldoPrevio)?h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,margin:'6px 0',padding:'8px 10px',borderRadius:10,background:'rgba(21,101,192,.07)',border:'1px solid rgba(21,101,192,.25)',fontSize:12.5}},
-            h('span',null,'Préstamo pendiente',c.saldoPrevio!==c.saldoPrestamo?h('span',{style:{color:'var(--text-soft)',marginLeft:6}},'(antes '+fmt(c.saldoPrevio)+')'):null),
-            h('b',{className:'mono',style:{color:'#1565c0'}},fmt(c.saldoPrestamo))):null,
+          (c.saldoPrestamo||c.saldoPrevio)?h('div',{style:{margin:'6px 0',padding:'9px 11px',borderRadius:12,background:'linear-gradient(135deg,rgba(194,106,18,.10),rgba(194,106,18,.04))',border:'1px solid rgba(194,106,18,.35)'}},
+            h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}},
+              h('span',{style:{fontSize:12,fontWeight:800,color:'#9a4d0c',letterSpacing:.3}},'Adelanto pendiente'),
+              h('b',{className:'mono',style:{fontSize:15,color:c.saldoPrestamo>0?'#9a4d0c':'#2e7d4f'}},c.saldoPrestamo>0?fmt(c.saldoPrestamo):'Saldado')),
+            h('div',{style:{fontSize:11.5,color:'var(--text-soft)',marginTop:2}},'Venía '+fmt(c.saldoPrevio)+((c.t.adelanto+c.t.prestamo)?' · entregado esta semana '+fmt(c.t.adelanto+c.t.prestamo):'')+(c.t.abono_prestamo?' · descontado esta semana '+fmt(c.t.abono_prestamo):'')),
+            c.saldoPrestamo>0?h('div',{style:{display:'flex',gap:6,marginTop:7,flexWrap:'wrap'}},
+              [['Descontar todo',c.saldoPrestamo],['Descontar la mitad',Math.round(c.saldoPrestamo/2)],['Descontar otro monto',null]].map(function(o){return h('button',{key:o[0],type:'button',onClick:function(){setAbierto(c.nombre);setForm(c.nombre,{tipo:'abono_prestamo',monto:o[1]!=null?String(o[1]):'',items:{},nota:''});},style:{padding:'4px 10px',borderRadius:999,border:'1px solid #c26a12',background:o[1]===c.saldoPrestamo?'#c26a12':'#fff',color:o[1]===c.saldoPrestamo?'#fff':'#9a4d0c',fontSize:11,fontWeight:800,cursor:'pointer'}},o[0]);})):null):null,
           // siniestros pendientes de descontar
           c.sin.length?h('div',{style:{margin:'6px 0',padding:'8px 10px',borderRadius:10,background:'rgba(211,47,47,.06)',border:'1px solid rgba(211,47,47,.25)'}},
             h('div',{style:{fontSize:11.5,fontWeight:800,color:'#b03030',marginBottom:4}},c.sin.length+' siniestro(s) sin descontar'),
-            c.sin.slice(0,4).map(function(s){return h('div',{key:s.id,style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,fontSize:12,padding:'2px 0'}},
+            h('div',{style:{maxHeight:118,overflowY:'auto'}},c.sin.map(function(s){return h('div',{key:s.id,style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,fontSize:12,padding:'2px 0'}},
               h('span',{className:'mono'},s.codigo,h('span',{style:{color:'var(--text-soft)',marginLeft:6,fontFamily:'DM Sans'}},s.fecha_siniestro?dm(String(s.fecha_siniestro).slice(0,10)):'')),
-              h('a',{href:'#',onClick:function(ev){ev.preventDefault();setAbierto(c.nombre);setForm(c.nombre,{tipo:'siniestro',codigo:s.codigo,sinId:s.id,nota:'Siniestro '+s.codigo});},style:{color:'#b03030',fontWeight:800}},'Descontar'));})):null,
+              h('a',{href:'#',onClick:function(ev){ev.preventDefault();setAbierto(c.nombre);setForm(c.nombre,{tipo:'siniestro',codigo:s.codigo,sinId:s.id,nota:'Siniestro '+s.codigo,items:{}});},style:{color:'#b03030',fontWeight:800}},'Descontar'));}))):null,
           // agregar movimiento
           ab?h('div',{style:{margin:'10px 0 4px',padding:12,borderRadius:14,background:'#fff',border:'1px solid rgba(200,168,75,.4)'}},
-            h('div',{style:{display:'flex',flexWrap:'wrap',gap:5,marginBottom:8}},ORDEN_TIPOS.map(function(k){var a=(f.tipo||'adelanto')===k;var T0=TIPOS[k];return h('button',{key:k,type:'button',onClick:function(){setForm(c.nombre,k==='consumo'?{tipo:k}:{tipo:k,items:{}});},style:{padding:'5px 10px',borderRadius:999,border:'1px solid '+(a?T0.c:'var(--border)'),background:a?T0.c:'#fff',color:a?'#fff':'var(--dark)',fontSize:11.5,fontWeight:800,cursor:'pointer'}},T0.l);})),
+            h('div',{style:{display:'flex',flexWrap:'wrap',gap:5,marginBottom:8}},TIPOS_UI.map(function(k){var a=(f.tipo||'adelanto')===k;var T0=TIPOS[k];return h('button',{key:k,type:'button',onClick:function(){var o=k==='consumo'?{tipo:k}:{tipo:k,items:{}};if(k==='abono_prestamo'&&c.saldoPrestamo>0)o.monto=String(c.saldoPrestamo);setForm(c.nombre,o);},style:{padding:'5px 10px',borderRadius:999,border:'1px solid '+(a?T0.c:'var(--border)'),background:a?T0.c:'#fff',color:a?'#fff':'var(--dark)',fontSize:11.5,fontWeight:800,cursor:'pointer'}},T0.l);})),
             h('div',{style:{fontSize:11.5,color:'var(--text-soft)',marginBottom:8}},AYUDA[f.tipo||'adelanto']),
             (f.tipo==='consumo')?h('div',{style:{marginBottom:10}},
               prodsVenta.length===0?h('div',{style:{fontSize:11.5,color:'var(--text-soft)'}},'No hay productos con precio. Agrégalos en Consumo del local › Administrar productos.'):
@@ -320,13 +356,15 @@ function PagoSemanal(props){
                     h('button',{type:'button',onClick:function(){itemsConsumo(c.nombre,pv,1);},style:{width:22,height:22,borderRadius:6,border:'1px solid #8a5a2b',background:'#8a5a2b',color:'#fff',fontWeight:900,cursor:'pointer',lineHeight:1}},'+')):null);})),
               Object.keys(f.items||{}).length?h('div',{style:{marginTop:6,fontSize:12,fontWeight:700,color:'#8a5a2b'}},'Total consumo: '+fmt(+f.monto||0)):null):null,
             h('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
+              (f.tipo==='siniestro')?h('input',{className:'form-input',placeholder:'Código del paquete',value:f.codigo,onChange:function(e){setForm(c.nombre,{codigo:e.target.value,sinId:null});},style:{margin:0,flex:'1 1 100%',fontFamily:'JetBrains Mono'}}):null,
+              (f.tipo==='descuento'&&FALTAS.length)?h('select',{className:'form-input',value:'',onChange:function(e){if(e.target.value)setForm(c.nombre,{nota:e.target.value});},style:{margin:0,flex:'1 1 100%'}},h('option',{value:''},'Elegir motivo del reglamento (opcional)'),FALTAS.map(function(x){return h('option',{key:x,value:x},x);})):null,
               h('input',{className:'form-input',inputMode:'numeric',placeholder:'Monto',value:f.monto,onChange:function(e){setForm(c.nombre,{monto:e.target.value});},onKeyDown:function(e){if(e.key==='Enter')agregar(c.nombre);},style:{margin:0,width:120,fontFamily:'JetBrains Mono'}}),
-              (f.tipo==='siniestro')?h('input',{className:'form-input',placeholder:'Código',value:f.codigo,onChange:function(e){setForm(c.nombre,{codigo:e.target.value});},style:{margin:0,width:140}}):null,
-              h('input',{className:'form-input',placeholder:'Nota (opcional)',value:f.nota,onChange:function(e){setForm(c.nombre,{nota:e.target.value});},onKeyDown:function(e){if(e.key==='Enter')agregar(c.nombre);},style:{margin:0,flex:'1 1 140px'}}),
-              h('button',{type:'button',className:'btn-futurista btn-f-success',onClick:function(){agregar(c.nombre);},style:{padding:'8px 14px'}},'Agregar'),
+              h('input',{className:'form-input',placeholder:f.tipo==='descuento'?'Motivo (obligatorio)':'Nota (opcional)',value:f.nota,onChange:function(e){setForm(c.nombre,{nota:e.target.value});},onKeyDown:function(e){if(e.key==='Enter')agregar(c.nombre);},style:{margin:0,flex:'1 1 140px'}}),
+              h('button',{type:'button',className:'btn-futurista btn-f-success',onClick:function(){agregar(c.nombre);},style:{padding:'8px 14px'}},f.tipo==='siniestro'?'Descontar':'Agregar'),
+              (f.tipo==='siniestro')?h('button',{type:'button',className:'btn-futurista btn-f-ghost',title:'Lo deja en la hoja de Siniestros y en la tarjeta, sin descontar todavía',onClick:function(){soloAnotarSiniestro(c.nombre);},style:{padding:'8px 12px'}},'Solo anotar'):null,
               h('button',{type:'button',className:'btn-futurista btn-f-ghost',onClick:function(){setAbierto(null);},style:{padding:'8px 12px'}},'Cerrar'))):
           h('div',{style:{display:'flex',gap:8,margin:'10px 0 4px'}},
-            h('button',{type:'button',className:'btn-futurista btn-f-ghost',onClick:function(){setAbierto(c.nombre);},style:{flex:1,padding:'9px 12px'}},'+ Adelanto, consumo, extra o descuento'),
+            h('button',{type:'button',className:'btn-futurista btn-f-ghost',onClick:function(){setAbierto(c.nombre);},style:{flex:1,padding:'9px 12px'}},'+ Adelanto, consumo, extra, siniestro o descuento'),
             h('button',{type:'button',className:'btn-futurista btn-f-ghost',title:'Dejar fuera del pago (cuentas internas o de prueba)',onClick:function(){if(window.confirm('¿Dejar a '+tit(c.nombre)+' fuera del pago semanal?'))excluir(c.nombre,true);},style:{padding:'9px 10px'}},'Excluir')),
           h('div',{style:{flex:1}}),
           h('div',{style:{marginTop:10,borderRadius:14,padding:'12px 14px',background:'linear-gradient(160deg,#2f3325,#1c1f15)',color:'#f3ecd6',boxShadow:'inset 0 1px 0 rgba(255,255,255,.08)'}},
