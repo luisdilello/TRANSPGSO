@@ -1259,6 +1259,24 @@ function CobrosClientesTab(_ref4){
   },[periodo.desde,periodo.hasta]);
 
   var resumen=React.useMemo(function(){return calcularResumenCobrosClientes(envios,clientes,tarifasSeccionPorCliente);},[envios,clientes,tarifasSeccionPorCliente]);
+  // Siniestros registrados del período por cliente (08-11-2026): hoja de Siniestros (confirmados, no
+  // descartados, fecha del siniestro en el período) + cliente y valor desde el envío. Informativo: el
+  // monto que se resta al cliente es el que se marcó "descontar a cliente" (se aplica en el Recibo de Cobro).
+  var _uSinCli=React.useState({}),sinPorCliente=_uSinCli[0],setSinPorCliente=_uSinCli[1];
+  React.useEffect(function(){
+    var cancelado=false;
+    db.from('siniestros').select('id,codigo,mensajero,fecha_siniestro,pago_cliente,descontado_cliente,descontado_cliente_valor,descontado_mensajero,descontado_mensajero_valor,confirmado,descartado').gte('fecha_siniestro',periodo.desde).lte('fecha_siniestro',periodo.hasta).eq('confirmado',true).order('fecha_siniestro',{ascending:true}).then(function(r){
+      if(cancelado)return;var sins=(r.data||[]).filter(function(x){return !x.descartado;});
+      if(!sins.length){setSinPorCliente({});return;}
+      var cods=sins.map(function(x){return x.codigo;}),lotes=[];for(var i=0;i<cods.length;i+=150)lotes.push(cods.slice(i,i+150));
+      return Promise.all(lotes.map(function(l){return db.from('envios').select('codigo,cliente,valor_siniestro').in('codigo',l);})).then(function(rs){
+        if(cancelado)return;var env={};rs.forEach(function(x){(x.data||[]).forEach(function(e){env[e.codigo]=e;});});
+        var m={};sins.forEach(function(x){var e=env[x.codigo]||{};var k=String(e.cliente||'Sin cliente').trim().toUpperCase();(m[k]=m[k]||[]).push(Object.assign({},x,{valor:e.valor_siniestro!=null?+e.valor_siniestro:null}));});
+        setSinPorCliente(m);});
+    }).catch(function(e){console.warn('Error cargando siniestros para Cobros a Clientes:',e.message);});
+    return function(){cancelado=true;};
+  },[periodo.desde,periodo.hasta]);
+  var PAGO_CLI_TXT={no_pagado:'Sin resolver',descuento_facturacion:'Descuento en factura',transferencia_proveedor:'Transferencia',mediacion:'Mediación',sin_informar:'Sin informar'};
 
   // Recibido = r.total de 'resumen' (ya cuenta TODO envío de ese cliente despachado en el
   // rango, sin importar su estado). Retornado = conteo de 'retornos' (fecha real, arriba).
@@ -1471,6 +1489,17 @@ function CobrosClientesTab(_ref4){
             tipos.map(function(t){var n=r.grupos[t[0]];var tar=t[0]==='colina'?(cd.tarifaColina||cd.tarifa||0):t[0]==='ph'?(cd.tarifaPH||cd.tarifa||0):(cd[t[2]]||0);return h('div',{key:t[0],style:{display:'flex',justifyContent:'space-between',gap:8,fontSize:12.5,padding:'4px 0',borderBottom:'1px dashed rgba(200,168,75,.22)'}},
               h('span',null,t[1],h('span',{style:{color:'var(--text-soft)',marginLeft:6}},n+' × '+fmt(tar))),h('b',{className:'mono',style:{color:tar?'var(--dark)':'#b03030'}},tar?fmt(n*tar):'sin tarifa'));}),
             secs.map(function(s){var n=r.gruposSeccion[s];return h('div',{key:s,style:{display:'flex',justifyContent:'space-between',gap:8,fontSize:12.5,padding:'4px 0',borderBottom:'1px dashed rgba(200,168,75,.22)'}},h('span',null,'Sección '+s,h('span',{style:{color:'var(--text-soft)',marginLeft:6}},n+' × '+fmt(tsc[s]||0))),h('b',{className:'mono'},fmt(n*(tsc[s]||0))));})):null,
+          (function(){var ss=sinPorCliente[String(r.nombre||'').trim().toUpperCase()]||[];if(!ss.length)return null;
+            var tv=ss.reduce(function(a,x){return a+(x.valor||0);},0),sinV=ss.filter(function(x){return !x.valor;}).length,desc=ss.reduce(function(a,x){return a+(x.descontado_cliente?(+x.descontado_cliente_valor||0):0);},0);
+            return h('div',{style:{marginBottom:10,padding:'8px 10px',borderRadius:12,background:'rgba(211,47,47,.05)',border:'1px solid rgba(211,47,47,.22)'}},
+              h('div',{style:{display:'flex',justifyContent:'space-between',gap:8,fontSize:10,fontWeight:800,letterSpacing:1.3,textTransform:'uppercase',color:'#b03030',marginBottom:5}},
+                h('span',null,'Siniestros del período ('+ss.length+')'),h('span',{className:'mono',style:{letterSpacing:0}},fmt(tv)+(sinV?' · '+sinV+' sin valor':''))),
+              h('div',{style:{maxHeight:132,overflowY:'auto',paddingRight:2}},ss.map(function(x){var pc=x.pago_cliente||'no_pagado';var colP=pc==='no_pagado'?'#a15c00':pc==='descuento_facturacion'?'#b03030':'#2e7d4f';
+                return h('div',{key:x.id,style:{display:'grid',gridTemplateColumns:'1fr auto auto',gap:8,alignItems:'center',fontSize:11.5,padding:'3px 0',borderBottom:'1px dashed rgba(211,47,47,.14)'}},
+                  h('span',{style:{minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},h('span',{className:'mono'},x.codigo),h('span',{style:{color:'var(--text-soft)',marginLeft:6}},String(x.fecha_siniestro||'').slice(8,10)+'-'+String(x.fecha_siniestro||'').slice(5,7)+(x.mensajero?' · '+String(x.mensajero).replace(/,\s*/g,' '):''))),
+                  h('span',{title:'Forma de pago al cliente',style:{fontSize:10,fontWeight:800,color:colP,background:colP+'14',border:'1px solid '+colP+'55',borderRadius:999,padding:'1px 7px',whiteSpace:'nowrap'}},PAGO_CLI_TXT[pc]||pc),
+                  x.valor?h('b',{className:'mono',style:{color:'#8a1f1f'}},fmt(x.valor)):h('span',{style:{fontSize:10,fontWeight:800,color:'#a15c00'}},'Falta valor'));})),
+              desc?h('div',{style:{fontSize:11,color:'#b03030',fontWeight:700,marginTop:5}},'Descontado al cliente en factura: '+fmt(desc)+' (se resta en el Recibo de Cobro)'):null);})(),
           h('div',{style:{flex:1}}),
           h('div',{style:{borderRadius:14,padding:'10px 14px',background:'linear-gradient(160deg,#2f3325,#1c1f15)',color:'#f3ecd6',marginBottom:10}},
             h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12.5,opacity:.9}},h('span',null,'Neto'),h('b',{className:'mono'},fmt(r.montoNeto))),
