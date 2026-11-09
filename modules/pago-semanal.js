@@ -139,7 +139,9 @@ function PagoSemanal(props){
       db.from('configuracion').select('valor').eq('clave','pago_semanal_excluidos').maybeSingle(),
       db.from('siniestros').select('id,codigo,mensajero,descontado_mensajero_valor,descontado_mensajero_fecha,descontado_mensajero_por').eq('descontado_mensajero',true).like('descontado_mensajero_semana',dmy(sem.desde)+'%'),
       db.from('consumos_mensajeros').select('mensajero_nombre,producto,cantidad,monto,fecha').gte('fecha',sem.desde).lte('fecha',sem.hasta),
-      sem.num===1?db.from('retiros').select('mensajero,pago_mensajero,fecha').gte('fecha',mesAnt.desde).lte('fecha',mesAnt.hasta).neq('mensajero',''):Promise.resolve({data:[]})
+      sem.num===1?db.from('retiros').select('mensajero,pago_mensajero,fecha').gte('fecha',mesAnt.desde).lte('fecha',mesAnt.hasta).neq('mensajero',''):Promise.resolve({data:[]}),
+      // Todos los mensajeros activos (Gestión de Usuarios: rol rider, activo), aunque no tengan entregas en la semana.
+      db.from('usuarios').select('nombre').eq('rol','rider').eq('activo',true)
     ]).then(function(r){
       if(!vivo)return;
       var err=r.slice(0,3).find(function(x){return x.error;});if(err){toast('Error cargando pago semanal: '+err.error.message);setData({error:true});return;}
@@ -159,7 +161,8 @@ function PagoSemanal(props){
       var ret={};(r[7]&&r[7].data||[]).forEach(function(x){var n=norm(x.mensajero);if(!n)return;var t=ret[n]||(ret[n]={n:0,p:0});t.n++;t.p+=+x.pago_mensajero||0;});
       Object.keys(ret).forEach(function(n){var t=ret[n];if(!t.p)return;(movsSem[n]=movsSem[n]||[]).push({id:'r'+n,virtual:true,fuente:'retiros',semana:sem.desde,mensajero:n,tipo:'extra',monto:t.p,nota:'Retiros de '+mesAnt.nombre+' ('+t.n+')',fecha:sem.desde,creado_por:''});});
       var excl=((r[4]&&r[4].data&&r[4].data.valor)||['ELY MENSAJERO','FERNANDOCHECK','FERNANDO CHECK']).map(norm);
-      setData({porComuna:porComuna,cfg:cfg,movs:movsSem,saldo:saldo,siniestros:sinP,excluidos:excl});
+      var activos=((r[8]&&r[8].data)||[]).map(function(u){return norm(u.nombre);}).filter(Boolean);
+      setData({porComuna:porComuna,cfg:cfg,movs:movsSem,saldo:saldo,siniestros:sinP,excluidos:excl,activos:activos});
     }).catch(function(e){if(vivo){toast('Error: '+(e&&e.message||e));setData({error:true});}});
     return function(){vivo=false;};
   },[lunes,gen]);
@@ -264,8 +267,9 @@ function PagoSemanal(props){
   if(data&&!data.error){
     var nombres={};Object.keys(data.porComuna).forEach(function(n){nombres[n]=1;});Object.keys(data.movs).forEach(function(n){nombres[n]=1;});
     Object.keys(data.saldo).forEach(function(n){if(data.saldo[n])nombres[n]=1;});
+    (data.activos||[]).forEach(function(n){nombres[n]=1;});
     Object.keys(nombres).forEach(function(n){var c=calcular(n,data.cfg[n],data.porComuna,data.movs[n],data.cfg,data.saldo[n]);c.nombre=n;c.movs=data.movs[n]||[];c.sin=data.siniestros[n]||[];
-      if(!c.entregas&&!c.movs.length&&!c.saldoPrestamo&&!c.perRecibidas)return;
+      if(!c.entregas&&!c.movs.length&&!c.saldoPrestamo&&!c.perRecibidas&&!c.sin.length&&(data.activos||[]).indexOf(n)<0)return;
       (data.excluidos.indexOf(n)>=0?excluidas:filas).push(c);});
     filas.sort(function(a,b){return orden==='nombre'?a.nombre.localeCompare(b.nombre):b.total-a.total;});
   }
