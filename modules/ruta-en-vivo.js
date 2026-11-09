@@ -25,6 +25,7 @@ function colPct(p){return p==null?'var(--text-soft)':p>=97?'#2e7d4f':p>=90?'#5e9
 
 function RutaEnVivo(props){
   var toast=props.toast||function(){};
+  var db=props.db||(window.__app&&window.__app.db)||window.db;
   var _d=R.useState(hoyCL()),dia=_d[0],setDia=_d[1];
   var _r=R.useState(null),res=_r[0],setRes=_r[1];
   var _c=R.useState(false),cargando=_c[0],setCargando=_c[1];
