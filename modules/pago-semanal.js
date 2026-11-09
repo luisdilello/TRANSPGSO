@@ -179,8 +179,9 @@ function PagoSemanal(props){
   function buscarEnvio(nombre,cod){
     cod=String(cod||'').trim();if(cod.length<5){setForm(nombre,{envio:null,envioMsg:''});return;}
     setForm(nombre,{envioMsg:'Buscando…'});
-    db.from('envios').select('codigo,cliente,estado,mensajero,destinatario,comuna,valor_siniestro').eq('codigo',cod).limit(1).then(function(r){
-      var e=(r&&r.data||[])[0];
+    Promise.all([db.from('envios').select('codigo,cliente,estado,mensajero,destinatario,comuna,valor_siniestro').eq('codigo',cod).limit(1),
+      db.from('siniestros').select('id,descontado_mensajero').eq('codigo',cod).eq('descartado',false).limit(1)]).then(function(rr){var r=rr[0];
+      var e=(r&&r.data||[])[0];var sx=(rr[1]&&rr[1].data||[])[0];if(e)e.yaReg=sx?(sx.descontado_mensajero?'descontado':'pendiente'):null;
       setForms(function(p){var cur=p[nombre]||{};if(String(cur.codigo||'').trim()!==cod)return p;var x=Object.assign({},p);
         x[nombre]=Object.assign({},cur,{envio:e||null,envioMsg:e?'':'Este código no existe en el sistema',cliente:e?(e.cliente||cur.cliente||''):cur.cliente,monto:(e&&e.valor_siniestro&&!cur.monto)?String(Math.round(+e.valor_siniestro)):cur.monto});return x;});
     }).catch(function(){setForm(nombre,{envioMsg:'No se pudo verificar el código'});});
@@ -393,7 +394,7 @@ function PagoSemanal(props){
             h('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
               (f.tipo==='siniestro')?h('input',{className:'form-input',placeholder:'Código del paquete',value:f.codigo,disabled:!!f.sinId,onChange:function(e){var v=e.target.value;setForm(c.nombre,{codigo:v,sinId:null,envio:null,envioMsg:''});clearTimeout(window.__tmBusq);window.__tmBusq=setTimeout(function(){buscarEnvio(c.nombre,v);},450);},onBlur:function(e){if(!f.sinId)buscarEnvio(c.nombre,e.target.value);},style:{margin:0,flex:'1 1 100%',fontFamily:'JetBrains Mono'}}):null,
               (f.tipo==='siniestro'&&(f.envio||f.envioMsg))?h('div',{style:{flex:'1 1 100%',fontSize:11.5,padding:'6px 9px',borderRadius:8,background:f.envio?'rgba(46,125,79,.08)':'rgba(176,48,48,.08)',border:'1px solid '+(f.envio?'rgba(46,125,79,.3)':'rgba(176,48,48,.3)'),color:f.envio?'#1f6b40':'#a02828'}},
-                f.envio?((f.sinId?'Siniestro ya registrado':'Envío encontrado')+(f.envio.estado?' · '+f.envio.estado:'')+(f.envio.destinatario?' · '+f.envio.destinatario:'')+(f.envio.comuna?' · '+f.envio.comuna:'')+(f.envio.mensajero&&norm(f.envio.mensajero)!==c.nombre?' · asignado a '+tit(f.envio.mensajero):'')):f.envioMsg):null,
+                f.envio?((f.sinId?'Siniestro ya registrado':f.envio.yaReg==='descontado'?'Ya está en la hoja de Siniestros y ya fue descontado':f.envio.yaReg==='pendiente'?'Ya está en la hoja de Siniestros (pendiente de descontar)':'Envío encontrado')+(f.envio.estado?' · '+f.envio.estado:'')+(f.envio.destinatario?' · '+f.envio.destinatario:'')+(f.envio.comuna?' · '+f.envio.comuna:'')+(f.envio.mensajero&&norm(f.envio.mensajero)!==c.nombre?' · asignado a '+tit(f.envio.mensajero):'')):f.envioMsg):null,
               (f.tipo==='siniestro'&&f.envio&&!f.sinId)?h('select',{className:'form-input',value:f.cliente||'',disabled:!!(f.envio.cliente),onChange:function(e){setForm(c.nombre,{cliente:e.target.value});},style:{margin:0,flex:'1 1 100%'}},
                 h('option',{value:''},'Cliente del paquete'),(f.envio.cliente&&!(props.clientes||[]).some(function(x){return x.nombre===f.envio.cliente;}))?h('option',{value:f.envio.cliente},f.envio.cliente):null,
                 (props.clientes||[]).filter(function(x){return x.activo!==false;}).map(function(x){return h('option',{key:x.nombre,value:x.nombre},x.nombre);})):null,
