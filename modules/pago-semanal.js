@@ -167,6 +167,24 @@ function PagoSemanal(props){
   function recargar(){setGen(function(g){return g+1;});}
   // Productos del local (mismo catálogo de "Administrar productos"): en el tipo Consumo se eligen con
   // un toque y el monto y la nota se completan solos (08-11-2026).
+  // Valor y cliente de cada siniestro pendiente (vienen del envío: envios.valor_siniestro / cliente).
+  var _is=R.useState({}),infoSin=_is[0],setInfoSin=_is[1];
+  R.useEffect(function(){
+    if(!data||data.error)return;var cods=[];Object.keys(data.siniestros||{}).forEach(function(n){(data.siniestros[n]||[]).forEach(function(x){if(x.codigo)cods.push(x.codigo);});});
+    if(!cods.length){setInfoSin({});return;}
+    var lotes=[];for(var i=0;i<cods.length;i+=150)lotes.push(cods.slice(i,i+150));
+    Promise.all(lotes.map(function(l){return db.from('envios').select('codigo,cliente,valor_siniestro').in('codigo',l);})).then(function(rs){var m={};rs.forEach(function(r){(r.data||[]).forEach(function(e){m[e.codigo]={cliente:e.cliente||'',valor:e.valor_siniestro!=null?+e.valor_siniestro:null};});});setInfoSin(m);}).catch(function(){});
+  },[data]);
+  // Busca el envío del código ingresado en el formulario de siniestro (debe existir en el sistema).
+  function buscarEnvio(nombre,cod){
+    cod=String(cod||'').trim();if(cod.length<5){setForm(nombre,{envio:null,envioMsg:''});return;}
+    setForm(nombre,{envioMsg:'Buscando…'});
+    db.from('envios').select('codigo,cliente,estado,mensajero,destinatario,comuna,valor_siniestro').eq('codigo',cod).limit(1).then(function(r){
+      var e=(r&&r.data||[])[0];
+      setForms(function(p){var cur=p[nombre]||{};if(String(cur.codigo||'').trim()!==cod)return p;var x=Object.assign({},p);
+        x[nombre]=Object.assign({},cur,{envio:e||null,envioMsg:e?'':'Este código no existe en el sistema',cliente:e?(e.cliente||cur.cliente||''):cur.cliente,monto:(e&&e.valor_siniestro&&!cur.monto)?String(Math.round(+e.valor_siniestro)):cur.monto});return x;});
+    }).catch(function(){setForm(nombre,{envioMsg:'No se pudo verificar el código'});});
+  }
   var _pv=R.useState([]),prodsVenta=_pv[0],setProdsVenta=_pv[1];
   R.useEffect(function(){db.from('configuracion').select('valor').eq('clave','productos_venta').maybeSingle().then(function(r){var v=(r&&r.data&&r.data.valor)||[];setProdsVenta((Array.isArray(v)?v:[]).filter(function(p){return p.activo!==false&&(+p.precio||0)>0;}));}).catch(function(){});},[]);
   function itemsConsumo(nombre,prod,delta){
@@ -178,38 +196,53 @@ function PagoSemanal(props){
   function setForm(n,o){setForms(function(p){var x=Object.assign({},p);x[n]=Object.assign({tipo:'adelanto',monto:'',nota:'',codigo:''},p[n]||{},o);return x;});}
   // Siniestro anotado desde la tarjeta: queda en la hoja de Siniestros (confirmado) y en la tarjeta
   // como pendiente hasta descontarlo. Devuelve el id del siniestro (existente o nuevo).
-  function asegurarSiniestro(nombre,codigo,nota){
-    var cod=String(codigo||'').trim();
-    return db.from('siniestros').select('id,descontado_mensajero').eq('codigo',cod).eq('descartado',false).order('id',{ascending:false}).limit(1).then(function(r){
-      var ex=(r&&r.data||[])[0];if(ex)return ex.id;
-      return db.from('siniestros').insert({codigo:cod,mensajero:nombre,nota:nota||'Registrado desde Pago Semanal',fecha_siniestro:hoy,confirmado:true,confirmado_fecha:new Date().toISOString(),confirmado_por:quien}).select('id').single().then(function(x){
-        if(x.error)throw x.error;db.from('envios').update({tuvo_siniestro:true}).eq('codigo',cod).then(function(){});return x.data.id;});
+  function asegurarSiniestro(nombre,codigo,nota,valor,cliente,envio){
+    var cod=String(codigo||'').trim(),ts=new Date().toISOString();
+    var upd={tuvo_siniestro:true,estado:'siniestro',updated_at:ts};
+    if(valor)upd.valor_siniestro=valor;
+    if(cliente&&envio&&!envio.cliente)upd.cliente=cliente;
+    return db.from('siniestros').select('id').eq('codigo',cod).eq('descartado',false).order('id',{ascending:false}).limit(1).then(function(r){
+      var ex=(r&&r.data||[])[0];
+      var paso=ex?Promise.resolve(ex.id):db.from('siniestros').insert({codigo:cod,mensajero:nombre,nota:nota||'Registrado desde Pago Semanal',fecha_siniestro:hoy,confirmado:true,confirmado_fecha:ts,confirmado_por:quien}).select('id').single().then(function(x){if(x.error)throw x.error;return x.data.id;});
+      return paso.then(function(id){
+        return db.from('envios').update(upd).eq('codigo',cod).then(function(){
+          if(!ex)db.from('historial_envios').insert({envio_id:null,codigo_envio:cod,estado:'siniestro',nota:'Siniestro registrado desde Pago Semanal por '+quien+' (mensajero '+nombre+')'+(valor?' · valor '+fmt(valor):' · falta el valor'),usuario:quien,canal:'panel_admin',created_at:ts}).then(function(){});
+          return id;});
+      });
     });
   }
-  function soloAnotarSiniestro(nombre){
+  function validarSiniestro(nombre){
     var f=forms[nombre]||{};var cod=String(f.codigo||'').trim();
-    if(!cod){toast('Indica el código del paquete siniestrado');return;}
-    asegurarSiniestro(nombre,cod,(f.nota||'').trim()).then(function(){toast('Siniestro '+cod+' anotado en la hoja de Siniestros. Queda pendiente de descontar.');setForm(nombre,{monto:'',nota:'',codigo:'',sinId:null});recargar();})
+    if(!cod){toast('Indica el código del paquete siniestrado');return null;}
+    if(!f.sinId&&!f.envio){toast(f.envioMsg==='Buscando…'?'Espera a que se verifique el código':'El código '+cod+' no existe en el sistema');return null;}
+    if(!f.sinId&&!(f.cliente||(f.envio&&f.envio.cliente))){toast('Indica el cliente al que pertenece el paquete');return null;}
+    return cod;
+  }
+  function soloAnotarSiniestro(nombre){
+    var f=forms[nombre]||{};var cod=validarSiniestro(nombre);if(!cod)return;
+    var valor=Math.round(+String(f.monto||'').replace(/[^\d]/g,'')||0);
+    asegurarSiniestro(nombre,cod,(f.nota||'').trim(),valor,f.cliente,f.envio).then(function(){toast('Siniestro '+cod+' anotado en la hoja de Siniestros'+(valor?'.':'. Falta el valor: complétalo para poder descontarlo.'));setForm(nombre,{monto:'',nota:'',codigo:'',sinId:null,envio:null,envioMsg:'',cliente:''});recargar();})
       .catch(function(e){toast('No se pudo anotar: '+(e&&e.message||e));});
   }
   function agregar(nombre){
     var f=forms[nombre]||{};var monto=Math.round(+String(f.monto||'').replace(/[^\d]/g,'')||0);
-    if(f.tipo==='siniestro'&&!String(f.codigo||'').trim()){toast('Indica el código del paquete siniestrado');return;}
-    if(!monto){toast(f.tipo==='siniestro'?'Ingresa el monto a descontar, o usa "Solo anotar"':'Ingresa un monto');return;}
+    if(f.tipo==='siniestro'&&!validarSiniestro(nombre))return;
+    if(!monto){toast(f.tipo==='siniestro'?'Ingresa el valor a descontar, o usa "Solo anotar" si aún no lo sabes':'Ingresa un monto');return;}
     if(f.tipo==='descuento'&&!(f.nota||'').trim()){toast('Indica el motivo del descuento');return;}
     if(f.tipo==='abono_prestamo'){var cc=filas.find(function(x){return x.nombre===nombre;});var pend=cc?cc.saldoPrestamo:0;
       if(pend<=0){toast(tit(nombre)+' no tiene adelanto pendiente');return;}
       if(monto>pend){toast('El adelanto pendiente es '+fmt(pend)+'; no puedes descontar más');return;}}
     if(f.tipo==='siniestro'&&!f.sinId){var cod0=String(f.codigo).trim();
-      asegurarSiniestro(nombre,cod0,(f.nota||'').trim()).then(function(id){var ff=Object.assign({},f,{sinId:id,codigo:cod0});setForm(nombre,{sinId:id,codigo:cod0});guardarMov(nombre,ff,monto);}).catch(function(e){toast('No se pudo registrar el siniestro: '+(e&&e.message||e));});
+      asegurarSiniestro(nombre,cod0,(f.nota||'').trim(),monto,f.cliente,f.envio).then(function(id){var ff=Object.assign({},f,{sinId:id,codigo:cod0});setForm(nombre,{sinId:id,codigo:cod0});guardarMov(nombre,ff,monto);}).catch(function(e){toast('No se pudo registrar el siniestro: '+(e&&e.message||e));});
       return;}
     guardarMov(nombre,f,monto);
   }
   function guardarMov(nombre,f,monto){
     db.from('movimientos_pago_mensajero').insert({semana:sem.desde,mensajero:nombre,tipo:f.tipo||'adelanto',monto:monto,nota:(f.nota||'').trim()||null,codigo:(f.codigo||'').trim()||null,fecha:hoy,creado_por:quien}).then(function(r){
       if(r.error){toast('No se guardó: '+r.error.message);return;}
+      if(f.tipo==='siniestro'&&f.codigo){var inf0=infoSin[f.codigo];if(!inf0||!inf0.valor)db.from('envios').update({valor_siniestro:monto}).eq('codigo',f.codigo).then(function(){});}
       if(f.tipo==='siniestro'&&f.sinId){db.from('siniestros').update({descontado_mensajero:true,descontado_mensajero_fecha:hoy,descontado_mensajero_semana:dmy(sem.desde)+' al '+dmy(sem.hasta),descontado_mensajero_valor:monto,descontado_mensajero_por:quien}).eq('id',f.sinId).then(function(){});}
-      toast(TIPOS[f.tipo||'adelanto'].l+' registrado a '+tit(nombre));setForm(nombre,{monto:'',nota:'',codigo:'',sinId:null,items:{}});recargar();
+      toast(TIPOS[f.tipo||'adelanto'].l+' registrado a '+tit(nombre));setForm(nombre,{monto:'',nota:'',codigo:'',sinId:null,items:{},envio:null,envioMsg:'',cliente:''});recargar();
     });
   }
   function borrar(m){
@@ -335,10 +368,12 @@ function PagoSemanal(props){
               [['Descontar todo',c.saldoPrestamo],['Descontar la mitad',Math.round(c.saldoPrestamo/2)],['Descontar otro monto',null]].map(function(o){return h('button',{key:o[0],type:'button',onClick:function(){setAbierto(c.nombre);setForm(c.nombre,{tipo:'abono_prestamo',monto:o[1]!=null?String(o[1]):'',items:{},nota:''});},style:{padding:'4px 10px',borderRadius:999,border:'1px solid #c26a12',background:o[1]===c.saldoPrestamo?'#c26a12':'#fff',color:o[1]===c.saldoPrestamo?'#fff':'#9a4d0c',fontSize:11,fontWeight:800,cursor:'pointer'}},o[0]);})):null):null,
           // siniestros pendientes de descontar
           c.sin.length?h('div',{style:{margin:'6px 0',padding:'8px 10px',borderRadius:10,background:'rgba(211,47,47,.06)',border:'1px solid rgba(211,47,47,.25)'}},
-            h('div',{style:{fontSize:11.5,fontWeight:800,color:'#b03030',marginBottom:4}},c.sin.length+' siniestro(s) sin descontar'),
-            h('div',{style:{maxHeight:118,overflowY:'auto'}},c.sin.map(function(s){return h('div',{key:s.id,style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,fontSize:12,padding:'2px 0'}},
-              h('span',{className:'mono'},s.codigo,h('span',{style:{color:'var(--text-soft)',marginLeft:6,fontFamily:'DM Sans'}},s.fecha_siniestro?dm(String(s.fecha_siniestro).slice(0,10)):'')),
-              h('a',{href:'#',onClick:function(ev){ev.preventDefault();setAbierto(c.nombre);setForm(c.nombre,{tipo:'siniestro',codigo:s.codigo,sinId:s.id,nota:'Siniestro '+s.codigo,items:{}});},style:{color:'#b03030',fontWeight:800}},'Descontar'));}))):null,
+            (function(){var tot=0,sinV=0;c.sin.forEach(function(x){var v=(infoSin[x.codigo]||{}).valor;if(v)tot+=v;else sinV++;});
+              return h('div',{style:{display:'flex',justifyContent:'space-between',gap:6,fontSize:11.5,fontWeight:800,color:'#b03030',marginBottom:4}},h('span',null,c.sin.length+' siniestro(s) sin descontar'),h('span',{className:'mono'},fmt(tot)+(sinV?' · '+sinV+' sin valor':'')));})(),
+            h('div',{style:{maxHeight:150,overflowY:'auto',paddingRight:2}},c.sin.map(function(s){var inf=infoSin[s.codigo]||{};return h('div',{key:s.id,style:{display:'grid',gridTemplateColumns:'1fr auto auto',alignItems:'center',gap:8,fontSize:12,padding:'3px 0',borderBottom:'1px dashed rgba(211,47,47,.15)'}},
+              h('span',{style:{minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},h('span',{className:'mono'},s.codigo),h('span',{style:{color:'var(--text-soft)',marginLeft:6}},(s.fecha_siniestro?dm(String(s.fecha_siniestro).slice(0,10)):'')+(inf.cliente?' · '+inf.cliente:''))),
+              inf.valor?h('b',{className:'mono',style:{color:'#8a1f1f'}},fmt(inf.valor)):h('span',{title:'Este siniestro no tiene valor registrado',style:{fontSize:10.5,fontWeight:800,color:'#a15c00',background:'rgba(240,185,74,.18)',border:'1px solid rgba(240,185,74,.6)',borderRadius:999,padding:'1px 7px'}},'Falta valor'),
+              h('a',{href:'#',onClick:function(ev){ev.preventDefault();setAbierto(c.nombre);setForm(c.nombre,{tipo:'siniestro',codigo:s.codigo,sinId:s.id,nota:'Siniestro '+s.codigo,items:{},monto:inf.valor?String(Math.round(inf.valor)):'',envio:{codigo:s.codigo,cliente:inf.cliente},envioMsg:'',cliente:inf.cliente||''});},style:{color:'#b03030',fontWeight:800}},'Descontar'));}))):null,
           // agregar movimiento
           ab?h('div',{style:{margin:'10px 0 4px',padding:12,borderRadius:14,background:'#fff',border:'1px solid rgba(200,168,75,.4)'}},
             h('div',{style:{display:'flex',flexWrap:'wrap',gap:5,marginBottom:8}},TIPOS_UI.map(function(k){var a=(f.tipo||'adelanto')===k;var T0=TIPOS[k];return h('button',{key:k,type:'button',onClick:function(){var o=k==='consumo'?{tipo:k}:{tipo:k,items:{}};if(k==='abono_prestamo'&&c.saldoPrestamo>0)o.monto=String(c.saldoPrestamo);setForm(c.nombre,o);},style:{padding:'5px 10px',borderRadius:999,border:'1px solid '+(a?T0.c:'var(--border)'),background:a?T0.c:'#fff',color:a?'#fff':'var(--dark)',fontSize:11.5,fontWeight:800,cursor:'pointer'}},T0.l);})),
@@ -356,9 +391,14 @@ function PagoSemanal(props){
                     h('button',{type:'button',onClick:function(){itemsConsumo(c.nombre,pv,1);},style:{width:22,height:22,borderRadius:6,border:'1px solid #8a5a2b',background:'#8a5a2b',color:'#fff',fontWeight:900,cursor:'pointer',lineHeight:1}},'+')):null);})),
               Object.keys(f.items||{}).length?h('div',{style:{marginTop:6,fontSize:12,fontWeight:700,color:'#8a5a2b'}},'Total consumo: '+fmt(+f.monto||0)):null):null,
             h('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
-              (f.tipo==='siniestro')?h('input',{className:'form-input',placeholder:'Código del paquete',value:f.codigo,onChange:function(e){setForm(c.nombre,{codigo:e.target.value,sinId:null});},style:{margin:0,flex:'1 1 100%',fontFamily:'JetBrains Mono'}}):null,
+              (f.tipo==='siniestro')?h('input',{className:'form-input',placeholder:'Código del paquete',value:f.codigo,disabled:!!f.sinId,onChange:function(e){var v=e.target.value;setForm(c.nombre,{codigo:v,sinId:null,envio:null,envioMsg:''});clearTimeout(window.__tmBusq);window.__tmBusq=setTimeout(function(){buscarEnvio(c.nombre,v);},450);},onBlur:function(e){if(!f.sinId)buscarEnvio(c.nombre,e.target.value);},style:{margin:0,flex:'1 1 100%',fontFamily:'JetBrains Mono'}}):null,
+              (f.tipo==='siniestro'&&(f.envio||f.envioMsg))?h('div',{style:{flex:'1 1 100%',fontSize:11.5,padding:'6px 9px',borderRadius:8,background:f.envio?'rgba(46,125,79,.08)':'rgba(176,48,48,.08)',border:'1px solid '+(f.envio?'rgba(46,125,79,.3)':'rgba(176,48,48,.3)'),color:f.envio?'#1f6b40':'#a02828'}},
+                f.envio?((f.sinId?'Siniestro ya registrado':'Envío encontrado')+(f.envio.estado?' · '+f.envio.estado:'')+(f.envio.destinatario?' · '+f.envio.destinatario:'')+(f.envio.comuna?' · '+f.envio.comuna:'')+(f.envio.mensajero&&norm(f.envio.mensajero)!==c.nombre?' · asignado a '+tit(f.envio.mensajero):'')):f.envioMsg):null,
+              (f.tipo==='siniestro'&&f.envio&&!f.sinId)?h('select',{className:'form-input',value:f.cliente||'',disabled:!!(f.envio.cliente),onChange:function(e){setForm(c.nombre,{cliente:e.target.value});},style:{margin:0,flex:'1 1 100%'}},
+                h('option',{value:''},'Cliente del paquete'),(f.envio.cliente&&!(props.clientes||[]).some(function(x){return x.nombre===f.envio.cliente;}))?h('option',{value:f.envio.cliente},f.envio.cliente):null,
+                (props.clientes||[]).filter(function(x){return x.activo!==false;}).map(function(x){return h('option',{key:x.nombre,value:x.nombre},x.nombre);})):null,
               (f.tipo==='descuento'&&FALTAS.length)?h('select',{className:'form-input',value:'',onChange:function(e){if(e.target.value)setForm(c.nombre,{nota:e.target.value});},style:{margin:0,flex:'1 1 100%'}},h('option',{value:''},'Elegir motivo del reglamento (opcional)'),FALTAS.map(function(x){return h('option',{key:x,value:x},x);})):null,
-              h('input',{className:'form-input',inputMode:'numeric',placeholder:'Monto',value:f.monto,onChange:function(e){setForm(c.nombre,{monto:e.target.value});},onKeyDown:function(e){if(e.key==='Enter')agregar(c.nombre);},style:{margin:0,width:120,fontFamily:'JetBrains Mono'}}),
+              h('input',{className:'form-input',inputMode:'numeric',placeholder:f.tipo==='siniestro'?'Valor (opcional para anotar)':'Monto',value:f.monto,onChange:function(e){setForm(c.nombre,{monto:e.target.value});},onKeyDown:function(e){if(e.key==='Enter')agregar(c.nombre);},style:{margin:0,width:f.tipo==='siniestro'?170:120,fontFamily:'JetBrains Mono'}}),
               h('input',{className:'form-input',placeholder:f.tipo==='descuento'?'Motivo (obligatorio)':'Nota (opcional)',value:f.nota,onChange:function(e){setForm(c.nombre,{nota:e.target.value});},onKeyDown:function(e){if(e.key==='Enter')agregar(c.nombre);},style:{margin:0,flex:'1 1 140px'}}),
               h('button',{type:'button',className:'btn-futurista btn-f-success',onClick:function(){agregar(c.nombre);},style:{padding:'8px 14px'}},f.tipo==='siniestro'?'Descontar':'Agregar'),
               (f.tipo==='siniestro')?h('button',{type:'button',className:'btn-futurista btn-f-ghost',title:'Lo deja en la hoja de Siniestros y en la tarjeta, sin descontar todavía',onClick:function(){soloAnotarSiniestro(c.nombre);},style:{padding:'8px 12px'}},'Solo anotar'):null,
