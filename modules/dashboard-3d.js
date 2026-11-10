@@ -139,10 +139,10 @@ function montarMapa(T,cont,datos,ui,geo){
     f.r.forEach(function(ring){ring.forEach(function(p){var x=X(p[0]),z=-Y(p[1]);if(x<a0)a0=x;if(x>a1)a1=x;if(z<c0)c0=z;if(z>c1)c1=z;});});
     var q={x:(a0+a1)/2,z:(c0+c1)/2,w:d.total};pts.push(q);sw+=q.w;mx+=q.x*q.w;mz+=q.z*q.w;});
   if(sw){mx/=sw;mz/=sw;pts.sort(function(a,b){return Math.hypot(a.x-mx,a.z-mz)-Math.hypot(b.x-mx,b.z-mz);});
-    var acc=0;for(var qi=0;qi<pts.length;qi++){var q=pts[qi];if(q.x-4<bx0)bx0=q.x-4;if(q.x+4>bx1)bx1=q.x+4;if(q.z-4<bz0)bz0=q.z-4;if(q.z+4>bz1)bz1=q.z+4;acc+=q.w;if(acc>=sw*0.88)break;}}
+    var acc=0;for(var qi=0;qi<pts.length;qi++){var q=pts[qi];if(q.x-4<bx0)bx0=q.x-4;if(q.x+4>bx1)bx1=q.x+4;if(q.z-4<bz0)bz0=q.z-4;if(q.z+4>bz1)bz1=q.z+4;acc+=q.w;if(acc>=sw*0.8)break;}}
   if(bx0>bx1){bx0=-30;bx1=30;bz0=-30;bz1=30;}
   var Wc=cont.clientWidth||900,Hc=cont.clientHeight||420,asp=Wc/Hc,movil=Wc<600;
-  var spanX=(bx1-bx0)*1.25,spanZ=(bz1-bz0)*1.25;
+  var spanX=(bx1-bx0)*1.02,spanZ=(bz1-bz0)*1.02;
   var rFit=Math.max(spanZ/0.62,spanX/(0.62*Math.max(asp,movil?0.9:1.85)));if(movil)rFit*=0.62;rFit=Math.max(40,Math.min(230,rFit));
   var E=crearEscena(T,cont,{r:rFit,pol:0.42,az:0.0001,tx:(bx0+bx1)/2,tz:(bz0+bz1)/2+rFit*0.04,quieto:true,rMin:18,rMax:300,fogNear:rFit+120,fogFar:rFit+320,bloom:0.75,bloomTh:0.9,onLost:ui.onLost,
     onMove:function(e){var b=E.ren.domElement.getBoundingClientRect();ptr.x=(e.clientX-b.left)/b.width*2-1;ptr.y=-(e.clientY-b.top)/b.height*2+1;
@@ -185,10 +185,10 @@ function montarMapa(T,cont,datos,ui,geo){
     if(con)torres.push(losa);
   });
   // etiquetas HTML para las 8 comunas con más envíos
-  var top=torres.slice().sort(function(a,b){return b.userData.d.total-a.userData.d.total;}).slice(0,(labels.clientWidth||900)<600?5:12);
+  var top=torres.slice().sort(function(a,b){return b.userData.d.total-a.userData.d.total;}).slice(0,(labels.clientWidth||900)<600?12:60);
   labels.innerHTML='';var lab=top.map(function(m){var el=document.createElement('div');
-    el.style.cssText='position:absolute;transform:translate(-50%,-50%);pointer-events:none;white-space:nowrap;text-align:center;color:#fff;font:800 11px DM Sans,system-ui,sans-serif;text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 8px rgba(0,0,0,.8);line-height:1.05';
-    el.innerHTML=titulo(m.userData.d.n)+'<div style="color:#ffe59a;font-family:Bebas Neue;font-size:15px;letter-spacing:.5px">'+m.userData.d.total.toLocaleString('es-CL')+'</div>';labels.appendChild(el);return{el:el,m:m};});
+    el.style.cssText='position:absolute;transform:translate(-50%,-50%);pointer-events:none;white-space:nowrap;text-align:center;color:#fff;font:800 10.5px DM Sans,system-ui,sans-serif;text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 8px rgba(0,0,0,.8);line-height:1.05';
+    el.innerHTML=titulo(m.userData.d.n)+'<div style="color:#ffe59a;font-family:Bebas Neue;font-size:14px;letter-spacing:.5px">'+m.userData.d.total.toLocaleString('es-CL')+'</div>';labels.appendChild(el);return{el:el,m:m};});
   var v=new T.Vector3();
   // 10-11-2026: PULSOS EN VIVO. Cada entrega / reprogramación / cancelación real enciende un punto de luz
   // en el mapa (haz vertical + onda en el piso + etiqueta con el mensajero) y deja una marca que se
@@ -225,7 +225,17 @@ function montarMapa(T,cont,datos,ui,geo){
     marcas.forEach(function(M){var dt=t-M.t0;M.m.material.opacity=dt<3?Math.min(0.85,dt/3*0.85):Math.max(0.28,0.85-(dt-3)/600);});
     meshes.forEach(function(m){var u=m.userData;var k=Math.max(0,Math.min(1,(t-u.delay)/0.9));var e=1-Math.pow(1-k,3);m.scale.y=Math.max(0.001,u.h*e);
       if(!u.losa){m.position.y=(u.base||0)*Math.min(1,t/0.9)+(m===hov?0.35:0);u.cap.position.set(u.cx,m.position.y+m.scale.y+0.06,u.cz);}});
-    lab.forEach(function(L){v.set(L.m.userData.cx,0.8,L.m.userData.cz);var p=proyectar(E,v,cont);L.el.style.left=p.x+'px';L.el.style.top=p.y+'px';L.el.style.display=p.vis?'block':'none';});
+    // todas las comunas con envíos llevan rótulo; si dos se pisan, el de menos envíos se corre arriba/abajo
+    var puestos=[];
+    lab.forEach(function(L){v.set(L.m.userData.cx,0.8,L.m.userData.cz);var p=proyectar(E,v,cont);
+      if(!p.vis){L.el.style.display='none';return;}
+      if(!L.w){L.w=L.el.offsetWidth||60;L.h=L.el.offsetHeight||24;}
+      var offs=[0,-L.h*0.75,L.h*0.75,-L.h*1.4,L.h*1.4,-L.h*2],ok=0,y=p.y;
+      for(var oi=0;oi<offs.length;oi++){var yy=p.y+offs[oi],hit=false;
+        for(var pj=0;pj<puestos.length;pj++){var Q=puestos[pj];if(Math.abs(Q.x-p.x)<(Q.w+L.w)/2+2&&Math.abs(Q.y-yy)<(Q.h+L.h)/2){hit=true;break;}}
+        if(!hit){y=yy;ok=1;break;}}
+      puestos.push({x:p.x,y:y,w:L.w,h:L.h});
+      L.el.style.left=p.x+'px';L.el.style.top=y+'px';L.el.style.display='block';L.el.style.opacity=ok?'1':'0.55';});
   });
   E.start();return E;
 }
