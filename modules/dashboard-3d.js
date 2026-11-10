@@ -56,7 +56,7 @@ function crearEscena(T,cont,opts){
   // En pantallas angostas (teléfono) se abre el ángulo vertical para conservar el ancho de la escena.
   function ajustarFov(a){var base=38*Math.PI/180,ref=1.85;cam.fov=a>=ref?38:Math.min(80,2*Math.atan(Math.tan(base/2)*ref/a)*180/Math.PI);}
   ajustarFov(W/H);cam.updateProjectionMatrix();
-  var orb={az:opts.az||-0.6,pol:opts.pol||0.95,r:opts.r||60,tAz:null,auto:true,target:new T.Vector3(opts.tx||0,opts.ty||0,opts.tz||0)};
+  var orb={az:opts.az||-0.6,pol:opts.pol||0.95,r:opts.r||60,tAz:null,auto:!opts.quieto,target:new T.Vector3(opts.tx||0,opts.ty||0,opts.tz||0)};
   function ubicar(){var sp=Math.sin(orb.pol);cam.position.set(orb.target.x+orb.r*sp*Math.sin(orb.az),orb.r*Math.cos(orb.pol),orb.target.z+orb.r*sp*Math.cos(orb.az));cam.lookAt(orb.target);}
   ubicar();
   sc.add(new T.HemisphereLight(0xfff4d6,0x1c2014,0.75));
@@ -127,11 +127,22 @@ function suelo(T,sc,rad){
 function montarMapa(T,cont,datos,ui,geo){
   var tip=ui.tip,labels=ui.labels;
   var meshes=[],ray=new T.Raycaster(),ptr=new T.Vector2(),hov=null;
-  var E=crearEscena(T,cont,{r:(ui.labels.clientWidth||900)<600?150:118,pol:0.8,az:-0.3,rMin:18,rMax:260,fogNear:170,fogFar:380,bloom:0.75,bloomTh:0.9,onLost:ui.onLost,
+  // 10-11-2026: mapa plano y casi cenital, norte arriba, encuadrado en las comunas con volumen real
+  // (sin torres: tapaban el mapa). El volumen se lee por el brillo de cada comuna.
+  var byN={};datos.forEach(function(d){byN[d.n]=d;});
+  var max=Math.max.apply(null,datos.map(function(d){return d.total;}).concat([1]));
+  var X=function(lng){return (lng+70.65)*105;},Y=function(lat){return (lat+33.47)*105;};var centros={};
+  var bx0=1e9,bx1=-1e9,bz0=1e9,bz1=-1e9;
+  geo.forEach(function(f){var d=byN[norm(f.n)];if(!d||d.total<max*0.04)return;f.r.forEach(function(ring){ring.forEach(function(p){var x=X(p[0]),z=-Y(p[1]);if(x<bx0)bx0=x;if(x>bx1)bx1=x;if(z<bz0)bz0=z;if(z>bz1)bz1=z;});});});
+  if(bx0>bx1){bx0=-30;bx1=30;bz0=-30;bz1=30;}
+  var Wc=cont.clientWidth||900,Hc=cont.clientHeight||420,asp=Wc/Hc,movil=Wc<600;
+  var spanX=(bx1-bx0)*1.12,spanZ=(bz1-bz0)*1.12;
+  var rFit=Math.max(spanZ/0.62,spanX/(0.62*Math.max(asp,movil?0.9:1.85)));if(movil)rFit*=0.62;rFit=Math.max(40,Math.min(230,rFit));
+  var E=crearEscena(T,cont,{r:rFit,pol:0.42,az:0.0001,tx:(bx0+bx1)/2,tz:(bz0+bz1)/2+rFit*0.04,quieto:true,rMin:18,rMax:300,fogNear:rFit+120,fogFar:rFit+320,bloom:0.75,bloomTh:0.9,onLost:ui.onLost,
     onMove:function(e){var b=E.ren.domElement.getBoundingClientRect();ptr.x=(e.clientX-b.left)/b.width*2-1;ptr.y=-(e.clientY-b.top)/b.height*2+1;
       ray.setFromCamera(ptr,E.cam);var hit=ray.intersectObjects(meshes,false)[0];var m=hit?hit.object:null;
       if(hov&&hov!==m){hov.material.emissiveIntensity=hov.userData.ei;}
-      hov=m;if(m){m.material.emissiveIntensity=m.userData.losa?0.35:0.75;var d=m.userData.d;
+      hov=m;if(m){m.material.emissiveIntensity=Math.min(1,m.userData.ei+0.35);var d=m.userData.d;
         tip.style.display='block';tip.style.left=Math.min(cont.clientWidth-210,e.clientX-b.left+14)+'px';tip.style.top=(e.clientY-b.top+14)+'px';
         if(!d.total){tip.innerHTML='<div style="font-family:Bebas Neue;font-size:20px;letter-spacing:1px;color:#ffe59a">'+titulo(d.n)+'</div><div style="font-size:12px;opacity:.75">Provincia de '+d.prov+' · sin envíos en el período</div>';return;}
         tip.innerHTML='<div style="font-family:Bebas Neue;font-size:20px;letter-spacing:1px;color:#ffe59a">'+titulo(d.n)+'</div>'
@@ -143,13 +154,9 @@ function montarMapa(T,cont,datos,ui,geo){
   // suelo amplio y oscuro (la región completa se pierde en la niebla hacia la cordillera y la costa)
   var piso=new T.Mesh(new T.CircleGeometry(260,96),new T.MeshStandardMaterial({color:0x1d2116,roughness:1}));piso.rotation.x=-Math.PI/2;piso.position.y=-0.05;piso.receiveShadow=true;E.sc.add(piso);
   var grid=new T.PolarGridHelper(150,24,10,96,0xc8a84b,0xc8a84b);grid.material.transparent=true;grid.material.opacity=0.07;grid.position.y=-0.02;E.sc.add(grid);
-  var byN={};datos.forEach(function(d){byN[d.n]=d;});
-  var max=Math.max.apply(null,datos.map(function(d){return d.total;}).concat([1]));
-  var X=function(lng){return (lng+70.65)*105;},Y=function(lat){return (lat+33.47)*105;};var centros={};
   var lineMat=new T.LineBasicMaterial({color:0xffe08a,transparent:true,opacity:0.9});
   var i=0,torres=[];
-  var geoT=new T.CylinderGeometry(1.0,1.0,1,6,1);geoT.translate(0,0.5,0);var capT=new T.CylinderGeometry(1.03,1.03,0.12,6,1);
-  geo.forEach(function(f){
+    geo.forEach(function(f){
     var key=norm(f.n);var d=byN[key];
     var shapes=f.r.map(function(ring){return new T.Shape(ring.map(function(p){return new T.Vector2(X(p[0]),Y(p[1]));}));});
     var g=new T.ExtrudeGeometry(shapes,{depth:1,bevelEnabled:false});g.rotateX(-Math.PI/2);
@@ -161,30 +168,21 @@ function montarMapa(T,cont,datos,ui,geo){
     // losa del mapa: tono crema/oliva, teñida suave según efectividad si tiene envíos
     var paleta=[0xe9dcae,0xd8c48a,0xf1e6c2,0xcdb877,0xe2d29f,0xc9b26b];
     var vari=(f.n.length*7+f.n.charCodeAt(0)*3)%paleta.length;
-    var colL=con?efColor(T,d.ef,ui.lo,ui.hi).multiplyScalar([0.42,0.55,0.68,0.48,0.62,0.36][vari]):new T.Color([0x3a4030,0x323827,0x41472f][vari%3]);
-    var matL=new T.MeshStandardMaterial({color:colL,emissive:colL,emissiveIntensity:0.12,roughness:0.7,metalness:0.1});
+    var colL=con?efColor(T,d.ef,ui.lo,ui.hi).multiplyScalar([0.42,0.55,0.68,0.48,0.62,0.36][vari]):new T.Color([0x2a2f22,0x24291c,0x2f3424][vari%3]);
+    var eiL=con?0.1+0.55*Math.sqrt(d.total/max):0.05;var matL=new T.MeshStandardMaterial({color:colL,emissive:colL,emissiveIntensity:eiL,roughness:0.7,metalness:0.1});
     var losa=new T.Mesh(g,matL);losa.receiveShadow=true;losa.castShadow=false;losa.scale.y=0.001;
-    var hl=con?0.9:0.45;
-    losa.userData={d:d||{n:key,total:0,prov:f.p},h:hl,ei:0.12,delay:0,losa:true};
+    var hl=con?0.6:0.3;
+    losa.userData={d:d||{n:key,total:0,prov:f.p},h:hl,ei:eiL,delay:0,losa:true,cx:ccx,cz:ccz};
     if(d)d.prov=f.p;
     losa.add(new T.LineSegments(new T.EdgesGeometry(g,25),con?lineMat:new T.LineBasicMaterial({color:0xc8a84b,transparent:true,opacity:0.55})));
     E.sc.add(losa);meshes.push(losa);
-    if(con){
-      var c=COORD[key];var cx,cz;
-      if(c){cx=X(c[1]);cz=-Y(c[0]);}else{g.computeBoundingBox();var bb=g.boundingBox;cx=(bb.min.x+bb.max.x)/2;cz=(bb.min.z+bb.max.z)/2;}
-      var col=efColor(T,d.ef,ui.lo,ui.hi);
-      var mat=new T.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:0.2,roughness:0.32,metalness:0.25});
-      var tw=new T.Mesh(geoT,mat);tw.position.set(cx,0,cz);tw.castShadow=true;tw.scale.y=0.001;
-      tw.userData={d:d,h:1+13*Math.sqrt(d.total/max),ei:0.2,delay:0.35+i++*0.03,base:hl,cx:cx,cz:cz};
-      var cap=new T.Mesh(capT,new T.MeshBasicMaterial({color:col.clone().lerp(new T.Color(0xffffff),0.45)}));tw.userData.cap=cap;E.sc.add(cap);
-      E.sc.add(tw);meshes.push(tw);torres.push(tw);
-    }
+    if(con)torres.push(losa);
   });
   // etiquetas HTML para las 8 comunas con más envíos
-  var top=torres.slice().sort(function(a,b){return b.userData.d.total-a.userData.d.total;}).slice(0,(labels.clientWidth||900)<600?3:8);
+  var top=torres.slice().sort(function(a,b){return b.userData.d.total-a.userData.d.total;}).slice(0,(labels.clientWidth||900)<600?5:12);
   labels.innerHTML='';var lab=top.map(function(m){var el=document.createElement('div');
-    el.style.cssText='position:absolute;transform:translate(-50%,-100%);pointer-events:none;white-space:nowrap;padding:3px 9px;border-radius:999px;background:rgba(20,22,15,.8);border:1px solid rgba(200,168,75,.6);color:#fff;font:700 11px DM Sans,system-ui,sans-serif;box-shadow:0 6px 14px rgba(0,0,0,.35);backdrop-filter:blur(4px)';
-    el.innerHTML=titulo(m.userData.d.n)+' <span style="color:#ffe59a;font-family:Bebas Neue;font-size:14px;letter-spacing:.5px;margin-left:3px">'+m.userData.d.total.toLocaleString('es-CL')+'</span>';labels.appendChild(el);return{el:el,m:m};});
+    el.style.cssText='position:absolute;transform:translate(-50%,-50%);pointer-events:none;white-space:nowrap;text-align:center;color:#fff;font:800 11px DM Sans,system-ui,sans-serif;text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 8px rgba(0,0,0,.8);line-height:1.05';
+    el.innerHTML=titulo(m.userData.d.n)+'<div style="color:#ffe59a;font-family:Bebas Neue;font-size:15px;letter-spacing:.5px">'+m.userData.d.total.toLocaleString('es-CL')+'</div>';labels.appendChild(el);return{el:el,m:m};});
   var v=new T.Vector3();
   // 10-11-2026: PULSOS EN VIVO. Cada entrega / reprogramación / cancelación real enciende un punto de luz
   // en el mapa (haz vertical + onda en el piso + etiqueta con el mensajero) y deja una marca que se
@@ -198,7 +196,7 @@ function montarMapa(T,cont,datos,ui,geo){
     else{var c=centros[norm(pos&&pos.comuna||'')];if(!c)return false;var a=Math.random()*Math.PI*2,rr=Math.random()*c.r;x=c.x+Math.cos(a)*rr;z=c.z+Math.sin(a)*rr;}
     var col=new T.Color(color);
     var grupo=new T.Group();grupo.position.set(x,0,z);E.sc.add(grupo);
-    var haz=new T.Mesh(new T.CylinderGeometry(0.35,0.9,26,16,1,true),new T.MeshBasicMaterial({map:texH,color:col,transparent:true,opacity:0.9,side:T.DoubleSide,depthWrite:false,blending:T.AdditiveBlending}));haz.position.y=13;grupo.add(haz);
+    var haz=new T.Mesh(new T.CylinderGeometry(0.3,0.8,16,16,1,true),new T.MeshBasicMaterial({map:texH,color:col,transparent:true,opacity:0.9,side:T.DoubleSide,depthWrite:false,blending:T.AdditiveBlending}));haz.position.y=8;grupo.add(haz);
     var flash=new T.Mesh(new T.PlaneGeometry(9,9),new T.MeshBasicMaterial({map:texP,color:col,transparent:true,opacity:1,depthWrite:false,blending:T.AdditiveBlending}));flash.rotation.x=-Math.PI/2;flash.position.y=1.15;grupo.add(flash);
     var onda=new T.Mesh(new T.RingGeometry(0.8,1.15,48),new T.MeshBasicMaterial({color:col,transparent:true,opacity:1,side:T.DoubleSide,depthWrite:false,blending:T.AdditiveBlending}));onda.rotation.x=-Math.PI/2;onda.position.y=1.2;grupo.add(onda);
     var nucleo=new T.Mesh(new T.SphereGeometry(0.45,16,16),new T.MeshBasicMaterial({color:col.clone().multiplyScalar(1.6)}));nucleo.position.y=1.4;grupo.add(nucleo);
@@ -217,11 +215,11 @@ function montarMapa(T,cont,datos,ui,geo){
       P.flash.material.opacity=Math.max(0,1-k*1.4);P.flash.scale.setScalar(1+k*0.8);
       var ko=(dt%1.1)/1.1;P.onda.scale.setScalar(1+ko*9);P.onda.material.opacity=(1-ko)*(1-k);
       P.nucleo.position.y=1.4+Math.sin(dt*6)*0.25;
-      v.set(P.x,9,P.z);var pp=proyectar(E,v,cont);P.el.style.left=pp.x+'px';P.el.style.top=pp.y+'px';P.el.style.display=pp.vis?'block':'none';P.el.style.opacity=k>0.8?String((1-k)*5):'1';}
+      v.set(P.x,5,P.z);var pp=proyectar(E,v,cont);P.el.style.left=pp.x+'px';P.el.style.top=pp.y+'px';P.el.style.display=pp.vis?'block':'none';P.el.style.opacity=k>0.8?String((1-k)*5):'1';}
     marcas.forEach(function(M){var dt=t-M.t0;M.m.material.opacity=dt<3?Math.min(0.85,dt/3*0.85):Math.max(0.28,0.85-(dt-3)/600);});
     meshes.forEach(function(m){var u=m.userData;var k=Math.max(0,Math.min(1,(t-u.delay)/0.9));var e=1-Math.pow(1-k,3);m.scale.y=Math.max(0.001,u.h*e);
       if(!u.losa){m.position.y=(u.base||0)*Math.min(1,t/0.9)+(m===hov?0.35:0);u.cap.position.set(u.cx,m.position.y+m.scale.y+0.06,u.cz);}});
-    lab.forEach(function(L){v.set(L.m.userData.cx,L.m.scale.y+L.m.position.y+1.2,L.m.userData.cz);var p=proyectar(E,v,cont);L.el.style.left=p.x+'px';L.el.style.top=p.y+'px';L.el.style.display=p.vis?'block':'none';});
+    lab.forEach(function(L){v.set(L.m.userData.cx,0.8,L.m.userData.cz);var p=proyectar(E,v,cont);L.el.style.left=p.x+'px';L.el.style.top=p.y+'px';L.el.style.display=p.vis?'block':'none';});
   });
   E.start();return E;
 }
@@ -668,7 +666,7 @@ function CentroControl3D(props){
     h('div',{className:'cc3d-head',style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10,padding:'16px 20px 0'}},
       h('div',null,
         h('div',{style:{fontFamily:'Bebas Neue',fontSize:28,letterSpacing:2.5,color:'#fff',lineHeight:1}},'Centro de control'),
-        h('div',{className:'cc3d-sub',style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:3}},modo==='mapa'?'Región Metropolitana · altura = envíos del período · color = efectividad total (rojo la más baja, verde la más alta) · arrastra para girar, rueda para acercar':'Recorrido de los envíos del período: de bodega a ruta y su resultado final')),
+        h('div',{className:'cc3d-sub',style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:3}},modo==='mapa'?'Región Metropolitana · brillo = envíos del período · color = efectividad total (rojo la más baja, verde la más alta) · arrastra para girar, rueda para acercar':'Recorrido de los envíos del período: de bodega a ruta y su resultado final')),
       h('div',{style:{display:'flex',gap:6}},tab('mapa','Mapa 3D de la RM'),tab('flujo','Flujo de estados'))),
     h('style',null,'@media (max-width:820px){.cc3d-grid{grid-template-columns:1fr!important}.cc3d-stage{height:330px!important}.cc3d-side{display:grid!important;grid-template-columns:1fr 1fr;padding:12px!important}.cc3d-side>*:last-child{grid-column:1/-1}.cc3d-head{padding:14px 14px 0!important}.cc3d-sub{display:none}.cc3d-feed-d{display:none!important}.cc3d-hint{display:none}}@media (min-width:821px){.cc3d-feed-m{display:none!important}}@media (max-width:420px){.cc3d-side{grid-template-columns:1fr}}'),
     h('div',{className:'cc3d-grid',style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 250px',gap:0}},
