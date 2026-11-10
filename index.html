@@ -743,7 +743,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261110140904;
+window.__MODULES_VERSION=20261110141933;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7691,7 +7691,10 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
       React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center'}},
         React.createElement('div',null,
           React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,color:'var(--gold)',letterSpacing:2}},clienteSel.nombre),
-          React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.75)',marginTop:2,fontWeight:700}},paquetes.length+' paquete'+(paquetes.length!==1?'s':'')+' escaneado'+(paquetes.length!==1?'s':'')),
+          React.createElement('div',{style:{display:'flex',alignItems:'baseline',gap:8,marginTop:2}},
+            React.createElement('span',{key:paquetes.length,style:{display:'inline-block',fontFamily:'Bebas Neue',fontSize:52,lineHeight:.9,color:'#fff',textShadow:'0 0 18px rgba(232,199,102,.55)',animation:paquetes.length?'pgsoCuenta .35s ease-out':'none'}},paquetes.length),
+            React.createElement('span',{style:{fontSize:12,fontWeight:800,letterSpacing:1,textTransform:'uppercase',color:'rgba(255,255,255,.75)'}},'escaneado'+(paquetes.length!==1?'s':'')),
+            React.createElement('style',null,'@keyframes pgsoCuenta{0%{transform:scale(1.35);color:#e8c766}100%{transform:scale(1)}}')),
           (function(){
             var nG=paquetes.filter(function(p){return p.syncEstado==='guardado'||p.syncEstado==='parcial';}).length;
             var nL=paquetes.filter(function(p){return p.analizandoIA;}).length;
@@ -9347,6 +9350,11 @@ function AsignacionRider(_ref_ar){
         React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.6)',marginTop:1}},'No existe en el sistema. Bodega ya recibió el aviso; entrégalo en bodega.')
       ))
     ),
+    paquetes.filter(p=>p.estado==='asignado'&&p.cobro).length>0&&React.createElement('div',{style:{background:'rgba(212,0,42,0.16)',border:'2px solid #ff1744',borderRadius:12,padding:14,marginBottom:16,width:'100%',maxWidth:340}},
+      React.createElement('div',{style:{fontSize:12,fontWeight:900,color:'#ff6b81',letterSpacing:1,textTransform:'uppercase',marginBottom:6}},paquetes.filter(p=>p.estado==='asignado'&&p.cobro).length+' por cobrar en tu ruta'),
+      React.createElement('div',{style:{fontSize:11.5,color:'rgba(255,255,255,0.75)',marginBottom:6}},'Cobra antes de entregar. Aparecen en rojo en Mis envíos.'),
+      paquetes.filter(p=>p.estado==='asignado'&&p.cobro).map((p,i)=>React.createElement('div',{key:i,style:{fontFamily:'JetBrains Mono',fontSize:12,color:'#fff',fontWeight:700,padding:'3px 0'}},p.codigo+'  ·  '+p.cobro.replace('POR COBRAR','').trim()))
+    ),
     sinDirFin.length>0&&React.createElement('div',{style:{background:'rgba(255,152,0,0.14)',border:'2px solid #ff9800',borderRadius:12,padding:14,marginBottom:24,width:'100%',maxWidth:340}},
       React.createElement('div',{style:{fontSize:12,fontWeight:800,color:'#ffb74d',letterSpacing:1,textTransform:'uppercase',marginBottom:6}},sinDirFin.length+' sin dirección completa'),
       React.createElement('div',{style:{fontSize:11.5,color:'rgba(255,255,255,0.75)',marginBottom:6,lineHeight:1.4}},'Aparecen en naranjo en Mis envíos. Corrígelas antes de cargar la ruta en Circuit.'),
@@ -9358,13 +9366,16 @@ function AsignacionRider(_ref_ar){
   return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
     React.createElement('div',{style:{background:'var(--dark)',padding:'10px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'2px solid var(--gold)',flexShrink:0}},
       React.createElement('div',null,
-        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:16,color:'var(--gold)',letterSpacing:2}},'ASIGNACIÓN DE RUTA'),
-        React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.4)',marginTop:2}},paquetes.length+' paquetes escaneados'),
+        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:15,color:'var(--gold)',letterSpacing:2}},'ASIGNACIÓN DE RUTA'),
+        React.createElement('div',{style:{display:'flex',alignItems:'baseline',gap:8,marginTop:2}},
+          React.createElement('span',{key:paquetes.length,style:{display:'inline-block',fontFamily:'Bebas Neue',fontSize:52,lineHeight:.9,color:'#fff',textShadow:'0 0 18px rgba(232,199,102,.55)',animation:paquetes.length?'pgsoCuenta .35s ease-out':'none'}},paquetes.length),
+          React.createElement('span',{style:{fontSize:12,fontWeight:800,letterSpacing:1,textTransform:'uppercase',color:'rgba(255,255,255,.7)'}},'escaneado'+(paquetes.length!==1?'s':'')),
+          React.createElement('style',null,'@keyframes pgsoCuenta{0%{transform:scale(1.35);color:#e8c766}100%{transform:scale(1)}}')),
         (function(){
-          const nR=paquetes.filter(p=>p.verif==='noexiste').length,nS=paquetes.filter(p=>p.verif==='sindir').length,nB=paquetes.filter(p=>p.verif==='bloqueado').length;
-          if(!nR&&!nS&&!nB) return null;
-          const chip=(n,t,c)=>n>0&&React.createElement('span',{style:{padding:'2px 7px',borderRadius:5,background:c,color:'#000',fontSize:10,fontWeight:800}},n+' '+t);
-          return React.createElement('div',{style:{display:'flex',gap:5,marginTop:4,flexWrap:'wrap'}},chip(nR,'NO REGISTRADO'+(nR>1?'S':''),'#ff4fd8'),chip(nS,'SIN DIRECCIÓN','#ff9800'),chip(nB,'NO SE PUEDEN TOMAR','#ff3b3b'));
+          const nR=paquetes.filter(p=>p.verif==='noexiste').length,nS=paquetes.filter(p=>p.verif==='sindir').length,nB=paquetes.filter(p=>p.verif==='bloqueado').length,nC=paquetes.filter(p=>p.cobro).length,nOk=paquetes.filter(p=>p.verif==='ok').length;
+          if(!nR&&!nS&&!nB&&!nC&&!nOk) return null;
+          const chip=(n,t,c,fg)=>n>0&&React.createElement('span',{key:t,style:{padding:'3px 8px',borderRadius:6,background:c,color:fg||'#000',fontSize:10.5,fontWeight:900,letterSpacing:.4}},n+' '+t);
+          return React.createElement('div',{style:{display:'flex',gap:5,marginTop:5,flexWrap:'wrap'}},chip(nOk,'OK','#00e676'),chip(nC,'POR COBRAR','#ff1744','#fff'),chip(nS,'SIN DIRECCIÓN','#ff9800'),chip(nR,'NO REGISTRADO'+(nR>1?'S':''),'#ff4fd8','#fff'),chip(nB,'NO SE PUEDEN TOMAR','#ff3b3b','#fff'));
         })()
       ),
       React.createElement('button',{onClick:()=>{ detenerScannerAsig(); onClose(); },style:{background:'none',border:'1px solid rgba(255,255,255,0.2)',borderRadius:8,color:'rgba(255,255,255,0.4)',padding:'6px 10px',cursor:'pointer',fontSize:12}},'✕')
