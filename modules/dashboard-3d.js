@@ -143,7 +143,7 @@ function montarMapa(T,cont,datos,ui,geo){
   if(bx0>bx1){bx0=-30;bx1=30;bz0=-30;bz1=30;}
   var Wc=cont.clientWidth||900,Hc=cont.clientHeight||420,asp=Wc/Hc,movil=Wc<600;
   var spanX=(bx1-bx0)*1.02,spanZ=(bz1-bz0)*1.02;
-  var rFit=Math.max(spanZ/0.62,spanX/(0.62*Math.max(asp,movil?0.9:1.85)));if(movil)rFit*=0.62;rFit=Math.max(40,Math.min(230,rFit));
+  var rFit=Math.max(spanZ/0.62,spanX/(0.62*Math.max(asp,movil?0.9:1.85)));rFit*=movil?0.6:0.8;rFit=Math.max(40,Math.min(230,rFit));
   var E=crearEscena(T,cont,{r:rFit,pol:0.42,az:0.0001,tx:(bx0+bx1)/2,tz:(bz0+bz1)/2+rFit*0.04,quieto:true,rMin:18,rMax:300,fogNear:rFit+120,fogFar:rFit+320,bloom:0.75,bloomTh:0.9,onLost:ui.onLost,
     onMove:function(e){var b=E.ren.domElement.getBoundingClientRect();ptr.x=(e.clientX-b.left)/b.width*2-1;ptr.y=-(e.clientY-b.top)/b.height*2+1;
       ray.setFromCamera(ptr,E.cam);var hit=ray.intersectObjects(meshes,false)[0];var m=hit?hit.object:null;
@@ -686,7 +686,7 @@ function CentroControl3D(props){
       h('div',{style:{display:'flex',gap:6}},tab('mapa','Mapa 3D de la RM'),tab('flujo','Flujo de estados'))),
     h('style',null,'@media (max-width:820px){.cc3d-grid{grid-template-columns:1fr!important}.cc3d-stage{height:330px!important}.cc3d-side{display:grid!important;grid-template-columns:1fr 1fr;padding:12px!important}.cc3d-side>*:last-child{grid-column:1/-1}.cc3d-head{padding:14px 14px 0!important}.cc3d-sub{display:none}.cc3d-feed-d{display:none!important}.cc3d-hint{display:none}}@media (min-width:821px){.cc3d-feed-m{display:none!important}}@media (max-width:420px){.cc3d-side{grid-template-columns:1fr}}'),
     h('div',{className:'cc3d-grid',style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 250px',gap:0}},
-      h('div',{className:'cc3d-stage',style:{position:'relative',height:500,minWidth:0,touchAction:'pan-y'}},
+      h('div',{className:'cc3d-stage',style:{position:'relative',minHeight:500,height:'100%',alignSelf:'stretch',minWidth:0,touchAction:'pan-y'}},
         h('div',{ref:refC,style:{position:'absolute',inset:0}}),
         h('div',{ref:refLab,style:{position:'absolute',inset:0,pointerEvents:'none',overflow:'hidden'}}),
         h('div',{ref:refTip,style:{position:'absolute',display:'none',pointerEvents:'none',zIndex:3,minWidth:190,padding:'10px 12px',borderRadius:12,background:'rgba(18,20,13,.92)',border:'1px solid rgba(200,168,75,.6)',color:'#fff',font:'12px DM Sans,system-ui,sans-serif',boxShadow:'0 14px 30px rgba(0,0,0,.45)',backdropFilter:'blur(6px)'}}),
