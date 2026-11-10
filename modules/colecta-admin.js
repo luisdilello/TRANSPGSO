@@ -23,6 +23,8 @@ function ColectaAdmin(_ref_ca){var clientes=_ref_ca.clientes,mensajeros=_ref_ca.
   var _scanGuard=useState(false),scanGuardando=_scanGuard[0],setScanGuardando=_scanGuard[1];
   var _scanTotal=useState([]),scanTotal=_scanTotal[0],setScanTotal=_scanTotal[1];
   var scanInputRef=React.useRef(null);
+  var _rm=useState(false),showRM=_rm[0],setShowRM=_rm[1];
+  var esTactil=typeof window!=='undefined'&&('ontouchstart' in window||navigator.maxTouchPoints>0);
 
   // Cargar envíos escaneados hoy desde Supabase
   React.useEffect(function(){
@@ -352,7 +354,7 @@ async function guardarColecta(){
           className:'form-input',
           placeholder:'Escanea o escribe el código...',
           value:scanCode,
-          autoFocus:true,
+          autoFocus:!esTactil,
           onChange:function(e){setScanCode(e.target.value);},
           onKeyDown:function(e){
             if(e.key==='Enter'&&scanCode.trim()){
@@ -367,6 +369,29 @@ async function guardarColecta(){
           style:{whiteSpace:'nowrap'}
         },'+ Agregar')
       ),
+      // Retiro masivo con cámara (mismo flujo que la app de mensajeros, a nombre del mensajero elegido)
+      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',padding:'12px 14px',marginBottom:16,borderRadius:10,border:'1px solid rgba(200,168,75,0.35)',background:'linear-gradient(135deg,rgba(200,168,75,0.10),rgba(200,168,75,0.03))'}},
+        React.createElement('div',{style:{flex:'1 1 220px',minWidth:0}},
+          React.createElement('div',{style:{fontWeight:700,fontSize:13,letterSpacing:.3}},'Retiro masivo con cámara'),
+          React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginTop:2}},scanMensajero?('Escanea con la cámara del teléfono y foto de etiqueta. Queda a nombre de '+scanMensajero+'.'):'Elige primero el mensajero que trajo los paquetes.')
+        ),
+        React.createElement('button',{
+          className:'btn-primary',
+          disabled:!scanMensajero||!window.RetiroMasivoRider,
+          onClick:function(){
+            if(!scanMensajero){toast('Elige el mensajero primero');return;}
+            if(!window.RetiroMasivoRider){toast('Retiro masivo no disponible, recarga la página');return;}
+            setShowRM(true);
+          },
+          style:{whiteSpace:'nowrap',opacity:scanMensajero?1:.5}
+        },'Abrir retiro masivo')
+      ),
+      showRM&&window.RetiroMasivoRider&&React.createElement(window.RetiroMasivoRider,{
+        usuario:{nombre:scanMensajero,rol:'rider'},
+        clientes:clientes,
+        toast:toast,
+        onClose:function(){setShowRM(false);cargarScanHoy();}
+      }),
       // Lista escaneados
       scanList.length>0&&React.createElement('div',null,
         React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}},
