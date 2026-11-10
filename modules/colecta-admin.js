@@ -31,12 +31,23 @@ function ColectaAdmin(_ref_ca){var clientes=_ref_ca.clientes,mensajeros=_ref_ca.
 
   async function cargarScanHoy(){
     try{
-      var r=await db.from('envios')
-        .select('id,codigo,cliente,mensajero,fecha,estado,fuente,nota,updated_at')
-        .eq('fecha',filtroFecha)
-        .in('fuente',['flex','lector','manual','scanner'])
-        .order('updated_at',{ascending:false});
-      setScanTotal(r.data||[]);
+      // Paginado: Supabase corta cada consulta en 1000 filas
+      var todos=[],desde=0,PAG=1000;
+      while(true){
+        var r=await db.from('envios')
+          .select('id,codigo,cliente,mensajero,fecha,estado,fuente,nota,updated_at')
+          .eq('fecha',filtroFecha)
+          .in('fuente',['flex','lector','manual','scanner'])
+          .order('updated_at',{ascending:false})
+          .order('id',{ascending:true})
+          .range(desde,desde+PAG-1);
+        if(r.error)throw r.error;
+        var lote=r.data||[];
+        todos=todos.concat(lote);
+        if(lote.length<PAG)break;
+        desde+=PAG;
+      }
+      setScanTotal(todos);
     }catch(e){setScanTotal([]);}
   }
 
@@ -47,12 +58,22 @@ function ColectaAdmin(_ref_ca){var clientes=_ref_ca.clientes,mensajeros=_ref_ca.
   async function cargarColectas(){
     setLoading(true);
     try{
-      var q=db.from('colectas').select('*').eq('fecha',filtroFecha).order('created_at',{ascending:false});
-      if(filtroCliente!=='todos')q=q.eq('cliente',filtroCliente);
-      if(filtroMen!=='todos')q=q.eq('mensajero',filtroMen);
-      var res=await q;
-      if(res.data)setColectas(res.data);
-      else setColectas([]);
+      var armarQ=function(){
+        var q=db.from('colectas').select('*').eq('fecha',filtroFecha).order('created_at',{ascending:false}).order('id',{ascending:true});
+        if(filtroCliente!=='todos')q=q.eq('cliente',filtroCliente);
+        if(filtroMen!=='todos')q=q.eq('mensajero',filtroMen);
+        return q;
+      };
+      var acum=[],ini=0;
+      while(true){
+        var res=await armarQ().range(ini,ini+999);
+        if(res.error)throw res.error;
+        var pag=res.data||[];
+        acum=acum.concat(pag);
+        if(pag.length<1000)break;
+        ini+=1000;
+      }
+      setColectas(acum);
     }catch(e){
       // Fallback localStorage
       var local=lsLoad('transpgso_v2_colectas',[]);
