@@ -197,7 +197,7 @@ function montarMapa(T,cont,datos,ui,geo){
 function montarFlujo(T,cont,cnt,ui){
   // 10-11-2026: tocar una estación (bodega, camión, casa, reloj, caja) abre el detalle por comuna.
   var clicables=[],rayF=new T.Raycaster(),ptrF=new T.Vector2();
-  var E=crearEscena(T,cont,{r:52,pol:0.98,az:-0.3,ty:3,rMin:24,rMax:110,bloom:1.15,fogNear:52,fogFar:118,onLost:ui.onLost,
+  var E=crearEscena(T,cont,{r:52,pol:0.98,az:-0.3,ty:3,rMin:24,rMax:110,bloom:1.15,fogNear:60,fogFar:150,onLost:ui.onLost,
     onClick:function(e){if(!ui.onNodo)return;var b=E.ren.domElement.getBoundingClientRect();ptrF.x=(e.clientX-b.left)/b.width*2-1;ptrF.y=-(e.clientY-b.top)/b.height*2+1;
       rayF.setFromCamera(ptrF,E.cam);var hit=rayF.intersectObjects(clicables,true)[0];if(!hit){ui.onNodo(null);return;}
       var o=hit.object;while(o&&!(o.userData&&o.userData.k))o=o.parent;ui.onNodo(o?o.userData.k:null);}});
@@ -275,7 +275,7 @@ function montarFlujo(T,cont,cnt,ui){
     var cv=document.createElement('canvas');cv.width=64;cv.height=128;var x=cv.getContext('2d');x.fillStyle='#0e1009';x.fillRect(0,0,64,128);
     for(var yy=4;yy<128;yy+=9)for(var xx=4;xx<64;xx+=10){var on=Math.random();x.fillStyle=on>0.72?(on>0.94?'rgba(255,214,140,.95)':'rgba(255,190,100,.6)'):'rgba(14,16,10,1)';x.fillRect(xx,yy,6,5);}
     var tx=new T.CanvasTexture(cv);tx.wrapS=tx.wrapT=T.RepeatWrapping;
-    for(var bi=0;bi<54;bi++){var ang=bi/54*Math.PI*2+Math.random()*0.06,rad=56+Math.random()*12,alto=3+Math.pow(Math.random(),1.8)*13,an=2.4+Math.random()*3;
+    for(var bi=0;bi<54;bi++){var ang=bi/54*Math.PI*2+Math.random()*0.06,rad=74+Math.random()*12,alto=4+Math.pow(Math.random(),1.6)*18,an=3+Math.random()*4;
       var mat=new T.MeshStandardMaterial({color:0x0c0e08,roughness:0.9,metalness:0.1,emissive:0xffffff,emissiveMap:tx,emissiveIntensity:0.55});
       mat.emissiveMap=tx.clone();mat.emissiveMap.needsUpdate=true;mat.emissiveMap.repeat.set(an/3,alto/6);mat.emissiveMap.offset.set(Math.random(),Math.random());
       var ed=new T.Mesh(new T.BoxGeometry(an,alto,an),mat);ed.position.set(Math.cos(ang)*rad,alto/2,Math.sin(ang)*rad);ed.rotation.y=-ang;E.sc.add(ed);
