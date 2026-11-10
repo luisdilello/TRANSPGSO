@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261110143227;
+window.__MODULES_VERSION=20261110143813;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3053,9 +3053,9 @@ function CargaPorComuna(){
   }
 
   const tarjeta=function(label,valor,color,sub){return React.createElement('div',{className:'stat-card',style:{flex:'1 1 150px','--card-accent':color.indexOf('var(')===0?'#c8a84b':color,padding:'14px 16px 16px'}},
-    React.createElement('div',{style:{fontSize:10.5,letterSpacing:1.6,fontWeight:800,textTransform:'uppercase',color:'var(--text-soft)'}},label),
-    React.createElement('div',{className:'stat-value',style:{fontFamily:'Bebas Neue',fontSize:40,color:color,lineHeight:1.05}},valor),
-    sub&&React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)'}},sub));};
+    React.createElement('div',{style:{fontSize:13,letterSpacing:1.3,fontWeight:800,textTransform:'uppercase',color:'#2b2e20',lineHeight:1.25}},React.createElement('span',{style:{display:'inline-block',width:9,height:9,borderRadius:'50%',background:color.indexOf('var(')===0?'#c8a84b':color,boxShadow:'0 0 8px '+(color.indexOf('var(')===0?'#c8a84b':color),marginRight:7,verticalAlign:'1px'}}),label),
+    React.createElement('div',{className:'stat-value',style:{fontFamily:'Bebas Neue',fontSize:42,color:color,lineHeight:1.05}},valor),
+    sub&&React.createElement('div',{style:{fontSize:12.5,fontWeight:700,color:'#5a5d4a'}},sub));};
   const th={textAlign:'right',padding:'10px 9px',fontSize:11.5,fontWeight:800,letterSpacing:0.8,textTransform:'uppercase',color:'#f6e7b8',borderBottom:'2px solid #c8a84b',whiteSpace:'nowrap',cursor:'pointer',position:'sticky',top:0,zIndex:2,background:'linear-gradient(180deg,#34382a,#23261c)'};
   const td={textAlign:'right',padding:'7px 8px',fontSize:13,borderBottom:'1px solid var(--border)',fontFamily:'JetBrains Mono',whiteSpace:'nowrap'};
   const num=function(n,color){return React.createElement('span',{style:{color:n?color:'#c4c1b0',fontWeight:n?700:400}},n);};
@@ -3106,16 +3106,16 @@ function CargaPorComuna(){
   const panel1=React.createElement('div',{className:'panel'},
     React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,flexWrap:'wrap',marginBottom:12}},
       React.createElement('div',null,
-        React.createElement('div',{className:'panel-title',style:{margin:0}},'Carga por comuna (en vivo)'),
-        React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginTop:2}},'Ingresado del día y lo que va quedando pendiente. No depende del período elegido arriba.'+(hora?' Actualizado '+hora+'.':''))
+        React.createElement('div',{className:'panel-title',style:{margin:0,fontSize:22}},'Carga por comuna (en vivo)'),
+        React.createElement('div',{style:{fontSize:13,color:'#5a5d4a',fontWeight:600,marginTop:3}},'Ingresado del día y lo que va quedando pendiente. No depende del período elegido arriba.'+(hora?' Actualizado '+hora+'.':''))
       ),
       React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}},
-        React.createElement('label',{style:{fontSize:11,color:'var(--text-soft)'}},'Día de ingreso'),
+        React.createElement('label',{style:{fontSize:12.5,fontWeight:800,color:'#4a4d3a'}},'Día de ingreso'),
         React.createElement('input',{type:'date',className:'form-input',value:dia,max:hoy,onChange:function(e){setDia(e.target.value||hoy);},style:{width:150,padding:'6px 8px'}}),
         !esHoy&&React.createElement('button',{className:'filter-btn',onClick:function(){setDia(hoy);}},'Hoy'),
-        React.createElement('button',{className:'btn-secondary',style:{padding:'6px 12px',fontSize:12},onClick:function(){setCargando(true);cargar();}},cargando?'Actualizando…':'Actualizar'),
-        React.createElement('button',{className:'btn-secondary',style:{padding:'6px 12px',fontSize:12},onClick:exportar,disabled:!lista.length},'Excel'),
-        React.createElement('button',{className:'btn-secondary',style:{padding:'6px 12px',fontSize:12},title:'Revisa en el mapa las direcciones de lo que está para ruta (en bodega + reprogramados)'+(comunaSel?' de '+comunaSel:''),onClick:function(){
+        React.createElement('button',{className:'btn-secondary',style:{padding:'8px 14px',fontSize:13.5,fontWeight:700},onClick:function(){setCargando(true);cargar();}},cargando?'Actualizando…':'Actualizar'),
+        React.createElement('button',{className:'btn-secondary',style:{padding:'8px 14px',fontSize:13.5,fontWeight:700},onClick:exportar,disabled:!lista.length},'Excel'),
+        React.createElement('button',{className:'btn-secondary',style:{padding:'8px 14px',fontSize:13.5,fontWeight:700},title:'Revisa en el mapa las direcciones de lo que está para ruta (en bodega + reprogramados)'+(comunaSel?' de '+comunaSel:''),onClick:function(){
           const l=pend.filter(function(e){return (e.estado==='en_bodega'||e.estado==='sin_asignar'||e.estado==='reprogramado')&&(!comunaSel||comunaCC(e.comuna)===comunaSel);});
           if(!l.length){alert('No hay piezas para ruta'+(comunaSel?' en '+comunaSel:'')+'.');return;}
           loadScriptOnce('revisar-direcciones','modules/revisar-direcciones.js').then(function(){window.__revDir.abrir(l,{onClose:function(){cargar();}});});
