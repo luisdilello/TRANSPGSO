@@ -673,6 +673,19 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 .sec-cockpit .action-btn{border-radius:9px;padding:7px 12px;font-weight:800;box-shadow:0 2px 0 rgba(43,46,32,.22);transition:transform .12s ease;}
 .sec-cockpit .action-btn:hover{transform:translateY(-1px);}
 .sec-cockpit .table-wrap{border-radius:16px;box-shadow:0 14px 30px rgba(43,46,32,0.10),0 2px 6px rgba(43,46,32,0.06);}
+
+/* ── 10-11-2026: Gestión de Envíos en cabecera cockpit de 3 franjas (título · período · tarjetas de estado) ── */
+.ge-x > .section-head{margin-bottom:16px;}
+.ge-x > .section-head:has(+ .ge-band){border-radius:20px 20px 0 0;margin-bottom:0;border-bottom:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);padding-bottom:6px;}
+.ge-x .ge-band{background:linear-gradient(180deg,#22261a 0%,#1b1e15 100%);border:1px solid rgba(200,168,75,.35);border-top:none;border-bottom:none;margin-bottom:0;}
+.ge-x .ge-band:not(:has(+ .ge-cards)){border-radius:0 0 20px 20px;border-bottom:1px solid rgba(200,168,75,.35);margin-bottom:16px;box-shadow:0 24px 50px rgba(20,22,15,.30);}
+.ge-x :not(.ge-band) + .ge-cards{border-radius:20px;border-top:1px solid rgba(200,168,75,.35);}
+.ge-x .ge-cards{padding:12px 20px 18px;margin-bottom:16px;border-radius:0 0 20px 20px;background:linear-gradient(180deg,#1b1e15 0%,#14170f 100%);border:1px solid rgba(200,168,75,.35);border-top:none;box-shadow:0 24px 50px rgba(20,22,15,.30);}
+.ge-x .ge-band input{padding:7px 10px!important;border-radius:10px!important;border:1px solid rgba(232,199,102,.45)!important;background:rgba(255,255,255,.94);}
+.ge-x .ge-band span[style*="color: var(--text-soft)"]{color:rgba(233,228,210,.7)!important;}
+.ge-x .ge-badge{transition:transform .12s ease,box-shadow .12s ease;}
+.ge-x .ge-badge:hover{transform:translateY(-1px);box-shadow:0 0 18px rgba(232,199,102,.25),inset 0 1px 0 rgba(255,255,255,.1)!important;}
+.ge-x .toolbar select.filter-btn{border-radius:11px;}
 </style>
 
 <style>
@@ -730,7 +743,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261110133940;
+window.__MODULES_VERSION=20261110134823;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){

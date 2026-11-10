@@ -1613,7 +1613,7 @@ function renderCampoLargo(campo,label,tipo,candado){
       :/*#__PURE__*/React.createElement("div",{style:{fontSize:13,color:'var(--text-mid)'}},tipo==='number'?(valorActual>0?'$'+Number(valorActual).toLocaleString('es-CL'):'—'):(valorActual||'—'))
   );
 }
-return/*#__PURE__*/React.createElement("div",null,/*#__PURE__*/React.createElement("div",{className:"section-head",style:{flexWrap:'wrap',gap:10}},/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:12}},/*#__PURE__*/React.createElement("div",{className:"section-title"},"Gesti\xF3n de ",/*#__PURE__*/React.createElement("span",null,"Env\xEDos")),/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:6,background:'rgba(46,125,79,0.1)',border:'1px solid rgba(46,125,79,0.2)',borderRadius:20,padding:'4px 10px'}},/*#__PURE__*/React.createElement("div",{style:{width:8,height:8,borderRadius:'50%',background:'#2e7d4f',animation:'pulse 2s infinite'}}),/*#__PURE__*/React.createElement("span",{style:{fontSize:10,color:'#2e7d4f',fontWeight:700,letterSpacing:1}},"TIEMPO REAL"))),/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:8,flexWrap:'wrap'}},/*#__PURE__*/React.createElement("button",{onClick:sincronizarDesdeSupabase,disabled:sincronizando,className:'btn-futurista btn-f-dark',style:{display:'flex',alignItems:'center',gap:6,opacity:sincronizando?0.7:1}},sincronizando?'↺ Sincronizando...':'↺ Sincronizar Riders'),
+return/*#__PURE__*/React.createElement("div",{className:"ge-x sec-cockpit"},/*#__PURE__*/React.createElement("div",{className:"section-head",style:{flexWrap:'wrap',gap:10}},/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:12}},/*#__PURE__*/React.createElement("div",{className:"section-title"},"Gesti\xF3n de ",/*#__PURE__*/React.createElement("span",null,"Env\xEDos")),/*#__PURE__*/React.createElement("div",{style:{display:'flex',alignItems:'center',gap:6,background:'rgba(54,196,127,0.15)',border:'1px solid rgba(54,196,127,0.45)',borderRadius:20,padding:'4px 11px'}},/*#__PURE__*/React.createElement("div",{style:{width:8,height:8,borderRadius:'50%',background:'#36c47f',boxShadow:'0 0 8px #36c47f',animation:'pulse 2s infinite'}}),/*#__PURE__*/React.createElement("span",{style:{fontSize:10,color:'#6fe0a5',fontWeight:800,letterSpacing:1}},"TIEMPO REAL"))),/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:8,flexWrap:'wrap'}},/*#__PURE__*/React.createElement("button",{onClick:sincronizarDesdeSupabase,disabled:sincronizando,className:'btn-futurista btn-f-dark',style:{display:'flex',alignItems:'center',gap:6,opacity:sincronizando?0.7:1}},sincronizando?'↺ Sincronizando...':'↺ Sincronizar Riders'),
   (()=>{const listaNegraCount=lsLoad('envios_eliminados',[]).length;return/*#__PURE__*/React.createElement("button",{onClick:()=>setShowListaNegra(v=>!v),style:{padding:'8px 14px',borderRadius:8,border:'1px solid '+(listaNegraCount>0?'rgba(176,48,48,0.8)':'rgba(100,100,100,0.4)'),background:showListaNegra?'rgba(176,48,48,0.25)':(listaNegraCount>0?'rgba(176,48,48,0.15)':'rgba(80,80,80,0.12)'),color:'#ffffff',cursor:'pointer',fontWeight:700,fontSize:12,display:'flex',alignItems:'center',gap:6}},"⊘ Lista negra",(listaNegraCount>0&&/*#__PURE__*/React.createElement("span",{style:{background:'rgba(176,48,48,0.3)',borderRadius:10,padding:'1px 7px',fontSize:11}},listaNegraCount)));})(),/*#__PURE__*/React.createElement("input",{id:"gestion-pdf-inp",ref:pdfRef,type:"file",accept:"application/pdf",style:{display:'none'},onChange:e=>{const f=e.target.files[0];if(!f)return;importarPDF(f,window._colecta_pdf_cliente||clientePDF);e.target.value='';}})  ,/*#__PURE__*/React.createElement("button",{onClick:()=>setSubTab('nuevo'),className:'btn-futurista btn-f-gold'},"+ Nuevo Env\xEDo"))),showPDFModal&&/*#__PURE__*/React.createElement(Modal,{title:'📄 Importar PDF Flex',onClose:()=>{setShowPDFModal(false);setPdfPreview(null);setClientePDF('');}},
   !pdfPreview&&/*#__PURE__*/React.createElement('div',null,
     /*#__PURE__*/React.createElement('div',{className:'form-group'},
@@ -1710,9 +1710,10 @@ showListaNegra&&(()=>{const lista=lsLoad('envios_eliminados',[]);return/*#__PURE
     )
 );
 })(),
-/*#__PURE__*/React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',marginBottom:14,flexWrap:'wrap',paddingTop:10}},
-  /*#__PURE__*/React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:2,color:'var(--text-soft)',marginRight:4}},'PERÍODO:'),
-  [{val:'hoy',label:'Hoy'},{val:'ayer',label:'Ayer'},{val:'semana',label:'Esta semana'},{val:'mes',label:'Mes'},{val:'rango',label:'Rango'}].map(function(p){return/*#__PURE__*/React.createElement('button',{key:p.val,onClick:function(){setPeriodo(p.val);setPage(1);},style:{padding:'6px 16px',borderRadius:20,border:'1px solid '+(periodo===p.val?'var(--gold)':'var(--border)'),background:periodo===p.val?'rgba(200,168,75,0.12)':'#fff',color:periodo===p.val?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer',transition:'all 0.15s'}},p.label);}),
+/*#__PURE__*/React.createElement('div',{className:'ge-band',style:{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap',padding:'10px 20px 12px'}},
+  /*#__PURE__*/React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:15,letterSpacing:2.4,color:'#e8c766'}},'Período'),
+  /*#__PURE__*/React.createElement('div',{style:{display:'inline-flex',gap:4,padding:4,borderRadius:14,background:'rgba(0,0,0,.35)',border:'1px solid rgba(255,255,255,.08)',boxShadow:'inset 0 2px 6px rgba(0,0,0,.45)'}},
+  [{val:'hoy',label:'Hoy'},{val:'ayer',label:'Ayer'},{val:'semana',label:'Esta semana'},{val:'mes',label:'Mes'},{val:'rango',label:'Rango'}].map(function(p){return/*#__PURE__*/React.createElement('button',{key:p.val,onClick:function(){setPeriodo(p.val);setPage(1);},style:{padding:'8px 16px',borderRadius:10,border:'1px solid '+(periodo===p.val?'#f7dd8c':'transparent'),background:periodo===p.val?'linear-gradient(180deg,#f7dd8c,#d9b553 55%,#ae8829)':'transparent',color:periodo===p.val?'#1a1d13':'rgba(241,236,218,.7)',fontWeight:800,fontSize:12.5,cursor:'pointer',whiteSpace:'nowrap',boxShadow:periodo===p.val?'0 3px 0 #6d531a,0 6px 14px rgba(200,168,75,.35),inset 0 1px 0 rgba(255,255,255,.55)':'none'}},p.label);})),
   periodo==='mes'&&/*#__PURE__*/React.createElement('input',{type:'month',value:mesFiltro,onChange:function(e){setMesFiltro(e.target.value);setPage(1);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--gold)',fontSize:12,outline:'none',color:'var(--dark)'}}),
   periodo==='rango'&&/*#__PURE__*/React.createElement(React.Fragment,null,
     /*#__PURE__*/React.createElement('input',{type:'date',value:desde,onChange:function(e){setDesde(e.target.value);setPage(1);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12,outline:'none'}}),
@@ -1732,25 +1733,25 @@ showListaNegra&&(()=>{const lista=lsLoad('envios_eliminados',[]);return/*#__PURE
     // real sin importar la vista). El tercer badge (TOTAL A PAGAR) NO tiene filtro propio -- es una
     // resta entre dos criterios distintos (recibido vs. resuelto), no una lista de códigos real, así
     // que no hay ningún filtro que muestre exactamente "eso": se deja sin onClick a propósito.
-    /*#__PURE__*/React.createElement('span',{onClick:()=>{setFiltroEst('todos');setPage(1);},title:'Envíos DESPACHADOS dentro del rango elegido (columna Fecha), en cualquier estado que estén ahora -- es el "recibido" de la fórmula de cobro (recibido − retorno). Clic para filtrar la tabla por esto.',style:{display:'flex',alignItems:'center',gap:8,fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1,color:'var(--dark)',background:'linear-gradient(145deg,#fff,#f5eedc)',border:'1.5px solid var(--gold)',borderRadius:12,padding:'6px 16px',boxShadow:'3px 3px 8px rgba(43,46,32,0.1)',cursor:'pointer'}},
+    /*#__PURE__*/React.createElement('span',{onClick:()=>{setFiltroEst('todos');setPage(1);},title:'Envíos DESPACHADOS dentro del rango elegido (columna Fecha), en cualquier estado que estén ahora -- es el "recibido" de la fórmula de cobro (recibido − retorno). Clic para filtrar la tabla por esto.',className:'ge-badge',style:{display:'flex',alignItems:'center',gap:10,fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1,color:'#f1ecda',background:'linear-gradient(160deg,rgba(255,255,255,.10),rgba(255,255,255,.03))',border:'1px solid rgba(232,199,102,.45)',borderRadius:14,padding:'7px 16px',boxShadow:'inset 0 1px 0 rgba(255,255,255,.08)',cursor:'pointer'}},
       sincronizando?/*#__PURE__*/React.createElement('span',{style:{fontSize:13,fontFamily:'DM Sans',color:'var(--text-soft)'}},'Sincronizando...'):/*#__PURE__*/React.createElement(React.Fragment,null,
-        /*#__PURE__*/React.createElement('span',{style:{color:'var(--gold)',fontSize:22}},enviosPeriodoTarjetas.length.toLocaleString('es-CL')),
-        /*#__PURE__*/React.createElement('span',{style:{fontSize:11,fontFamily:'DM Sans',color:'var(--text-soft)',letterSpacing:0,textTransform:'none'}},'recibidos en el período')
+        /*#__PURE__*/React.createElement('span',{style:{color:'#e8c766',fontSize:28,lineHeight:1,textShadow:'0 0 14px rgba(232,199,102,.45)'}},enviosPeriodoTarjetas.length.toLocaleString('es-CL')),
+        /*#__PURE__*/React.createElement('span',{style:{fontSize:11,fontFamily:'DM Sans',color:'rgba(233,228,210,.75)',letterSpacing:0,textTransform:'none',fontWeight:700}},'recibidos en el período')
       )
     ),
-    /*#__PURE__*/React.createElement('span',{onClick:()=>{setFiltroEst('retorno');setPage(1);},title:'Envíos cuyo ÚLTIMO movimiento a Retorno ocurrió dentro del rango elegido, sin importar cuándo se despacharon -- mismo criterio que la vista "Resuelto en el período". Es el "retorno" de la fórmula de cobro (recibido − retorno). Clic para filtrar la tabla por esto.',style:{display:'flex',alignItems:'center',gap:8,fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1,color:'var(--dark)',background:'linear-gradient(145deg,#fff,#fbe9e9)',border:'1.5px solid #c86a6a',borderRadius:12,padding:'6px 16px',boxShadow:'3px 3px 8px rgba(43,46,32,0.1)',cursor:'pointer'}},
+    /*#__PURE__*/React.createElement('span',{onClick:()=>{setFiltroEst('retorno');setPage(1);},title:'Envíos cuyo ÚLTIMO movimiento a Retorno ocurrió dentro del rango elegido, sin importar cuándo se despacharon -- mismo criterio que la vista "Resuelto en el período". Es el "retorno" de la fórmula de cobro (recibido − retorno). Clic para filtrar la tabla por esto.',className:'ge-badge',style:{display:'flex',alignItems:'center',gap:10,fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1,color:'#f1ecda',background:'linear-gradient(160deg,rgba(255,120,110,.14),rgba(255,255,255,.03))',border:'1px solid rgba(255,123,112,.5)',borderRadius:14,padding:'7px 16px',boxShadow:'inset 0 1px 0 rgba(255,255,255,.08)',cursor:'pointer'}},
       cargandoRetornadosReal?/*#__PURE__*/React.createElement('span',{style:{fontSize:13,fontFamily:'DM Sans',color:'var(--text-soft)'}},'Actualizando...'):/*#__PURE__*/React.createElement(React.Fragment,null,
-        /*#__PURE__*/React.createElement('span',{style:{color:'#c86a6a',fontSize:22}},retornadosPeriodoRealTarjetas.length.toLocaleString('es-CL')),
-        /*#__PURE__*/React.createElement('span',{style:{fontSize:11,fontFamily:'DM Sans',color:'var(--text-soft)',letterSpacing:0,textTransform:'none'}},'retorno resuelto en el período')
+        /*#__PURE__*/React.createElement('span',{style:{color:'#ff7b70',fontSize:28,lineHeight:1,textShadow:'0 0 14px rgba(255,123,112,.45)'}},retornadosPeriodoRealTarjetas.length.toLocaleString('es-CL')),
+        /*#__PURE__*/React.createElement('span',{style:{fontSize:11,fontFamily:'DM Sans',color:'rgba(233,228,210,.75)',letterSpacing:0,textTransform:'none',fontWeight:700}},'retorno resuelto en el período')
       )
     ),
     // NUEVO 2026-09-23: tercer badge con el resultado YA calculado -- Luis pidió "una vista con
     // esta lógica" en vez de tener que restar los dos números de arriba a mano cada vez. Se pone
     // acá (fuera del selector de VISTA, junto a los otros dos) para que se vea SIEMPRE, sin
     // importar en qué vista esté parado -- es la fórmula de cobro (recibido − retorno) ya resuelta.
-    /*#__PURE__*/React.createElement('span',{title:'Total a pagar/facturar = recibidos en el período MENOS retorno resuelto en el período. Ya calculado -- no hace falta restar a mano ni cambiar de vista. Este número es una resta entre dos criterios distintos (recibido y resuelto), no corresponde a una lista real de códigos -- por eso, a diferencia de los otros dos badges, no tiene filtro propio.',style:{display:'flex',alignItems:'center',gap:8,fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1,color:'#fff',background:'linear-gradient(145deg,#3a5a40,#2e4632)',border:'1.5px solid #2e4632',borderRadius:12,padding:'6px 16px',boxShadow:'3px 3px 8px rgba(43,46,32,0.15)'}},
+    /*#__PURE__*/React.createElement('span',{title:'Total a pagar/facturar = recibidos en el período MENOS retorno resuelto en el período. Ya calculado -- no hace falta restar a mano ni cambiar de vista. Este número es una resta entre dos criterios distintos (recibido y resuelto), no corresponde a una lista real de códigos -- por eso, a diferencia de los otros dos badges, no tiene filtro propio.',style:{display:'flex',alignItems:'center',gap:10,fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1,color:'#fff',background:'linear-gradient(180deg,#3fc27c,#23885a)',border:'1px solid #5fd896',borderRadius:14,padding:'7px 16px',boxShadow:'0 3px 0 #145a38,0 8px 18px rgba(54,196,127,.3),inset 0 1px 0 rgba(255,255,255,.35)'}},
       (sincronizando||cargandoRetornadosReal)?/*#__PURE__*/React.createElement('span',{style:{fontSize:13,fontFamily:'DM Sans',color:'#fff'}},'Calculando...'):/*#__PURE__*/React.createElement(React.Fragment,null,
-        /*#__PURE__*/React.createElement('span',{style:{color:'#fff',fontSize:22}},(enviosPeriodoTarjetas.length-retornadosPeriodoRealTarjetas.length).toLocaleString('es-CL')),
+        /*#__PURE__*/React.createElement('span',{style:{color:'#fff',fontSize:28,lineHeight:1}},(enviosPeriodoTarjetas.length-retornadosPeriodoRealTarjetas.length).toLocaleString('es-CL')),
         /*#__PURE__*/React.createElement('span',{style:{fontSize:11,fontFamily:'DM Sans',color:'rgba(255,255,255,0.85)',letterSpacing:0,textTransform:'none'}},'TOTAL A PAGAR (recibido − retorno)')
       )
     )
@@ -1864,8 +1865,8 @@ filtroCli!=='todos'&&React.createElement('div',{style:{background:'#fff',border:
 // FIX 2026-10-03: se quitó por completo el selector de botones "VISTA:" (ver comentario junto a
 // la declaración de 'vistaEstado' más arriba) -- ya no hay nada que elegir, 'vistaEstado' queda
 // fijo en 'fusion' y las tarjetas de abajo siempre muestran "recibido"+"resuelto" juntas.
-sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',padding:'20px',color:'var(--text-soft)',fontSize:13,marginBottom:20}},'⏳ Sincronizando historial completo desde la nube...'):
-/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:10,flexWrap:'wrap',marginBottom:20,paddingTop:14,overflowX:'auto'}},[{val:'todos',label:'Todos',color:'var(--gold)'},...ESTADOS_ENVIO].map(est=>{
+sincronizando?/*#__PURE__*/React.createElement("div",{className:'ge-cards',style:{textAlign:'center',padding:'22px',color:'rgba(233,228,210,.75)',fontSize:13}},'Sincronizando historial completo desde la nube...'):
+/*#__PURE__*/React.createElement("div",{className:'ge-cards',style:{display:'flex',gap:10,flexWrap:'wrap',overflowX:'auto'}},[{val:'todos',label:'Todos',color:'var(--gold)'},...ESTADOS_ENVIO].map(est=>{
   // NUEVO 2026-09-22 (vista 'fusion'): 'countRecibido'/'countResuelto' se calculan SIEMPRE (no
   // solo en 'fusion') para no repetir la lógica -- en las otras dos vistas solo se usa 'count'
   // (el que corresponde a esa vista), igual que antes.
@@ -1873,35 +1874,35 @@ sincronizando?/*#__PURE__*/React.createElement("div",{style:{textAlign:'center',
   const countResuelto=est.val==='todos'?todosPeriodoRealTarjetas.length:statsResuelto[est.val]||0;
   const count=vistaEstado==='actual'?countRecibido:countResuelto;
   const active=filtroEst===est.val;const accentColor=est.color||'var(--gold)';return/*#__PURE__*/React.createElement("div",{key:est.val,onClick:()=>{setFiltroEst(est.val);setPage(1);},style:{
-  padding:'16px 18px',borderRadius:14,cursor:'pointer',minWidth:vistaEstado==='fusion'?150:100,textAlign:'center',
-  background:active?'linear-gradient(145deg,#ffffff,#f0e8d0)':'linear-gradient(145deg,#fff,#faf3e0)',
-  border:'2px solid '+(active?accentColor:'rgba(200,168,75,0.12)'),
-  borderTop:'4px solid '+(active?accentColor:'rgba(200,168,75,0.08)'),
-  boxShadow:active?'8px 8px 16px rgba(43,46,32,0.15),-3px -3px 8px rgba(255,255,255,0.95),0 0 20px '+accentColor+'33':'4px 4px 8px rgba(43,46,32,0.08),-2px -2px 6px rgba(255,255,255,0.9)',
-  transform:active?'perspective(600px) rotateX(-2deg) translateY(-5px)':'perspective(600px) rotateX(0deg)',
+  padding:'14px 16px',borderRadius:14,cursor:'pointer',minWidth:vistaEstado==='fusion'?140:100,flex:'1 1 130px',textAlign:'center',
+  background:active?'linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,.05))':'linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.02))',
+  border:'1px solid '+(active?accentColor:'rgba(255,255,255,.10)'),
+  borderTop:'3px solid '+(active?accentColor:'rgba(255,255,255,.10)'),
+  boxShadow:active?'0 0 22px '+accentColor+'55, inset 0 1px 0 rgba(255,255,255,.12)':'inset 0 1px 0 rgba(255,255,255,.06)',
+  transform:active?'translateY(-3px)':'none',
   transition:'all 0.25s cubic-bezier(0.34,1.56,0.64,1)'}},
   vistaEstado==='fusion'
     ?/*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:8,justifyContent:'center',alignItems:'baseline'}},
         /*#__PURE__*/React.createElement("div",null,
-          /*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:26,lineHeight:1,color:active?accentColor:'#9a9d8a',transition:'all 0.25s'}},countRecibido),
-          /*#__PURE__*/React.createElement("div",{style:{fontSize:7,fontWeight:600,letterSpacing:0.5,color:active?accentColor:'#b0b3a0',opacity:0.75,marginTop:1}},'recibido')
+          /*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:26,lineHeight:1,color:active?accentColor:'rgba(241,236,218,.85)',transition:'all 0.25s'}},countRecibido),
+          /*#__PURE__*/React.createElement("div",{style:{fontSize:7,fontWeight:600,letterSpacing:0.5,color:active?accentColor:'rgba(233,228,210,.55)',opacity:0.75,marginTop:1}},'recibido')
         ),
-        /*#__PURE__*/React.createElement("div",{style:{width:1,alignSelf:'stretch',background:active?accentColor+'44':'rgba(0,0,0,0.1)'}}),
+        /*#__PURE__*/React.createElement("div",{style:{width:1,alignSelf:'stretch',background:active?accentColor+'66':'rgba(255,255,255,.12)'}}),
         /*#__PURE__*/React.createElement("div",null,
-          /*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:26,lineHeight:1,color:active?accentColor:'#9a9d8a',transition:'all 0.25s'}},countResuelto),
-          /*#__PURE__*/React.createElement("div",{style:{fontSize:7,fontWeight:600,letterSpacing:0.5,color:active?accentColor:'#b0b3a0',opacity:0.75,marginTop:1}},'resuelto')
+          /*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:26,lineHeight:1,color:active?accentColor:'rgba(241,236,218,.85)',transition:'all 0.25s'}},countResuelto),
+          /*#__PURE__*/React.createElement("div",{style:{fontSize:7,fontWeight:600,letterSpacing:0.5,color:active?accentColor:'rgba(233,228,210,.55)',opacity:0.75,marginTop:1}},'resuelto')
         )
       )
     :/*#__PURE__*/React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:42,lineHeight:1,
-    color:active?accentColor:'#9a9d8a',
+    color:active?accentColor:'rgba(241,236,218,.85)',
     textShadow:active?'0 0 12px '+accentColor+'88':'none',
     filter:active?'drop-shadow(0 2px 2px rgba(43,46,32,0.2))':'none',
     transition:'all 0.25s'}},count),
-  /*#__PURE__*/React.createElement("div",{style:{fontSize:9,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:active?accentColor:'#b0b3a0',marginTop:8,transition:'all 0.25s'}},est.label,
+  /*#__PURE__*/React.createElement("div",{style:{fontSize:9,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:active?accentColor:'rgba(233,228,210,.55)',marginTop:8,transition:'all 0.25s'}},est.label,
     // 'Entregado' se calcula con la fecha REAL de entrega (igual que Pagos Mensajeros), no con
     // la fecha de despacho como el resto de las tarjetas -- por eso puede no calzar exactamente
     // con 'Todos' menos la suma del resto. Se avisa aca mismo para no repetir la confusion.
-    est.val==='entregado'&&(vistaEstado==='cierre'||vistaEstado==='fusion')&&/*#__PURE__*/React.createElement("div",{style:{fontSize:7,fontWeight:600,letterSpacing:0.5,textTransform:'none',color:active?accentColor:'#b0b3a0',opacity:0.75,marginTop:2}},cargandoEntregadosReal?'actualizando…':'"resuelto" = fecha real de entrega')));})),selected.size>0&&/*#__PURE__*/React.createElement("div",{style:{background:'linear-gradient(145deg,#ffffff,#f5eedc)',border:'1px solid rgba(200,168,75,0.3)',borderTop:'3px solid var(--gold)',borderRadius:14,padding:'16px 20px',marginBottom:16,boxShadow:'6px 6px 16px rgba(43,46,32,0.12),-2px -2px 8px rgba(255,255,255,0.9)'}},
+    est.val==='entregado'&&(vistaEstado==='cierre'||vistaEstado==='fusion')&&/*#__PURE__*/React.createElement("div",{style:{fontSize:7,fontWeight:600,letterSpacing:0.5,textTransform:'none',color:active?accentColor:'rgba(233,228,210,.55)',opacity:0.75,marginTop:2}},cargandoEntregadosReal?'actualizando…':'"resuelto" = fecha real de entrega')));})),selected.size>0&&/*#__PURE__*/React.createElement("div",{style:{background:'linear-gradient(145deg,#ffffff,#f5eedc)',border:'1px solid rgba(200,168,75,0.3)',borderTop:'3px solid var(--gold)',borderRadius:14,padding:'16px 20px',marginBottom:16,boxShadow:'6px 6px 16px rgba(43,46,32,0.12),-2px -2px 8px rgba(255,255,255,0.9)'}},
   // Encabezado
   React.createElement("div",{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}},
     React.createElement("div",{style:{display:'flex',alignItems:'center',gap:8}},
