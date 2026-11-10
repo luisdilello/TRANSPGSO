@@ -51,6 +51,8 @@ function RutaEnVivo(props){
   R.useEffect(function(){setRes(null);cargar();},[dia]);
   R.useEffect(function(){
     if(!esHoy||pausa)return;
+    var iv=window.__app&&window.__app.intervaloVisible;
+    if(iv)return iv(cargar,30000,['envios'],8000);
     var id=setInterval(function(){if(!document.hidden)cargar();},30000);
     return function(){clearInterval(id);};
   },[dia,pausa,esHoy]);

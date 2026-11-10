@@ -32,6 +32,8 @@ function ColectaAdmin(_ref_ca){var clientes=_ref_ca.clientes,mensajeros=_ref_ca.
   function refrescarTodo(){cargarScanHoy();cargarColectas();cargarNoReg();}
   React.useEffect(function(){
     if(!enVivo||filtroFecha!==hoy)return;
+    var iv=window.__app&&window.__app.intervaloVisible;
+    if(iv)return iv(function(){cargarScanHoy();cargarNoReg();},30000,['envios'],5000);
     var t=setInterval(function(){if(document.visibilityState==='visible'){cargarScanHoy();cargarNoReg();}},30000);
     return function(){clearInterval(t);};
   },[enVivo,filtroFecha]);

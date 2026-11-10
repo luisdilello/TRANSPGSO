@@ -268,7 +268,7 @@ useEffect(()=>{
     try{const m=await marcasCambiosEnvios();if(vigente&&cursoresCambiosRef.current.clave===clave)Object.assign(cursoresCambiosRef.current,{env:m.env,hist:m.hist,elim:m.elim});}catch(_e){}
     if(vigente)sincronizarDesdeSupabase();
   })();
-  const limpiar=intervaloVisible(sincronizarCambios,60000);
+  const limpiar=intervaloVisible(sincronizarCambios,60000,['envios']);
   return()=>{vigente=false;limpiar();};
 },[periodo,mesFiltro,desde,hasta]);// Antes cada 60s: se sube a 3 min (igual que los otros dos auto-refrescos de esta pantalla, ver más abajo) -- es de solo lectura, no necesita ser al segundo, y así no se repiten 3 consultas por minuto por cada pestaña de Gestión de Envíos que quede abierta.// Igual que el sistema anterior de Luis: por defecto solo trae el DIA EN CURSO (rapido), y solo trae
 // mas cuando el usuario cambia de periodo (Semana/Mes/Rango). Antes se traia SIEMPRE la tabla

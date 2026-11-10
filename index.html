@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261110170938;
+window.__MODULES_VERSION=20261110171935;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1679,13 +1679,39 @@ function limiteDiaChileUTC(fechaStr,finDelDia){
 // ══════════════════════════════════════════════════════════════════════════════════════
 // Ejecuta fn cada 'ms' SOLO mientras la pestaña está visible. Si la pestaña estuvo oculta y
 // vuelve a verse cuando ya pasó el intervalo, ejecuta fn de inmediato. Devuelve la función de limpieza.
-function intervaloVisible(fn,ms){
-  let ultimo=Date.now();
+// 10-11-2026 · TIEMPO REAL EN TODO EL SISTEMA: un solo canal de Supabase Realtime por pestaña escucha
+// envios / retiros / colectas / siniestros. Cuando llega un cambio, las pantallas que pidieron esa
+// tabla (3er parámetro de intervaloVisible) corren su refresco incremental de inmediato (agrupando
+// ráfagas: espera 700 ms de calma, máximo 2,5 s). El intervalo queda como respaldo por si se corta
+// la conexión. Pestaña oculta = no se refresca; al volver se pone al día.
+const busVivo={subs:{},canal:null,timers:{},primero:{},estado:'off'};
+function busVivoAvisar(tabla){
+  const L=busVivo.subs[tabla];if(!L||!L.size)return;
+  const ahora=Date.now();if(!busVivo.primero[tabla])busVivo.primero[tabla]=ahora;
+  clearTimeout(busVivo.timers[tabla]);
+  const correr=function(){busVivo.primero[tabla]=0;if(document.hidden){L.forEach(function(x){x.pendiente=true;});return;}L.forEach(function(x){try{x.fn();}catch(e){}});};
+  if(ahora-busVivo.primero[tabla]>=2500)correr();else busVivo.timers[tabla]=setTimeout(correr,700);
+}
+function busVivoConectar(){
+  if(busVivo.canal||typeof db==='undefined'||!db||!db.channel)return;
+  try{
+    let ch=db.channel('pgso-bus-'+Math.random().toString(36).slice(2,8));
+    ['envios','retiros','colectas','siniestros'].forEach(function(t){ch=ch.on('postgres_changes',{event:'*',schema:'public',table:t},function(){busVivoAvisar(t);});});
+    busVivo.canal=ch.subscribe(function(st){busVivo.estado=st;if(st==='CHANNEL_ERROR'||st==='TIMED_OUT'||st==='CLOSED'){try{db.removeChannel(busVivo.canal);}catch(e){}busVivo.canal=null;setTimeout(function(){if(Object.keys(busVivo.subs).some(function(k){return busVivo.subs[k].size;}))busVivoConectar();},5000);}});
+  }catch(e){busVivo.canal=null;}
+}
+window.__busVivo=busVivo;
+function intervaloVisible(fn,ms,tablas,minGap){
+  let ultimo=Date.now(),tTrail=null;
   const tick=function(){if(document.hidden)return;ultimo=Date.now();fn();};
   const id=setInterval(tick,ms);
-  const onVis=function(){if(!document.hidden&&Date.now()-ultimo>=ms){ultimo=Date.now();fn();}};
+  // minGap: refresco pesado (RPC, informes) -> como máximo uno cada minGap ms ante ráfagas de cambios.
+  const sub={fn:function(){const falta=(minGap||0)-(Date.now()-ultimo);if(falta>0){if(!tTrail)tTrail=setTimeout(function(){tTrail=null;ultimo=Date.now();fn();},falta);return;}ultimo=Date.now();fn();},pendiente:false};
+  (tablas||[]).forEach(function(t){(busVivo.subs[t]=busVivo.subs[t]||new Set()).add(sub);});
+  if(tablas&&tablas.length)busVivoConectar();
+  const onVis=function(){if(document.hidden)return;if(sub.pendiente||Date.now()-ultimo>=ms){sub.pendiente=false;ultimo=Date.now();fn();}};
   document.addEventListener('visibilitychange',onVis);
-  return function(){clearInterval(id);document.removeEventListener('visibilitychange',onVis);};
+  return function(){clearInterval(id);clearTimeout(tTrail);document.removeEventListener('visibilitychange',onVis);(tablas||[]).forEach(function(t){busVivo.subs[t]&&busVivo.subs[t].delete(sub);});};
 }
 // Marcas iniciales para preguntar "qué cambió desde ahora": el updated_at más reciente de envios
 // y el id más alto de historial_envios (ambos con índice, consultas de 1 fila).
@@ -3329,7 +3355,7 @@ function Dashboard(_ref7){
     // Antes cada 60s: para una pantalla de solo lectura como el Dashboard (no hay riesgo de
     // pisar cambios) no hace falta tan seguido -- se sube a 3 min, igual que 'Todo' más abajo,
     // para no repetir esta consulta de más por cada pestaña de Dashboard que quede abierta.
-    const _limpiarExtra=intervaloVisible(()=>fetchExtra(true),120000);
+    const _limpiarExtra=intervaloVisible(()=>fetchExtra(true),120000,['envios']);
     return()=>{cancelado=true;_limpiarExtra();};
   },[periodo,mesFiltro,db]);
   // Consulta específica para Rango: se dispara cada vez que cambian las fechas elegidas,
@@ -3352,7 +3378,7 @@ function Dashboard(_ref7){
     fetchRango(false);
     // Mismo criterio que fetchExtra: se sube de 60s a 3 min, es de solo lectura y no necesita
     // refrescarse tan seguido.
-    const _limpiarRango=intervaloVisible(()=>fetchRango(true),120000);
+    const _limpiarRango=intervaloVisible(()=>fetchRango(true),120000,['envios']);
     return()=>{cancelado=true;_limpiarRango();};
   },[periodo,desde,hasta,db]);
   // Consulta completa para 'Todo': trae TODA la tabla en bloques de 1000, sin tope artificial,
@@ -3372,7 +3398,7 @@ function Dashboard(_ref7){
     }
     fetchTodoHistorico();
     // Refresco cada 3 min (no 60s) porque es un escaneo completo de la tabla, mas pesado que los otros.
-    const _limpiarTodos=intervaloVisible(fetchTodoHistorico,180000);
+    const _limpiarTodos=intervaloVisible(fetchTodoHistorico,180000,['envios']);
     return()=>{cancelado=true;_limpiarTodos();};
   },[periodo,db]);
   const lunesStr=(()=>{const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
@@ -4529,7 +4555,7 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
     // El canal realtime de abajo ya avisa al instante ante cualquier cambio -- este intervalo
     // es solo una red de seguridad por si se pierde algún evento, así que puede ser mucho más
     // espaciado de lo que estaba (antes cada 15s, repitiendo la misma consulta sin necesidad).
-    var limpiarIv=intervaloVisible(function(){sincronizarDesdeSupabaseRetiros(false);},120000);// 12-10-2026: pausa con la pestaña oculta
+    var limpiarIv=intervaloVisible(function(){sincronizarDesdeSupabaseRetiros(false);},120000,['retiros']);// 12-10-2026: pausa con la pestaña oculta
     var canal=db.channel('planilla-retiros-admin-'+retiroFecha).on('postgres_changes',{event:'*',schema:'public',table:'retiros',filter:'fecha=eq.'+retiroFecha},function(){sincronizarDesdeSupabaseRetiros(false);}).subscribe();
     return function(){limpiarIv();db.removeChannel(canal);};
   },[retiroFecha]);
@@ -4564,7 +4590,7 @@ function PlanillaRetiros(_ref_pr){var clientes=_ref_pr.clientes,mensajeros=_ref_
     // instante, este polling es solo respaldo (antes cada 20s).
     // 12-10-2026: pausa con la pestaña oculta y el canal en vivo recarga como máximo cada 30 s
     // (antes cada entrega del día de cualquier mensajero recargaba toda la colecta del día).
-    var limpiarIv=intervaloVisible(cargarColectaDelDia,120000);
+    var limpiarIv=intervaloVisible(cargarColectaDelDia,120000,['envios','colectas']);
     var recargaFrenada=conFreno(cargarColectaDelDia,30000);
     var canal=db.channel('planilla-retiros-colecta-'+retiroFecha).on('postgres_changes',{event:'*',schema:'public',table:'envios',filter:'fecha=eq.'+retiroFecha},function(){if(!document.hidden)recargaFrenada();}).subscribe();
     return function(){limpiarIv();db.removeChannel(canal);};
@@ -10660,7 +10686,7 @@ function RetirosRider(_ref_rr){
     cargarRetiros(fechaVer);
     calcularPiezasAuto(fechaVer);
     // El canal realtime de abajo ya avisa al instante -- este polling es solo respaldo (antes cada 30s).
-    var limpiarIvR=intervaloVisible(function(){cargarRetiros(fechaVer);calcularPiezasAuto(fechaVer);},120000);// 12-10-2026: pausa con la app en segundo plano
+    var limpiarIvR=intervaloVisible(function(){cargarRetiros(fechaVer);calcularPiezasAuto(fechaVer);},120000,['retiros']);// 12-10-2026: pausa con la app en segundo plano
     var canalId='retiros-rider-'+(usuario.nombre||'').toLowerCase().replace(/[^a-z0-9]/g,'_');
     var canal=db.channel(canalId).on('postgres_changes',{event:'*',schema:'public',table:'retiros'},function(){cargarRetiros(fechaVer);}).subscribe();
     var canalId2='colecta-piezas-'+(usuario.nombre||'').toLowerCase().replace(/[^a-z0-9]/g,'_');
@@ -15372,7 +15398,7 @@ useEffect(()=>{
   syncInicial();
   // Cada 3 min y solo con la pestaña visible (intervaloVisible); desde el 12-10-2026 cada vuelta
   // trae solo los envíos que cambiaron (ver intentarSync).
-  const _limpiarSync2=intervaloVisible(syncInicial,180000);
+  const _limpiarSync2=intervaloVisible(syncInicial,180000,['envios']);
   return _limpiarSync2;
 },[]);
 const mensajerosActivos=useMemo(()=>mensajeros.filter(m=>m.activo!==false),[mensajeros]);const mensajerosVista=useMemo(()=>{if(!perfil||perfil.verTodo)return mensajerosActivos;return mensajerosActivos.filter(m=>perfil.mensajerosIds.includes(m.id));},[perfil,mensajerosActivos]);const mensajerosDiaVista=useMemo(()=>{if(!perfil||perfil.verTodo)return mensajerosDia;const nombresPermitidos=new Set(mensajerosVista.map(m=>m.nombre));return mensajerosDia.filter(m=>nombresPermitidos.has(m.nombre));},[perfil,mensajerosDia,mensajerosVista]);const kpiVista=useMemo(()=>{if(!perfil||perfil.verTodo)return kpi;const totEnt=mensajerosDiaVista.reduce((a,m)=>a+m.entregados,0);const totCam=mensajerosDiaVista.reduce((a,m)=>a+(m.enCamino||0),0);const totRep=mensajerosDiaVista.reduce((a,m)=>a+m.reprogram,0);const totCan=mensajerosDiaVista.reduce((a,m)=>a+m.cancelados,0);const totTotal=mensajerosDiaVista.reduce((a,m)=>a+m.total,0);return{...kpi,totalPaquetes:totTotal,entregados:totEnt,enCamino:totCam,reprogramados:totRep,cancelados:totCan};},[perfil,kpi,mensajerosDiaVista]);if(!usuarioActivo){return/*#__PURE__*/React.createElement(LoginScreen,{onLogin:u=>{setUsuarioActivo(u);lsSave('session_usuario',u);let pf=null;if(u.rol==='superadmin'){pf={nombre:u.nombre,rol:'superadmin',esAdmin:true,esSuperAdmin:true,verTodo:true,mensajerosIds:[]};}else if(u.rol==='admin'){pf={nombre:u.nombre,rol:'admin',esAdmin:true,esSuperAdmin:false,verTodo:true,mensajerosIds:[]};}else if(u.rol==='rider'){pf={nombre:u.nombre,rol:'rider',esAdmin:false,esSuperAdmin:false,verTodo:false,mensajerosIds:[]};}if(pf){setPerfil(pf);lsSave('session_perfil',pf);}}});}if((usuarioActivo==null?void 0:usuarioActivo.rol)==='cliente'){return/*#__PURE__*/React.createElement(PortalCliente,{usuario:usuarioActivo,onLogout:()=>{setUsuarioActivo(null);lsSave('session_usuario',null);}});}if((usuarioActivo==null?void 0:usuarioActivo.rol)==='rider'){return/*#__PURE__*/React.createElement(RiderApp,{usuario:usuarioActivo,mensajeros:mensajeros,onLogout:()=>{setUsuarioActivo(null);setPerfil(null);lsSave('session_usuario',null);lsSave('session_perfil',null);}});}if(!perfil){return/*#__PURE__*/React.createElement(PerfilSelector,{mensajeros:mensajerosActivos,usuario:usuarioActivo,onConfirm:p=>{const pf2={...p,rol:p.rol||usuarioActivo.rol,esAdmin:p.esAdmin,esSuperAdmin:p.esSuperAdmin||false};setPerfil(pf2);lsSave('session_perfil',pf2);}});}const tabs=[];return/*#__PURE__*/React.createElement(React.Fragment,null,

@@ -381,6 +381,11 @@ function montarFlujo(T,cont,cnt,ui){
   ui.labels.innerHTML='';var labs=Object.keys(nodos).map(function(k){var el=document.createElement('div');
     el.style.cssText='position:absolute;transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer;text-align:center;white-space:nowrap';el.title='Ver por comuna';el.onclick=function(){ui.onNodo&&ui.onNodo(k);};
     var L={el:el,k:k};pintar(L);ui.labels.appendChild(el);return L;});
+  // Datos frescos del servidor (cada refresco en tiempo real): reemplaza conteos sin reconstruir la escena.
+  E.actualizar=function(cntN){
+    Object.keys(vals).forEach(function(k){vals[k]=0;});det={};
+    Object.keys(cntN||{}).forEach(function(e){var k=nodoDe(e);if(k){vals[k]+=cntN[e]||0;det[e]=(det[e]||0)+(cntN[e]||0);}});
+    salieron=vals.en_ruta+vals.entregado+vals.reprogramado+vals.cancelado;labs.forEach(pintar);};
   // En vivo: un envío cambió de estado -> mueve el conteo, repinta etiquetas y dispara un destello en el destino.
   E.evento=function(desdeE,haciaE,codigo){
     var desde=nodoDe(desdeE),hacia=nodoDe(haciaE);
@@ -535,6 +540,7 @@ function CentroControl3D(props){
   R.useEffect(function(){var iv=setInterval(function(){setTick2(function(x){return x+1;});},30000);return function(){clearInterval(iv);};},[]);
   var refNodo=R.useRef(setNodoSel);refNodo.current=setNodoSel;
   var refC=R.useRef(null),refTip=R.useRef(null),refLab=R.useRef(null);
+  var _kb=R.useState(''),keyEscena=_kb[0],setKeyEscena=_kb[1];var ultReconst=R.useRef(0);
   var res=R.useMemo(function(){
     var pc={},cnt={},sinCoord={};
     envios.forEach(function(e){cnt[e.estado]=(cnt[e.estado]||0)+1;if(!e.comuna)return;var k=coordDe(e.comuna);
@@ -556,9 +562,14 @@ function CentroControl3D(props){
     var lo=peor?peor.ef:0.9,hi=mejor?mejor.ef:1;if(hi-lo<0.01)lo=Math.max(0,hi-0.01);
     return{datos:datos,cnt:cnt,mejor:mejor,peor:peor,masInc:masInc,top:top,key:key,nComunas:datos.length,lo:lo,hi:hi,sinComuna:sinComuna,nSinCoord:nSinCoord,total:envios.length};
   },[envios]);
+  // Datos nuevos del servidor: se toman como verdad (se descartan los ajustes en vivo ya incorporados)
+  // y la escena del flujo actualiza sus números sin reconstruirse.
   R.useEffect(function(){
     var m={};envios.forEach(function(e){m[e.codigo]=e.estado;});vivoRef.current=m;setDeltas({});if(!inicioVivo.current)inicioVivo.current=Date.now();
-    var db=window.__app&&window.__app.db;if(!db||!db.channel||!envios.length)return;
+    try{refE.current&&refE.current.actualizar&&refE.current.actualizar(res.cnt);}catch(e){}
+  },[res.key]);
+  R.useEffect(function(){
+    var db=window.__app&&window.__app.db;if(!db||!db.channel)return;
     var canal=db.channel('cc3d-envios-'+Date.now()).on('postgres_changes',{event:'UPDATE',schema:'public',table:'envios'},function(pl){
       var nw=pl&&pl.new;if(!nw||!nw.codigo)return;var antes=vivoRef.current[nw.codigo];
       if(antes===undefined||antes===nw.estado)return;
@@ -568,9 +579,17 @@ function CentroControl3D(props){
       try{refE.current&&refE.current.evento&&refE.current.evento(antes,nw.estado,nw.codigo);}catch(e){}
     }).subscribe();
     return function(){try{db.removeChannel(canal);}catch(e){}};
-  },[res.key]);
+  },[]);
+  // Reconstrucción de la escena: el flujo solo al cambiar de vista (los números se actualizan en vivo);
+  // el mapa como máximo cada 90 s o si cambia el conjunto de comunas.
+  R.useEffect(function(){
+    var estructura=res.datos.map(function(d){return d.n;}).sort().join('|');
+    var k=(envios.length?'D':'V')+(modo==='flujo'?'flujo':(estructura+'#'+res.total));
+    if(!keyEscena||modo==='flujo'||keyEscena.split('#')[0]!==(envios.length?'D':'V')+estructura||keyEscena.charAt(0)!==(envios.length?'D':'V')||Date.now()-ultReconst.current>90000){if(k!==keyEscena){ultReconst.current=Date.now();setKeyEscena(k);}}
+  },[res.key,modo]);
   R.useEffect(function(){
     var E=null,vivo=true;setErr('');
+    if(!keyEscena)return;
     if(!envios.length)return;
     Promise.all([cargarThree(),modo==='mapa'?cargarGeo():null]).then(function(rr){var T=rr[0],geo=rr[1];if(!vivo||!refC.current)return;
       var ui={lo:res.lo,hi:res.hi,tip:refTip.current,labels:refLab.current,onNodo:function(k){refNodo.current(function(prev){return k&&prev!==k?k:(k?null:null);});},onLost:function(){setTimeout(function(){setGen(function(g){return g+1;});},800);}};
@@ -583,7 +602,7 @@ function CentroControl3D(props){
         else setErr('3d');}
     }).catch(function(){setErr('3d');});
     return function(){vivo=false;refE.current=null;if(E)E.destroy();if(refLab.current)refLab.current.innerHTML='';};
-  },[modo,res.key,gen]);
+  },[modo,keyEscena,gen]);
   function cambiar(m){setModo(m);try{localStorage.setItem('dash3d_modo',m);}catch(e){}}
   var tab=function(v,l){var a=modo===v;return h('button',{key:v,type:'button',onClick:function(){cambiar(v);},style:{padding:'8px 16px',borderRadius:10,border:'1px solid '+(a?'#e8c766':'rgba(255,255,255,.14)'),background:a?'linear-gradient(135deg,#e8c766,#b08a2e)':'rgba(255,255,255,.05)',color:a?'#1a1d13':'#e9e4d2',fontWeight:800,fontSize:12.5,letterSpacing:.4,cursor:'pointer',boxShadow:a?'0 6px 16px rgba(200,168,75,.35)':'none'}},l);};
   var ins=function(lbl,val,sub,col){return h('div',{key:lbl,style:{padding:'9px 12px',borderRadius:14,background:'linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.03))',border:'1px solid rgba(255,255,255,.10)',boxShadow:'inset 0 1px 0 rgba(255,255,255,.08)'}},
