@@ -743,7 +743,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261110135802;
+window.__MODULES_VERSION=20261110140904;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1514,7 +1514,7 @@ async function registrarSiniestro(codigo,mensajero,nota,opts){
 // inicial ya insertó el envio con su estado - esto solo deja la marca de quién y por qué medio entró al sistema).
 async function sbRegistrarHistorial(codigo,estado,nota,usuario,canal){try{await db.from('historial_envios').insert({envio_id:null,codigo_envio:codigo,estado,nota:nota||'',usuario:usuario||'Sistema',canal:canal||'sistema',created_at:new Date().toISOString()});}catch(e){console.warn('Registrar historial error:',e.message);}}
 // Version en lote: para inserciones masivas (colecta, importaciones) evita 1 insert por paquete.
-async function sbRegistrarHistorialLote(codigos,estado,nota,usuario,canal){try{if(!codigos||!codigos.length)return;const ts=new Date().toISOString();const filas=codigos.map(function(cod){return{envio_id:null,codigo_envio:cod,estado,nota:nota||'',usuario:usuario||'Sistema',canal:canal||'sistema',created_at:ts};});await db.from('historial_envios').insert(filas);}catch(e){console.warn('Registrar historial lote error:',e.message);}}async function obtenerFuentesExistentes(codigos){try{if(!codigos||!codigos.length)return new Map();var uniq=Array.from(new Set(codigos.filter(Boolean)));if(!uniq.length)return new Map();var res=await db.from('envios').select('codigo,fuente').in('codigo',uniq);var mapa=new Map();if(res&&res.data)res.data.forEach(function(r){mapa.set(r.codigo,r.fuente);});return mapa;}catch(e){console.warn('obtenerFuentesExistentes error:',e.message);return new Map();}}async function obtenerEnviosExistentes(codigos){try{if(!codigos||!codigos.length)return new Map();var uniq=Array.from(new Set(codigos.filter(Boolean)));if(!uniq.length)return new Map();var res=await db.from('envios').select('codigo,estado,mensajero,fuente,cliente,fecha,created_at').in('codigo',uniq);var mapa=new Map();if(res&&res.data)res.data.forEach(function(r){mapa.set(r.codigo,r);});return mapa;}catch(e){console.warn('obtenerEnviosExistentes error:',e.message);return new Map();}}
+async function sbRegistrarHistorialLote(codigos,estado,nota,usuario,canal){try{if(!codigos||!codigos.length)return;const ts=new Date().toISOString();const filas=codigos.map(function(cod){return{envio_id:null,codigo_envio:cod,estado,nota:nota||'',usuario:usuario||'Sistema',canal:canal||'sistema',created_at:ts};});await db.from('historial_envios').insert(filas);}catch(e){console.warn('Registrar historial lote error:',e.message);}}async function obtenerFuentesExistentes(codigos){try{if(!codigos||!codigos.length)return new Map();var uniq=Array.from(new Set(codigos.filter(Boolean)));if(!uniq.length)return new Map();var res=await db.from('envios').select('codigo,fuente').in('codigo',uniq);var mapa=new Map();if(res&&res.data)res.data.forEach(function(r){mapa.set(r.codigo,r.fuente);});return mapa;}catch(e){console.warn('obtenerFuentesExistentes error:',e.message);return new Map();}}async function obtenerEnviosExistentes(codigos){try{if(!codigos||!codigos.length)return new Map();var uniq=Array.from(new Set(codigos.filter(Boolean)));if(!uniq.length)return new Map();var res=await db.from('envios').select('codigo,estado,mensajero,fuente,cliente,fecha,created_at,monto,en_un_cambio,direccion,comuna').in('codigo',uniq);var mapa=new Map();if(res&&res.data)res.data.forEach(function(r){mapa.set(r.codigo,r);});return mapa;}catch(e){console.warn('obtenerEnviosExistentes error:',e.message);return new Map();}}
 // Trae TODAS las filas de una consulta paginandola en bloques de 1000 (tope de Supabase/PostgREST),
 // pero en PARALELO en vez de pagina por pagina: pide la primera pagina pidiendo tambien el conteo
 // exacto (count:'exact'), y con ese total sabe cuantas paginas mas faltan y las pide TODAS juntas con
@@ -6446,6 +6446,12 @@ function playSound(type){try{
     o.start(now); o.stop(now+1.35);
     osc(130,'square',0,1.2,0.35);
     vib([400,120,400,120,400]);
+  } else if(type==='scan_cobro'){
+    // Por cobrar: caja registradora (dos campanazos brillantes + golpe grave), distinto a todo lo demás
+    osc(2093,'triangle',0,0.18,0.55);osc(2637,'triangle',0.08,0.22,0.5);
+    osc(1568,'square',0.24,0.12,0.35);osc(2093,'square',0.34,0.25,0.4);
+    osc(110,'sawtooth',0.24,0.3,0.45);
+    vib([90,40,90,40,300]);
   } else if(type==='scan_alerta'){
     // Sin dirección: dos tonos alternados insistentes (ding-dong de aviso)
     [0,0.36].forEach(function(t){osc(988,'square',t,0.16,0.42);osc(740,'square',t+0.17,0.18,0.42);osc(494,'sine',t,0.35,0.3);});
@@ -6706,7 +6712,7 @@ async function analizarEtiqueta(base64img,mediaType,_retry=0){
             },
             {
               type:'text',
-              text:`Eres un OCR especializado en etiquetas de paquetes de Chile. La etiqueta puede estar en cualquier orientación (normal, girada 90°, 180°, espejo).\n\nTIPO A — MercadoLibre Flex (tiene logo ML con manos, dice "FLEX", tiene QR grande):\n\nCÓDIGO DE ENVÍO — sigue estos pasos en orden:\n1. Busca la línea que empieza con "Envio:" (puede estar en cualquier orientación)\n2. Esa línea tiene DOS números separados por espacio: "Envio: XXXXXXX YYYY"\n3. Únelos SIN espacio: "Envio: 4723568 8653" → codigo = "47235688653"\n4. El código SIEMPRE tiene 10 o más dígitos — si obtienes menos de 8 dígitos, estás leyendo mal\n5. NUNCA uses el número de Pack ID (línea "Pack ID: 20000...") ni Venta\n6. Si la etiqueta está girada, lee igualmente buscando la línea "Envio:"\n\nCOMUNA:\n- Debajo del QR hay DOS líneas en MAYÚSCULAS\n- PRIMERA línea = zona logística (ANILLO OESTE, ANILLO ESTE, etc.) → IGNORAR\n- SEGUNDA línea = comuna real → USAR (ej: CERRO NAVIA, MAIPU, SANTIAGO, QUILICURA, ÑUÑOA)\n- Si solo hay UNA línea mayúscula bajo el QR y se repite (ej: LA FLORIDA / LA FLORIDA) → esa es la comuna\n- NUNCA uses RESIDENCIAL, COMERCIAL como comuna — son tipos de entrega\n\nDIRECCIÓN: texto después de "Direccion:" — solo calle y número, sin repetir la comuna\nREFERENCIA: texto útil después de "Referencia:" (omite si repite la palabra "Referencia:")\nDESTINATARIO: nombre antes del paréntesis en "Destinatario:"\n\nTIPO B — Manual/Otro (campos "Nomber:", "RUT:", "Ciudad:"):\n- codigo: código alfanumérico visible (ej: "RG-CL-00768*1")\n- comuna: campo "Ciudad:" o "Comuna:"\n- direccion: campo "Dirección:"\n- destinatario: campo "Nomber:" o "Nombre:"\n\nResponde SOLO con JSON válido:\n{"codigo":"47235688653","comuna":"QUILICURA","direccion":"Piedra Roja 65","referencia":"Referencia: 19","destinatario":"Jeannette Ortega","tipo":"flex"}`
+              text:`Eres un OCR especializado en etiquetas de paquetes de Chile. La etiqueta puede estar en cualquier orientación (normal, girada 90°, 180°, espejo).\n\nTIPO A — MercadoLibre Flex (tiene logo ML con manos, dice "FLEX", tiene QR grande):\n\nCÓDIGO DE ENVÍO — sigue estos pasos en orden:\n1. Busca la línea que empieza con "Envio:" (puede estar en cualquier orientación)\n2. Esa línea tiene DOS números separados por espacio: "Envio: XXXXXXX YYYY"\n3. Únelos SIN espacio: "Envio: 4723568 8653" → codigo = "47235688653"\n4. El código SIEMPRE tiene 10 o más dígitos — si obtienes menos de 8 dígitos, estás leyendo mal\n5. NUNCA uses el número de Pack ID (línea "Pack ID: 20000...") ni Venta\n6. Si la etiqueta está girada, lee igualmente buscando la línea "Envio:"\n\nCOMUNA:\n- Debajo del QR hay DOS líneas en MAYÚSCULAS\n- PRIMERA línea = zona logística (ANILLO OESTE, ANILLO ESTE, etc.) → IGNORAR\n- SEGUNDA línea = comuna real → USAR (ej: CERRO NAVIA, MAIPU, SANTIAGO, QUILICURA, ÑUÑOA)\n- Si solo hay UNA línea mayúscula bajo el QR y se repite (ej: LA FLORIDA / LA FLORIDA) → esa es la comuna\n- NUNCA uses RESIDENCIAL, COMERCIAL como comuna — son tipos de entrega\n\nDIRECCIÓN: texto después de "Direccion:" — solo calle y número, sin repetir la comuna\nREFERENCIA: texto útil después de "Referencia:" (omite si repite la palabra "Referencia:")\nDESTINATARIO: nombre antes del paréntesis en "Destinatario:"\n\nTIPO B — Manual/Otro (campos "Nomber:", "RUT:", "Ciudad:"):\n- codigo: código alfanumérico visible (ej: "RG-CL-00768*1")\n- comuna: campo "Ciudad:" o "Comuna:"\n- direccion: campo "Dirección:"\n- destinatario: campo "Nomber:" o "Nombre:"\n\nCOBRAR: si la etiqueta dice claramente "POR COBRAR" o "COBRAR $" con un monto, pon ese monto como número entero en "cobrar"; si no lo dice, pon 0. No inventes montos.\n\nResponde SOLO con JSON válido:\n{"codigo":"47235688653","comuna":"QUILICURA","direccion":"Piedra Roja 65","referencia":"Referencia: 19","destinatario":"Jeannette Ortega","tipo":"flex","cobrar":0}`
 
             }
           ]
@@ -7226,6 +7232,24 @@ function RetiroMasivoRider(_ref_rm){
     return!dest&&!dir&&!com&&!tel&&!ref;
   }
 
+  // 10-11-2026: al terminar de leer la foto, aviso inmediato si quedó sin dirección/comuna (para
+  // corregirlo con el paquete en la mano) o si la etiqueta dice "por cobrar".
+  function avisarLecturaRM(codigo,datos){
+    try{
+      if(!datos||datos._error) return; // sin datos: ya existe el aviso rojo "SIN DATOS"
+      var algo=datos.destinatario||datos.direccion||datos.comuna||datos.telefono||datos.referencia;
+      if(!algo) return;
+      if(esPDFRefRM.current.has(codigo)) return; // datos del sistema/PDF: no dependen de esta lectura
+      var cob=+datos.cobrar||0;
+      if(cob>0){
+        setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo&&!p.porCobrar?Object.assign({},p,{porCobrar:{monto:cob,leido:true}}):p;});});
+        playSound('scan_cobro');flashEscaneo('cobro',codigo,'POSIBLE POR COBRAR $'+Math.round(cob).toLocaleString('es-CL'),'La etiqueta indica cobro. Avisa en bodega al entregarlo.');
+        return;
+      }
+      var falta=!datos.direccion?'Sin dirección':(!/\d/.test(String(datos.direccion))?'Dirección sin número':(!datos.comuna?'Sin comuna':''));
+      if(falta){playSound('scan_alerta');flashEscaneo('sindir',codigo,'SIN DIRECCIÓN',falta+'. Corrígela en la revisión antes de confirmar.');}
+    }catch(e){}
+  }
   function procesarCodigo(codigo,canvas){
     if(codigosRef.current.has(codigo)){
       playSound('scan_dup');
@@ -7267,6 +7291,7 @@ function RetiroMasivoRider(_ref_rm){
           // Si IA detecta código diferente, NO reemplazar — el scanner es la fuente de verdad
           return Object.assign({},p,{datosIA:datos,analizandoIA:false});
         });});
+        avisarLecturaRM(codigo,datos);
         // El registro base ya se guardó — completar con los datos de dirección que detectó
         // la IA (si no está protegido por PDF, en cuyo caso esos datos no se tocan).
         // ANTES: esto se ejecutaba también cuando `datos` era un error (foto borrosa, límite de
@@ -7315,6 +7340,11 @@ function RetiroMasivoRider(_ref_rm){
       // "entregado") se reingresara a bodega con solo volver a escanearlo, sin ningún aviso.
       var existentes=await obtenerEnviosExistentes([codigo]);
       var ex=existentes.get(codigo);
+      // 10-11-2026: paquete que ya existe con monto por cobrar -> se marca y se avisa fuerte.
+      var cobroRM=ex&&((+ex.monto>0)||ex.en_un_cambio)?{monto:+ex.monto||0,cambio:!!ex.en_un_cambio}:null;
+      if(cobroRM) setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{porCobrar:cobroRM}):p;});});
+      if(ex&&ex.direccion&&ex.comuna) setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{dirSistema:true}):p;});});
+      var txtCobroRM=cobroRM?('POR COBRAR'+(cobroRM.monto>0?' $'+Math.round(cobroRM.monto).toLocaleString('es-CL'):'')+(cobroRM.cambio?' · EN UN CAMBIO':'')):'';
       if(ex&&!ESTADOS_ADQUIRIBLES_ESCANEO.includes(ex.estado)){
         setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{syncEstado:'bloqueado',estado:'error',motivo:'Requiere admin (no está en bodega/en ruta)'}):p;});});
         playSound('scan_dup');
@@ -7355,7 +7385,7 @@ function RetiroMasivoRider(_ref_rm){
         setAvisoRep(Object.assign({codigo:codigo},infoRep));
         setTimeout(function(){setAvisoRep(function(a){return a&&a.codigo===codigo?null:a;});},5000);
         playSound('scan_noreg');
-        flashEscaneo('noreg',codigo,'YA REGISTRADO',(infoRep.cliente||'Sin cliente')+' · '+(infoRep.hoy?('hoy '+infoRep.hora):(infoRep.fecha+' '+infoRep.hora))+(infoRep.otroCliente?' · es de otro cliente, sepáralo':''));
+        flashEscaneo('noreg',codigo,'YA REGISTRADO',(infoRep.cliente||'Sin cliente')+' · '+(infoRep.hoy?('hoy '+infoRep.hora):(infoRep.fecha+' '+infoRep.hora))+(infoRep.otroCliente?' · es de otro cliente, sepáralo':'')+(txtCobroRM?' · '+txtCobroRM:''));
         // FIX 2026-10-22 (regla de Luis): el PRIMER registro se respeta. Un código que ya estaba
         // registrado (y no viene del PDF) no se modifica desde la app: ni estado, ni mensajero, ni
         // cliente, ni historial. Cualquier corrección se hace desde el panel administrativo.
@@ -7372,6 +7402,7 @@ function RetiroMasivoRider(_ref_rm){
       var ok=!(r&&r.error);
       if(ok&&!yaExistia)creadosSesionRMRef.current.add(codigo);
       setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{syncEstado:ok?(yaExistia?'guardado':'parcial'):'error',esPDF:esPDF,reingreso:yaExistia&&!esPDF}):p;});});
+      if(ok&&cobroRM){setTimeout(function(){playSound('scan_cobro');flashEscaneo('cobro',codigo,txtCobroRM,'Entrégalo en bodega avisando que es por cobrar');},950);}
       if(ok){
         sbRegistrarHistorial(codigo,'en_bodega',esPDF?'Colecta / Retiro masivo (dato PDF preservado)':(yaExistia?'Colecta / Retiro masivo (ya estaba en el sistema, no se cuenta como nuevo ingreso)':'Colecta / Retiro masivo'),usuario.nombre,'app_mensajero');
       }else{
@@ -7627,7 +7658,7 @@ function RetiroMasivoRider(_ref_rm){
   // FASE SELECCIÓN CLIENTE
 if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed',inset:0,background:'#0a0c07',zIndex:9999,display:'flex',flexDirection:'column',color:'#fff',fontFamily:'DM Sans,sans-serif'}},
     React.createElement('div',{style:{background:'var(--dark)',padding:'16px',paddingTop:'max(16px,env(safe-area-inset-top))',borderBottom:'2px solid var(--gold)',display:'flex',alignItems:'center',justifyContent:'space-between'}},
-      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,color:'var(--gold)',letterSpacing:2}},'🚛 RETIRO MASIVO'),
+      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,color:'var(--gold)',letterSpacing:2}},'RETIRO MASIVO'),
       React.createElement('button',{onClick:onClose,style:{background:'none',border:'1px solid rgba(255,255,255,0.2)',borderRadius:8,padding:'8px 14px',color:'rgba(255,255,255,0.6)',cursor:'pointer',fontSize:13}},'✕')
     ),
     React.createElement('div',{style:{flex:1,overflowY:'auto',padding:20}},
@@ -7659,11 +7690,22 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
     React.createElement('div',{style:{position:'absolute',top:0,left:0,right:0,zIndex:10,background:'linear-gradient(to bottom,rgba(0,0,0,0.8),transparent)',padding:'16px',paddingTop:'max(16px,env(safe-area-inset-top))'}},
       React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center'}},
         React.createElement('div',null,
-          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,color:'var(--gold)',letterSpacing:2}},'🚛 '+clienteSel.nombre),
-          React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.6)',marginTop:2}},paquetes.length+' paquetes escaneados')
+          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,color:'var(--gold)',letterSpacing:2}},clienteSel.nombre),
+          React.createElement('div',{style:{fontSize:12,color:'rgba(255,255,255,0.75)',marginTop:2,fontWeight:700}},paquetes.length+' paquete'+(paquetes.length!==1?'s':'')+' escaneado'+(paquetes.length!==1?'s':'')),
+          (function(){
+            var nG=paquetes.filter(function(p){return p.syncEstado==='guardado'||p.syncEstado==='parcial';}).length;
+            var nL=paquetes.filter(function(p){return p.analizandoIA;}).length;
+            var nS=paquetes.filter(function(p){var d=p.datosIA||{};return !p.analizandoIA&&!p.dirSistema&&!d._error&&(d.destinatario||d.direccion||d.comuna)&&(!d.direccion||!d.comuna);}).length;
+            var nC=paquetes.filter(function(p){return p.porCobrar;}).length;
+            var nR=paquetes.filter(function(p){return p.yaRegistrado;}).length;
+            var nB=paquetes.filter(function(p){return p.syncEstado==='bloqueado';}).length;
+            var chip=function(n,t,bg,fg){return n>0&&React.createElement('span',{key:t,style:{padding:'3px 8px',borderRadius:6,background:bg,color:fg||'#000',fontSize:10.5,fontWeight:900,letterSpacing:.4,boxShadow:'0 2px 8px rgba(0,0,0,.4)'}},n+' '+t);};
+            return React.createElement('div',{style:{display:'flex',gap:5,marginTop:6,flexWrap:'wrap',maxWidth:'62vw'}},
+              chip(nG,'GUARDADOS','#00e676'),chip(nL,'LEYENDO','rgba(255,255,255,.85)'),chip(nS,'SIN DIRECCIÓN','#ff9800'),chip(nC,'POR COBRAR','#ff1744','#fff'),chip(nR,'YA REGISTRADOS','#ff4fd8','#fff'),chip(nB,'NO SE PUEDEN TOMAR','#ff3b3b','#fff'));
+          })()
         ),
         React.createElement('div',{style:{display:'flex',gap:8}},
-          React.createElement('button',{onClick:toggleLinterna,style:{background:linternaOn?'rgba(200,168,75,0.3)':'rgba(0,0,0,0.5)',border:'1px solid '+(linternaOn?'var(--gold)':'rgba(255,255,255,0.3)'),borderRadius:8,padding:'8px 12px',color:'#fff',cursor:'pointer',fontSize:16}},'🔦'),
+          React.createElement('button',{onClick:toggleLinterna,style:{background:linternaOn?'rgba(200,168,75,0.3)':'rgba(0,0,0,0.5)',border:'1px solid '+(linternaOn?'var(--gold)':'rgba(255,255,255,0.3)'),borderRadius:8,padding:'8px 12px',color:'#fff',cursor:'pointer',fontSize:12,fontWeight:800,letterSpacing:.5}},'LUZ'),
           React.createElement('button',{onClick:function(){setShowManual(true);},style:{background:'rgba(0,0,0,0.5)',border:'1px solid rgba(255,255,255,0.3)',borderRadius:8,padding:'8px 12px',color:'#fff',cursor:'pointer',fontSize:13}},'✎'),
           React.createElement('button',{onClick:function(){detenerScanner();setFase('revision');},style:{background:'rgba(200,168,75,0.2)',border:'1px solid var(--gold)',borderRadius:8,padding:'8px 14px',color:'var(--gold)',cursor:'pointer',fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1}},paquetes.length>0?'REVISAR →':'Cancelar')
         )
@@ -7705,12 +7747,12 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
           fontSize:11,fontWeight:700,letterSpacing:1.5,
           color:scanEstado==='alineando'?'#ffdd00':scanEstado==='capturando'?'#00ff88':'rgba(255,255,255,0.5)',
           transition:'color 0.2s'
-        }},scanEstado==='alineando'?'⚡ MANTÉN QUIETO...':scanEstado==='capturando'?'📸 CAPTURANDO...':'▶ APUNTA AL CÓDIGO QR')
+        }},scanEstado==='alineando'?'MANTÉN QUIETO...':scanEstado==='capturando'?'CAPTURANDO...':'APUNTA AL CÓDIGO QR')
       )
     ),
     // Aviso inmediato si algún paquete no se pudo guardar — no esperar al final del lote
     erroresSyncRM>0&&React.createElement('div',{style:{position:'absolute',top:78,left:0,right:0,zIndex:15,display:'flex',justifyContent:'center',padding:'0 16px'}},
-      React.createElement('div',{onClick:reintentarPendientesRM,style:{background:'rgba(200,0,0,0.95)',padding:'10px 18px',borderRadius:10,fontSize:13,fontWeight:800,color:'#fff',cursor:'pointer',boxShadow:'0 0 20px rgba(255,0,0,0.5)',textAlign:'center'}},'⚠ '+erroresSyncRM+' sin guardar — toca para reintentar')
+      React.createElement('div',{onClick:reintentarPendientesRM,style:{background:'rgba(200,0,0,0.95)',padding:'10px 18px',borderRadius:10,fontSize:13,fontWeight:800,color:'#fff',cursor:'pointer',boxShadow:'0 0 20px rgba(255,0,0,0.5)',textAlign:'center'}},erroresSyncRM+' sin guardar — toca para reintentar')
     ),
     // Aviso EN EL MOMENTO de paquete sin ningún dato — no hay que esperar a terminar todo el
     // lote para enterarse: apenas la IA termina de leer una foto y sale vacía, aparece acá
@@ -7719,7 +7761,7 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
     // pantalla completa).
     vaciosEnVivo.length>0&&React.createElement('div',{style:{position:'absolute',top:erroresSyncRM>0?134:78,left:0,right:0,zIndex:16,display:'flex',justifyContent:'center',padding:'0 16px'}},
       React.createElement('div',{onClick:function(){iniciarReescaneo(vaciosEnVivo[0].codigo);},style:{background:'rgba(220,20,20,0.97)',padding:'10px 18px',borderRadius:10,fontSize:13,fontWeight:800,color:'#fff',cursor:'pointer',textAlign:'center',animation:'alertaVacioPulse 1s ease-in-out infinite',border:'1px solid rgba(255,255,255,0.3)'}},
-        '🚫 SIN DATOS: '+vaciosEnVivo[0].codigo+' — toca para reescanear'+(vaciosEnVivo.length>1?' (+'+(vaciosEnVivo.length-1)+' más)':'')
+        'SIN DATOS: '+vaciosEnVivo[0].codigo+' — toca para reescanear'+(vaciosEnVivo.length>1?' (+'+(vaciosEnVivo.length-1)+' más)':'')
       )
     ),
     // Último scan
@@ -7731,7 +7773,7 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
         avisoRep.otroCliente&&React.createElement('div',{style:{fontSize:12,marginTop:4}},'Es de otro cliente: sepáralo de este retiro'))),
     lastScan&&React.createElement('div',{style:{position:'absolute',bottom:120,left:0,right:0,display:'flex',justifyContent:'center',pointerEvents:'none'}},
       React.createElement('div',{style:{background:lastScan.noLeido?'rgba(180,80,0,0.95)':lastScan.duplicado?'rgba(200,0,0,0.95)':lastScan.esperandoFoto?'rgba(200,168,75,0.95)':'rgba(0,180,80,0.95)',padding:'14px 28px',borderRadius:24,fontSize:15,fontWeight:800,fontFamily:'JetBrains Mono',letterSpacing:1.5,boxShadow:lastScan.noLeido?'0 0 20px rgba(255,140,0,0.6)':lastScan.duplicado?'0 0 20px rgba(255,0,0,0.6)':lastScan.esperandoFoto?'0 0 20px rgba(200,168,75,0.6)':'0 0 20px rgba(0,255,100,0.5)',border:lastScan.noLeido?'2px solid #ff9800':lastScan.duplicado?'2px solid #ff4444':lastScan.esperandoFoto?'2px solid var(--gold)':'2px solid #00ff88',transition:'all 0.2s'}},
-        lastScan.noLeido?'⚠ NO SE PUDO LEER':lastScan.duplicado?'YA ESCANEADO':lastScan.esperandoFoto?'📸 '+lastScan.codigo+'...':'✅ '+lastScan.codigo
+        lastScan.noLeido?'NO SE PUDO LEER':lastScan.duplicado?'YA ESCANEADO':lastScan.esperandoFoto?'FOTO · '+lastScan.codigo+'...':'OK · '+lastScan.codigo
       )
     ),
     // Bottom bar
@@ -7766,7 +7808,7 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
           React.createElement('div',null,
             React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,color:'var(--gold)',letterSpacing:2}},'REVISIÓN · '+paquetes.length+' PAQUETES'),
             analizando>0&&React.createElement('div',{style:{fontSize:11,color:'rgba(200,168,75,0.6)',marginTop:2}},'⏳ Extrayendo datos... '+analizando+' pendientes'),
-            erroresSyncRM>0&&React.createElement('div',{onClick:reintentarPendientesRM,style:{fontSize:11,color:'#ff6b6b',marginTop:2,cursor:'pointer',fontWeight:700}},'⚠ '+erroresSyncRM+' sin guardar — toca para reintentar')
+            erroresSyncRM>0&&React.createElement('div',{onClick:reintentarPendientesRM,style:{fontSize:11,color:'#ff6b6b',marginTop:2,cursor:'pointer',fontWeight:700}},erroresSyncRM+' sin guardar — toca para reintentar')
           ),
           React.createElement('button',{onClick:function(){setFase('escaneando');},style:{background:'none',border:'1px solid rgba(200,168,75,0.4)',borderRadius:8,padding:'8px 14px',color:'var(--gold)',cursor:'pointer',fontSize:13}},'+ Escanear más')
         )
@@ -7787,7 +7829,8 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
           // aparte y más fuerte que el aviso suave de "incompleto", porque a diferencia de una
           // etiqueta parcial (chica, doblada) acá no hay nada que mostrarle al cliente al cobrar.
           var esVacioTotal=!editando&&paqueteVacioTotal(p);
-          return React.createElement('div',{key:p.codigo,style:{background:esVacioTotal?'rgba(255,30,30,0.14)':(datosIncompletos?'rgba(176,48,48,0.06)':'rgba(255,255,255,0.03)'),border:'1px solid '+(editando?'var(--gold)':(esVacioTotal?'#ff2222':(datosIncompletos?'#b03030':'rgba(200,168,75,0.15)'))),boxShadow:esVacioTotal?'0 0 10px rgba(255,30,30,0.35)':'none',borderRadius:10,marginBottom:8,overflow:'hidden',transition:'border 0.2s'}},
+          var colSlotRM=p.porCobrar?'#ff1744':(p.yaRegistrado?'#ff4fd8':(p.syncEstado==='bloqueado'?'#ff3b3b':null));
+          return React.createElement('div',{key:p.codigo,style:{background:esVacioTotal?'rgba(255,30,30,0.14)':(colSlotRM?colSlotRM+'1f':(datosIncompletos?'rgba(255,152,0,0.12)':'rgba(255,255,255,0.03)')),border:(colSlotRM||datosIncompletos?'2px solid ':'1px solid ')+(editando?'var(--gold)':(esVacioTotal?'#ff2222':(colSlotRM||(datosIncompletos?'#ff9800':'rgba(200,168,75,0.15)')))),borderLeft:(colSlotRM||datosIncompletos||esVacioTotal)?'6px solid '+(esVacioTotal?'#ff2222':(colSlotRM||'#ff9800')):undefined,boxShadow:esVacioTotal?'0 0 10px rgba(255,30,30,0.35)':'none',borderRadius:10,marginBottom:8,overflow:'hidden',transition:'border 0.2s'}},
             React.createElement('div',{style:{display:'flex',gap:10,padding:10,alignItems:'flex-start'}},
               // Foto clickeable para zoom
               p.foto
@@ -7798,6 +7841,11 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
                 editando
                   ?React.createElement('input',{value:p.codigoEdit||p.codigo,onChange:function(e){var v=e.target.value.replace(/[^0-9a-zA-Z]/g,'').toUpperCase();setPaquetes(function(prev){return prev.map(function(x,j){return j===i?Object.assign({},x,{codigoEdit:v}):x;});});},style:{fontFamily:'JetBrains Mono',fontSize:14,color:'var(--gold)',fontWeight:700,background:'rgba(200,168,75,0.1)',border:'1px solid var(--gold)',borderRadius:6,padding:'3px 8px',width:'100%',outline:'none',boxSizing:'border-box',marginBottom:4},autoFocus:true})
                   :React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:15,color:'var(--gold)',fontWeight:700,marginBottom:3}},p.codigo),
+                !editando&&(p.porCobrar||p.yaRegistrado||p.syncEstado==='bloqueado'||(!p.dirSistema&&!p.analizandoIA&&!esVacioTotal&&!tieneErrorIA&&(!d.direccion||!d.comuna)))&&React.createElement('div',{style:{display:'flex',gap:5,flexWrap:'wrap',margin:'2px 0 5px'}},
+                  p.porCobrar&&React.createElement('span',{style:{padding:'3px 8px',borderRadius:6,background:'#d4002a',color:'#fff',fontSize:10.5,fontWeight:900,letterSpacing:.4}},(p.porCobrar.leido?'POSIBLE ':'')+'POR COBRAR'+(p.porCobrar.monto>0?' $'+Math.round(p.porCobrar.monto).toLocaleString('es-CL'):'')+(p.porCobrar.cambio?' · CAMBIO':'')),
+                  p.yaRegistrado&&React.createElement('span',{style:{padding:'3px 8px',borderRadius:6,background:'#ff4fd8',color:'#fff',fontSize:10.5,fontWeight:900,letterSpacing:.4}},'YA REGISTRADO · '+(p.yaRegistrado.cliente||'Sin cliente')+(p.yaRegistrado.otroCliente?' (OTRO CLIENTE)':'')),
+                  p.syncEstado==='bloqueado'&&React.createElement('span',{style:{padding:'3px 8px',borderRadius:6,background:'#ff3b3b',color:'#fff',fontSize:10.5,fontWeight:900,letterSpacing:.4}},'NO SE PUEDE TOMAR'),
+                  (!p.dirSistema&&!p.analizandoIA&&!esVacioTotal&&!tieneErrorIA&&(!d.direccion||!d.comuna))&&React.createElement('span',{style:{padding:'3px 8px',borderRadius:6,background:'#ff9800',color:'#1a1200',fontSize:10.5,fontWeight:900,letterSpacing:.4}},!d.direccion?'SIN DIRECCIÓN':'SIN COMUNA')),
                 p.analizandoIA&&React.createElement('div',{style:{fontSize:11,color:'rgba(200,168,75,0.5)'}},'⏳ Procesando...'),
                 !p.analizandoIA&&editando&&React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:4,marginTop:4}},
                   React.createElement('input',{value:p.editDest!=null?p.editDest:(d.destinatario||''),onChange:function(e){var v=e.target.value;setPaquetes(function(prev){return prev.map(function(x,j){return j===i?Object.assign({},x,{editDest:v}):x;});});},placeholder:'Destinatario',style:{fontSize:12,padding:'4px 8px',background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.15)',borderRadius:6,color:'#fff',outline:'none',width:'100%',boxSizing:'border-box'}}),
@@ -8790,7 +8838,7 @@ if(fase==='seleccion') return React.createElement('div',{style:{position:'fixed'
       React.createElement('button',{onClick:onClose,style:{background:'none',border:'1px solid rgba(255,255,255,0.2)',borderRadius:8,color:'rgba(255,255,255,0.6)',padding:'8px 14px',cursor:'pointer',fontSize:13}},'✕ Cerrar')
     ),
     React.createElement('div',{style:{flex:1,overflowY:'auto',padding:20}},
-      React.createElement('button',{onClick:function(){setShowRetiroMasivo(true);},style:{width:'100%',padding:'16px',borderRadius:10,border:'2px solid var(--gold)',background:'rgba(200,168,75,0.12)',color:'var(--gold)',cursor:'pointer',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,marginBottom:24,display:'flex',alignItems:'center',justifyContent:'center',gap:8}},'🚛 RETIRO MASIVO'),
+      React.createElement('button',{onClick:function(){setShowRetiroMasivo(true);},style:{width:'100%',padding:'16px',borderRadius:10,border:'2px solid var(--gold)',background:'rgba(200,168,75,0.12)',color:'var(--gold)',cursor:'pointer',fontFamily:'Bebas Neue',fontSize:18,letterSpacing:2,marginBottom:24,display:'flex',alignItems:'center',justifyContent:'center',gap:8}},'RETIRO MASIVO'),
       React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1.5,color:'rgba(255,255,255,0.4)',marginBottom:12}},'TURNO'),
       React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:24}},
         ['AM','PM'].map(t=>React.createElement('button',{key:t,onClick:()=>setTurno(t),style:{padding:'16px',borderRadius:10,border:'2px solid '+(turno===t?'var(--gold)':'rgba(255,255,255,0.1)'),background:turno===t?'rgba(200,168,75,0.12)':'rgba(255,255,255,0.04)',color:turno===t?'var(--gold)':'rgba(255,255,255,0.5)',fontFamily:'Bebas Neue',fontSize:22,letterSpacing:3,cursor:'pointer'}},t,' ',t==='AM'?'🌅':'🌆'))
@@ -8959,10 +9007,10 @@ function AsignacionRider(_ref_ar){
     let fila=null,fallo=false;
     try{
       const consulta=(async()=>{
-        const r=await db.from('envios').select('codigo,estado,mensajero,direccion,comuna').eq('codigo',codigo).limit(1);
+        const r=await db.from('envios').select('codigo,estado,mensajero,direccion,comuna,monto,en_un_cambio').eq('codigo',codigo).limit(1);
         if(r.error) throw r.error;
         if(r.data&&r.data.length) return r.data[0];
-        const r2=await db.from('envios').select('codigo,estado,mensajero,direccion,comuna').ilike('codigo','%'+codigo+'%').limit(2);
+        const r2=await db.from('envios').select('codigo,estado,mensajero,direccion,comuna,monto,en_un_cambio').ilike('codigo','%'+codigo+'%').limit(2);
         if(r2.error) throw r2.error;
         return (r2.data&&r2.data.length===1)?r2.data[0]:null;
       })();
@@ -8989,7 +9037,15 @@ function AsignacionRider(_ref_ar){
       mostrarFlash('dup',codigo,'NO SE PUEDE TOMAR',mot);
       return;
     }
+    const cobroA=((+fila.monto>0)||fila.en_un_cambio)?('POR COBRAR'+((+fila.monto>0)?' $'+Math.round(+fila.monto).toLocaleString('es-CL'):'')+(fila.en_un_cambio?' · EN UN CAMBIO':'')):'';
+    if(cobroA) actualizarPaquete(codigo,{cobro:cobroA});
     const falta=faltaDireccion(fila);
+    if(cobroA&&!falta){
+      actualizarPaquete(codigo,{verif:'ok'});
+      playSound('scan_cobro');
+      mostrarFlash('cobro',codigo,cobroA,'Cobra antes de entregar. Ya quedó marcado en tu lista.');
+      return;
+    }
     if(falta){
       actualizarPaquete(codigo,{verif:'sindir',motivo:falta});
       playSound('scan_alerta');
@@ -9363,6 +9419,7 @@ function AsignacionRider(_ref_ar){
             destacado&&p.motivo&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.85)',marginTop:2}},p.motivo),
             !destacado&&React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.3)',marginTop:1}},new Date(p.ts).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}))
           ),
+          p.cobro&&React.createElement('span',{style:{flexShrink:0,padding:'4px 8px',borderRadius:6,fontSize:10,fontWeight:900,letterSpacing:.5,background:'#d4002a',color:'#fff',marginRight:4}},p.cobro),
           React.createElement('span',{style:{flexShrink:0,padding:'4px 8px',borderRadius:6,fontSize:10,fontWeight:800,letterSpacing:.5,background:destacado?st.borde:'rgba(255,255,255,0.06)',color:destacado?'#000':st.texto}},etiqueta)
         );
       })
@@ -9380,6 +9437,7 @@ const ESTILO_ESCANEO={
   noreg:  {bg:'linear-gradient(135deg,#9c00b8,#ff2fd0)',bgSuave:'rgba(255,47,208,0.18)',borde:'#ff4fd8',glow:'rgba(255,47,208,0.6)',texto:'#ff7be3',signo:'?',flash:'rgba(170,0,190,0.88)'},
   sindir: {bg:'linear-gradient(135deg,#e06a00,#ffa000)',bgSuave:'rgba(255,152,0,0.18)',borde:'#ff9800',glow:'rgba(255,152,0,0.6)',texto:'#ffb74d',signo:'!',flash:'rgba(240,120,0,0.86)'},
   noleido:{bg:'linear-gradient(135deg,#6b4a00,#a87400)',bgSuave:'rgba(168,116,0,0.18)',borde:'#c99a2e',glow:'rgba(200,150,40,0.45)',texto:'#e0b040',signo:'?',flash:'rgba(120,85,0,0.85)'},
+  cobro:  {bg:'linear-gradient(135deg,#8a0018,#d4002a)',bgSuave:'rgba(212,0,42,0.20)',borde:'#ff1744',glow:'rgba(255,23,68,0.6)',texto:'#ff6b81',signo:'$',flash:'rgba(176,0,32,0.9)'},
   verif:  {bg:'linear-gradient(135deg,#3a3d2e,#55594a)',bgSuave:'rgba(255,255,255,0.05)',borde:'#8a8d7a',glow:'rgba(0,0,0,0)',texto:'rgba(255,255,255,0.55)',signo:'…',flash:'rgba(40,40,40,0.7)'}
 };
 // Aviso de escaneo invocable desde cualquier flujo (Colecta, Retiro Masivo) sin pasar estado:
