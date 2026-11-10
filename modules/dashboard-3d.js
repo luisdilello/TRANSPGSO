@@ -81,7 +81,7 @@ function crearEscena(T,cont,opts){
     var tipo=ren.capabilities.isWebGL2?T.HalfFloatType:T.UnsignedByteType;
     var rt0=new T.WebGLRenderTarget(w,hh,{type:tipo}),rtA=new T.WebGLRenderTarget(w>>1,hh>>1,{type:tipo}),rtB=new T.WebGLRenderTarget(w>>1,hh>>1,{type:tipo});
     var VS='varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}';
-    var mB=new T.ShaderMaterial({uniforms:{t:{value:null},th:{value:0.62}},vertexShader:VS,fragmentShader:'uniform sampler2D t;uniform float th;varying vec2 vUv;void main(){vec4 c=texture2D(t,vUv);float l=max(c.r,max(c.g,c.b));gl_FragColor=vec4(c.rgb*smoothstep(th,th+0.35,l),1.);}',depthTest:false,depthWrite:false});
+    var mB=new T.ShaderMaterial({uniforms:{t:{value:null},th:{value:opts.bloomTh||0.62}},vertexShader:VS,fragmentShader:'uniform sampler2D t;uniform float th;varying vec2 vUv;void main(){vec4 c=texture2D(t,vUv);float l=max(c.r,max(c.g,c.b));gl_FragColor=vec4(c.rgb*smoothstep(th,th+0.35,l),1.);}',depthTest:false,depthWrite:false});
     var mG=new T.ShaderMaterial({uniforms:{t:{value:null},d:{value:new T.Vector2()}},vertexShader:VS,fragmentShader:'uniform sampler2D t;uniform vec2 d;varying vec2 vUv;void main(){vec3 c=texture2D(t,vUv).rgb*0.227;c+=texture2D(t,vUv+d*1.385).rgb*0.316;c+=texture2D(t,vUv-d*1.385).rgb*0.316;c+=texture2D(t,vUv+d*3.231).rgb*0.07;c+=texture2D(t,vUv-d*3.231).rgb*0.07;gl_FragColor=vec4(c,1.);}',depthTest:false,depthWrite:false});
     var mS=new T.ShaderMaterial({uniforms:{t:{value:null},k:{value:opts.bloom}},vertexShader:VS,fragmentShader:'uniform sampler2D t;uniform float k;varying vec2 vUv;void main(){vec3 c=texture2D(t,vUv).rgb*k;gl_FragColor=vec4(c,0.);}',transparent:true,blending:T.CustomBlending,blendEquation:T.AddEquation,blendSrc:T.OneFactor,blendDst:T.OneFactor,blendSrcAlpha:T.ZeroFactor,blendDstAlpha:T.OneFactor,depthTest:false,depthWrite:false});
     var scO=new T.Scene(),camO=new T.OrthographicCamera(-1,1,1,-1,0,1),quad=new T.Mesh(new T.PlaneGeometry(2,2),mB);quad.frustumCulled=false;scO.add(quad);
@@ -127,7 +127,7 @@ function suelo(T,sc,rad){
 function montarMapa(T,cont,datos,ui,geo){
   var tip=ui.tip,labels=ui.labels;
   var meshes=[],ray=new T.Raycaster(),ptr=new T.Vector2(),hov=null;
-  var E=crearEscena(T,cont,{r:(ui.labels.clientWidth||900)<600?150:118,pol:0.8,az:-0.3,rMin:18,rMax:260,fogNear:170,fogFar:380,bloom:0.95,onLost:ui.onLost,
+  var E=crearEscena(T,cont,{r:(ui.labels.clientWidth||900)<600?150:118,pol:0.8,az:-0.3,rMin:18,rMax:260,fogNear:170,fogFar:380,bloom:0.75,bloomTh:0.9,onLost:ui.onLost,
     onMove:function(e){var b=E.ren.domElement.getBoundingClientRect();ptr.x=(e.clientX-b.left)/b.width*2-1;ptr.y=-(e.clientY-b.top)/b.height*2+1;
       ray.setFromCamera(ptr,E.cam);var hit=ray.intersectObjects(meshes,false)[0];var m=hit?hit.object:null;
       if(hov&&hov!==m){hov.material.emissiveIntensity=hov.userData.ei;}
