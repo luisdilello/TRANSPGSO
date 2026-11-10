@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261110193119;
+window.__MODULES_VERSION=20261110194139;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -13913,12 +13913,12 @@ function PortalCliente({usuario,onLogout}){
     var estado=params.get('ml_estado');
     if(!estado)return;
     if(estado==='ok'){
-      setAvisoML({tipo:'ok',msg:t('✓ Cuenta de Mercado Libre conectada')+(params.get('ml_nickname')?' ('+params.get('ml_nickname')+')':'')});
+      setAvisoML({tipo:'ok',msg:t('Cuenta de Mercado Libre conectada')+(params.get('ml_nickname')?' ('+params.get('ml_nickname')+')':'')});
       cargarEstadoML();
     }else if(estado==='cancelado'){
       setAvisoML({tipo:'info',msg:t('Conexión con Mercado Libre cancelada.')});
     }else{
-      setAvisoML({tipo:'error',msg:t('⚠ No se pudo conectar con Mercado Libre: ')+(params.get('ml_msg')||'')});
+      setAvisoML({tipo:'error',msg:t('No se pudo conectar con Mercado Libre: ')+(params.get('ml_msg')||'')});
     }
     window.history.replaceState({},'',window.location.pathname);
   },[]);
@@ -13926,13 +13926,13 @@ function PortalCliente({usuario,onLogout}){
     setConectandoML(true);
     db.functions.invoke('ml-oauth-iniciar',{body:{cliente_nombre:nombreCliente}}).then(function(res){
       if(res.error||!res.data||!res.data.url){
-        setAvisoML({tipo:'error',msg:t('⚠ No se pudo iniciar la conexión con Mercado Libre.')});
+        setAvisoML({tipo:'error',msg:t('No se pudo iniciar la conexión con Mercado Libre.')});
         setConectandoML(false);
         return;
       }
       window.location.href=res.data.url;
     }).catch(function(){
-      setAvisoML({tipo:'error',msg:t('⚠ No se pudo iniciar la conexión con Mercado Libre.')});
+      setAvisoML({tipo:'error',msg:t('No se pudo iniciar la conexión con Mercado Libre.')});
       setConectandoML(false);
     });
   }
@@ -13994,6 +13994,23 @@ function PortalCliente({usuario,onLogout}){
     }
     setLoading(false);
   }
+
+  // 10-11-2026: tiempo real. Cada cambio de un envío del cliente (RLS: solo recibe los suyos)
+  // se aplica en el acto sobre la lista, sin recargar. Se aplica con un leve retraso para que el
+  // Centro 3D alcance a registrar el cambio de estado (punto de luz) antes que la lista.
+  var _rt=useState(false),rtOk=_rt[0],setRtOk=_rt[1];
+  React.useEffect(function(){
+    if(typeof db==='undefined'||!db.channel)return;
+    var CAMPOS=['estado','mensajero','destinatario','telefono','direccion','comuna','fecha','monto','nota'];
+    var canal=db.channel('portal-cli-'+Date.now()).on('postgres_changes',{event:'*',schema:'public',table:'envios'},function(pl){
+      var nw=pl&&pl.new;if(!nw||!nw.codigo)return;
+      if(String(nw.cliente||'').toUpperCase().trim()!==nombreCliente)return;
+      setTimeout(function(){setEnvios(function(arr){var i=-1;for(var k=0;k<arr.length;k++){if(arr[k].codigo===nw.codigo){i=k;break;}}
+        if(i<0){if(pl.eventType!=='INSERT')return arr;return [{id:nw.id,codigo:nw.codigo,cliente:nw.cliente,destinatario:nw.destinatario,telefono:nw.telefono,direccion:nw.direccion,comuna:nw.comuna,fecha:nw.fecha,estado:nw.estado,mensajero:nw.mensajero,monto:nw.monto,nota:nw.nota,foto_etiqueta:null,historial:[{fecha:nw.created_at,estado:nw.estado,nota:'Cargado'}]}].concat(arr);}
+        var e=Object.assign({},arr[i]);CAMPOS.forEach(function(c){if(nw[c]!==undefined)e[c]=nw[c];});var copia=arr.slice();copia[i]=e;return copia;});},120);
+    }).subscribe(function(st){setRtOk(st==='SUBSCRIBED');});
+    return function(){try{db.removeChannel(canal);}catch(e){}};
+  },[nombreCliente]);
 
   React.useEffect(function(){
     // Antes esto sembraba 'envios' con el cache local (lsLoad('gestion_envios')) filtrado por
@@ -14074,6 +14091,40 @@ function PortalCliente({usuario,onLogout}){
     exportToExcel('Envios_'+nombreCliente+'_'+fechaHoyCL(),[{name:'Envíos',headers,rows}]);
   }
 
+  // 10-11-2026: franja de período oscura con selector segmentado (mismo estilo del panel admin)
+  var FRASE_PER_CLI={hoy:'de hoy',semana:'de esta semana',mes:'de este mes',personalizado:'del rango elegido'};
+  function tiraPeriodo(){
+    return React.createElement('div',{className:'pc-strip',style:{display:'flex',gap:12,alignItems:'center',marginBottom:18,flexWrap:'wrap',padding:'10px 12px 10px 18px',borderRadius:18,background:'radial-gradient(120% 160% at 20% 0%,#3a3f2b 0%,#22261a 50%,#14170f 100%)',border:'1px solid rgba(200,168,75,.35)',boxShadow:'0 16px 34px rgba(20,22,15,.22), inset 0 1px 0 rgba(255,255,255,.07)'}},
+      React.createElement('style',null,'.per-seg{transition:transform .12s ease,color .12s ease}.per-seg:hover{color:#fff}.per-seg:active{transform:translateY(1px)}.per-in{padding:9px 12px;border-radius:10px;border:1px solid rgba(232,199,102,.45);background:rgba(255,255,255,.94);font-size:14px;outline:none;color:#1a1d13}@keyframes pcDot{0%,100%{opacity:1}50%{opacity:.3}}@media (max-width:700px){.pc-strip .per-seg{padding:8px 11px!important;font-size:13px!important}.pc-strip .pc-tot{margin-left:0!important}}'),
+      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:2.6,color:'#e8c766'}},t('Período')),
+      React.createElement('div',{style:{display:'inline-flex',gap:4,padding:4,borderRadius:14,background:'rgba(0,0,0,.35)',border:'1px solid rgba(255,255,255,.08)',boxShadow:'inset 0 2px 6px rgba(0,0,0,.45)',flexWrap:'wrap'}},
+        [['hoy','Hoy'],['semana','Esta semana'],['mes','Este mes'],['personalizado','Rango']].map(function(pp){var act=periodo===pp[0];
+          return React.createElement('button',{key:pp[0],className:'per-seg',onClick:function(){setPeriodo(pp[0]);},style:{padding:'10px 20px',borderRadius:11,border:'1px solid '+(act?'#f7dd8c':'transparent'),background:act?'linear-gradient(180deg,#f7dd8c,#d9b553 55%,#ae8829)':'transparent',color:act?'#1a1d13':'rgba(241,236,218,.82)',fontWeight:800,fontSize:15,letterSpacing:.4,cursor:'pointer',boxShadow:act?'0 3px 0 #6d531a,0 6px 14px rgba(200,168,75,.35),inset 0 1px 0 rgba(255,255,255,.55)':'none',whiteSpace:'nowrap'}},t(pp[1]));})),
+      periodo==='personalizado'&&React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6}},
+        React.createElement('input',{type:'date',className:'per-in',value:fechaDesde,onChange:function(e){setFechaDesde(e.target.value);}}),
+        React.createElement('span',{style:{color:'rgba(233,228,210,.7)',fontSize:12,fontWeight:700}},t('al')),
+        React.createElement('input',{type:'date',className:'per-in',value:fechaHasta,onChange:function(e){setFechaHasta(e.target.value);}})),
+      React.createElement('div',{className:'pc-tot',style:{marginLeft:'auto',display:'flex',alignItems:'center',gap:14,padding:'8px 16px',borderRadius:14,background:'linear-gradient(160deg,rgba(255,255,255,.10),rgba(255,255,255,.03))',border:'1px solid rgba(232,199,102,.4)',boxShadow:'inset 0 1px 0 rgba(255,255,255,.08)'}},
+        React.createElement('span',{title:t('Los estados se actualizan solos'),style:{display:'inline-flex',alignItems:'center',gap:6,fontSize:11,fontWeight:900,letterSpacing:1.2,color:rtOk?'#7fe3a8':'rgba(233,228,210,.5)'}},React.createElement('span',{style:{width:8,height:8,borderRadius:'50%',background:rtOk?'#36c47f':'#888',boxShadow:rtOk?'0 0 8px #36c47f':'none',animation:rtOk?'pcDot 1.2s infinite':'none'}}),t('TIEMPO REAL')),
+        loading?React.createElement('span',{style:{fontSize:12.5,fontWeight:700,color:'rgba(233,228,210,.8)'}},t('Cargando...')):
+        React.createElement(React.Fragment,null,
+          React.createElement('span',{style:{fontFamily:'Bebas Neue',fontSize:38,lineHeight:1,color:'#e8c766',textShadow:'0 0 16px rgba(232,199,102,.45)'}},total.toLocaleString('es-CL')),
+          React.createElement('span',{style:{display:'flex',flexDirection:'column',lineHeight:1.15}},
+            React.createElement('span',{style:{fontSize:13.5,fontWeight:800,letterSpacing:1.3,textTransform:'uppercase',color:'#f1ecda'}},t('Envíos')),
+            React.createElement('span',{style:{fontSize:13,color:'rgba(233,228,210,.75)'}},t(FRASE_PER_CLI[periodo]||'del período'))))));
+  }
+  // Tarjetas por estado (estilo panel admin): punto de color, cantidad y % del período. Clickeables si se pasa onSel.
+  function tarjetasEstado(sel,onSel){
+    var lista=ESTADOS_CLIENTE_PORTAL.filter(function(est){return (statsPeriodo[est.val]||0)>0||['en_bodega','en_ruta','entregado','reprogramado','cancelado'].indexOf(est.val)>=0;});
+    if(onSel)lista=[{val:'todos',label:'Total',color:'#C8A84B'}].concat(lista);
+    return React.createElement('div',{className:'dash-est',style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:12,marginBottom:18}},
+      lista.map(function(est){var n=est.val==='todos'?total:(statsPeriodo[est.val]||0);var act=onSel&&sel===est.val;var col=est.color||'#C8A84B';
+        return React.createElement('div',{key:est.val,className:'stat-card',onClick:onSel?function(){onSel(act||est.val==='todos'?'todos':est.val);}:undefined,
+          style:{'--card-accent':col,borderTop:'4px solid '+col,cursor:onSel?'pointer':'default',boxShadow:act?'0 0 0 3px '+col+'55, 0 10px 24px rgba(20,22,15,.18)':undefined,transform:act?'translateY(-2px)':undefined,transition:'transform .15s, box-shadow .15s'}},
+          React.createElement('div',{className:'stat-label'},React.createElement('span',{style:{display:'inline-block',width:9,height:9,borderRadius:'50%',background:col,boxShadow:'0 0 8px '+col,marginRight:7,verticalAlign:'1px'}}),t(est.label)),
+          React.createElement('div',{className:'stat-value',style:{color:col,background:'none',WebkitTextFillColor:col}},n.toLocaleString('es-CL')),
+          React.createElement('div',{className:'stat-sub'},est.val==='todos'?t('en el período'):(total>0?(n/total*100).toFixed(1)+t('% del período'):'—')));}));
+  }
   var btnPeriodo=function(v,l){return React.createElement('button',{onClick:function(){setPeriodo(v);},style:{padding:'6px 14px',borderRadius:8,border:'1px solid '+(periodo===v?'var(--gold)':'var(--border)'),background:periodo===v?'rgba(200,168,75,0.12)':'#fff',color:periodo===v?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer'}},l);};
 
   return React.createElement('div',{style:{minHeight:'100vh',background:'var(--bg)'}},
@@ -14108,25 +14159,20 @@ function PortalCliente({usuario,onLogout}){
     React.createElement('div',{className:'main'},
       // Dashboard tab
       tab==='dashboard'&&React.createElement('div',null,
-        React.createElement('div',{className:'section-head'},
-          React.createElement('div',{className:'section-title'},t('Mi '),React.createElement('span',null,t('Dashboard'))),
-          React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
-            btnPeriodo('hoy',t('Hoy')),
-            btnPeriodo('semana',t('Esta semana')),
-            btnPeriodo('mes',t('Este mes')),
-            btnPeriodo('personalizado',t('Rango')),
-            periodo==='personalizado'&&React.createElement(React.Fragment,null,
-              React.createElement('input',{type:'date',value:fechaDesde,onChange:function(e){setFechaDesde(e.target.value);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}}),
-              React.createElement('span',{style:{alignSelf:'center',fontSize:12,color:'var(--text-soft)'}},t('al')),
-              React.createElement('input',{type:'date',value:fechaHasta,onChange:function(e){setFechaHasta(e.target.value);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}})
-            )
-          )
-        ),
         avisoML&&React.createElement('div',{className:'info-banner',style:{marginBottom:14,background:avisoML.tipo==='ok'?'rgba(76,175,80,0.12)':avisoML.tipo==='error'?'rgba(220,53,69,0.1)':undefined,display:'flex',justifyContent:'space-between',alignItems:'center',gap:12}},
           React.createElement('span',null,avisoML.msg),
-          React.createElement('button',{className:'btn-secondary',onClick:function(){setAvisoML(null);}},'✕')
+          React.createElement('button',{className:'btn-secondary',onClick:function(){setAvisoML(null);}},t('Cerrar'))
         ),
-        React.createElement('div',{className:'panel',style:{marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}},
+        tiraPeriodo(),
+        loading?React.createElement('div',{className:'empty-state'},t('Cargando...')):
+        fetchError&&!envios.length?React.createElement('div',{className:'info-banner',style:{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}},
+          React.createElement('span',null,t('No pudimos cargar tus envíos. Verifica tu conexión e intenta de nuevo.')),
+          React.createElement('button',{className:'btn-secondary',onClick:cargarEnviosCliente},t('Reintentar'))):
+        React.createElement('div',null,
+          React.createElement(CentroControl3DTab,{envios:filtPeriodo,cliente:nombreCliente}),
+          tarjetasEstado(null,null)
+        ),
+        React.createElement('div',{className:'panel',style:{marginTop:4,display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}},
           React.createElement('div',null,
             React.createElement('div',{className:'panel-title'},t('Mercado Libre')),
             conexionML===null?React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)'}},t('Cargando estado...')):
@@ -14134,47 +14180,6 @@ function PortalCliente({usuario,onLogout}){
             React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)'}},t('Conecta tu cuenta de Mercado Libre para que tus pedidos entren solos a TransPgso.'))
           ),
           !conexionML&&React.createElement('button',{className:'btn-primary',disabled:conectandoML,onClick:conectarMercadoLibre},conectandoML?t('Conectando...'):t('Conectar con Mercado Libre'))
-        ),
-        loading?React.createElement('div',{className:'empty-state'},t('Cargando...')):
-        React.createElement('div',null,
-          React.createElement('div',{className:'stats-grid',style:{marginBottom:20}},
-            // OJO: antes esta lista venía fija (Entregados/En Ruta/Reprogramados/Cancelados),
-            // así que cualquier estado nuevo que no estuviera en esos 4 (ej. 'En Bodega' o
-            // 'Siniestro') simplemente no se mostraba nunca — el total sí los contaba pero
-            // no aparecían en ningún desglose, y los números no cuadraban a simple vista.
-            // Ahora se arma dinámicamente desde ESTADOS_CLIENTE_PORTAL (mismo criterio que
-            // ya se usaba en la pestaña "Mis Envíos"), así que cualquier estado visible para
-            // el cliente aparece automáticamente, para todos los clientes, sin tener que
-            // tocar este código cada vez que se agregue un estado nuevo al sistema.
-            [{label:'Total Envíos',val:total,cls:''}].concat(
-              ESTADOS_CLIENTE_PORTAL.map(function(est){
-                var cls=est.val==='en_bodega'?'teal':est.val==='en_ruta'?'gold':est.val==='entregado'?'green':est.val==='reprogramado'?'purple':est.val==='cancelado'?'red':est.val==='siniestro'?'orange':est.val==='retorno'?'brown':est.val==='en_bodega_cancelado'?'rust':'gold';
-                return{label:est.label,val:statsPeriodo[est.val]||0,cls:cls};
-              })
-            ).concat([{label:'Efectividad',val:efectividad+'%',cls:efectividad>=80?'green':efectividad>=60?'gold':'red'}]).map(function(s){
-              return React.createElement('div',{key:s.label,className:'stat-card'},
-                React.createElement('div',{className:'stat-label'},t(s.label)),
-                React.createElement('div',{className:'stat-value '+s.cls},s.val)
-              );
-            })
-          ),
-          // Distribución estados
-          React.createElement('div',{className:'panel'},
-            React.createElement('div',{className:'panel-title'},t('Distribución de Estados')),
-            React.createElement('div',{style:{display:'flex',gap:12,flexWrap:'wrap',padding:'8px 0'}},
-              ESTADOS_CLIENTE_PORTAL.map(function(est){return{label:est.label,val:statsPeriodo[est.val]||0,color:est.color};}).map(function(s){
-                var pct=total>0?Math.round(s.val/total*100):0;
-                return React.createElement('div',{key:s.label,style:{flex:'1 1 130px',background:'var(--cream)',borderRadius:10,padding:'12px 16px',border:'1px solid var(--border)'}},
-                  React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',marginBottom:4,textTransform:'uppercase',letterSpacing:1}},t(s.label)),
-                  React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:24,fontWeight:700,color:s.color}},s.val),
-                  React.createElement('div',{style:{marginTop:6,height:4,borderRadius:2,background:'var(--border)'}},
-                    React.createElement('div',{style:{height:'100%',width:pct+'%',background:s.color,borderRadius:2,transition:'width 0.5s'}})
-                  ),
-                  React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)',marginTop:4}},pct+t('% del total'))
-                );
-              })
-            )
-          )
         )
       ),
 
@@ -14183,46 +14188,19 @@ function PortalCliente({usuario,onLogout}){
         React.createElement('div',{className:'section-head'},
           React.createElement('div',{className:'section-title'},t('Mis '),React.createElement('span',null,t('Envíos'))),
           React.createElement('div',{style:{display:'flex',gap:8}},
-            React.createElement('button',{className:'btn-secondary',onClick:exportarPDF},'📄 PDF'),
+            React.createElement('button',{className:'btn-secondary',onClick:exportarPDF},'PDF'),
             React.createElement('button',{className:'btn-secondary',onClick:exportarExcel},'Excel')
           )
         ),
-        React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}},
-          btnPeriodo('hoy',t('Hoy')),
-          btnPeriodo('semana',t('Esta semana')),
-          btnPeriodo('mes',t('Este mes')),
-          btnPeriodo('personalizado',t('Rango')),
-          periodo==='personalizado'&&React.createElement(React.Fragment,null,
-            React.createElement('input',{type:'date',value:fechaDesde,onChange:function(e){setFechaDesde(e.target.value);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}}),
-            React.createElement('span',{style:{alignSelf:'center',fontSize:12,color:'var(--text-soft)'}},t('al')),
-            React.createElement('input',{type:'date',value:fechaHasta,onChange:function(e){setFechaHasta(e.target.value);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}})
-          )
-        ),
-        // Totalizador por estado del período elegido arriba (Hoy/Semana/Mes/Rango) - clickeable,
-        // funciona como filtro adicional sobre la tabla (igual que en Gestión de Envíos admin).
-        React.createElement('div',{className:'stats-grid',style:{marginBottom:16}},
-          [{val:'todos',label:'Total',color:'var(--gold)',val_num:filtPeriodo.length}].concat(
-            ESTADOS_CLIENTE_PORTAL.map(function(est){return{val:est.val,label:est.label,color:est.color,val_num:statsPeriodo[est.val]||0};})
-          ).map(function(s){
-            var activo=filtroEstadoCliente===s.val;
-            return React.createElement('div',{
-              key:s.val,
-              className:'stat-card',
-              onClick:function(){setFiltroEstadoCliente(activo?'todos':s.val);},
-              style:{cursor:'pointer',border:'2px solid '+(activo?s.color:'rgba(200,168,75,0.18)'),borderTop:'4px solid '+(activo?s.color:'rgba(200,168,75,0.18)'),boxShadow:activo?'0 0 0 3px '+s.color+'22':undefined}
-            },
-              React.createElement('div',{className:'stat-label'},t(s.label)),
-              React.createElement('div',{className:'stat-value',style:{color:s.color,background:'none',WebkitTextFillColor:s.color}},s.val_num)
-            );
-          })
-        ),
+        tiraPeriodo(),
+        tarjetasEstado(filtroEstadoCliente,setFiltroEstadoCliente),
         React.createElement('div',{style:{marginBottom:16}},
           React.createElement('input',{className:'search-box',placeholder:t('Buscar por código, destinatario o dirección...'),value:search,onChange:function(e){setSearch(e.target.value);}})
         ),
         loading?React.createElement('div',{className:'empty-state'},t('Cargando envíos...')):
         fetchError?React.createElement('div',{className:'info-banner',style:{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}},
-          React.createElement('span',null,t('⚠ No pudimos cargar tus envíos. Verifica tu conexión e intenta de nuevo.')),
-          React.createElement('button',{className:'btn-secondary',onClick:cargarEnviosCliente},t('🔄 Reintentar'))
+          React.createElement('span',null,t('No pudimos cargar tus envíos. Verifica tu conexión e intenta de nuevo.')),
+          React.createElement('button',{className:'btn-secondary',onClick:cargarEnviosCliente},t('Reintentar'))
         ):
         enviosFiltrados.length===0?React.createElement('div',{className:'info-banner'},t('Sin envíos encontrados.')):
         React.createElement('div',{className:'table-wrap'},
@@ -14415,7 +14393,7 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
 
   // Carga masiva desde PDF (mismo parser que usa el admin en Colecta para etiquetas Flex)
   function procesarPDF(file){
-    setProcesandoPDF(true);setProgresoPDF('📄 Leyendo PDF...');setMsg('');
+    setProcesandoPDF(true);setProgresoPDF('Leyendo PDF...');setMsg('');
     var reader=new FileReader();
     reader.onload=async function(e){
       try{
@@ -14424,12 +14402,12 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
         window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         var pdfDoc=await window.pdfjsLib.getDocument({data:arrayBuffer}).promise;
         var totalPags=pdfDoc.numPages;
-        setProgresoPDF('📄 PDF cargado · '+totalPags+' páginas · Extrayendo datos...');
+        setProgresoPDF('PDF cargado · '+totalPags+' páginas · Extrayendo datos...');
         var enviosPDF=[];
         var pendientesFotoPortal=[]; // {envioObj,dataUrlFoto} - se suben todas juntas en paralelo al final
         var NO_COMUNA=/^(RESIDENCIAL|FLEX|ANILLO|DISTRIBUIDOR|PUNTO|Pack|Venta|Envio|Avenida|Quilicura|Recorta|Color|Unidad|Led|ZONA|SECTOR|NORTE|SUR|ESTE|ORIENTE|PONIENTE|CENTRO)/i;
         for(var i=1;i<=totalPags;i++){
-          if(i%10===0||i===1){setProgresoPDF('⚙ Procesando página '+i+' / '+totalPags+'...');await new Promise(function(r){setTimeout(r,0);});}
+          if(i%10===0||i===1){setProgresoPDF('Procesando página '+i+' / '+totalPags+'...');await new Promise(function(r){setTimeout(r,0);});}
           try{
             var page=await pdfDoc.getPage(i);
             var tc=await page.getTextContent();
@@ -14487,7 +14465,7 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
         // Subir todas las fotos en paralelo (6 a la vez) en vez de una por una - mismo fix de rendimiento
         // que se aplicó a Importar PDF de Colecta Admin.
         if(pendientesFotoPortal.length>0){
-          setProgresoPDF('📤 Subiendo '+pendientesFotoPortal.length+' fotos de etiqueta...');
+          setProgresoPDF('Subiendo '+pendientesFotoPortal.length+' fotos de etiqueta...');
           await procesarConcurrencia(pendientesFotoPortal,async function(item){
             try{item.envioObj.foto_etiqueta=await subirFotoStorage(item.dataUrlFoto,item.envioObj.codigo,'etq','etiquetas');}
             catch(re){console.warn('Error subiendo foto '+item.envioObj.codigo,re);}
@@ -14583,7 +14561,7 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
         <div class="section-dest">
           <div class="slabel">Destinatario</div>
           <div style="font-weight:900;font-size:14px;margin-bottom:3px">${e.destinatario||'—'}</div>
-          <div style="font-size:10px">📞 ${e.telefono||'—'}</div>
+          <div style="font-size:10px">${e.telefono||'—'}</div>
         </div>
         <div class="section-dir">
           <div class="slabel">Dirección de Entrega</div>
@@ -14682,9 +14660,9 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
       React.createElement('div',{className:'section-title'},t('Mis '),React.createElement('span',null,t('Etiquetas'))),
       React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}},
         btnSub('lista',t('Mis Envíos')),
-        btnSub('nuevo',t('➕ Nuevo Envío')),
+        btnSub('nuevo',t('Nuevo Envío')),
         btnSub('masiva',t('Carga Masiva')),
-        btnSub('pdf',t('📄 Carga PDF')),
+        btnSub('pdf',t('Carga PDF')),
         subTab==='lista'&&React.createElement(React.Fragment,null,
           React.createElement('div',{style:{width:1,height:20,background:'var(--border)',margin:'0 4px'}}),
           React.createElement('button',{className:'btn-secondary',onClick:selTodo},t('Sel. todos')),
@@ -14694,11 +14672,11 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
       )
     ),
 
-    msg&&React.createElement('div',{style:{margin:'0 0 16px',padding:'10px 14px',borderRadius:8,background:msg.startsWith('✓')?'rgba(46,125,79,0.1)':'rgba(200,168,75,0.1)',border:'1px solid '+(msg.startsWith('✓')?'var(--success)':'var(--warning)'),fontSize:13,color:msg.startsWith('✓')?'var(--success)':'var(--text)',fontWeight:600}},msg),
+    msg&&React.createElement('div',{style:{margin:'0 0 16px',padding:'10px 14px',borderRadius:8,background:msg.startsWith('✓')?'rgba(46,125,79,0.1)':'rgba(200,168,75,0.1)',border:'1px solid '+(msg.startsWith('✓')?'var(--success)':'var(--warning)'),fontSize:13,color:msg.startsWith('✓')?'var(--success)':'var(--text)',fontWeight:600}},msg.replace(/^[✓⚠]\s*/,'')),
 
     // Tab: Nuevo envío individual
     subTab==='nuevo'&&React.createElement('div',{className:'panel'},
-      React.createElement('div',{className:'panel-title'},'➕ Nuevo Envío Individual'),
+      React.createElement('div',{className:'panel-title'},'Nuevo Envío Individual'),
       React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}},
         React.createElement('div',{className:'form-group'},
           React.createElement('label',{className:'form-label'},'Destinatario *'),
@@ -14730,7 +14708,7 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
       ),
       React.createElement('div',{style:{marginTop:16,display:'flex',gap:8,justifyContent:'flex-end'}},
         React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)',alignSelf:'center',flex:1}},'El código PGSO se asignará automáticamente en correlativo.'),
-        React.createElement('button',{className:'btn-primary',onClick:guardarIndividual,disabled:guardando,style:{padding:'10px 24px'}},guardando?'Guardando...':'✓ Crear Envío y Generar Etiqueta')
+        React.createElement('button',{className:'btn-primary',onClick:guardarIndividual,disabled:guardando,style:{padding:'10px 24px'}},guardando?'Guardando...':'Crear Envío y Generar Etiqueta')
       )
     ),
 
@@ -14750,7 +14728,7 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
               onDragOver:function(e){e.preventDefault();},
               onDrop:function(e){e.preventDefault();var f=e.dataTransfer.files[0];if(f)procesarExcel(f);}
             },
-              React.createElement('div',{style:{fontSize:28,marginBottom:8}},'📂'),
+              React.createElement('svg',{width:34,height:34,viewBox:'0 0 24 24',fill:'none',stroke:'#C8A84B',strokeWidth:1.8,strokeLinecap:'round',strokeLinejoin:'round',style:{marginBottom:8}},React.createElement('path',{d:'M12 16V4M7 9l5-5 5 5'}),React.createElement('path',{d:'M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3'})),
               React.createElement('div',{style:{fontWeight:700,color:'var(--dark)',marginBottom:4}},'Arrastra tu Excel aquí o haz clic'),
               React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)'}},'Formatos: .xlsx, .xls'),
               React.createElement('input',{ref:fileRef,type:'file',accept:'.xlsx,.xls',style:{display:'none'},onChange:function(e){if(e.target.files[0])procesarExcel(e.target.files[0]);}})
@@ -14769,7 +14747,7 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
       preview.length>0&&React.createElement('div',{className:'panel'},
         React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
           React.createElement('div',{className:'panel-title',style:{marginBottom:0}},'Vista previa — '+preview.length+' envíos'),
-          React.createElement('button',{className:'btn-primary',onClick:confirmarCargaMasiva,disabled:guardando},guardando?'Cargando...':'✓ Confirmar y Crear '+preview.length+' Envíos')
+          React.createElement('button',{className:'btn-primary',onClick:confirmarCargaMasiva,disabled:guardando},guardando?'Cargando...':'Confirmar y Crear '+preview.length+' Envíos')
         ),
         React.createElement('div',{className:'table-wrap'},
           React.createElement('table',null,
@@ -14816,7 +14794,7 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
               onDragOver:function(e){e.preventDefault();},
               onDrop:function(e){e.preventDefault();if(procesandoPDF)return;var f=e.dataTransfer.files[0];if(f)procesarPDF(f);}
             },
-              React.createElement('div',{style:{fontSize:28,marginBottom:8}},'📄'),
+              React.createElement('svg',{width:34,height:34,viewBox:'0 0 24 24',fill:'none',stroke:'#C8A84B',strokeWidth:1.8,strokeLinecap:'round',strokeLinejoin:'round',style:{marginBottom:8}},React.createElement('path',{d:'M12 16V4M7 9l5-5 5 5'}),React.createElement('path',{d:'M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3'})),
               React.createElement('div',{style:{fontWeight:700,color:'var(--dark)',marginBottom:4}},procesandoPDF?(progresoPDF||'Procesando...'):'Arrastra tu PDF aquí o haz clic'),
               React.createElement('div',{style:{fontSize:11,color:'var(--text-soft)'}},'Formato: .pdf — etiquetas Flex'),
               React.createElement('input',{ref:pdfFileRef,type:'file',accept:'application/pdf',style:{display:'none'},onChange:function(e){if(e.target.files[0])procesarPDF(e.target.files[0]);e.target.value='';}})
@@ -14827,7 +14805,7 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
       previewPDF.length>0&&React.createElement('div',{className:'panel'},
         React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,flexWrap:'wrap',gap:8}},
           React.createElement('div',{className:'panel-title',style:{marginBottom:0}},'Vista previa — '+previewPDF.length+' envíos'),
-          React.createElement('button',{className:'btn-primary',onClick:confirmarCargaPDF,disabled:guardando},guardando?'Cargando...':'✓ Confirmar y Crear '+previewPDF.length+' Envíos')
+          React.createElement('button',{className:'btn-primary',onClick:confirmarCargaPDF,disabled:guardando},guardando?'Cargando...':'Confirmar y Crear '+previewPDF.length+' Envíos')
         ),
         React.createElement('div',{className:'table-wrap'},
           React.createElement('table',null,
@@ -14849,7 +14827,7 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
                   React.createElement('td',null,r.destinatario||'—'),
                   React.createElement('td',null,r.direccion||'—'),
                   React.createElement('td',null,r.comuna||'—'),
-                  React.createElement('td',null,r.foto_etiqueta?'✓':'—')
+                  React.createElement('td',null,r.foto_etiqueta?'Sí':'—')
                 );
               }),
               previewPDF.length>20&&React.createElement('tr',null,
@@ -14863,7 +14841,7 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
 
     // Tab: Lista de envíos
     subTab==='lista'&&React.createElement('div',null,
-      envios.length===0?React.createElement('div',{className:'info-banner'},'Aún no tienes envíos. Usa "➕ Nuevo Envío" o "Carga Masiva" para comenzar.'):
+      envios.length===0?React.createElement('div',{className:'info-banner'},'Aún no tienes envíos. Usa "Nuevo Envío" o "Carga Masiva" para comenzar.'):
       React.createElement('div',{className:'table-wrap'},
         React.createElement('table',null,
           React.createElement('thead',null,

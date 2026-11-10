@@ -524,7 +524,7 @@ function FeedVivo(p){
   var minV=Math.max(1,Math.min(15,(ahora-(p.inicio||ahora))/60000));
   var c=function(est){return ult.filter(function(e){return e.estado===est;}).length;};
   var ent=c('entregado'),rep=c('reprogramado'),mal=ult.filter(function(e){return MALOS[e.estado]&&e.estado!=='reprogramado';}).length;
-  var porMen={};ult.forEach(function(e){if(e.estado==='entregado'&&e.mensajero){porMen[e.mensajero]=(porMen[e.mensajero]||0)+1;}});
+  var porMen={};ult.forEach(function(e){if(!p.cliente&&e.estado==='entregado'&&e.mensajero){porMen[e.mensajero]=(porMen[e.mensajero]||0)+1;}});
   var top=Object.keys(porMen).sort(function(a,b){return porMen[b]-porMen[a];})[0];
   var hm=function(t){return new Date(t).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',hour12:false});};
   var nm=function(s){return String(s||'').replace(/,\s*/g,' ');};
@@ -548,11 +548,11 @@ function FeedVivo(p){
       lista.map(function(e){var col=COL_EST[e.estado]||(MALOS[e.estado]?'#ff7b70':'#e8c766');var malo=MALOS[e.estado];
         return h('div',{key:e.t+e.codigo,style:{padding:'7px 12px',borderBottom:'1px solid rgba(255,255,255,.05)',borderLeft:'3px solid '+col,animation:'ccEvIn .35s ease-out',background:malo?'rgba(255,90,70,.06)':'transparent'}},
           h('div',{style:{display:'flex',justifyContent:'space-between',gap:8,alignItems:'baseline'}},
-            h('span',{style:{fontSize:12.5,fontWeight:800,color:'#f1ecda',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},nm(e.mensajero)||'Sin mensajero'),
+            h('span',{style:{fontSize:12.5,fontWeight:800,color:'#f1ecda',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},p.cliente?(e.destinatario||('Envío '+e.codigo)):(nm(e.mensajero)||'Sin mensajero')),
             h('span',{style:{fontSize:11,color:'rgba(233,228,210,.55)',fontFamily:'JetBrains Mono',flexShrink:0}},hm(e.t))),
           h('div',{style:{fontSize:11.5,color:'rgba(233,228,210,.75)',marginTop:1}},
             (NOM_EST[e.antes]||e.antes||'')+' → ',h('b',{style:{color:col}},NOM_EST[e.estado]||e.estado),
-            ' · '+(e.comuna?titulo(norm(e.comuna)):'Sin comuna')+(e.cliente?' · '+e.cliente:'')),
+            ' · '+(e.comuna?titulo(norm(e.comuna)):'Sin comuna')+(!p.cliente&&e.cliente?' · '+e.cliente:'')),
           h('div',{style:{fontSize:10.5,color:'rgba(233,228,210,.5)',fontFamily:'JetBrains Mono',marginTop:1}},e.codigo),
           malo&&e.nota&&h('div',{style:{fontSize:11.5,color:'#ffb4a8',marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'},title:e.nota},'Motivo: '+e.nota));})));
 }
@@ -605,7 +605,7 @@ function CentroControl3D(props){
     var INC=['cancelado','siniestro','retorno','en_bodega_cancelado'];
     var datos=Object.keys(pc).map(function(k){var d=pc[k];var den=d.total-(d.en_bodega_fecha||0);d.ef=den>0?(d.entregado||0)/den:null;
       d.inc=INC.reduce(function(a,x){return a+(d[x]||0);},0);d.sinEnt=den-(d.entregado||0);return d;});
-    var conEf=datos.filter(function(d){return d.ef!=null&&d.total>=30;});
+    var conEf=datos.filter(function(d){return d.ef!=null&&d.total>=(props.cliente?10:30);});
     var mejor=conEf.slice().sort(function(a,b){return b.ef-a.ef||b.total-a.total;})[0];
     var peor=conEf.slice().sort(function(a,b){return a.ef-b.ef||b.inc-a.inc;})[0];
     var masInc=datos.slice().sort(function(a,b){return b.inc-a.inc||(b.siniestro||0)-(a.siniestro||0);})[0];
@@ -629,17 +629,17 @@ function CentroControl3D(props){
       if(antes===undefined||antes===nw.estado)return;
       vivoRef.current[nw.codigo]=nw.estado;
       setDeltas(function(d){var x=Object.assign({},d);x[antes]=(x[antes]||0)-1;x[nw.estado]=(x[nw.estado]||0)+1;return x;});
-      setEventos(function(ev){return [{codigo:nw.codigo,antes:antes,estado:nw.estado,mensajero:nw.mensajero,comuna:nw.comuna,cliente:nw.cliente,nota:nw.nota,t:Date.now()}].concat(ev).slice(0,60);});
+      setEventos(function(ev){return [{codigo:nw.codigo,antes:antes,estado:nw.estado,mensajero:nw.mensajero,destinatario:nw.destinatario,comuna:nw.comuna,cliente:nw.cliente,nota:nw.nota,t:Date.now()}].concat(ev).slice(0,60);});
       try{refE.current&&refE.current.evento&&refE.current.evento(antes,nw.estado,nw.codigo);}catch(e){}
       // Mapa: punto de luz donde ocurrió (GPS del envío > ubicación actual del mensajero > comuna)
       try{var ColP={entregado:'#36ff8f',reprogramado:'#c77dff',cancelado:'#ff4d4d',retorno:'#ff8a3d',siniestro:'#ff8a3d',en_bodega_cancelado:'#ff4d4d'}[nw.estado];
         if(ColP&&refE.current&&refE.current.pulso){
           var enRM=function(la,lo){la=+la;lo=+lo;return la<-32.8&&la>-34.4&&lo<-69.6&&lo>-71.9;};
           var nomM=String(nw.mensajero||'').replace(/,\s*/g,' ');
-          var etq=(nomM||'Sin mensajero'),sub=(NOM_EST[nw.estado]||nw.estado)+(nw.comuna?' · '+titulo(norm(nw.comuna)):'');
+          var etq=props.cliente?(nw.destinatario||('Envío '+nw.codigo)):(nomM||'Sin mensajero'),sub=(NOM_EST[nw.estado]||nw.estado)+(nw.comuna?' · '+titulo(norm(nw.comuna)):'');
           var lanzar=function(pos){try{if(refE.current&&refE.current.pulso)refE.current.pulso(pos,ColP,etq,sub);}catch(e){}};
           if(nw.lat&&nw.lng&&enRM(nw.lat,nw.lng))lanzar({lat:nw.lat,lng:nw.lng});
-          else if(nw.mensajero){db.from('ubicaciones_mensajeros').select('lat,lng,updated_at').eq('mensajero',nw.mensajero).limit(1).then(function(r){var u=r&&r.data&&r.data[0];
+          else if(nw.mensajero&&!props.cliente){db.from('ubicaciones_mensajeros').select('lat,lng,updated_at').eq('mensajero',nw.mensajero).limit(1).then(function(r){var u=r&&r.data&&r.data[0];
             if(u&&enRM(u.lat,u.lng)&&Date.now()-new Date(u.updated_at).getTime()<20*60000)lanzar({lat:u.lat,lng:u.lng});else lanzar({comuna:nw.comuna});},function(){lanzar({comuna:nw.comuna});});}
           else lanzar({comuna:nw.comuna});
         }}catch(e){}
@@ -681,8 +681,8 @@ function CentroControl3D(props){
   return h('div',{style:{position:'relative',marginBottom:20,borderRadius:20,overflow:'hidden',background:'radial-gradient(120% 90% at 30% 0%,#3a3f2b 0%,#22261a 45%,#14170f 100%)',border:'1px solid rgba(200,168,75,.35)',boxShadow:'0 24px 50px rgba(20,22,15,.35), inset 0 1px 0 rgba(255,255,255,.08)'}},
     h('div',{className:'cc3d-head',style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10,padding:'16px 20px 0'}},
       h('div',null,
-        h('div',{style:{fontFamily:'Bebas Neue',fontSize:28,letterSpacing:2.5,color:'#fff',lineHeight:1}},'Centro de control'),
-        h('div',{className:'cc3d-sub',style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:3}},modo==='mapa'?'Región Metropolitana · brillo = envíos del período · color = efectividad total (rojo la más baja, verde la más alta) · arrastra para girar, rueda para acercar':'Recorrido de los envíos del período: de bodega a ruta y su resultado final')),
+        h('div',{style:{fontFamily:'Bebas Neue',fontSize:28,letterSpacing:2.5,color:'#fff',lineHeight:1}},props.cliente?'Seguimiento en vivo':'Centro de control'),
+        h('div',{className:'cc3d-sub',style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:3}},modo==='mapa'?(props.cliente?'Tus envíos en la Región Metropolitana · brillo = envíos del período · color = efectividad · cada entrega enciende un punto de luz':'Región Metropolitana · brillo = envíos del período · color = efectividad total (rojo la más baja, verde la más alta) · arrastra para girar, rueda para acercar'):(props.cliente?'Recorrido de tus envíos del período: de bodega a ruta y su resultado final':'Recorrido de los envíos del período: de bodega a ruta y su resultado final'))),
       h('div',{style:{display:'flex',gap:6}},tab('mapa','Mapa 3D de la RM'),tab('flujo','Flujo de estados'))),
     h('style',null,'@media (max-width:820px){.cc3d-grid{grid-template-columns:1fr!important}.cc3d-stage{height:330px!important}.cc3d-side{display:grid!important;grid-template-columns:1fr 1fr;padding:12px!important}.cc3d-side>*:last-child{grid-column:1/-1}.cc3d-head{padding:14px 14px 0!important}.cc3d-sub{display:none}.cc3d-feed-d{display:none!important}.cc3d-hint{display:none}}@media (min-width:821px){.cc3d-feed-m{display:none!important}}@media (max-width:420px){.cc3d-side{grid-template-columns:1fr}}'),
     h('div',{className:'cc3d-grid',style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 250px',gap:0}},
@@ -692,13 +692,13 @@ function CentroControl3D(props){
         h('div',{ref:refTip,style:{position:'absolute',display:'none',pointerEvents:'none',zIndex:3,minWidth:190,padding:'10px 12px',borderRadius:12,background:'rgba(18,20,13,.92)',border:'1px solid rgba(200,168,75,.6)',color:'#fff',font:'12px DM Sans,system-ui,sans-serif',boxShadow:'0 14px 30px rgba(0,0,0,.45)',backdropFilter:'blur(6px)'}}),
         !envios.length&&h('div',{style:{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(233,228,210,.7)',fontSize:13}},'Sin envíos en el período.'),
         modo==='flujo'&&nodoSel&&h(DetalleNodo,{k:nodoSel,envios:envios,vivo:vivoRef.current,rev:deltas,onClose:function(){setNodoSel(null);}}),
-        eventos.length>0&&h(FeedVivo,{inicio:inicioVivo.current,eventos:eventos,abierto:feedAbierto,onToggle:function(){setFeedAbierto(!feedAbierto);}}),
+        eventos.length>0&&h(FeedVivo,{cliente:!!props.cliente,inicio:inicioVivo.current,eventos:eventos,abierto:feedAbierto,onToggle:function(){setFeedAbierto(!feedAbierto);}}),
         modo==='mapa'&&!err&&envios.length>0&&h('div',{className:'cc3d-hint',style:{position:'absolute',right:16,top:12,fontSize:11.5,fontWeight:700,color:'rgba(233,228,210,.75)',display:'flex',alignItems:'center',gap:6,pointerEvents:'none'}},h('span',{style:{width:8,height:8,borderRadius:'50%',background:'#36ff8f',boxShadow:'0 0 10px #36ff8f'}}),'Cada entrega real enciende un punto de luz en el mapa'),
         modo==='flujo'&&!nodoSel&&!err&&envios.length>0&&h('div',{className:'cc3d-hint',style:{position:'absolute',left:16,bottom:14,fontSize:11.5,fontWeight:700,color:'rgba(233,228,210,.7)'}},'Toca una estación para ver sus comunas'),
         err&&envios.length>0&&h(Vista2D,{modo:modo,res:res,onReintentar:function(){reintRef.current=0;setErr('');setGen(function(g){return g+1;});}}),
         modo==='mapa'&&h('div',{style:{position:'absolute',left:16,bottom:14,display:'flex',alignItems:'center',gap:8,fontSize:11,color:'rgba(233,228,210,.8)',fontWeight:700}},
           'Efectividad',h('span',null,Math.floor(res.lo*1000)/10+'%'),h('span',{style:{width:120,height:8,borderRadius:6,background:'linear-gradient(90deg,#e0473f,#e8b84a,#36c47f)',boxShadow:'0 0 10px rgba(232,184,74,.4)'}}),h('span',null,Math.ceil(res.hi*1000)/10+'%'))),
-      eventos.length>0&&h(FeedVivo,{movil:true,inicio:inicioVivo.current,eventos:eventos,abierto:feedAbierto,onToggle:function(){setFeedAbierto(!feedAbierto);}}),
+      eventos.length>0&&h(FeedVivo,{cliente:!!props.cliente,movil:true,inicio:inicioVivo.current,eventos:eventos,abierto:feedAbierto,onToggle:function(){setFeedAbierto(!feedAbierto);}}),
       h('div',{className:'cc3d-side',style:{display:'flex',flexDirection:'column',gap:8,padding:'14px 16px 16px 4px'}},
         (function(){
           var tot=res.total,bf=c.en_bodega_fecha||0,denT=tot-bf,ent=c.entregado||0;
@@ -712,7 +712,7 @@ function CentroControl3D(props){
             ins('Efectividad total',denT>0?p1(ent/denT):'—',f(ent)+' entregados de '+f(denT)+(denT>0&&denT-ent>0?' · '+f(denT-ent)+' sin entregar':''),'#36c47f'),
             ins('Pendientes ahora',f(pend),pend?partes([[c.en_ruta,'en ruta'],[c.en_bodega,'en bodega'],[c.reprogramado,'reprog.']]):'Todo resuelto','#e8b84a'),
             ins('Incidencias',f(inc),inc?partes([[c.siniestro,'siniestros'],[c.retorno,'retornos'],[c.en_bodega_cancelado,'bodega canc.'],[c.cancelado,'cancel.']]):'Sin incidencias','#ff8f86'),
-            ins('Comuna a revisar',pe?titulo(pe.n):'—',pe?p1(pe.ef)+' · '+f(pe.sinEnt)+' sin entregar de '+f(pe.total-(pe.en_bodega_fecha||0))+(pe.siniestro?' · '+pe.siniestro+' siniestro'+(pe.siniestro>1?'s':''):''):'Mín. 30 envíos','#ff6b5e'),
+            ins(props.cliente?'Menor efectividad':'Comuna a revisar',pe?titulo(pe.n):'—',pe?p1(pe.ef)+' · '+f(pe.sinEnt)+' sin entregar de '+f(pe.total-(pe.en_bodega_fecha||0))+(pe.siniestro?' · '+pe.siniestro+' siniestro'+(pe.siniestro>1?'s':''):''):(props.cliente?'Mín. 10 envíos':'Mín. 30 envíos'),'#ff6b5e'),
             mi&&mi.inc>0&&(!pe||mi.n!==pe.n)?ins('Más incidencias',titulo(mi.n),f(mi.inc)+' · '+partes([[mi.siniestro,'sin.'],[mi.retorno,'ret.'],[mi.en_bodega_cancelado,'bod. canc.'],[mi.cancelado,'canc.']]),'#ffb07a'):null,
             ins('Mayor volumen',res.top?titulo(res.top.n):'—',res.top?f(res.top.total)+' envíos · '+p1(res.top.total/(tot||1))+' del total':'','#ffe59a'),
             h('div',{key:'cob',style:{fontSize:11,color:'rgba(233,228,210,.7)',padding:'2px 4px',lineHeight:1.45}},
