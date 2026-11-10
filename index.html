@@ -714,6 +714,8 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 }
 @media(min-width:1081px) and (max-width:1720px){.nav{flex-wrap:wrap;row-gap:8px;padding:9px 20px;gap:6px;}.nav-btn{font-size:12.5px!important;letter-spacing:1.1px!important;padding:10px 13px!important;}}
 @media(min-width:1081px) and (max-width:1360px){.nav-btn{font-size:12px!important;letter-spacing:.8px!important;padding:9px 11px!important;}}
+.dash-est .stat-label{font-size:13px!important;font-weight:800!important;letter-spacing:1.3px!important;color:#2b2e20!important;opacity:1!important;line-height:1.25!important;}
+.dash-est .stat-sub{font-size:12.5px!important;font-weight:700!important;color:#5a5d4a!important;font-family:'DM Sans',sans-serif!important;}
 </style>
 
 <style>
@@ -771,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261110143032;
+window.__MODULES_VERSION=20261110143227;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3597,14 +3599,14 @@ function Dashboard(_ref7){
     // un desglose parcial que luego cambia de golpe al terminar de traer todas las páginas de Supabase)
     !(cargandoExtra||cargandoRango||cargandoTodos)&&React.createElement(CentroControl3DTab,{envios:filtrados}),
     (cargandoExtra||cargandoRango||cargandoTodos)?React.createElement('div',{style:{textAlign:'center',padding:'20px',color:'var(--text-soft)',fontSize:13,marginBottom:20}},'Cargando historial completo del período...'):
-    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12,marginBottom:20}},
+    React.createElement('div',{className:'dash-est',style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:12,marginBottom:20}},
       Object.entries(porEstado).map(([est,cnt])=>{
         var valClass=est==='en_bodega'?'teal':est==='en_ruta'?'gold':est==='entregado'?'green':est==='reprogramado'?'purple':est==='cancelado'?'red':est==='siniestro'?'orange':est==='retorno'?'brown':est==='en_bodega_cancelado'?'rust':est==='en_bodega_fecha'?'blue':'orange';
         var accentColor=ESTADO_COLORS[est];
         return React.createElement('div',{key:est,className:'stat-card',style:{'--card-accent':accentColor,borderTop:`4px solid ${accentColor}`}},
-        React.createElement('div',{className:'stat-label'},ESTADO_LABELS[est]),
+        React.createElement('div',{className:'stat-label'},React.createElement('span',{style:{display:'inline-block',width:9,height:9,borderRadius:'50%',background:accentColor,boxShadow:'0 0 8px '+accentColor,marginRight:7,verticalAlign:'1px'}}),ESTADO_LABELS[est]),
         React.createElement('div',{className:`stat-value ${valClass}`},cnt.toLocaleString('es-CL')),
-        React.createElement('div',{className:'stat-sub'},total>0?(cnt/total*100).toFixed(1)+'%':'—')
+        React.createElement('div',{className:'stat-sub'},total>0?(cnt/total*100).toFixed(1)+'% del período':'—')
       );})
     ),
     // ── EFECTIVIDAD ──
