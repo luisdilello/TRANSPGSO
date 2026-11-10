@@ -373,11 +373,12 @@ function montarFlujo(T,cont,cnt,ui){
   var pts=new T.Points(pg,new T.PointsMaterial({size:0.75,map:new T.CanvasTexture(cv),vertexColors:true,transparent:true,depthWrite:false,blending:T.AdditiveBlending}));E.sc.add(pts);
   // etiquetas
   var chico=(ui.labels.clientWidth||900)<600;
+  if(chico){E.orb.r=63;E.orb.pol=0.92;E.ubicar();}
   var factorCuenta=0;
   function pintar(L){var k=L.k,n=nodos[k],el=L.el;var mostrar=Math.round(vals[k]*factorCuenta);
     var pct=k==='en_bodega'||k==='en_bodega_fecha'||k==='en_ruta'?'':(salieron?' · '+Math.round(vals[k]/salieron*100)+'%':'');
     el.innerHTML='<div style="font-family:Bebas Neue;font-size:'+(chico?20:30)+'px;line-height:1;color:#fff;text-shadow:0 0 18px '+n.c+',0 3px 0 rgba(0,0,0,.4)">'+mostrar.toLocaleString('es-CL')+'</div>'
-      +'<div style="margin-top:3px;padding:'+(chico?'1px 6px':'2px 10px')+';border-radius:999px;background:rgba(20,22,15,.75);border:1px solid '+n.c+';color:#fff;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif">'+n.l+(k==='en_ruta'?' ahora':'')+pct+'</div>'+(k==='en_ruta'?'<div style="margin-top:3px;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif;color:rgba(233,228,210,.8)">salieron '+salieron.toLocaleString('es-CL')+'</div>':(subNodo(k)?'<div style="margin-top:3px;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif;color:rgba(233,228,210,.8)">'+subNodo(k)+'</div>':''));}
+      +'<div style="margin-top:3px;padding:'+(chico?'1px 6px':'2px 10px')+';border-radius:999px;background:rgba(20,22,15,.75);border:1px solid '+n.c+';color:#fff;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif">'+n.l+(k==='en_ruta'?' ahora':'')+pct+'</div>'+(chico?'':k==='en_ruta'?'<div style="margin-top:3px;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif;color:rgba(233,228,210,.8)">salieron '+salieron.toLocaleString('es-CL')+'</div>':(subNodo(k)?'<div style="margin-top:3px;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif;color:rgba(233,228,210,.8)">'+subNodo(k)+'</div>':''));}
   ui.labels.innerHTML='';var labs=Object.keys(nodos).map(function(k){var el=document.createElement('div');
     el.style.cssText='position:absolute;transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer;text-align:center;white-space:nowrap';el.title='Ver por comuna';el.onclick=function(){ui.onNodo&&ui.onNodo(k);};
     var L={el:el,k:k};pintar(L);ui.labels.appendChild(el);return L;});
@@ -417,7 +418,12 @@ function montarFlujo(T,cont,cnt,ui){
     pistas.forEach(function(P){for(var li=0;li<P.n;li++){var f=((li/P.n)+t*P.vel)%1;P.cur.getPointAt(f,tmpQ);P.cur.getTangentAt(f,tmpQ2);quat.setFromAxisAngle(eje,Math.atan2(-tmpQ2.z,tmpQ2.x));tmpQ.y=0.08;mtx.compose(tmpQ,quat,new T.Vector3(1,1,1));P.mesh.setMatrixAt(li,mtx);}P.mesh.instanceMatrix.needsUpdate=true;});
     var i=0;curvas.forEach(function(c){for(var j=0;j<c.n;j++){var f=(fase[i]+t*vel[i])%1;c.cur.getPointAt(f,tmp);pos[i*3]=tmp.x+off[i][0];pos[i*3+1]=tmp.y+off[i][1];pos[i*3+2]=tmp.z+off[i][0]*0.6;i++;}});
     pg.attributes.position.needsUpdate=true;
-    labs.forEach(function(L){var s=silos[L.k];v.set(s.n.p[0]+0.6,Math.max(s.hm*1.4,s.hp)+1.6,s.n.p[2]);var p=proyectar(E,v,cont);L.el.style.left=p.x+'px';L.el.style.top=p.y+'px';L.el.style.display=p.vis?'block':'none';});
+    // Etiquetas sin superponerse: se proyectan, se ordenan por altura y la que choca con otra se sube.
+    var cajasL=labs.map(function(L){var s=silos[L.k];v.set(s.n.p[0]+0.6,Math.max(s.hm*1.4,s.hp)+1.6,s.n.p[2]);var p=proyectar(E,v,cont);var w=L.el.offsetWidth||90,hh=L.el.offsetHeight||40;return{L:L,x:p.x,y:p.y,w:w,h:hh,vis:p.vis};});
+    cajasL.sort(function(a,b){return b.y-a.y;});
+    var puestas=[];cajasL.forEach(function(c){if(!c.vis){c.L.el.style.display='none';return;}
+      for(var it=0;it<6;it++){var choca=puestas.filter(function(o){return Math.abs(o.x-c.x)<(o.w+c.w)/2+4&&c.y>o.y-o.h-2&&c.y-c.h<o.y+2;})[0];if(!choca)break;c.y=choca.y-choca.h-4;}
+      puestas.push(c);c.L.el.style.left=c.x+'px';c.L.el.style.top=Math.max(c.h,c.y)+'px';c.L.el.style.display='block';});
   });
   E.start();return E;
 }
@@ -476,7 +482,8 @@ function FeedVivo(p){
   var hm=function(t){return new Date(t).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',hour12:false});};
   var nm=function(s){return String(s||'').replace(/,\s*/g,' ');};
   var lista=p.abierto?ev:ev.slice(0,2);
-  return h('div',{style:{position:'absolute',right:12,bottom:12,zIndex:3,width:360,maxWidth:'calc(100% - 24px)',borderRadius:14,background:'rgba(14,16,10,.92)',border:'1px solid rgba(232,199,102,.4)',boxShadow:'0 14px 30px rgba(0,0,0,.5)',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',overflow:'hidden'}},
+  var movil=!!p.movil;
+  return h('div',{className:movil?'cc3d-feed-m':'cc3d-feed-d',style:movil?{margin:'10px 12px 0',borderRadius:14,background:'rgba(14,16,10,.92)',border:'1px solid rgba(232,199,102,.4)',overflow:'hidden'}:{position:'absolute',right:12,bottom:12,zIndex:3,width:360,maxWidth:'calc(100% - 24px)',borderRadius:14,background:'rgba(14,16,10,.92)',border:'1px solid rgba(232,199,102,.4)',boxShadow:'0 14px 30px rgba(0,0,0,.5)',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',overflow:'hidden'}},
     h('style',null,'@keyframes ccDot{0%,100%{opacity:1}50%{opacity:.3}}@keyframes ccEvIn{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}'),
     h('div',{onClick:p.onToggle,style:{cursor:'pointer',padding:'9px 12px',borderBottom:'1px solid rgba(255,255,255,.08)'}},
       h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}},
@@ -618,7 +625,7 @@ function CentroControl3D(props){
         h('div',{style:{fontFamily:'Bebas Neue',fontSize:28,letterSpacing:2.5,color:'#fff',lineHeight:1}},'Centro de control'),
         h('div',{className:'cc3d-sub',style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:3}},modo==='mapa'?'Región Metropolitana · altura = envíos del período · color = efectividad total (rojo la más baja, verde la más alta) · arrastra para girar, rueda para acercar':'Recorrido de los envíos del período: de bodega a ruta y su resultado final')),
       h('div',{style:{display:'flex',gap:6}},tab('mapa','Mapa 3D de la RM'),tab('flujo','Flujo de estados'))),
-    h('style',null,'@media (max-width:820px){.cc3d-grid{grid-template-columns:1fr!important}.cc3d-stage{height:330px!important}.cc3d-side{display:grid!important;grid-template-columns:1fr 1fr;padding:12px!important}.cc3d-side>*:last-child{grid-column:1/-1}.cc3d-head{padding:14px 14px 0!important}.cc3d-sub{display:none}}@media (max-width:420px){.cc3d-side{grid-template-columns:1fr}}'),
+    h('style',null,'@media (max-width:820px){.cc3d-grid{grid-template-columns:1fr!important}.cc3d-stage{height:330px!important}.cc3d-side{display:grid!important;grid-template-columns:1fr 1fr;padding:12px!important}.cc3d-side>*:last-child{grid-column:1/-1}.cc3d-head{padding:14px 14px 0!important}.cc3d-sub{display:none}.cc3d-feed-d{display:none!important}.cc3d-hint{display:none}}@media (min-width:821px){.cc3d-feed-m{display:none!important}}@media (max-width:420px){.cc3d-side{grid-template-columns:1fr}}'),
     h('div',{className:'cc3d-grid',style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 250px',gap:0}},
       h('div',{className:'cc3d-stage',style:{position:'relative',height:500,minWidth:0,touchAction:'pan-y'}},
         h('div',{ref:refC,style:{position:'absolute',inset:0}}),
@@ -627,10 +634,11 @@ function CentroControl3D(props){
         !envios.length&&h('div',{style:{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(233,228,210,.7)',fontSize:13}},'Sin envíos en el período.'),
         modo==='flujo'&&nodoSel&&h(DetalleNodo,{k:nodoSel,envios:envios,vivo:vivoRef.current,rev:deltas,onClose:function(){setNodoSel(null);}}),
         eventos.length>0&&h(FeedVivo,{inicio:inicioVivo.current,eventos:eventos,abierto:feedAbierto,onToggle:function(){setFeedAbierto(!feedAbierto);}}),
-        modo==='flujo'&&!nodoSel&&!err&&envios.length>0&&h('div',{style:{position:'absolute',left:16,bottom:14,fontSize:11.5,fontWeight:700,color:'rgba(233,228,210,.7)'}},'Toca una estación para ver sus comunas'),
+        modo==='flujo'&&!nodoSel&&!err&&envios.length>0&&h('div',{className:'cc3d-hint',style:{position:'absolute',left:16,bottom:14,fontSize:11.5,fontWeight:700,color:'rgba(233,228,210,.7)'}},'Toca una estación para ver sus comunas'),
         err&&envios.length>0&&h(Vista2D,{modo:modo,res:res,onReintentar:function(){reintRef.current=0;setErr('');setGen(function(g){return g+1;});}}),
         modo==='mapa'&&h('div',{style:{position:'absolute',left:16,bottom:14,display:'flex',alignItems:'center',gap:8,fontSize:11,color:'rgba(233,228,210,.8)',fontWeight:700}},
           'Efectividad',h('span',null,Math.floor(res.lo*1000)/10+'%'),h('span',{style:{width:120,height:8,borderRadius:6,background:'linear-gradient(90deg,#e0473f,#e8b84a,#36c47f)',boxShadow:'0 0 10px rgba(232,184,74,.4)'}}),h('span',null,Math.ceil(res.hi*1000)/10+'%'))),
+      eventos.length>0&&h(FeedVivo,{movil:true,inicio:inicioVivo.current,eventos:eventos,abierto:feedAbierto,onToggle:function(){setFeedAbierto(!feedAbierto);}}),
       h('div',{className:'cc3d-side',style:{display:'flex',flexDirection:'column',gap:8,padding:'14px 16px 16px 4px'}},
         (function(){
           var tot=res.total,bf=c.en_bodega_fecha||0,denT=tot-bf,ent=c.entregado||0;
