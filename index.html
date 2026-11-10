@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261110194139;
+window.__MODULES_VERSION=20261110194309;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -14252,6 +14252,7 @@ function PortalCliente({usuario,onLogout}){
   );
 }
 
+try{window.__PortalCliente=PortalCliente;}catch(e){}
 function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
   function t(es){return traducirCliente(idioma||'es',es);}
   var _sel=useState([]),seleccionados=_sel[0],setSeleccionados=_sel[1];
