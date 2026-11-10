@@ -133,10 +133,16 @@ function montarMapa(T,cont,datos,ui,geo){
   var max=Math.max.apply(null,datos.map(function(d){return d.total;}).concat([1]));
   var X=function(lng){return (lng+70.65)*105;},Y=function(lat){return (lat+33.47)*105;};var centros={};
   var bx0=1e9,bx1=-1e9,bz0=1e9,bz1=-1e9;
-  geo.forEach(function(f){var d=byN[norm(f.n)];if(!d||d.total<max*0.04)return;f.r.forEach(function(ring){ring.forEach(function(p){var x=X(p[0]),z=-Y(p[1]);if(x<bx0)bx0=x;if(x>bx1)bx1=x;if(z<bz0)bz0=z;if(z>bz1)bz1=z;});});});
+  // encuadre: núcleo que concentra ~88% del volumen (las comunas rurales grandes no achican la ciudad)
+  var pts=[],sw=0,mx=0,mz=0;
+  geo.forEach(function(f){var d=byN[norm(f.n)];if(!d||!d.total)return;var a0=1e9,a1=-1e9,c0=1e9,c1=-1e9;
+    f.r.forEach(function(ring){ring.forEach(function(p){var x=X(p[0]),z=-Y(p[1]);if(x<a0)a0=x;if(x>a1)a1=x;if(z<c0)c0=z;if(z>c1)c1=z;});});
+    var q={x:(a0+a1)/2,z:(c0+c1)/2,w:d.total};pts.push(q);sw+=q.w;mx+=q.x*q.w;mz+=q.z*q.w;});
+  if(sw){mx/=sw;mz/=sw;pts.sort(function(a,b){return Math.hypot(a.x-mx,a.z-mz)-Math.hypot(b.x-mx,b.z-mz);});
+    var acc=0;for(var qi=0;qi<pts.length;qi++){var q=pts[qi];if(q.x-4<bx0)bx0=q.x-4;if(q.x+4>bx1)bx1=q.x+4;if(q.z-4<bz0)bz0=q.z-4;if(q.z+4>bz1)bz1=q.z+4;acc+=q.w;if(acc>=sw*0.88)break;}}
   if(bx0>bx1){bx0=-30;bx1=30;bz0=-30;bz1=30;}
   var Wc=cont.clientWidth||900,Hc=cont.clientHeight||420,asp=Wc/Hc,movil=Wc<600;
-  var spanX=(bx1-bx0)*1.12,spanZ=(bz1-bz0)*1.12;
+  var spanX=(bx1-bx0)*1.25,spanZ=(bz1-bz0)*1.25;
   var rFit=Math.max(spanZ/0.62,spanX/(0.62*Math.max(asp,movil?0.9:1.85)));if(movil)rFit*=0.62;rFit=Math.max(40,Math.min(230,rFit));
   var E=crearEscena(T,cont,{r:rFit,pol:0.42,az:0.0001,tx:(bx0+bx1)/2,tz:(bz0+bz1)/2+rFit*0.04,quieto:true,rMin:18,rMax:300,fogNear:rFit+120,fogFar:rFit+320,bloom:0.75,bloomTh:0.9,onLost:ui.onLost,
     onMove:function(e){var b=E.ren.domElement.getBoundingClientRect();ptr.x=(e.clientX-b.left)/b.width*2-1;ptr.y=-(e.clientY-b.top)/b.height*2+1;
