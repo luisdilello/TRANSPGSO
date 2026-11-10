@@ -743,7 +743,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261110135224;
+window.__MODULES_VERSION=20261110135802;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -7061,6 +7061,7 @@ function RetiroMasivoRider(_ref_rm){
                 // por qué no "agarra".
                 playSound('error');
                 setLastScan({noLeido:true});
+                flashEscaneo('noleido',null,'NO SE PUDO LEER','Acerca la etiqueta o ingresa el código manual');
                 setTimeout(function(){setLastScan(null);},1500);
               }
               setTimeout(function(){procesandoRef.current=false;},1200);
@@ -7090,6 +7091,7 @@ function RetiroMasivoRider(_ref_rm){
           }else{
             playSound('error');
             setLastScan({noLeido:true});
+            flashEscaneo('noleido',null,'NO SE PUDO LEER','Acerca la etiqueta o ingresa el código manual');
             setTimeout(function(){setLastScan(null);},1500);
           }
           setTimeout(function(){procesandoRef.current=false;},1200);
@@ -7226,8 +7228,9 @@ function RetiroMasivoRider(_ref_rm){
 
   function procesarCodigo(codigo,canvas){
     if(codigosRef.current.has(codigo)){
-      playSound('error');
+      playSound('scan_dup');
       setLastScan({codigo,duplicado:true});
+      flashEscaneo('dup',codigo,'YA ESCANEADO','Este paquete ya está en la lista');
       setTimeout(function(){setLastScan(null);},1500);
       return;
     }
@@ -7242,7 +7245,8 @@ function RetiroMasivoRider(_ref_rm){
       setTimeout(function(){
       var foto=capturarFoto();
       if(foto) playSound('foto');
-      else playSound('success');
+      setTimeout(function(){playSound('scan_ok');},foto?120:0);
+      flashEscaneo('ok',codigo,'AGREGADO',null,true);
       setScanEstado('idle');
       var paquete={codigo:codigo,estado:'escaneado',ts:new Date().toISOString(),foto:foto,datosIA:null,analizandoIA:!!foto,syncEstado:'guardando'};
       setPaquetes(function(prev){return[paquete,...prev];});
@@ -7313,7 +7317,8 @@ function RetiroMasivoRider(_ref_rm){
       var ex=existentes.get(codigo);
       if(ex&&!ESTADOS_ADQUIRIBLES_ESCANEO.includes(ex.estado)){
         setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{syncEstado:'bloqueado',estado:'error',motivo:'Requiere admin (no está en bodega/en ruta)'}):p;});});
-        playSound('error');
+        playSound('scan_dup');
+        flashEscaneo('dup',codigo,'NO SE PUEDE TOMAR',motivoNoAdquirible(ex.estado,ex.mensajero));
         return;
       }
       var esPDF=ex&&ex.fuente==='flex';
@@ -7349,7 +7354,8 @@ function RetiroMasivoRider(_ref_rm){
         setPaquetes(function(prev){return prev.map(function(p){return p.codigo===codigo?Object.assign({},p,{yaRegistrado:infoRep}):p;});});
         setAvisoRep(Object.assign({codigo:codigo},infoRep));
         setTimeout(function(){setAvisoRep(function(a){return a&&a.codigo===codigo?null:a;});},5000);
-        playSound('error');
+        playSound('scan_noreg');
+        flashEscaneo('noreg',codigo,'YA REGISTRADO',(infoRep.cliente||'Sin cliente')+' · '+(infoRep.hoy?('hoy '+infoRep.hora):(infoRep.fecha+' '+infoRep.hora))+(infoRep.otroCliente?' · es de otro cliente, sepáralo':''));
         // FIX 2026-10-22 (regla de Luis): el PRIMER registro se respeta. Un código que ya estaba
         // registrado (y no viene del PDF) no se modifica desde la app: ni estado, ni mensajero, ni
         // cliente, ni historial. Cualquier corrección se hace desde el panel administrativo.
@@ -8084,17 +8090,20 @@ function ColectaRider(_ref_cr){
       // ambiguo con más de un número posible) para que ingrese el código a mano.
       playSound('error');
       setLastScan({noLeido:true});
+      flashEscaneo('noleido',null,'NO SE PUDO LEER','Acerca la etiqueta o ingresa el código manual');
       return;
     }
     // Bloquear duplicados usando ref síncrona (no stale state)
     if(codigosRef.current.has(codigo)){
-      playSound('error');
+      playSound('scan_dup');
       setLastScan({codigo,duplicado:true});
+      flashEscaneo('dup',codigo,'YA ESCANEADO','Este paquete ya está en la lista');
       return;
     }
     codigosRef.current.add(codigo);
     if(!inicioColRef.current)inicioColRef.current=Date.now();
-    playSound('success');
+    playSound('scan_ok');
+    flashEscaneo('ok',codigo,'AGREGADO',null,true);
     setPaquetes(prev=>[{codigo,raw,estado:'pendiente',datos:null,ts:new Date().toISOString(),syncEstado:'guardando'},...prev]);
     setLastScan({codigo,nuevo:true,esperandoFoto:true});
     // Guardar en la base apenas se escanea (aunque falten los datos de la foto todavía) —
@@ -8108,7 +8117,8 @@ function ColectaRider(_ref_cr){
       var ex=existentes.get(codigo);
       if(ex&&!ESTADOS_ADQUIRIBLES_ESCANEO.includes(ex.estado)){
         setPaquetes(prev=>prev.map(p=>p.codigo===codigo?{...p,syncEstado:'bloqueado',estado:'error',motivo:'Requiere admin (no está en bodega/en ruta)'}:p));
-        playSound('error');
+        playSound('scan_dup');
+        flashEscaneo('dup',codigo,'NO SE PUEDE TOMAR',motivoNoAdquirible(ex.estado,ex.mensajero));
         return;
       }
       var esPDF=ex&&ex.fuente==='flex';
@@ -8126,7 +8136,8 @@ function ColectaRider(_ref_cr){
         var horaC='';try{horaC=ex.created_at?new Date(ex.created_at).toLocaleTimeString('es-CL',{timeZone:'America/Santiago',hour:'2-digit',minute:'2-digit'}):'';}catch(_h){}
         var infoC={cliente:ex.cliente||'',fecha:ex.fecha||'',hora:horaC,hoy:ex.fecha===fechaHoyCL(),otroCliente:!!(ex.cliente&&ex.cliente!==clienteNombre)};
         setPaquetes(prev=>prev.map(p=>p.codigo===codigo?{...p,syncEstado:'guardado',yaRegistrado:infoC}:p));
-        playSound('error');
+        playSound('scan_noreg');
+        flashEscaneo('noreg',codigo,'YA REGISTRADO',(infoC.cliente||'Sin cliente')+' · '+(infoC.hoy?('hoy '+infoC.hora):(infoC.fecha+' '+infoC.hora))+(infoC.otroCliente?' · es de otro cliente, sepáralo':''));
         toast('Ya estaba registrado: '+codigo+' · '+(infoC.cliente||'Sin cliente')+' · '+(infoC.hoy?('hoy '+infoC.hora):(infoC.fecha+' '+infoC.hora))+(infoC.otroCliente?' · es de otro cliente, sepáralo':'')+'. No se modificó.');
         return;
       }
@@ -9371,8 +9382,26 @@ const ESTILO_ESCANEO={
   noleido:{bg:'linear-gradient(135deg,#6b4a00,#a87400)',bgSuave:'rgba(168,116,0,0.18)',borde:'#c99a2e',glow:'rgba(200,150,40,0.45)',texto:'#e0b040',signo:'?',flash:'rgba(120,85,0,0.85)'},
   verif:  {bg:'linear-gradient(135deg,#3a3d2e,#55594a)',bgSuave:'rgba(255,255,255,0.05)',borde:'#8a8d7a',glow:'rgba(0,0,0,0)',texto:'rgba(255,255,255,0.55)',signo:'…',flash:'rgba(40,40,40,0.7)'}
 };
+// Aviso de escaneo invocable desde cualquier flujo (Colecta, Retiro Masivo) sin pasar estado:
+// se dibuja en un contenedor propio sobre la pantalla y se retira solo.
+function flashEscaneo(tipo,codigo,titulo,detalle,suave){
+  try{
+    let el=document.getElementById('pgso-flash-root');
+    if(!el){el=document.createElement('div');el.id='pgso-flash-root';document.body.appendChild(el);window.__pgsoFlashRoot=ReactDOM.createRoot(el);}
+    const k=Date.now();window.__pgsoFlashK=k;
+    window.__pgsoFlashRoot.render(React.createElement(FlashEscaneo,{key:k,flash:{tipo,codigo,titulo,detalle,suave:!!suave,k}}));
+    setTimeout(()=>{if(window.__pgsoFlashK===k)window.__pgsoFlashRoot.render(null);},tipo==='ok'?900:1800);
+  }catch(e){}
+}
 function FlashEscaneo(_ref_fe){
   const f=_ref_fe.flash; const st=ESTILO_ESCANEO[f.tipo]||ESTILO_ESCANEO.ok;
+  if(f.suave){
+    if(!document.getElementById('pgso-flash-css')){const css=document.createElement('style');css.id='pgso-flash-css';css.textContent='@keyframes pgsoFlashIn{0%{opacity:0;transform:scale(1.06)}12%{opacity:1;transform:scale(1)}80%{opacity:1}100%{opacity:0}}@keyframes pgsoFlashPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}';document.head.appendChild(css);}
+    return React.createElement('div',{style:{position:'fixed',inset:0,zIndex:10050,pointerEvents:'none',boxShadow:'inset 0 0 0 10px '+st.borde+', inset 0 0 60px '+st.glow,animation:'pgsoFlashIn .9s ease-out forwards',display:'flex',justifyContent:'center',alignItems:'flex-start',paddingTop:'max(18px,env(safe-area-inset-top))'}},
+      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,padding:'10px 18px',borderRadius:14,background:st.bg,boxShadow:'0 10px 26px '+st.glow,color:'#fff'}},
+        React.createElement('span',{style:{width:30,height:30,borderRadius:'50%',border:'3px solid #fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,fontSize:17}},st.signo),
+        React.createElement('div',null,React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:24,letterSpacing:2,lineHeight:1}},f.titulo),f.codigo&&React.createElement('div',{style:{fontFamily:'JetBrains Mono',fontSize:12,fontWeight:800,opacity:.9}},f.codigo))));
+  }
   if(!document.getElementById('pgso-flash-css')){const css=document.createElement('style');css.id='pgso-flash-css';css.textContent='@keyframes pgsoFlashIn{0%{opacity:0;transform:scale(1.06)}12%{opacity:1;transform:scale(1)}80%{opacity:1}100%{opacity:0}}@keyframes pgsoFlashPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}';document.head.appendChild(css);}
   const dur=f.tipo==='ok'?0.9:1.8;
   return React.createElement('div',{style:{position:'fixed',inset:0,zIndex:10050,pointerEvents:'none',background:st.flash,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:24,textAlign:'center',animation:'pgsoFlashIn '+dur+'s ease-out forwards',boxShadow:'inset 0 0 0 10px '+st.borde}},
