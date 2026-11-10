@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261110194309;
+window.__MODULES_VERSION=20261110194455;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -13962,6 +13962,8 @@ function PortalCliente({usuario,onLogout}){
     // envío puntual (FotosEntregaConRecarga ya la trae fresca por su cuenta al abrir el modal),
     // así que pedirla para el histórico completo era peso muerto en cada carga.
     try{
+      // 10-11-2026: lo más reciente primero (índice cliente+fecha): Hoy/Semana/Mes quedan correctos con el primer bloque.
+      setCargandoHist(true);
       var acumulado=[];var offset=0;var bloque=1000;var primero=true;
       // OJO: 'foto_etiqueta' NO se pide aquí (a proposito). Es una foto en base64 guardada
       // directo en la fila (puede pesar >100KB cada una) y NO se usa en ningún listado del
@@ -13973,7 +13975,7 @@ function PortalCliente({usuario,onLogout}){
       // portal vacío sin ningún aviso. Mismo criterio que ya se usaba para 'fotos_entrega'.
       var cols='id,codigo,cliente,destinatario,telefono,direccion,comuna,fecha,estado,mensajero,monto,nota,created_at';
       while(true){
-        var res=await db.from('envios').select(cols).eq('cliente',nombreCliente).range(offset,offset+bloque-1);
+        var res=await db.from('envios').select(cols).eq('cliente',nombreCliente).order('fecha',{ascending:false}).order('id',{ascending:false}).range(offset,offset+bloque-1);
         if(res.error){
           console.warn('Error cargando envíos del cliente:',res.error.message);
           if(primero)setFetchError(true);
@@ -13992,13 +13994,14 @@ function PortalCliente({usuario,onLogout}){
       console.warn('Error de conexión cargando envíos del cliente:',err&&err.message);
       setFetchError(true);
     }
-    setLoading(false);
+    setLoading(false);setCargandoHist(false);
   }
 
   // 10-11-2026: tiempo real. Cada cambio de un envío del cliente (RLS: solo recibe los suyos)
   // se aplica en el acto sobre la lista, sin recargar. Se aplica con un leve retraso para que el
   // Centro 3D alcance a registrar el cambio de estado (punto de luz) antes que la lista.
   var _rt=useState(false),rtOk=_rt[0],setRtOk=_rt[1];
+  var _chi=useState(false),cargandoHist=_chi[0],setCargandoHist=_chi[1];
   React.useEffect(function(){
     if(typeof db==='undefined'||!db.channel)return;
     var CAMPOS=['estado','mensajero','destinatario','telefono','direccion','comuna','fecha','monto','nota'];
@@ -14106,6 +14109,7 @@ function PortalCliente({usuario,onLogout}){
         React.createElement('input',{type:'date',className:'per-in',value:fechaHasta,onChange:function(e){setFechaHasta(e.target.value);}})),
       React.createElement('div',{className:'pc-tot',style:{marginLeft:'auto',display:'flex',alignItems:'center',gap:14,padding:'8px 16px',borderRadius:14,background:'linear-gradient(160deg,rgba(255,255,255,.10),rgba(255,255,255,.03))',border:'1px solid rgba(232,199,102,.4)',boxShadow:'inset 0 1px 0 rgba(255,255,255,.08)'}},
         React.createElement('span',{title:t('Los estados se actualizan solos'),style:{display:'inline-flex',alignItems:'center',gap:6,fontSize:11,fontWeight:900,letterSpacing:1.2,color:rtOk?'#7fe3a8':'rgba(233,228,210,.5)'}},React.createElement('span',{style:{width:8,height:8,borderRadius:'50%',background:rtOk?'#36c47f':'#888',boxShadow:rtOk?'0 0 8px #36c47f':'none',animation:rtOk?'pcDot 1.2s infinite':'none'}}),t('TIEMPO REAL')),
+        cargandoHist&&!loading&&periodo==='personalizado'&&React.createElement('span',{style:{fontSize:11.5,fontWeight:700,color:'rgba(233,228,210,.7)'}},t('Cargando historial...')),
         loading?React.createElement('span',{style:{fontSize:12.5,fontWeight:700,color:'rgba(233,228,210,.8)'}},t('Cargando...')):
         React.createElement(React.Fragment,null,
           React.createElement('span',{style:{fontFamily:'Bebas Neue',fontSize:38,lineHeight:1,color:'#e8c766',textShadow:'0 0 16px rgba(232,199,102,.45)'}},total.toLocaleString('es-CL')),
