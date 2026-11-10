@@ -712,6 +712,8 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
   .nav-dropdown-toggle::after{width:7px!important;height:7px!important;}
   .nav-dropdown-item{font-size:13px!important;padding:12px 16px 12px 20px!important;}
 }
+@media(min-width:1081px) and (max-width:1720px){.nav{flex-wrap:wrap;row-gap:8px;padding:9px 20px;gap:6px;}.nav-btn{font-size:12.5px!important;letter-spacing:1.1px!important;padding:10px 13px!important;}}
+@media(min-width:1081px) and (max-width:1360px){.nav-btn{font-size:12px!important;letter-spacing:.8px!important;padding:9px 11px!important;}}
 </style>
 
 <style>
@@ -769,7 +771,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261110142929;
+window.__MODULES_VERSION=20261110143032;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
