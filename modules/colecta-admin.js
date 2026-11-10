@@ -24,6 +24,8 @@ function ColectaAdmin(_ref_ca){var clientes=_ref_ca.clientes,mensajeros=_ref_ca.
   var _scanTotal=useState([]),scanTotal=_scanTotal[0],setScanTotal=_scanTotal[1];
   var scanInputRef=React.useRef(null);
   var _rm=useState(false),showRM=_rm[0],setShowRM=_rm[1];
+  var _nr=useState(0),nNoReg=_nr[0],setNNoReg=_nr[1];
+  React.useEffect(function(){(async function(){try{var r=await db.from('codigos_no_registrados').select('codigo',{count:'exact',head:true}).eq('resuelto',false);setNNoReg(r.count||0);}catch(e){}})();},[]);
   var esTactil=typeof window!=='undefined'&&('ontouchstart' in window||navigator.maxTouchPoints>0);
 
   // Cargar envíos escaneados hoy desde Supabase
@@ -244,6 +246,7 @@ async function guardarColecta(){
         btnSub('historial','Historial'),
         btnSub('excel','Importar Excel'),
         btnSub('pdf','Importar PDF'),
+        React.createElement('button',{onClick:function(){setSubTab('noreg');},style:{padding:'6px 14px',borderRadius:8,border:'1px solid '+(subTab==='noreg'?'#c2189b':(nNoReg>0?'#ff4fd8':'var(--border)')),background:subTab==='noreg'?'rgba(194,24,155,0.12)':(nNoReg>0?'rgba(255,47,208,0.08)':'#fff'),color:subTab==='noreg'||nNoReg>0?'#c2189b':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:6}},'No registrados',nNoReg>0&&React.createElement('span',{style:{background:'#ff4fd8',color:'#fff',borderRadius:10,padding:'1px 7px',fontSize:11,fontWeight:800}},nNoReg)),
         React.createElement('input',{type:'date',value:filtroFecha,onChange:function(e){setFiltroFecha(e.target.value);},style:{padding:'6px 12px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}}),
         React.createElement('select',{value:filtroCliente,onChange:function(e){setFiltroCliente(e.target.value);},style:{padding:'6px 12px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}},
           React.createElement('option',{value:'todos'},'Todos los clientes'),
@@ -471,6 +474,7 @@ async function guardarColecta(){
       /*#__PURE__*/React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginBottom:16}},'Sube el PDF de MercadoLibre Flex. El sistema extrae los envíos automáticamente y los agrega a Gestión de Envíos.'),
       /*#__PURE__*/React.createElement(ImportarPDFColecta,{clientes:clientes,toast:toast,db:db,usuario:nombreAdmin})
     ),
+    subTab==='noreg'&&React.createElement(NoRegistradosPanel,{toast:toast,fecha:filtroFecha,nombreAdmin:nombreAdmin,onCuenta:setNNoReg}),
     subTab==='historial'&&React.createElement('div',null,
       loading?React.createElement('div',{className:'empty-state'},'Cargando...'):
       colectas.length===0?React.createElement('div',{className:'info-banner'},'Sin colectas para la fecha seleccionada.'):
@@ -500,6 +504,76 @@ async function guardarColecta(){
             })
           )
         )
+      )
+    )
+  );
+}
+
+// 10-11-2026: códigos que un mensajero escaneó y no existen en el sistema (aviso a bodega).
+function NoRegistradosPanel(props){
+  var db=window.__app&&window.__app.db||window.db;var toast=props.toast;var fecha=props.fecha;var nombreAdmin=props.nombreAdmin;var onCuenta=props.onCuenta||function(){};
+  var _v=React.useState('pendientes'),vista=_v[0],setVista=_v[1];
+  var _f=React.useState([]),filas=_f[0],setFilas=_f[1];
+  var _l=React.useState(true),cargando=_l[0],setCargando=_l[1];
+  async function cargar(){
+    setCargando(true);
+    try{
+      var q=db.from('codigos_no_registrados').select('*').order('ultimo_at',{ascending:false}).limit(1000);
+      if(vista==='pendientes')q=q.eq('resuelto',false);else q=q.eq('fecha',fecha);
+      var r=await q;if(r.error)throw r.error;
+      var lista=r.data||[];
+      var cods=Array.from(new Set(lista.map(function(x){return x.codigo;})));
+      var existen={};
+      for(var i=0;i<cods.length;i+=200){
+        var r2=await db.from('envios').select('codigo,cliente,estado,mensajero').in('codigo',cods.slice(i,i+200));
+        (r2.data||[]).forEach(function(e){existen[e.codigo]=e;});
+      }
+      // Los que ya fueron ingresados al sistema se cierran solos
+      var ya=lista.filter(function(x){return !x.resuelto&&existen[x.codigo];}).map(function(x){return x.id;});
+      if(ya.length){try{await db.from('codigos_no_registrados').update({resuelto:true,resuelto_por:'Ingresado al sistema',resuelto_at:new Date().toISOString()}).in('id',ya);}catch(e){}}
+      lista=lista.map(function(x){var e=existen[x.codigo];return Object.assign({},x,{envio:e||null,resuelto:x.resuelto||!!e,resuelto_por:x.resuelto_por||(e?'Ingresado al sistema':null)});});
+      if(vista==='pendientes')lista=lista.filter(function(x){return !x.resuelto;});
+      setFilas(lista);
+      if(vista==='pendientes')onCuenta(lista.length);
+    }catch(e){toast('No se pudo cargar: '+(e.message||e));setFilas([]);}
+    setCargando(false);
+  }
+  React.useEffect(function(){cargar();},[vista,fecha]);
+  async function resolver(f){
+    var nota=prompt('Qué se hizo con '+f.codigo+'? (opcional)')||'';
+    var r=await db.from('codigos_no_registrados').update({resuelto:true,resuelto_por:nombreAdmin,resuelto_at:new Date().toISOString(),nota:nota||null}).eq('id',f.id);
+    if(r.error){toast('Error: '+r.error.message);return;}
+    toast('Marcado como resuelto');cargar();
+  }
+  var th={padding:'9px 10px',textAlign:'left',fontSize:11,color:'var(--gold)',fontFamily:'Bebas Neue',letterSpacing:1};
+  var td={padding:'8px 10px',fontSize:12,borderBottom:'1px solid var(--border)'};
+  var fmt=function(t){try{return new Date(t).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return '';}};
+  var btnV=function(v,l){return React.createElement('button',{onClick:function(){setVista(v);},style:{padding:'6px 14px',borderRadius:8,border:'1px solid '+(vista===v?'#c2189b':'var(--border)'),background:vista===v?'rgba(194,24,155,0.10)':'#fff',color:vista===v?'#c2189b':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer'}},l);};
+  return React.createElement('div',{className:'panel'},
+    React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:12}},
+      React.createElement('div',null,
+        React.createElement('div',{className:'panel-title',style:{marginBottom:2}},'Códigos no registrados'),
+        React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)'}},'Paquetes que un mensajero escaneó y no existen en el sistema. Se cierran solos cuando el código se ingresa.')
+      ),
+      React.createElement('div',{style:{display:'flex',gap:6}},btnV('pendientes','Pendientes (todas las fechas)'),btnV('dia','Del '+fecha.split('-').reverse().join('-')),
+        React.createElement('button',{onClick:cargar,className:'btn-secondary',style:{fontSize:12}},'Actualizar'))
+    ),
+    cargando?React.createElement('div',{className:'empty-state'},'Cargando...'):
+    filas.length===0?React.createElement('div',{className:'info-banner'},vista==='pendientes'?'No hay códigos no registrados pendientes.':'Sin avisos para esta fecha.'):
+    React.createElement('div',{style:{overflowX:'auto',border:'1px solid var(--border)',borderRadius:10}},
+      React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',minWidth:640}},
+        React.createElement('thead',null,React.createElement('tr',{style:{background:'var(--dark)'}},['Código','Mensajero','Veces','Primer aviso','Último','Estado',''].map(function(h){return React.createElement('th',{key:h,style:th},h);}))),
+        React.createElement('tbody',null,filas.map(function(f){
+          return React.createElement('tr',{key:f.id,style:{background:f.resuelto?'#fff':'rgba(255,47,208,0.06)'}},
+            React.createElement('td',{style:Object.assign({},td,{fontFamily:'JetBrains Mono',fontWeight:700})},f.codigo),
+            React.createElement('td',{style:td},f.mensajero||'—'),
+            React.createElement('td',{style:Object.assign({},td,{textAlign:'center',fontWeight:700})},f.veces),
+            React.createElement('td',{style:td},fmt(f.created_at)),
+            React.createElement('td',{style:td},fmt(f.ultimo_at)),
+            React.createElement('td',{style:td},f.resuelto?React.createElement('span',{style:{color:'var(--success)',fontWeight:700}},(f.envio?'Ingresado · '+(f.envio.cliente||''):'Resuelto · '+(f.resuelto_por||''))+(f.nota?' · '+f.nota:'')):React.createElement('span',{style:{padding:'3px 8px',borderRadius:6,background:'#ff4fd8',color:'#fff',fontWeight:800,fontSize:11}},'PENDIENTE')),
+            React.createElement('td',{style:td},!f.resuelto&&React.createElement('button',{className:'btn-secondary',style:{fontSize:11,padding:'4px 10px'},onClick:function(){resolver(f);}},'Marcar resuelto'))
+          );
+        }))
       )
     )
   );
