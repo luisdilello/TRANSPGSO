@@ -67,7 +67,7 @@ function RutaEnVivo(props){
     else if(esperado!=null&&(pct(cerr,sal)||0)<esperado-TOLERANCIA)estado='atrasado';
     return Object.assign({},m,{sal:sal,pend:pend,cerr:cerr,pE:pE,pO:pO,esperado:esperado,hAct:hAct,hEnt:hEnt,estado:estado});
   });
-  var T=filas.reduce(function(a,f){a.sal+=f.sal;a.ent+=+f.ent||0;a.rep+=+f.rep||0;a.can+=+f.can||0;a.pen+=f.pend;a.otr+=+f.otr||0;HORAS.forEach(function(x,i){a.c[i]+=+((f.cortes||[])[i])||0;});return a;},{sal:0,ent:0,rep:0,can:0,pen:0,otr:0,c:[0,0,0,0,0]});
+  var T=filas.reduce(function(a,f){a.etq+=+f.etq_futura||0;a.etqP+=+f.etq_futura_pend||0;a.sal+=f.sal;a.ent+=+f.ent||0;a.rep+=+f.rep||0;a.can+=+f.can||0;a.pen+=f.pend;a.otr+=+f.otr||0;HORAS.forEach(function(x,i){a.c[i]+=+((f.cortes||[])[i])||0;});return a;},{sal:0,ent:0,rep:0,can:0,pen:0,otr:0,etq:0,etqP:0,c:[0,0,0,0,0]});
   var cuenta={todos:filas.length,atrasado:0,detenido:0,terminado:0,ok:0};filas.forEach(function(f){cuenta[f.estado]++;});
   var prio={detenido:0,atrasado:1,ok:2,terminado:3};
   var vis=filas.filter(function(f){return (filtro==='todos'||f.estado===filtro)&&(!q||f.mensajero.indexOf(q.toUpperCase())>=0);});
@@ -110,7 +110,8 @@ function RutaEnVivo(props){
         kpi('Pendientes',fN(T.pen),T.pen?COL.ambar:COL.verde,fN(T.rep)+' reprog. · '+fN(T.can)+' cancel.'),
         kpi('% entrega',fP(pEnt),pEnt==null?'#fff':pEnt>=95?COL.verde:pEnt>=80?COL.ambar:COL.rojo,'% operacional '+fP(pOp)),
         kpi('Bajo el ritmo',fN(cuenta.atrasado),cuenta.atrasado?COL.ambar:COL.verde),
-        kpi('Detenidos',fN(cuenta.detenido),cuenta.detenido?COL.rojo:COL.verde,'sin movimiento '+DETENIDO_MIN+'+ min')),
+        kpi('Detenidos',fN(cuenta.detenido),cuenta.detenido?COL.rojo:COL.verde,'sin movimiento '+DETENIDO_MIN+'+ min'),
+        kpi('Etiqueta de otro día',fN(T.etq),T.etq?COL.ambar:'#fff',T.etq?fN(T.etqP)+' aún pendientes':'fecha de etiqueta posterior')),
       h('div',{style:{display:'flex',gap:6,marginTop:12,flexWrap:'wrap'}},HORAS.map(function(hh,i){var pas=cortePas(hh);var v=pas?pct(T.c[i],T.sal):null;
         return h('div',{key:hh,style:{flex:'1 1 110px',padding:'8px 10px',borderRadius:12,background:pas?'rgba(232,199,102,.12)':'rgba(255,255,255,.03)',border:'1px solid '+(pas?'rgba(232,199,102,.4)':'rgba(255,255,255,.08)')}},
           h('div',{style:{fontSize:10,fontWeight:800,letterSpacing:1.3,color:COL.suave}},'CORTE '+hh+':00'),
@@ -126,7 +127,7 @@ function RutaEnVivo(props){
       !res?h('div',{style:{padding:30,textAlign:'center',color:'var(--text-soft)'}},'Cargando la ruta…'):
       !filas.length?h('div',{style:{padding:30,textAlign:'center',color:'var(--text-soft)'}},'Todavía no sale ningún mensajero a ruta este día.'):
       h('div',{className:'table-wrap',style:{margin:0}},h('table',null,
-        h('thead',null,h('tr',null,['Mensajero','Estado','Salió','Llevó','Avance'].concat(HORAS.map(function(x){return x+':00';})).concat(['Final','Reprog.','Cancel.','Pend.','% entrega','% operac.','Última entrega']).map(function(c,i){return h('th',{key:i,style:i>=2&&i!==4&&i!==1?{textAlign:'right'}:null},c);}))),
+        h('thead',null,h('tr',null,['Mensajero','Estado','Salió','Llevó','Avance'].concat(HORAS.map(function(x){return x+':00';})).concat(['Final','Reprog.','Cancel.','Pend.','% entrega','% operac.','Etiq. otro día','Última entrega']).map(function(c,i){return h('th',{key:i,style:i>=2&&i!==4&&i!==1?{textAlign:'right'}:null},c);}))),
         h('tbody',null,vis.map(function(f){var E=ESTADOS[f.estado];
           return h('tr',{key:f.mensajero},
             h('td',{style:{fontWeight:700,whiteSpace:'nowrap'}},f.mensajero),
@@ -145,6 +146,7 @@ function RutaEnVivo(props){
             h('td',{className:'mono',style:{textAlign:'right',fontWeight:700,color:f.pend?'#a15c00':'var(--text-soft)'}},fN(f.pend)),
             h('td',{className:'mono',style:{textAlign:'right',fontWeight:700,color:colPct(f.pE)}},fP(f.pE)),
             h('td',{className:'mono',style:{textAlign:'right'}},fP(f.pO)),
+            h('td',{style:{textAlign:'right'}},(+f.etq_futura||0)?h('span',{title:'Paquetes que llevó con fecha de etiqueta posterior al día ('+(+f.etq_futura_pend||0)+' aún pendientes). La fecha de recepción no cambia.',style:{padding:'2px 8px',borderRadius:999,fontSize:11,fontWeight:800,color:'#8a5a00',background:'rgba(240,185,74,.2)',border:'1px solid rgba(240,185,74,.6)',whiteSpace:'nowrap'}},fN(f.etq_futura)+(f.etq_futura_pend?' · '+fN(f.etq_futura_pend)+' pend.':'')):h('span',{style:{color:'var(--text-soft)'}},'—')),
             h('td',{style:{textAlign:'right',whiteSpace:'nowrap',fontSize:12,color:f.estado==='detenido'?'#b03030':'var(--text-mid)',fontWeight:f.estado==='detenido'?800:500}},f.ultima_entrega?horaCL(f.ultima_entrega)+(esHoy?' · '+txtHace(f.hEnt):''):'Sin entregas'));
         }),
         h('tr',{style:{background:'var(--dark)'}},
@@ -157,11 +159,12 @@ function RutaEnVivo(props){
           h('td',{className:'mono',style:{textAlign:'right',color:'#ffd27a',fontWeight:800}},fN(T.pen)),
           h('td',{className:'mono',style:{textAlign:'right',color:'#fff',fontWeight:800}},fP(pEnt)),
           h('td',{className:'mono',style:{textAlign:'right',color:'#fff'}},fP(pOp)),
+          h('td',{className:'mono',style:{textAlign:'right',color:'#ffd27a',fontWeight:800}},T.etq?fN(T.etq):'—'),
           h('td',null)))))),
     h('div',{style:{fontSize:11.5,color:'var(--text-soft)',marginTop:10,lineHeight:1.5}},
       'Barra de avance: verde = entregados, dorado = cerrados (incluye reprogramados y cancelados), línea roja = donde debería ir según la hora (salida → '+HORA_META+':00). ',
       'Bajo el ritmo: va más de '+TOLERANCIA+' puntos detrás de esa línea. Detenido: tiene pendientes y no registra movimiento hace '+DETENIDO_MIN+' minutos o más. ',
-      'Mismos números que el Informe de cierre (FERNANDOCHECK no cuenta como ruta).'));
+      'Etiq. otro día: paquetes con fecha impresa en la etiqueta posterior al día (informativo, la fecha de recepción no cambia). Mismos números que el Informe de cierre (FERNANDOCHECK no cuenta como ruta).'));
 }
 window.RutaEnVivo=RutaEnVivo;
 })();
