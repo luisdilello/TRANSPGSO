@@ -579,7 +579,7 @@ function DetalleNodo(p){
 }
 function CentroControl3D(props){
   var envios=props.envios||[];
-  var _m=R.useState(function(){try{return localStorage.getItem('dash3d_modo')||'mapa';}catch(e){return 'mapa';}}),modo=_m[0],setModo=_m[1];
+  var _m=R.useState(function(){try{return localStorage.getItem('dash3d_vista')||'flujo';}catch(e){return 'flujo';}}),modo=_m[0],setModo=_m[1];
   var _g=R.useState(0),gen=_g[0],setGen=_g[1];
   var _e=R.useState(''),err=_e[0],setErr=_e[1];
   var reintRef=R.useRef(0);
@@ -669,7 +669,7 @@ function CentroControl3D(props){
     }).catch(function(){setErr('3d');});
     return function(){vivo=false;refE.current=null;if(E)E.destroy();if(refLab.current)refLab.current.innerHTML='';};
   },[modo,keyEscena,gen]);
-  function cambiar(m){setModo(m);try{localStorage.setItem('dash3d_modo',m);}catch(e){}}
+  function cambiar(m){setModo(m);try{localStorage.setItem('dash3d_vista',m);}catch(e){}}
   var tab=function(v,l){var a=modo===v;return h('button',{key:v,type:'button',onClick:function(){cambiar(v);},style:{padding:'8px 16px',borderRadius:10,border:'1px solid '+(a?'#e8c766':'rgba(255,255,255,.14)'),background:a?'linear-gradient(135deg,#e8c766,#b08a2e)':'rgba(255,255,255,.05)',color:a?'#1a1d13':'#e9e4d2',fontWeight:800,fontSize:12.5,letterSpacing:.4,cursor:'pointer',boxShadow:a?'0 6px 16px rgba(200,168,75,.35)':'none'}},l);};
   var ins=function(lbl,val,sub,col){return h('div',{key:lbl,style:{padding:'9px 12px',borderRadius:14,background:'linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.03))',border:'1px solid rgba(255,255,255,.10)',boxShadow:'inset 0 1px 0 rgba(255,255,255,.08)'}},
     h('div',{style:{fontSize:10.5,letterSpacing:1.6,textTransform:'uppercase',color:'rgba(233,228,210,.65)',fontWeight:800}},lbl),
@@ -683,7 +683,7 @@ function CentroControl3D(props){
       h('div',null,
         h('div',{style:{fontFamily:'Bebas Neue',fontSize:28,letterSpacing:2.5,color:'#fff',lineHeight:1}},props.cliente?'Seguimiento en vivo':'Centro de control'),
         h('div',{className:'cc3d-sub',style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:3}},modo==='mapa'?(props.cliente?'Tus envíos en la Región Metropolitana · brillo = envíos del período · color = efectividad · cada entrega enciende un punto de luz':'Región Metropolitana · brillo = envíos del período · color = efectividad total (rojo la más baja, verde la más alta) · arrastra para girar, rueda para acercar'):(props.cliente?'Recorrido de tus envíos del período: de bodega a ruta y su resultado final':'Recorrido de los envíos del período: de bodega a ruta y su resultado final'))),
-      h('div',{style:{display:'flex',gap:6}},tab('mapa','Mapa 3D de la RM'),tab('flujo','Flujo de estados'))),
+      h('div',{style:{display:'flex',gap:6}},tab('flujo','Flujo de estados'),tab('mapa','Mapa 3D de la RM'))),
     h('style',null,'@media (max-width:820px){.cc3d-grid{grid-template-columns:1fr!important}.cc3d-stage{height:330px!important}.cc3d-side{display:grid!important;grid-template-columns:1fr 1fr;padding:12px!important}.cc3d-side>*:last-child{grid-column:1/-1}.cc3d-head{padding:14px 14px 0!important}.cc3d-sub{display:none}.cc3d-feed-d{display:none!important}.cc3d-hint{display:none}}@media (min-width:821px){.cc3d-feed-m{display:none!important}}@media (max-width:420px){.cc3d-side{grid-template-columns:1fr}}'),
     h('div',{className:'cc3d-grid',style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 250px',gap:0}},
       h('div',{className:'cc3d-stage',style:{position:'relative',minHeight:500,height:'100%',alignSelf:'stretch',minWidth:0,touchAction:'pan-y'}},
