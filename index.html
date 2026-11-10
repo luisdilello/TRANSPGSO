@@ -686,6 +686,24 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 .ge-x .ge-badge{transition:transform .12s ease,box-shadow .12s ease;}
 .ge-x .ge-badge:hover{transform:translateY(-1px);box-shadow:0 0 18px rgba(232,199,102,.25),inset 0 1px 0 rgba(255,255,255,.1)!important;}
 .ge-x .toolbar select.filter-btn{border-radius:11px;}
+
+/* ── 10-11-2026: cabecera con más presencia (escritorio) ── */
+@media(min-width:1081px){
+  .header{height:calc(100px + env(safe-area-inset-top));padding-left:max(28px,env(safe-area-inset-left));padding-right:max(28px,env(safe-area-inset-right));}
+  .logo{gap:18px;}
+  .logo-img{width:86px;height:86px;border-radius:16px;object-fit:cover;padding:0;background:radial-gradient(circle at 50% 35%,#3d422d,#14170f 75%);border:1px solid rgba(232,199,102,.55);box-shadow:0 0 0 3px rgba(232,199,102,.10),0 10px 24px rgba(0,0,0,.45),0 0 26px rgba(232,199,102,.22),inset 0 1px 0 rgba(255,255,255,.12);}
+  .header .brand-title{font-size:38px!important;letter-spacing:5px!important;line-height:1!important;background:linear-gradient(180deg,#fff3c4 0%,#f0d27a 45%,#c8a84b 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:#e8c766!important;filter:drop-shadow(0 2px 6px rgba(0,0,0,.45)) drop-shadow(0 0 14px rgba(232,199,102,.25));}
+  .header .logo-sub{font-size:12.5px;font-weight:700;letter-spacing:4.5px;color:rgba(241,236,218,.82);margin-top:6px;}
+  .header-right{gap:12px;}
+  .header-date{font-size:13px;padding:10px 16px;border-radius:12px;}
+  .btn-manifiesto{font-size:18px;letter-spacing:2px;padding:12px 22px;border-radius:14px;gap:10px;}
+  .btn-manifiesto svg{width:18px;height:18px;}
+  .perfil-badge{font-size:14px;padding:10px 16px;border-radius:14px;gap:8px;}
+  .perfil-badge span{font-size:12px!important;}
+  .btn-salir{font-size:13px;padding:10px 15px;border-radius:12px;}
+  .btn-salir svg{width:17px;height:17px;}
+  .btn-clear-cache{width:42px;height:42px;border-radius:12px;}
+}
 </style>
 
 <style>
@@ -743,7 +761,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261110141933;
+window.__MODULES_VERSION=20261110142548;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
