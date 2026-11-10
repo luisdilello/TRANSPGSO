@@ -657,7 +657,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 .sec-cockpit .section-head + .stats-grid .stat-value.red{color:#ff7b70;text-shadow:0 0 16px rgba(255,123,112,.35);}
 .sec-cockpit .section-head + .stats-grid .stat-value.gold{color:#e8c766;}
 .sec-cockpit .section-head + .stats-grid .stat-value[style*="color"]{filter:brightness(1.75) saturate(1.15);}
-.sec-cockpit .section-head + .stats-grid .stat-sub{color:rgba(233,228,210,.6);}
+.sec-cockpit .section-head + .stats-grid .stat-sub{color:rgba(233,228,210,.6);font-family:'DM Sans',sans-serif;font-size:11.5px;}
 .sec-cockpit .section-head .btn-add,.sec-cockpit .section-head .btn-primary,.sec-cockpit .section-head .btn-secondary{display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border-radius:12px;font-weight:800;font-size:12.5px;letter-spacing:.4px;cursor:pointer;transition:transform .12s ease,filter .12s ease;}
 .sec-cockpit .section-head .btn-add,.sec-cockpit .section-head .btn-primary{color:#1a1d13;background:linear-gradient(180deg,#f7dd8c,#d9b553 50%,#ae8829);border:1px solid #f7dd8c;box-shadow:0 3px 0 #6d531a,0 8px 18px rgba(200,168,75,.35),inset 0 1px 0 rgba(255,255,255,.6);}
 .sec-cockpit .section-head .btn-secondary{color:#f0d27a;background:linear-gradient(180deg,#43482f,#2b2e20 60%,#22251a);border:1px solid rgba(232,199,102,.4);box-shadow:0 3px 0 #0f110a,0 8px 14px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.1);}
@@ -743,7 +743,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261110135110;
+window.__MODULES_VERSION=20261110135224;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
