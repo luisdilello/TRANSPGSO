@@ -50,6 +50,9 @@ function crearEscena(T,cont,opts){
   cont.appendChild(ren.domElement);ren.domElement.style.display='block';ren.domElement.style.cursor='grab';
   var sc=new T.Scene();sc.fog=new T.Fog(0x15180f,opts.fogNear||70,opts.fogFar||150);
   var cam=new T.PerspectiveCamera(38,W/H,0.1,400);
+  // En pantallas angostas (teléfono) se abre el ángulo vertical para conservar el ancho de la escena.
+  function ajustarFov(a){var base=38*Math.PI/180,ref=1.7;cam.fov=a>=ref?38:Math.min(80,2*Math.atan(Math.tan(base/2)*ref/a)*180/Math.PI);}
+  ajustarFov(W/H);cam.updateProjectionMatrix();
   var orb={az:opts.az||-0.6,pol:opts.pol||0.95,r:opts.r||60,tAz:null,auto:true,target:new T.Vector3(opts.tx||0,opts.ty||0,opts.tz||0)};
   function ubicar(){var sp=Math.sin(orb.pol);cam.position.set(orb.target.x+orb.r*sp*Math.sin(orb.az),orb.r*Math.cos(orb.pol),orb.target.z+orb.r*sp*Math.cos(orb.az));cam.lookAt(orb.target);}
   ubicar();
@@ -72,7 +75,7 @@ function crearEscena(T,cont,opts){
     tick&&tick(t);ren.render(sc,cam);raf=requestAnimationFrame(loop);}
   function vis(){if(!document.hidden&&!raf)loop();}
   document.addEventListener('visibilitychange',vis);
-  var ro=window.ResizeObserver?new ResizeObserver(function(){var w=cont.clientWidth,hh=cont.clientHeight;if(!w||!hh)return;ren.setSize(w,hh);cam.aspect=w/hh;cam.updateProjectionMatrix();}):null;ro&&ro.observe(cont);
+  var ro=window.ResizeObserver?new ResizeObserver(function(){var w=cont.clientWidth,hh=cont.clientHeight;if(!w||!hh)return;ren.setSize(w,hh);cam.aspect=w/hh;ajustarFov(w/hh);cam.updateProjectionMatrix();}):null;ro&&ro.observe(cont);
   el.addEventListener('webglcontextlost',function(e){e.preventDefault();opts.onLost&&opts.onLost();});
   return{T:T,ren:ren,sc:sc,cam:cam,orb:orb,ubicar:ubicar,setTick:function(f){tick=f;},start:loop,
     destroy:function(){vivo=false;cancelAnimationFrame(raf);io&&io.disconnect();ro&&ro.disconnect();document.removeEventListener('visibilitychange',vis);
@@ -316,13 +319,14 @@ function CentroControl3D(props){
     sub&&h('div',{style:{fontSize:11,lineHeight:1.35,color:'rgba(233,228,210,.78)'}},sub));};
   var c=res.cnt,den=(c.entregado||0)+(c.reprogramado||0)+(c.cancelado||0);
   return h('div',{style:{position:'relative',marginBottom:20,borderRadius:20,overflow:'hidden',background:'radial-gradient(120% 90% at 30% 0%,#3a3f2b 0%,#22261a 45%,#14170f 100%)',border:'1px solid rgba(200,168,75,.35)',boxShadow:'0 24px 50px rgba(20,22,15,.35), inset 0 1px 0 rgba(255,255,255,.08)'}},
-    h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10,padding:'16px 20px 0'}},
+    h('div',{className:'cc3d-head',style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10,padding:'16px 20px 0'}},
       h('div',null,
         h('div',{style:{fontFamily:'Bebas Neue',fontSize:28,letterSpacing:2.5,color:'#fff',lineHeight:1}},'Centro de control'),
-        h('div',{style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:3}},modo==='mapa'?'Región Metropolitana · altura = envíos del período · color = efectividad total (rojo la más baja, verde la más alta) · arrastra para girar, rueda para acercar':'Recorrido de los envíos del período: de bodega a ruta y su resultado final')),
+        h('div',{className:'cc3d-sub',style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:3}},modo==='mapa'?'Región Metropolitana · altura = envíos del período · color = efectividad total (rojo la más baja, verde la más alta) · arrastra para girar, rueda para acercar':'Recorrido de los envíos del período: de bodega a ruta y su resultado final')),
       h('div',{style:{display:'flex',gap:6}},tab('mapa','Mapa 3D de la RM'),tab('flujo','Flujo de estados'))),
-    h('div',{style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 250px',gap:0}},
-      h('div',{style:{position:'relative',height:500,minWidth:0}},
+    h('style',null,'@media (max-width:820px){.cc3d-grid{grid-template-columns:1fr!important}.cc3d-stage{height:340px!important}.cc3d-side{display:grid!important;grid-template-columns:1fr 1fr;padding:12px!important}.cc3d-side>*:last-child{grid-column:1/-1}.cc3d-head{padding:14px 14px 0!important}.cc3d-sub{display:none}}@media (max-width:420px){.cc3d-side{grid-template-columns:1fr}}'),
+    h('div',{className:'cc3d-grid',style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 250px',gap:0}},
+      h('div',{className:'cc3d-stage',style:{position:'relative',height:500,minWidth:0,touchAction:'pan-y'}},
         h('div',{ref:refC,style:{position:'absolute',inset:0}}),
         h('div',{ref:refLab,style:{position:'absolute',inset:0,pointerEvents:'none',overflow:'hidden'}}),
         h('div',{ref:refTip,style:{position:'absolute',display:'none',pointerEvents:'none',zIndex:3,minWidth:190,padding:'10px 12px',borderRadius:12,background:'rgba(18,20,13,.92)',border:'1px solid rgba(200,168,75,.6)',color:'#fff',font:'12px DM Sans,system-ui,sans-serif',boxShadow:'0 14px 30px rgba(0,0,0,.45)',backdropFilter:'blur(6px)'}}),
@@ -330,7 +334,7 @@ function CentroControl3D(props){
         err&&h('div',{style:{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#ffb4a8',fontSize:13}},err),
         modo==='mapa'&&h('div',{style:{position:'absolute',left:16,bottom:14,display:'flex',alignItems:'center',gap:8,fontSize:11,color:'rgba(233,228,210,.8)',fontWeight:700}},
           'Efectividad',h('span',null,Math.floor(res.lo*1000)/10+'%'),h('span',{style:{width:120,height:8,borderRadius:6,background:'linear-gradient(90deg,#e0473f,#e8b84a,#36c47f)',boxShadow:'0 0 10px rgba(232,184,74,.4)'}}),h('span',null,Math.ceil(res.hi*1000)/10+'%'))),
-      h('div',{style:{display:'flex',flexDirection:'column',gap:8,padding:'14px 16px 16px 4px'}},
+      h('div',{className:'cc3d-side',style:{display:'flex',flexDirection:'column',gap:8,padding:'14px 16px 16px 4px'}},
         (function(){
           var tot=res.total,bf=c.en_bodega_fecha||0,denT=tot-bf,ent=c.entregado||0;
           var pend=(c.en_bodega||0)+(c.en_ruta||0)+(c.reprogramado||0);
