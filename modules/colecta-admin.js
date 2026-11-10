@@ -25,7 +25,16 @@ function ColectaAdmin(_ref_ca){var clientes=_ref_ca.clientes,mensajeros=_ref_ca.
   var scanInputRef=React.useRef(null);
   var _rm=useState(false),showRM=_rm[0],setShowRM=_rm[1];
   var _nr=useState(0),nNoReg=_nr[0],setNNoReg=_nr[1];
-  React.useEffect(function(){(async function(){try{var r=await db.from('codigos_no_registrados').select('codigo',{count:'exact',head:true}).eq('resuelto',false);setNNoReg(r.count||0);}catch(e){}})();},[]);
+  var _ev=useState(true),enVivo=_ev[0],setEnVivo=_ev[1];
+  var _ua=useState(null),ultimaAct=_ua[0],setUltimaAct=_ua[1];
+  async function cargarNoReg(){try{var r=await db.from('codigos_no_registrados').select('codigo',{count:'exact',head:true}).eq('resuelto',false);setNNoReg(r.count||0);}catch(e){}}
+  React.useEffect(function(){cargarNoReg();},[]);
+  function refrescarTodo(){cargarScanHoy();cargarColectas();cargarNoReg();}
+  React.useEffect(function(){
+    if(!enVivo||filtroFecha!==hoy)return;
+    var t=setInterval(function(){if(document.visibilityState==='visible'){cargarScanHoy();cargarNoReg();}},30000);
+    return function(){clearInterval(t);};
+  },[enVivo,filtroFecha]);
   var esTactil=typeof window!=='undefined'&&('ontouchstart' in window||navigator.maxTouchPoints>0);
 
   // Cargar envíos escaneados hoy desde Supabase
@@ -39,7 +48,7 @@ function ColectaAdmin(_ref_ca){var clientes=_ref_ca.clientes,mensajeros=_ref_ca.
       var todos=[],desde=0,PAG=1000;
       while(true){
         var r=await db.from('envios')
-          .select('id,codigo,cliente,mensajero,fecha,estado,fuente,nota,updated_at')
+          .select('id,codigo,cliente,mensajero,fecha,estado,fuente,nota,updated_at,created_at')
           .eq('fecha',filtroFecha)
           .in('fuente',['flex','lector','manual','scanner'])
           .order('updated_at',{ascending:false})
@@ -51,7 +60,7 @@ function ColectaAdmin(_ref_ca){var clientes=_ref_ca.clientes,mensajeros=_ref_ca.
         if(lote.length<PAG)break;
         desde+=PAG;
       }
-      setScanTotal(todos);
+      setScanTotal(todos);setUltimaAct(new Date());
     }catch(e){setScanTotal([]);}
   }
 
@@ -233,93 +242,81 @@ async function guardarColecta(){
   var mensajerosActivos=(mensajeros||[]).filter(function(m){return m.activo!==false;});
   var totalPiezas=colectas.reduce(function(a,c){return a+(parseInt(c.piezas)||0);},0);
 
-  var btnSub=function(v,l){return React.createElement('button',{
-    onClick:function(){setSubTab(v);},
-    style:{padding:'6px 16px',borderRadius:8,border:'1px solid '+(subTab===v?'var(--gold)':'var(--border)'),background:subTab===v?'rgba(200,168,75,0.12)':'#fff',color:subTab===v?'var(--gold)':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer'}
-  },l);};
+  // ── Cabecera (10-11-2026): cockpit oscuro, pestañas visibles, KPIs y rankings en vivo ──
+  var tabOsc=function(v,l,extra){var act=subTab===v;return React.createElement('button',{key:v,type:'button',onClick:function(){setSubTab(v);},className:'ca-tab',style:{padding:'10px 16px',borderRadius:12,cursor:'pointer',fontWeight:800,fontSize:12.5,letterSpacing:.5,whiteSpace:'nowrap',display:'inline-flex',alignItems:'center',gap:8,border:'1px solid '+(act?'#e8c766':'rgba(255,255,255,.18)'),background:act?'linear-gradient(135deg,#f0d27a,#b08a2e)':'linear-gradient(160deg,rgba(255,255,255,.10),rgba(255,255,255,.03))',color:act?'#1a1d13':'#f1ecda',boxShadow:act?'0 8px 18px rgba(200,168,75,.35), inset 0 1px 0 rgba(255,255,255,.5)':'inset 0 1px 0 rgba(255,255,255,.08)'}},l,extra||null);};
+  var kpiC=function(lbl,val,col,sub){return React.createElement('div',{key:lbl,style:{flex:'1 1 118px',minWidth:0,padding:'12px 14px',borderRadius:14,background:'linear-gradient(160deg,rgba(255,255,255,.10),rgba(255,255,255,.03))',border:'1px solid rgba(255,255,255,.10)',boxShadow:'inset 0 1px 0 rgba(255,255,255,.08)'}},
+    React.createElement('div',{style:{fontSize:10,letterSpacing:1.5,textTransform:'uppercase',color:'rgba(233,228,210,.66)',fontWeight:800}},lbl),
+    React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:34,lineHeight:1.05,color:col,textShadow:'0 0 16px '+col+'55',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},val),
+    sub&&React.createElement('div',{style:{fontSize:11,color:'rgba(233,228,210,.66)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},sub));};
+  var ctrlLbl=function(t){return React.createElement('div',{style:{fontSize:10,letterSpacing:1.4,textTransform:'uppercase',color:'rgba(233,228,210,.66)',fontWeight:800,marginBottom:4}},t);};
+  var ctrlSt={padding:'8px 10px',borderRadius:10,border:'1px solid rgba(255,255,255,.2)',background:'rgba(255,255,255,.94)',fontSize:12.5,color:'#1a1d13',minWidth:0};
+  var normM=function(x){return String(x||'').replace(/,\s*/g,' ').trim();};
+  var scanVista=scanTotal.filter(function(e){return (filtroCliente==='todos'||e.cliente===filtroCliente)&&(filtroMen==='todos'||normM(e.mensajero)===normM(filtroMen));});
+  var agrupar=function(campo,vacio){var m={};scanVista.forEach(function(e){var k=e[campo]?normM(e[campo]):vacio;m[k]=(m[k]||0)+1;});return Object.keys(m).map(function(k){return {k:k,n:m[k]};}).sort(function(x,y){return y.n-x.n;});};
+  var porCli=agrupar('cliente','Sin cliente'),porMen=agrupar('mensajero','Sin asignar');
+  var porHora=(function(){var h={};scanVista.forEach(function(e){var t=e.created_at||e.updated_at;if(!t)return;var hh=new Date(t).toLocaleString('es-CL',{hour:'2-digit',hour12:false,timeZone:'America/Santiago'});h[hh]=(h[hh]||0)+1;});return Object.keys(h).sort().map(function(k){return {k:k,n:h[k]};});})();
+  var sinMen=scanVista.filter(function(e){return !e.mensajero;}).length;
+  var esHoy=filtroFecha===hoy;
+  var piezasCol=colectas.reduce(function(a,c){return a+(parseInt(c.piezas)||0);},0);
+  var PAL=['#e8c766','#36c47f','#5aa9ff','#ff8a5c','#b38bff','#ff5fa2','#4dd0c8','#f0b94a'];
+  var tarjeta={background:'linear-gradient(160deg,#ffffff 0%,#fbf6ea 100%)',border:'1px solid rgba(200,168,75,0.35)',borderRadius:16,boxShadow:'0 14px 30px rgba(43,46,32,0.10), 0 2px 6px rgba(43,46,32,0.06), inset 0 1px 0 #fff',padding:'14px 16px'};
+  var ranking=function(titulo,lista,vacio){var max=lista.length?lista[0].n:1;return React.createElement('div',{style:tarjeta},
+    React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:10}},
+      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1.3,color:'#2b2e20'}},titulo),
+      React.createElement('div',{style:{fontSize:11.5,fontWeight:800,color:'#8a7a45'}},lista.length+' · '+scanVista.length+' paquetes')),
+    lista.length===0?React.createElement('div',{style:{fontSize:12.5,color:'var(--text-soft)',padding:'10px 0'}},vacio):
+    React.createElement('div',{style:{maxHeight:260,overflowY:'auto',paddingRight:4}},lista.map(function(x,i){var c=x.k==='Sin asignar'||x.k==='Sin cliente'?'#c0392b':PAL[i%PAL.length];return React.createElement('div',{key:x.k,style:{marginBottom:8}},
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12.5,fontWeight:700,color:'#2b2e20',marginBottom:3}},React.createElement('span',{style:{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',paddingRight:8}},x.k),React.createElement('span',{style:{fontFamily:'Bebas Neue',fontSize:17,color:c==='#e8c766'?'#9a7a1f':c}},x.n)),
+      React.createElement('div',{style:{height:10,borderRadius:6,background:'rgba(43,46,32,.07)',overflow:'hidden',boxShadow:'inset 0 1px 2px rgba(0,0,0,.12)'}},React.createElement('div',{style:{width:Math.max(3,x.n/max*100)+'%',height:'100%',borderRadius:6,background:'linear-gradient(180deg,'+c+'cc,'+c+')',boxShadow:'0 0 8px '+c+'66'}})));})));};
+  var graficoHoras=function(){var max=porHora.reduce(function(a,x){return Math.max(a,x.n);},1);return React.createElement('div',{style:tarjeta},
+    React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:10}},
+      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1.3,color:'#2b2e20'}},'Ingresos por hora'),
+      porHora.length>0&&React.createElement('div',{style:{fontSize:11.5,fontWeight:800,color:'#8a7a45'}},'Peak '+porHora.reduce(function(a,x){return x.n>a.n?x:a;},porHora[0]).k+':00 h')),
+    porHora.length===0?React.createElement('div',{style:{fontSize:12.5,color:'var(--text-soft)',padding:'10px 0'}},'Sin ingresos todavía.'):
+    React.createElement('div',{style:{display:'flex',alignItems:'flex-end',gap:6,height:170,paddingTop:16}},porHora.map(function(x){return React.createElement('div',{key:x.k,style:{flex:1,minWidth:0,display:'flex',flexDirection:'column',alignItems:'center',height:'100%',justifyContent:'flex-end'}},
+      React.createElement('div',{style:{fontSize:11,fontWeight:800,color:'#2b2e20',marginBottom:3}},x.n),
+      React.createElement('div',{style:{width:'100%',maxWidth:38,height:Math.max(4,x.n/max*120),borderRadius:'7px 7px 3px 3px',background:'linear-gradient(180deg,#f0d27a,#b08a2e)',boxShadow:'0 6px 12px rgba(176,138,46,.35), inset 0 1px 0 rgba(255,255,255,.6)'}}),
+      React.createElement('div',{style:{fontSize:10.5,color:'var(--text-soft)',marginTop:4,fontWeight:700}},x.k+'h'));})));};
 
   return React.createElement('div',null,
-    React.createElement('div',{className:'section-head'},
-      React.createElement('div',{className:'section-title'},'Colecta ',React.createElement('span',null,'Admin')),
-      React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}},
-        btnSub('lector','Lector/Scanner'),
-        btnSub('historial','Historial'),
-        btnSub('excel','Importar Excel'),
-        btnSub('pdf','Importar PDF'),
-        React.createElement('button',{onClick:function(){setSubTab('noreg');},style:{padding:'6px 14px',borderRadius:8,border:'1px solid '+(subTab==='noreg'?'#c2189b':(nNoReg>0?'#ff4fd8':'var(--border)')),background:subTab==='noreg'?'rgba(194,24,155,0.12)':(nNoReg>0?'rgba(255,47,208,0.08)':'#fff'),color:subTab==='noreg'||nNoReg>0?'#c2189b':'var(--text-soft)',fontWeight:700,fontSize:12,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:6}},'No registrados',nNoReg>0&&React.createElement('span',{style:{background:'#ff4fd8',color:'#fff',borderRadius:10,padding:'1px 7px',fontSize:11,fontWeight:800}},nNoReg)),
-        React.createElement('input',{type:'date',value:filtroFecha,onChange:function(e){setFiltroFecha(e.target.value);},style:{padding:'6px 12px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}}),
-        React.createElement('select',{value:filtroCliente,onChange:function(e){setFiltroCliente(e.target.value);},style:{padding:'6px 12px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}},
-          React.createElement('option',{value:'todos'},'Todos los clientes'),
-          clientesActivos.map(function(c){return React.createElement('option',{key:c.id,value:c.nombre},c.nombre);})
-        ),
-        React.createElement('select',{value:filtroMen,onChange:function(e){setFiltroMen(e.target.value);},style:{padding:'6px 12px',borderRadius:8,border:'1px solid var(--border)',fontSize:12}},
-          React.createElement('option',{value:'todos'},'Todos los mensajeros'),
-          mensajerosActivos.map(function(m){return React.createElement('option',{key:m.id,value:m.nombre},m.nombre.replace(/,\s*/g,' '));})
-        ),
-        React.createElement('button',{className:'btn-secondary',onClick:cargarColectas},'↺ Actualizar')
-      )
+    React.createElement('style',null,'.ca-tab{transition:transform .12s ease,box-shadow .12s ease}.ca-tab:hover{transform:translateY(-1px)}@keyframes caPulse{0%,100%{opacity:1}50%{opacity:.35}}@media(max-width:900px){.ca-grid3{grid-template-columns:1fr!important}}'),
+    React.createElement('div',{style:{position:'relative',borderRadius:20,overflow:'hidden',background:'radial-gradient(120% 90% at 30% 0%,#3a3f2b 0%,#22261a 45%,#14170f 100%)',border:'1px solid rgba(200,168,75,.35)',boxShadow:'0 24px 50px rgba(20,22,15,.30), inset 0 1px 0 rgba(255,255,255,.08)',color:'#e9e4d2',padding:'16px 20px 18px',marginBottom:16}},
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:14,flexWrap:'wrap',marginBottom:14}},
+        React.createElement('div',null,
+          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:28,letterSpacing:2.2,color:'#fff',lineHeight:1}},'Colecta ',React.createElement('span',{style:{color:'#e8c766'}},'Admin')),
+          React.createElement('div',{style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:4,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}},
+            React.createElement('span',null,'Ingreso de paquetes a bodega'),
+            React.createElement('span',{style:{display:'inline-flex',alignItems:'center',gap:6,padding:'2px 9px',borderRadius:999,background:enVivo&&esHoy?'rgba(54,196,127,.15)':'rgba(255,255,255,.06)',border:'1px solid '+(enVivo&&esHoy?'rgba(54,196,127,.45)':'rgba(255,255,255,.14)'),fontWeight:700,fontSize:11}},
+              React.createElement('span',{style:{width:7,height:7,borderRadius:'50%',background:enVivo&&esHoy?'#36c47f':'#888',boxShadow:enVivo&&esHoy?'0 0 8px #36c47f':'none',animation:enVivo&&esHoy?'caPulse 1.6s infinite':'none'}}),
+              enVivo&&esHoy?'En vivo · cada 30 s':'Pausado'),
+            ultimaAct&&React.createElement('span',{style:{fontSize:11}},'Actualizado '+ultimaAct.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'})))),
+        React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'flex-end'}},
+          React.createElement('div',null,ctrlLbl('Fecha'),React.createElement('input',{type:'date',value:filtroFecha,onChange:function(e){setFiltroFecha(e.target.value);},style:ctrlSt})),
+          React.createElement('div',null,ctrlLbl('Cliente'),React.createElement('select',{value:filtroCliente,onChange:function(e){setFiltroCliente(e.target.value);},style:Object.assign({},ctrlSt,{maxWidth:190})},
+            React.createElement('option',{value:'todos'},'Todos'),clientesActivos.map(function(c){return React.createElement('option',{key:c.id,value:c.nombre},c.nombre);}))),
+          React.createElement('div',null,ctrlLbl('Mensajero'),React.createElement('select',{value:filtroMen,onChange:function(e){setFiltroMen(e.target.value);},style:Object.assign({},ctrlSt,{maxWidth:190})},
+            React.createElement('option',{value:'todos'},'Todos'),mensajerosActivos.map(function(m){return React.createElement('option',{key:m.id,value:m.nombre},normM(m.nombre));}))),
+          React.createElement('button',{type:'button',onClick:function(){setEnVivo(function(v){return !v;});},style:{padding:'9px 13px',borderRadius:10,cursor:'pointer',fontWeight:800,fontSize:12,border:'1px solid rgba(255,255,255,.18)',background:'rgba(255,255,255,.06)',color:'#e9e4d2'}},enVivo?'Pausar':'En vivo'),
+          React.createElement('button',{type:'button',onClick:refrescarTodo,style:{padding:'9px 15px',borderRadius:10,cursor:'pointer',fontWeight:800,fontSize:12,border:'1px solid #e8c766',background:'linear-gradient(135deg,#f0d27a,#b08a2e)',color:'#1a1d13',boxShadow:'0 6px 14px rgba(200,168,75,.3)'}},'Actualizar'))),
+      React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:14,paddingBottom:14,borderBottom:'1px solid rgba(255,255,255,.08)'}},
+        tabOsc('lector','Lector / Scanner'),
+        tabOsc('historial','Historial',colectas.length>0&&React.createElement('span',{style:{padding:'1px 7px',borderRadius:10,background:subTab==='historial'?'rgba(0,0,0,.18)':'rgba(255,255,255,.12)',fontSize:11}},colectas.length)),
+        tabOsc('excel','Importar Excel'),
+        tabOsc('pdf','Importar PDF'),
+        tabOsc('noreg','No registrados',nNoReg>0&&React.createElement('span',{style:{padding:'1px 8px',borderRadius:10,background:'#ff2fd0',color:'#fff',fontSize:11,fontWeight:900,boxShadow:'0 0 10px rgba(255,47,208,.6)'}},nNoReg))),
+      React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap'}},
+        kpiC(esHoy?'Ingresados hoy':'Ingresados',scanVista.length.toLocaleString('es-CL'),'#e8c766',(filtroCliente!=='todos'||filtroMen!=='todos')?'con filtros aplicados':'escaneados en bodega'),
+        kpiC('Clientes',porCli.length,'#5aa9ff',porCli[0]?'más: '+porCli[0].k+' ('+porCli[0].n+')':'sin ingresos'),
+        kpiC('Mensajeros',porMen.filter(function(x){return x.k!=='Sin asignar';}).length,'#36c47f',porMen[0]?'más: '+porMen[0].k+' ('+porMen[0].n+')':'sin ingresos'),
+        kpiC('Sin mensajero',sinMen,sinMen?'#ff8a5c':'#36c47f',sinMen?'ingresados sin asignar':'todo asignado'),
+        kpiC('Colectas',colectas.length,'#b38bff',piezasCol.toLocaleString('es-CL')+' piezas registradas'),
+        kpiC('No registrados',nNoReg,nNoReg?'#ff5fd8':'#36c47f',nNoReg?'pendientes de revisar':'sin pendientes'),
+        scanList.length>0&&kpiC('En lista actual',scanList.length,'#f0b94a','sin guardar todavía'))
     ),
-
-    // KPIs - datos de envíos escaneados del día
-    React.createElement('div',{className:'stats-grid',style:{marginBottom:20}},
-      React.createElement('div',{className:'stat-card'},
-        React.createElement('div',{className:'stat-label'},'Envíos Escaneados Hoy'),
-        React.createElement('div',{className:'stat-value'},scanTotal.length)
-      ),
-      React.createElement('div',{className:'stat-card'},
-        React.createElement('div',{className:'stat-label'},'En Lista Actual'),
-        React.createElement('div',{className:'stat-value gold'},scanList.length)
-      ),
-      React.createElement('div',{className:'stat-card'},
-        React.createElement('div',{className:'stat-label'},'Clientes del día'),
-        React.createElement('div',{style:{fontSize:12,marginTop:4}},
-          (function(){
-            var porCliente={};
-            scanTotal.forEach(function(e){
-              var c=e.cliente||'Sin cliente';
-              porCliente[c]=(porCliente[c]||0)+1;
-            });
-            var keys=Object.keys(porCliente);
-            if(keys.length===0)return React.createElement('span',{style:{color:'var(--text-soft)'}},'0');
-            return React.createElement('div',null,
-              keys.map(function(c){
-                return React.createElement('div',{key:c,style:{display:'flex',justifyContent:'space-between',gap:8}},
-                  React.createElement('span',{style:{fontWeight:600,fontSize:11}},c),
-                  React.createElement('span',{style:{color:'var(--gold)',fontWeight:700}},porCliente[c])
-                );
-              })
-            );
-          })()
-        )
-      ),
-      React.createElement('div',{className:'stat-card'},
-        React.createElement('div',{className:'stat-label'},'Mensajeros del día'),
-        React.createElement('div',{style:{fontSize:12,marginTop:4}},
-          (function(){
-            var porMen={};
-            scanTotal.forEach(function(e){
-              var m=e.mensajero||'Sin asignar';
-              if(!porMen[m])porMen[m]={total:0,fuente:e.fuente||'lector'};
-              porMen[m].total++;
-            });
-            var keys=Object.keys(porMen);
-            if(keys.length===0)return React.createElement('span',{style:{color:'var(--text-soft)'}},'0');
-            return React.createElement('div',null,
-              keys.map(function(m){
-                var fuente=porMen[m].fuente==='flex'?'Lector QR':porMen[m].fuente==='manual'?'Manual':'Scanner';
-                return React.createElement('div',{key:m,style:{marginBottom:4}},
-                  React.createElement('div',{style:{display:'flex',justifyContent:'space-between',gap:8}},
-                    React.createElement('span',{style:{fontWeight:700,fontSize:12}},m),
-                    React.createElement('span',{style:{color:'var(--gold)',fontWeight:700}},porMen[m].total)
-                  ),
-                  React.createElement('div',{style:{fontSize:10,color:'var(--text-soft)'}},fuente)
-                );
-              })
-            );
-          })()
-        )
-      )
-    ),
+    subTab==='lector'&&React.createElement('div',{className:'ca-grid3',style:{display:'grid',gridTemplateColumns:'1fr 1fr 1.2fr',gap:14,marginBottom:16}},
+      ranking('Por cliente',porCli,'Sin ingresos para esta fecha.'),
+      ranking('Por mensajero',porMen,'Sin ingresos para esta fecha.'),
+      graficoHoras()),
 
     // Tab registro
     subTab==='lector'&&React.createElement('div',{className:'panel'},
@@ -379,15 +376,14 @@ async function guardarColecta(){
           React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',marginTop:2}},scanMensajero?('Escanea con la cámara del teléfono y foto de etiqueta. Queda a nombre de '+scanMensajero+'.'):'Elige primero el mensajero que trajo los paquetes.')
         ),
         React.createElement('button',{
-          className:'btn-primary',
-          disabled:!scanMensajero||!window.RetiroMasivoRider,
+          disabled:!window.RetiroMasivoRider,
           onClick:function(){
             if(!scanMensajero){toast('Elige el mensajero primero');return;}
             if(!window.RetiroMasivoRider){toast('Retiro masivo no disponible, recarga la página');return;}
             setShowRM(true);
           },
-          style:{whiteSpace:'nowrap',opacity:scanMensajero?1:.5}
-        },'Abrir retiro masivo')
+          style:{whiteSpace:'nowrap',padding:'11px 18px',borderRadius:12,cursor:'pointer',fontWeight:800,fontSize:13,letterSpacing:.4,border:scanMensajero?'1px solid #e8c766':'1px solid #2b2e20',background:scanMensajero?'linear-gradient(135deg,#f0d27a,#b08a2e)':'linear-gradient(160deg,#3a3f2b,#1a1d13)',color:scanMensajero?'#1a1d13':'#f1ecda',boxShadow:scanMensajero?'0 8px 18px rgba(200,168,75,.35)':'0 6px 14px rgba(20,22,15,.25)'}
+        },scanMensajero?'Abrir retiro masivo':'Elegir mensajero primero')
       ),
       showRM&&window.RetiroMasivoRider&&React.createElement(window.RetiroMasivoRider,{
         usuario:{nombre:scanMensajero,rol:'rider'},
@@ -404,13 +400,13 @@ async function guardarColecta(){
               className:'btn-secondary',
               style:{fontSize:12,color:'var(--danger)'},
               onClick:function(){if(confirm('¿Limpiar lista?'))setScanList([]);}
-            },'🗑 Limpiar'),
+            },'Limpiar'),
             React.createElement('button',{
               className:'btn-primary',
               disabled:scanGuardando||!scanMensajero,
               onClick:guardarLoteScanner,
               style:{fontSize:12}
-            },scanGuardando?'Guardando...':'💾 Guardar '+scanList.length+' envíos')
+            },scanGuardando?'Guardando...':'Guardar '+scanList.length+' envíos')
           )
         ),
         React.createElement('div',{style:{maxHeight:350,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8}},
@@ -442,7 +438,7 @@ async function guardarColecta(){
         )
       ),
       scanList.length===0&&React.createElement('div',{style:{textAlign:'center',padding:'40px 20px',color:'var(--text-soft)'}},
-        React.createElement('div',{style:{fontSize:48,marginBottom:12}},'📷'),
+        React.createElement('div',{style:{width:64,height:64,margin:'0 auto 12px',borderRadius:18,background:'linear-gradient(160deg,#f0d27a,#b08a2e)',boxShadow:'0 10px 22px rgba(176,138,46,.35), inset 0 1px 0 rgba(255,255,255,.6)',display:'flex',alignItems:'center',justifyContent:'center'}},React.createElement('div',{style:{width:30,height:22,border:'3px solid #1a1d13',borderRadius:5,position:'relative'}},React.createElement('div',{style:{position:'absolute',left:'50%',top:'50%',width:9,height:9,marginLeft:-4.5,marginTop:-4.5,borderRadius:'50%',border:'2.5px solid #1a1d13'}}))),
         React.createElement('div',{style:{fontSize:14,fontWeight:600,marginBottom:6}},'Listo para escanear'),
         React.createElement('div',{style:{fontSize:12}},'El cursor está en el campo de escaneo. Usa tu lector o escribe el código.')
       )
