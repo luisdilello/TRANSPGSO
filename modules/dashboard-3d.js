@@ -463,6 +463,7 @@ function AvisoVivo(p){var e=p.ev,col=COL_EST[e.estado]||'#e8c766';
 var MALOS={reprogramado:1,cancelado:1,retorno:1,siniestro:1,en_bodega_cancelado:1};
 function FeedVivo(p){
   var ahora=Date.now(),ev=p.eventos,ult=ev.filter(function(e){return ahora-e.t<15*60000;});
+  var minV=Math.max(1,Math.min(15,(ahora-(p.inicio||ahora))/60000));
   var c=function(est){return ult.filter(function(e){return e.estado===est;}).length;};
   var ent=c('entregado'),rep=c('reprogramado'),mal=ult.filter(function(e){return MALOS[e.estado]&&e.estado!=='reprogramado';}).length;
   var porMen={};ult.forEach(function(e){if(e.estado==='entregado'&&e.mensajero){porMen[e.mensajero]=(porMen[e.mensajero]||0)+1;}});
@@ -476,13 +477,13 @@ function FeedVivo(p){
       h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}},
         h('div',{style:{display:'flex',alignItems:'center',gap:7}},
           h('span',{style:{width:8,height:8,borderRadius:'50%',background:'#36c47f',boxShadow:'0 0 8px #36c47f',animation:'ccDot 1s infinite'}}),
-          h('span',{style:{fontSize:11.5,fontWeight:900,letterSpacing:1.3,color:'#e8c766'}},'EN VIVO · ÚLTIMOS 15 MIN')),
+          h('span',{style:{fontSize:11.5,fontWeight:900,letterSpacing:1.3,color:'#e8c766'}},minV>=15?'EN VIVO · ÚLTIMOS 15 MIN':'EN VIVO · ÚLTIMOS '+Math.ceil(minV)+' MIN')),
         h('span',{style:{fontSize:11,fontWeight:800,color:'rgba(233,228,210,.65)'}},p.abierto?'Ver menos':'Ver todo ('+ev.length+')')),
       h('div',{style:{display:'flex',gap:12,marginTop:6,alignItems:'baseline',flexWrap:'wrap'}},
         h('span',null,h('b',{style:{fontFamily:'Bebas Neue',fontSize:24,color:'#36c47f',lineHeight:1}},ent),h('span',{style:{fontSize:11.5,color:'rgba(233,228,210,.75)',fontWeight:700}},' entregas')),
         h('span',null,h('b',{style:{fontFamily:'Bebas Neue',fontSize:24,color:'#b06ad6',lineHeight:1}},rep),h('span',{style:{fontSize:11.5,color:'rgba(233,228,210,.75)',fontWeight:700}},' reprog.')),
         h('span',null,h('b',{style:{fontFamily:'Bebas Neue',fontSize:24,color:mal?'#ff7b70':'rgba(233,228,210,.5)',lineHeight:1}},mal),h('span',{style:{fontSize:11.5,color:'rgba(233,228,210,.75)',fontWeight:700}},' cancel./ret.')),
-        h('span',{style:{fontSize:11.5,color:'rgba(233,228,210,.75)',fontWeight:700}},'≈ '+(Math.round(ent/15*60))+' entregas/h')),
+        h('span',{style:{fontSize:11.5,color:'rgba(233,228,210,.75)',fontWeight:700}},minV>=5?'≈ '+(Math.round(ent/minV*60))+' entregas/h':'ritmo en '+Math.ceil(5-minV)+' min')),
       top&&h('div',{style:{fontSize:11.5,color:'rgba(233,228,210,.75)',marginTop:3}},'Más activo: ',h('b',{style:{color:'#f1ecda'}},nm(top)),' · '+porMen[top]+' entrega'+(porMen[top]!==1?'s':''))),
     h('div',{style:{maxHeight:p.abierto?260:'none',overflowY:p.abierto?'auto':'visible'}},
       lista.map(function(e){var col=COL_EST[e.estado]||(MALOS[e.estado]?'#ff7b70':'#e8c766');var malo=MALOS[e.estado];
@@ -526,7 +527,7 @@ function CentroControl3D(props){
   var deltasRef=R.useRef({});
   var _nd=R.useState(null),nodoSel=_nd[0],setNodoSel=_nd[1];
   // 10-11-2026: en vivo. Cada cambio de estado real (Supabase Realtime) mueve el conteo sin recargar la escena.
-  var refE=R.useRef(null),vivoRef=R.useRef({});
+  var refE=R.useRef(null),vivoRef=R.useRef({}),inicioVivo=R.useRef(0);
   var _dl=R.useState({}),deltas=_dl[0],setDeltas=_dl[1];
   var _ul=R.useState([]),eventos=_ul[0],setEventos=_ul[1];
   var _fx=R.useState(false),feedAbierto=_fx[0],setFeedAbierto=_fx[1];
@@ -556,7 +557,7 @@ function CentroControl3D(props){
     return{datos:datos,cnt:cnt,mejor:mejor,peor:peor,masInc:masInc,top:top,key:key,nComunas:datos.length,lo:lo,hi:hi,sinComuna:sinComuna,nSinCoord:nSinCoord,total:envios.length};
   },[envios]);
   R.useEffect(function(){
-    var m={};envios.forEach(function(e){m[e.codigo]=e.estado;});vivoRef.current=m;setDeltas({});
+    var m={};envios.forEach(function(e){m[e.codigo]=e.estado;});vivoRef.current=m;setDeltas({});if(!inicioVivo.current)inicioVivo.current=Date.now();
     var db=window.__app&&window.__app.db;if(!db||!db.channel||!envios.length)return;
     var canal=db.channel('cc3d-envios-'+Date.now()).on('postgres_changes',{event:'UPDATE',schema:'public',table:'envios'},function(pl){
       var nw=pl&&pl.new;if(!nw||!nw.codigo)return;var antes=vivoRef.current[nw.codigo];
@@ -606,7 +607,7 @@ function CentroControl3D(props){
         h('div',{ref:refTip,style:{position:'absolute',display:'none',pointerEvents:'none',zIndex:3,minWidth:190,padding:'10px 12px',borderRadius:12,background:'rgba(18,20,13,.92)',border:'1px solid rgba(200,168,75,.6)',color:'#fff',font:'12px DM Sans,system-ui,sans-serif',boxShadow:'0 14px 30px rgba(0,0,0,.45)',backdropFilter:'blur(6px)'}}),
         !envios.length&&h('div',{style:{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(233,228,210,.7)',fontSize:13}},'Sin envíos en el período.'),
         modo==='flujo'&&nodoSel&&h(DetalleNodo,{k:nodoSel,envios:envios,vivo:vivoRef.current,rev:deltas,onClose:function(){setNodoSel(null);}}),
-        eventos.length>0&&h(FeedVivo,{eventos:eventos,abierto:feedAbierto,onToggle:function(){setFeedAbierto(!feedAbierto);}}),
+        eventos.length>0&&h(FeedVivo,{inicio:inicioVivo.current,eventos:eventos,abierto:feedAbierto,onToggle:function(){setFeedAbierto(!feedAbierto);}}),
         modo==='flujo'&&!nodoSel&&!err&&envios.length>0&&h('div',{style:{position:'absolute',left:16,bottom:14,fontSize:11.5,fontWeight:700,color:'rgba(233,228,210,.7)'}},'Toca una estación para ver sus comunas'),
         err&&envios.length>0&&h(Vista2D,{modo:modo,res:res,onReintentar:function(){reintRef.current=0;setErr('');setGen(function(g){return g+1;});}}),
         modo==='mapa'&&h('div',{style:{position:'absolute',left:16,bottom:14,display:'flex',alignItems:'center',gap:8,fontSize:11,color:'rgba(233,228,210,.8)',fontWeight:700}},
