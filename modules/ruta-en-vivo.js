@@ -28,6 +28,10 @@ function RutaEnVivo(props){
   var db=props.db||(window.__app&&window.__app.db)||window.db;
   var _d=R.useState(hoyCL()),dia=_d[0],setDia=_d[1];
   var _r=R.useState(null),res=_r[0],setRes=_r[1];
+  // 10-11-2026: lista de paquetes con fecha de etiqueta posterior al día (informativo)
+  var _ve=R.useState(false),verEtq=_ve[0],setVerEtq=_ve[1];
+  var _vm=R.useState('todos'),etqMen=_vm[0],setEtqMen=_vm[1];
+  var _vp=R.useState(false),etqPend=_vp[0],setEtqPend=_vp[1];
   var _c=R.useState(false),cargando=_c[0],setCargando=_c[1];
   var _p=R.useState(false),pausa=_p[0],setPausa=_p[1];
   var _t=R.useState(0),tick=_t[0],setTick=_t[1];
@@ -111,12 +115,38 @@ function RutaEnVivo(props){
         kpi('% entrega',fP(pEnt),pEnt==null?'#fff':pEnt>=95?COL.verde:pEnt>=80?COL.ambar:COL.rojo,'% operacional '+fP(pOp)),
         kpi('Bajo el ritmo',fN(cuenta.atrasado),cuenta.atrasado?COL.ambar:COL.verde),
         kpi('Detenidos',fN(cuenta.detenido),cuenta.detenido?COL.rojo:COL.verde,'sin movimiento '+DETENIDO_MIN+'+ min'),
-        kpi('Etiqueta de otro día',fN(T.etq),T.etq?COL.ambar:'#fff',T.etq?fN(T.etqP)+' aún pendientes':'fecha de etiqueta posterior')),
+        h('div',{key:'etqk',onClick:function(){setVerEtq(!verEtq);setEtqMen('todos');},title:'Ver la lista de paquetes',style:{flex:'1 1 150px',minWidth:0,cursor:'pointer',borderRadius:14,outline:verEtq?'2px solid '+COL.ambar:'none'}},
+          kpi('Etiqueta de otro día',fN(T.etq),T.etq?COL.ambar:'#fff',(T.etq?fN(T.etqP)+' aún pendientes · ':'')+(verEtq?'ocultar lista':'ver lista')))),
       h('div',{style:{display:'flex',gap:6,marginTop:12,flexWrap:'wrap'}},HORAS.map(function(hh,i){var pas=cortePas(hh);var v=pas?pct(T.c[i],T.sal):null;
         return h('div',{key:hh,style:{flex:'1 1 110px',padding:'8px 10px',borderRadius:12,background:pas?'rgba(232,199,102,.12)':'rgba(255,255,255,.03)',border:'1px solid '+(pas?'rgba(232,199,102,.4)':'rgba(255,255,255,.08)')}},
           h('div',{style:{fontSize:10,fontWeight:800,letterSpacing:1.3,color:COL.suave}},'CORTE '+hh+':00'),
           h('div',{style:{fontFamily:'Bebas Neue',fontSize:22,color:pas?'#ffe59a':'rgba(233,228,210,.35)',lineHeight:1.1}},pas?fP(v):'Pendiente'),
           pas&&h('div',{style:{fontSize:10.5,color:COL.suave}},fN(T.c[i])+' entregados'));}))),
+    verEtq&&(function(){
+      var L=(res&&res.etq_lista)||[];
+      var mens={};L.forEach(function(x){mens[x.mensajero]=(mens[x.mensajero]||0)+1;});
+      var vis=L.filter(function(x){return (etqMen==='todos'||x.mensajero===etqMen)&&(!etqPend||x.cat==='pendiente');});
+      var fechas={};vis.forEach(function(x){fechas[x.fecha_etiqueta]=(fechas[x.fecha_etiqueta]||0)+1;});
+      var fD=function(d){return d?String(d).slice(8,10)+'-'+String(d).slice(5,7):'—';};
+      var catTxt={pendiente:['Pendiente','#a15c00','rgba(240,185,74,.18)'],entregado:['Entregado','#2e7d4f','rgba(54,196,127,.15)'],reprogramado:['Reprogramado','#7b3fa0','rgba(176,106,214,.15)'],cancelado:['Cancelado','#b03030','rgba(224,71,63,.12)'],otro:['Otro','#555','rgba(0,0,0,.06)']};
+      var chipM=function(v,l,n){var a=etqMen===v;return h('button',{key:v,type:'button',onClick:function(){setEtqMen(v);},style:{padding:'6px 11px',borderRadius:10,cursor:'pointer',fontSize:12,fontWeight:800,border:'1px solid '+(a?'#e0a020':'rgba(43,46,32,.15)'),background:a?'linear-gradient(180deg,#ffd980,#e0a020)':'#fff',color:a?'#2a1d00':'#4a4d3a',boxShadow:a?'0 2px 0 #8a5a00':'0 2px 0 rgba(43,46,32,.12)'}},l+' ('+n+')');};
+      return h('div',{className:'panel',style:{marginBottom:14,border:'1px solid rgba(240,185,74,.55)'}},
+        h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:10,flexWrap:'wrap',marginBottom:10}},
+          h('div',null,
+            h('div',{className:'panel-title',style:{margin:0}},'Etiqueta de otro día · '+fN(vis.length)+' paquete'+(vis.length!==1?'s':'')),
+            h('div',{style:{fontSize:12.5,color:'var(--text-mid)',marginTop:3}},'Salieron hoy a ruta con fecha impresa posterior. '+Object.keys(fechas).sort().map(function(k){return fechas[k]+' con '+fD(k);}).join(' · ')+'. Informativo: la fecha de recepción no cambia.')),
+          h('div',{style:{display:'flex',gap:6,alignItems:'center'}},
+            h('label',{style:{display:'flex',alignItems:'center',gap:6,fontSize:12.5,fontWeight:700,cursor:'pointer'}},h('input',{type:'checkbox',checked:etqPend,onChange:function(e){setEtqPend(e.target.checked);}}),'Solo pendientes'),
+            h('button',{type:'button',className:'btn-secondary',onClick:function(){setVerEtq(false);}},'Cerrar'))),
+        h('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}},chipM('todos','Todos',L.length),Object.keys(mens).sort(function(a,b){return mens[b]-mens[a];}).map(function(m){return chipM(m,tit(m),mens[m]);})),
+        vis.length===0?h('div',{className:'empty-state'},'Sin paquetes con este filtro.'):
+        h('div',{className:'table-wrap',style:{maxHeight:380,overflow:'auto'}},h('table',null,
+          h('thead',null,h('tr',null,['Código','Mensajero','Cliente','Comuna','Fecha etiqueta','Resultado'].map(function(t){return h('th',{key:t},t);}))),
+          h('tbody',null,vis.map(function(x){var c=catTxt[x.cat]||catTxt.otro;return h('tr',{key:x.codigo},
+            h('td',{className:'mono',style:{fontWeight:700}},x.codigo),h('td',null,tit(x.mensajero)),h('td',null,x.cliente||'—'),h('td',null,tit(x.comuna||'—')),
+            h('td',null,h('span',{style:{padding:'2px 8px',borderRadius:999,fontSize:11.5,fontWeight:800,color:'#8a5a00',background:'rgba(240,185,74,.2)',border:'1px solid rgba(240,185,74,.6)'}},'ETIQUETA '+fD(x.fecha_etiqueta))),
+            h('td',null,h('span',{style:{padding:'2px 8px',borderRadius:999,fontSize:11.5,fontWeight:800,color:c[1],background:c[2]}},c[0])));})))));
+    })(),
     h('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:12}},
       h('input',{className:'form-input',placeholder:'Buscar mensajero',value:q,onChange:function(e){setQ(e.target.value);},style:{margin:0,maxWidth:240}}),
       chip('todos','Todos'),chip('detenido','Detenidos'),chip('atrasado','Bajo el ritmo'),chip('ok','En ruta'),chip('terminado','Terminaron'),
@@ -146,7 +176,7 @@ function RutaEnVivo(props){
             h('td',{className:'mono',style:{textAlign:'right',fontWeight:700,color:f.pend?'#a15c00':'var(--text-soft)'}},fN(f.pend)),
             h('td',{className:'mono',style:{textAlign:'right',fontWeight:700,color:colPct(f.pE)}},fP(f.pE)),
             h('td',{className:'mono',style:{textAlign:'right'}},fP(f.pO)),
-            h('td',{style:{textAlign:'right'}},(+f.etq_futura||0)?h('span',{title:'Paquetes que llevó con fecha de etiqueta posterior al día ('+(+f.etq_futura_pend||0)+' aún pendientes). La fecha de recepción no cambia.',style:{padding:'2px 8px',borderRadius:999,fontSize:11,fontWeight:800,color:'#8a5a00',background:'rgba(240,185,74,.2)',border:'1px solid rgba(240,185,74,.6)',whiteSpace:'nowrap'}},fN(f.etq_futura)+(f.etq_futura_pend?' · '+fN(f.etq_futura_pend)+' pend.':'')):h('span',{style:{color:'var(--text-soft)'}},'—')),
+            h('td',{style:{textAlign:'right'}},(+f.etq_futura||0)?h('span',{onClick:function(){setVerEtq(true);setEtqMen(f.mensajero);try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}},title:'Ver cuáles. Paquetes que llevó con fecha de etiqueta posterior al día ('+(+f.etq_futura_pend||0)+' aún pendientes). La fecha de recepción no cambia.',style:{padding:'2px 8px',borderRadius:999,fontSize:11,fontWeight:800,color:'#8a5a00',background:'rgba(240,185,74,.2)',border:'1px solid rgba(240,185,74,.6)',whiteSpace:'nowrap',cursor:'pointer'}},fN(f.etq_futura)+(f.etq_futura_pend?' · '+fN(f.etq_futura_pend)+' pend.':'')):h('span',{style:{color:'var(--text-soft)'}},'—')),
             h('td',{style:{textAlign:'right',whiteSpace:'nowrap',fontSize:12,color:f.estado==='detenido'?'#b03030':'var(--text-mid)',fontWeight:f.estado==='detenido'?800:500}},f.ultima_entrega?horaCL(f.ultima_entrega)+(esHoy?' · '+txtHace(f.hEnt):''):'Sin entregas'));
         }),
         h('tr',{style:{background:'var(--dark)'}},
