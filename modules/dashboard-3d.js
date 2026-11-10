@@ -168,7 +168,7 @@ function montarMapa(T,cont,datos,ui,geo){
 function montarFlujo(T,cont,cnt,ui){
   // 10-11-2026: tocar una estación (bodega, camión, casa, reloj, caja) abre el detalle por comuna.
   var clicables=[],rayF=new T.Raycaster(),ptrF=new T.Vector2();
-  var E=crearEscena(T,cont,{r:60,pol:0.98,az:-0.3,ty:3,rMin:26,rMax:110,onLost:ui.onLost,
+  var E=crearEscena(T,cont,{r:52,pol:0.98,az:-0.3,ty:3,rMin:24,rMax:110,onLost:ui.onLost,
     onClick:function(e){if(!ui.onNodo)return;var b=E.ren.domElement.getBoundingClientRect();ptrF.x=(e.clientX-b.left)/b.width*2-1;ptrF.y=-(e.clientY-b.top)/b.height*2+1;
       rayF.setFromCamera(ptrF,E.cam);var hit=rayF.intersectObjects(clicables,true)[0];if(!hit){ui.onNodo(null);return;}
       var o=hit.object;while(o&&!(o.userData&&o.userData.k))o=o.parent;ui.onNodo(o?o.userData.k:null);}});
