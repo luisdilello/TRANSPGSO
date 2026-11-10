@@ -51,7 +51,7 @@ function crearEscena(T,cont,opts){
   var sc=new T.Scene();sc.fog=new T.Fog(0x15180f,opts.fogNear||70,opts.fogFar||150);
   var cam=new T.PerspectiveCamera(38,W/H,0.1,400);
   // En pantallas angostas (teléfono) se abre el ángulo vertical para conservar el ancho de la escena.
-  function ajustarFov(a){var base=38*Math.PI/180,ref=1.7;cam.fov=a>=ref?38:Math.min(80,2*Math.atan(Math.tan(base/2)*ref/a)*180/Math.PI);}
+  function ajustarFov(a){var base=38*Math.PI/180,ref=1.85;cam.fov=a>=ref?38:Math.min(80,2*Math.atan(Math.tan(base/2)*ref/a)*180/Math.PI);}
   ajustarFov(W/H);cam.updateProjectionMatrix();
   var orb={az:opts.az||-0.6,pol:opts.pol||0.95,r:opts.r||60,tAz:null,auto:true,target:new T.Vector3(opts.tx||0,opts.ty||0,opts.tz||0)};
   function ubicar(){var sp=Math.sin(orb.pol);cam.position.set(orb.target.x+orb.r*sp*Math.sin(orb.az),orb.r*Math.cos(orb.pol),orb.target.z+orb.r*sp*Math.cos(orb.az));cam.lookAt(orb.target);}
@@ -148,7 +148,7 @@ function montarMapa(T,cont,datos,ui,geo){
     }
   });
   // etiquetas HTML para las 8 comunas con más envíos
-  var top=torres.slice().sort(function(a,b){return b.userData.d.total-a.userData.d.total;}).slice(0,8);
+  var top=torres.slice().sort(function(a,b){return b.userData.d.total-a.userData.d.total;}).slice(0,(labels.clientWidth||900)<600?3:8);
   labels.innerHTML='';var lab=top.map(function(m){var el=document.createElement('div');
     el.style.cssText='position:absolute;transform:translate(-50%,-100%);pointer-events:none;white-space:nowrap;padding:3px 9px;border-radius:999px;background:rgba(20,22,15,.8);border:1px solid rgba(200,168,75,.6);color:#fff;font:700 11px DM Sans,system-ui,sans-serif;box-shadow:0 6px 14px rgba(0,0,0,.35);backdrop-filter:blur(4px)';
     el.innerHTML=titulo(m.userData.d.n)+' <span style="color:#ffe59a;font-family:Bebas Neue;font-size:14px;letter-spacing:.5px;margin-left:3px">'+m.userData.d.total.toLocaleString('es-CL')+'</span>';labels.appendChild(el);return{el:el,m:m};});
@@ -257,11 +257,12 @@ function montarFlujo(T,cont,cnt,ui){
   var cv=document.createElement('canvas');cv.width=cv.height=64;var cx=cv.getContext('2d');var gr=cx.createRadialGradient(32,32,0,32,32,32);gr.addColorStop(0,'rgba(255,255,255,1)');gr.addColorStop(0.35,'rgba(255,255,255,.8)');gr.addColorStop(1,'rgba(255,255,255,0)');cx.fillStyle=gr;cx.fillRect(0,0,64,64);
   var pts=new T.Points(pg,new T.PointsMaterial({size:0.75,map:new T.CanvasTexture(cv),vertexColors:true,transparent:true,depthWrite:false,blending:T.AdditiveBlending}));E.sc.add(pts);
   // etiquetas
+  var chico=(ui.labels.clientWidth||900)<600;
   ui.labels.innerHTML='';var labs=Object.keys(nodos).map(function(k){var el=document.createElement('div');var n=nodos[k];
     el.style.cssText='position:absolute;transform:translate(-50%,-100%);pointer-events:none;text-align:center;white-space:nowrap';
     var pct=k==='en_bodega'||k==='en_ruta'?'':(salieron?' · '+Math.round(vals[k]/salieron*100)+'%':'');
-    el.innerHTML='<div style="font-family:Bebas Neue;font-size:30px;line-height:1;color:#fff;text-shadow:0 0 18px '+n.c+',0 3px 0 rgba(0,0,0,.4)">'+vals[k].toLocaleString('es-CL')+'</div>'
-      +'<div style="margin-top:3px;padding:2px 10px;border-radius:999px;background:rgba(20,22,15,.75);border:1px solid '+n.c+';color:#fff;font:700 11px DM Sans,system-ui,sans-serif">'+n.l+(k==='en_ruta'?' (salieron)':'')+pct+'</div>';
+    el.innerHTML='<div style="font-family:Bebas Neue;font-size:'+(chico?20:30)+'px;line-height:1;color:#fff;text-shadow:0 0 18px '+n.c+',0 3px 0 rgba(0,0,0,.4)">'+vals[k].toLocaleString('es-CL')+'</div>'
+      +'<div style="margin-top:3px;padding:'+(chico?'1px 6px':'2px 10px')+';border-radius:999px;background:rgba(20,22,15,.75);border:1px solid '+n.c+';color:#fff;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif">'+n.l+(k==='en_ruta'&&!chico?' (salieron)':'')+pct+'</div>';
     ui.labels.appendChild(el);return{el:el,k:k};});
   var v=new T.Vector3(),tmp=new T.Vector3();
   E.setTick(function(t){
@@ -324,7 +325,7 @@ function CentroControl3D(props){
         h('div',{style:{fontFamily:'Bebas Neue',fontSize:28,letterSpacing:2.5,color:'#fff',lineHeight:1}},'Centro de control'),
         h('div',{className:'cc3d-sub',style:{fontSize:12,color:'rgba(233,228,210,.7)',marginTop:3}},modo==='mapa'?'Región Metropolitana · altura = envíos del período · color = efectividad total (rojo la más baja, verde la más alta) · arrastra para girar, rueda para acercar':'Recorrido de los envíos del período: de bodega a ruta y su resultado final')),
       h('div',{style:{display:'flex',gap:6}},tab('mapa','Mapa 3D de la RM'),tab('flujo','Flujo de estados'))),
-    h('style',null,'@media (max-width:820px){.cc3d-grid{grid-template-columns:1fr!important}.cc3d-stage{height:340px!important}.cc3d-side{display:grid!important;grid-template-columns:1fr 1fr;padding:12px!important}.cc3d-side>*:last-child{grid-column:1/-1}.cc3d-head{padding:14px 14px 0!important}.cc3d-sub{display:none}}@media (max-width:420px){.cc3d-side{grid-template-columns:1fr}}'),
+    h('style',null,'@media (max-width:820px){.cc3d-grid{grid-template-columns:1fr!important}.cc3d-stage{height:330px!important}.cc3d-side{display:grid!important;grid-template-columns:1fr 1fr;padding:12px!important}.cc3d-side>*:last-child{grid-column:1/-1}.cc3d-head{padding:14px 14px 0!important}.cc3d-sub{display:none}}@media (max-width:420px){.cc3d-side{grid-template-columns:1fr}}'),
     h('div',{className:'cc3d-grid',style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 250px',gap:0}},
       h('div',{className:'cc3d-stage',style:{position:'relative',height:500,minWidth:0,touchAction:'pan-y'}},
         h('div',{ref:refC,style:{position:'absolute',inset:0}}),

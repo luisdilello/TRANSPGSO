@@ -399,6 +399,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 /* PANEL */
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;}
 @media(max-width:900px){.grid2{grid-template-columns:1fr;}}
+@media(max-width:900px){.dash-2col{grid-template-columns:1fr!important;}}
 .panel{background:linear-gradient(145deg,#ffffff,#fdf6e8);border:1px solid rgba(200,168,75,0.15);border-top:3px solid var(--gold);border-radius:14px;padding:20px;box-shadow:6px 6px 14px rgba(43,46,32,0.1),-2px -2px 8px rgba(255,255,255,0.9);}
 .panel-title{font-family:'Bebas Neue';font-size:16px;color:var(--dark-deep);letter-spacing:1.5px;margin-bottom:16px;}
 
@@ -664,7 +665,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=1794273012;
+window.__MODULES_VERSION=1794273649;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -3482,7 +3483,7 @@ function Dashboard(_ref7){
     // ── KPI CARDS ESTADO ── (oculto mientras carga el historial completo del período: evita mostrar
     // un desglose parcial que luego cambia de golpe al terminar de traer todas las páginas de Supabase)
     !(cargandoExtra||cargandoRango||cargandoTodos)&&React.createElement(CentroControl3DTab,{envios:filtrados}),
-    (cargandoExtra||cargandoRango||cargandoTodos)?React.createElement('div',{style:{textAlign:'center',padding:'20px',color:'var(--text-soft)',fontSize:13,marginBottom:20}},'⏳ Cargando historial completo del período...'):
+    (cargandoExtra||cargandoRango||cargandoTodos)?React.createElement('div',{style:{textAlign:'center',padding:'20px',color:'var(--text-soft)',fontSize:13,marginBottom:20}},'Cargando historial completo del período...'):
     React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12,marginBottom:20}},
       Object.entries(porEstado).map(([est,cnt])=>{
         var valClass=est==='en_bodega'?'teal':est==='en_ruta'?'gold':est==='entregado'?'green':est==='reprogramado'?'purple':est==='cancelado'?'red':est==='siniestro'?'orange':est==='retorno'?'brown':est==='en_bodega_cancelado'?'rust':est==='en_bodega_fecha'?'blue':'orange';
@@ -3494,7 +3495,7 @@ function Dashboard(_ref7){
       );})
     ),
     // ── EFECTIVIDAD ──
-    (cargandoExtra||cargandoRango||cargandoTodos)?React.createElement('div',{style:{padding:'20px 0',textAlign:'center',color:'var(--text-soft)',fontSize:13,marginBottom:20}},'⏳ Cargando historial completo del período...'):React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:20}},
+    (cargandoExtra||cargandoRango||cargandoTodos)?React.createElement('div',{style:{padding:'20px 0',textAlign:'center',color:'var(--text-soft)',fontSize:13,marginBottom:20}},'Cargando historial completo del período...'):React.createElement('div',{className:'dash-2col',style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:20}},
       React.createElement(EfectividadPeriodoPanel,{porEstado:porEstado,total:total,ef:ef,efOp:efOp,prev:efectividadAnterior,filtrados:filtrados,colores:ESTADO_COLORS,labels:ESTADO_LABELS}),
       // ── MENSAJEROS EN RUTA (lista completa) ──
       React.createElement('div',{className:'panel',style:{display:'flex',flexDirection:'column'}},
