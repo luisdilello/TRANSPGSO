@@ -173,7 +173,8 @@ function montarFlujo(T,cont,cnt,ui){
     cancelado:{p:[14,0,12],c:'#e0473f',l:'Cancelado'}};
   var finales=['entregado','reprogramado','cancelado'];
   var salieron=(cnt.en_ruta||0)+finales.reduce(function(a,k){return a+(cnt[k]||0);},0);
-  var vals={en_bodega:cnt.en_bodega||0,en_ruta:salieron,entregado:cnt.entregado||0,reprogramado:cnt.reprogramado||0,cancelado:cnt.cancelado||0};
+  // En ruta = lo que sigue en ruta ahora (no lo que salió); lo que salió se muestra aparte y es la base de los %.
+  var vals={en_bodega:cnt.en_bodega||0,en_ruta:cnt.en_ruta||0,entregado:cnt.entregado||0,reprogramado:cnt.reprogramado||0,cancelado:cnt.cancelado||0};
   var max=Math.max.apply(null,Object.keys(vals).map(function(k){return vals[k];}).concat([1]));
   // Modelos 3D según el estado: bodega, camión de reparto, casa con paquete entregado, reloj de reagenda
   // y caja cancelada. Al lado, una pila de cajas cuya altura es proporcional a la cantidad.
@@ -262,7 +263,7 @@ function montarFlujo(T,cont,cnt,ui){
     el.style.cssText='position:absolute;transform:translate(-50%,-100%);pointer-events:none;text-align:center;white-space:nowrap';
     var pct=k==='en_bodega'||k==='en_ruta'?'':(salieron?' · '+Math.round(vals[k]/salieron*100)+'%':'');
     el.innerHTML='<div style="font-family:Bebas Neue;font-size:'+(chico?20:30)+'px;line-height:1;color:#fff;text-shadow:0 0 18px '+n.c+',0 3px 0 rgba(0,0,0,.4)">'+vals[k].toLocaleString('es-CL')+'</div>'
-      +'<div style="margin-top:3px;padding:'+(chico?'1px 6px':'2px 10px')+';border-radius:999px;background:rgba(20,22,15,.75);border:1px solid '+n.c+';color:#fff;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif">'+n.l+(k==='en_ruta'&&!chico?' (salieron)':'')+pct+'</div>';
+      +'<div style="margin-top:3px;padding:'+(chico?'1px 6px':'2px 10px')+';border-radius:999px;background:rgba(20,22,15,.75);border:1px solid '+n.c+';color:#fff;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif">'+n.l+(k==='en_ruta'?' ahora':'')+pct+'</div>'+(k==='en_ruta'?'<div style="margin-top:3px;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif;color:rgba(233,228,210,.8)">salieron '+salieron.toLocaleString('es-CL')+'</div>':'');
     ui.labels.appendChild(el);return{el:el,k:k};});
   var v=new T.Vector3(),tmp=new T.Vector3();
   E.setTick(function(t){
