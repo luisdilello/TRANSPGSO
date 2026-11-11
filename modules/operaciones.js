@@ -1224,6 +1224,32 @@ function CierreDiario(props){
 // Firmas en Vivo: vista en tiempo real (solo lectura) de la evidencia de entrega, con
 // filtros por cliente/mensajero/período y exportación.
 // ══════════════════════════════════════════════════════════════════════════════════════
+function VerEnvioFirmas(p){
+  var ver=p.ver,codigo=ver.codigos[ver.i];
+  useEffect(function(){
+    var vivo=true;p.setEnv('cargando');
+    db.from('envios').select('*').eq('codigo',codigo).maybeSingle().then(function(q){if(vivo)p.setEnv(q&&q.data?q.data:{codigo:codigo,_noExiste:true});});
+    return function(){vivo=false;};
+  },[codigo]);
+  function mover(d){p.setVer(function(v){if(!v)return v;var ni=v.i+d;if(ni<0||ni>=v.codigos.length)return v;return {codigos:v.codigos,i:ni};});}
+  useEffect(function(){
+    function k(e){if(document.querySelector('textarea:focus,input:focus,select:focus'))return;if(e.key==='ArrowRight')mover(1);else if(e.key==='ArrowLeft')mover(-1);else if(e.key==='Escape')p.setVer(null);}
+    window.addEventListener('keydown',k);return function(){window.removeEventListener('keydown',k);};
+  },[]);
+  var h=React.createElement,M=window.__app.Modal,Card=window.__app.EnvioDetalleCard,env=p.env;
+  var nb=function(lbl,d,dis){return h('button',{type:'button',className:'btn-secondary',disabled:dis,onClick:function(){mover(d);},style:{padding:'6px 14px',fontSize:12,opacity:dis?0.4:1}},lbl);};
+  var rep=p.reportados&&p.reportados[codigo];
+  return h(M,{title:'Envío · '+codigo,sub:(ver.i+1)+' de '+ver.codigos.length+' en la lista · usa ← → para avanzar',wide:true,onClose:function(){p.setVer(null);}},
+    h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}},
+      h('div',{style:{display:'flex',gap:6}},nb('← Anterior',-1,ver.i===0),nb('Siguiente →',1,ver.i>=ver.codigos.length-1)),
+      h('div',{style:{display:'flex',gap:6,alignItems:'center'}},
+        rep?h('span',{style:{fontSize:12,fontWeight:800,color:'#b03030'}},'Reportado'+(rep.falta?': '+rep.falta:'')):
+        (env&&env!=='cargando'&&!env._noExiste)&&h('button',{type:'button',onClick:function(){p.onReportar(env);},style:{padding:'7px 14px',borderRadius:8,border:'1px solid rgba(176,48,48,0.4)',background:'rgba(176,48,48,0.08)',color:'#b03030',fontWeight:800,fontSize:12,cursor:'pointer'}},'Reportar'),
+        h('button',{type:'button',className:'btn-secondary',style:{padding:'7px 14px',fontSize:12},onClick:function(){p.setVer(null);}},'Cerrar'))),
+    env==='cargando'||!env?h('div',{style:{padding:30,textAlign:'center',color:'var(--text-soft)'}},'Cargando envío…'):
+    env._noExiste?h('div',{style:{padding:20,textAlign:'center',color:'var(--text-soft)'}},'Este código ya no existe en Envíos.'):
+    (Card?h(Card,{key:env.codigo,envio:env}):h('div',null,'No disponible')));
+}
 function FirmasEnVivo(props){
   var clientes=props.clientes||[], mensajeros=props.mensajeros||[], toast=props.toast, usuario=props.usuario;
   var nombreUsuario=(usuario&&usuario.nombre)||'';
@@ -1241,6 +1267,9 @@ function FirmasEnVivo(props){
   var _ultimaAct=useState(null), ultimaActualizacion=_ultimaAct[0], setUltimaActualizacion=_ultimaAct[1];
   var _zoomUrl=useState(null), zoomUrl=_zoomUrl[0], setZoomUrl=_zoomUrl[1];
   var _reportarEnvio=useState(null), reportarEnvio=_reportarEnvio[0], setReportarEnvio=_reportarEnvio[1];
+  // 11-11-2026: botón Ver -> mismo detalle del envío que Gestión de Envíos (EnvioDetalleCard), con Anterior/Siguiente.
+  var _verFv=useState(null), verFv=_verFv[0], setVerFv=_verFv[1]; // {codigos:[...], i:n}
+  var _verFvEnv=useState(null), verFvEnv=_verFvEnv[0], setVerFvEnv=_verFvEnv[1];
   var _reportados=useState({}), reportados=_reportados[0], setReportados=_reportados[1];
   var _estadoCounts=useState({}), estadoCounts=_estadoCounts[0], setEstadoCounts=_estadoCounts[1];
   var _totalCounts=useState(0), totalCounts=_totalCounts[0], setTotalCounts=_totalCounts[1];
@@ -1458,11 +1487,13 @@ function FirmasEnVivo(props){
             React.createElement('span',{style:{fontSize:10,color:'var(--text-soft)'}},'Actualizado '+(e.updated_at?new Date(e.updated_at).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—')),
             reportados[e.codigo]?
               React.createElement('span',{title:'Falta: '+(reportados[e.codigo].falta||'—')+(reportados[e.codigo].accion?'\nAcción: '+reportados[e.codigo].accion:'')+(reportados[e.codigo].hora?'\n'+new Date(reportados[e.codigo].hora).toLocaleString('es-CL'):''),style:{fontSize:10,fontWeight:700,color:'#2e7d4f',cursor:'help'}},'✓ Reportado'+(reportados[e.codigo].reportado_por?' por '+reportados[e.codigo].reportado_por.split(',')[0]:'')):
-              React.createElement('button',{onClick:function(){setReportarEnvio(e);},style:{padding:'3px 10px',borderRadius:6,border:'1px solid rgba(176,48,48,0.3)',background:'rgba(176,48,48,0.06)',color:'#b03030',fontWeight:700,fontSize:10,cursor:'pointer',whiteSpace:'nowrap'}},'⚠ Reportar'))
+              React.createElement('button',{onClick:function(){setReportarEnvio(e);},style:{padding:'3px 10px',borderRadius:6,border:'1px solid rgba(176,48,48,0.3)',background:'rgba(176,48,48,0.06)',color:'#b03030',fontWeight:700,fontSize:10,cursor:'pointer',whiteSpace:'nowrap'}},'Reportar'),
+            React.createElement('button',{onClick:function(){var cs=filtrados.map(function(x){return x.codigo;});setVerFv({codigos:cs,i:Math.max(0,cs.indexOf(e.codigo))});},style:{padding:'3px 12px',borderRadius:6,border:'1px solid #ae8829',background:'linear-gradient(180deg,#f7dd8c,#d9b553)',color:'#1a1d13',fontWeight:800,fontSize:10,cursor:'pointer',whiteSpace:'nowrap'}},'Ver'))
         );
       })
     ),
     zoomUrl&&React.createElement(Lightbox,{url:zoomUrl,onClose:function(){setZoomUrl(null);}}),
+    verFv&&React.createElement(VerEnvioFirmas,{ver:verFv,setVer:setVerFv,env:verFvEnv,setEnv:setVerFvEnv,onReportar:function(env){setReportarEnvio(env);},reportados:reportados}),
     reportarEnvio&&React.createElement(ReportarModal,{
       envio:reportarEnvio,toast:toast,nombreUsuario:nombreUsuario,
       onClose:function(){setReportarEnvio(null);},
