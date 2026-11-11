@@ -29,7 +29,7 @@ var EST={sin_revisar:['Sin revisar','#e8b84a'],por_decidir:['Revisada · sin dec
 
 var css='.bi-seg{transition:transform .12s,color .12s}.bi-seg:hover{color:#fff}.bi-seg:active{transform:translateY(1px)}'+
  '.bi-chip{transition:all .15s;cursor:pointer}.bi-chip:hover{transform:translateY(-1px)}'+
- '.bi-tab tbody tr td{color:#f1ecda;background:transparent!important}.bi-row:hover{background:rgba(232,199,102,.06)!important}'+
+ '.bi-tab{table-layout:fixed}.bi-tab th,.bi-tab td{white-space:normal;overflow-wrap:anywhere;word-break:normal;vertical-align:top;line-height:1.35}.bi-tab tbody tr td{color:#f1ecda;background:transparent!important}.bi-row:hover{background:rgba(232,199,102,.06)!important}'+
  '.bi-in{padding:8px 10px;border-radius:10px;border:1px solid rgba(232,199,102,.4);background:rgba(255,255,255,.95);font-size:13px;color:#1a1d13;outline:none}'+
  '.bi-btn{transition:transform .12s,filter .12s;cursor:pointer}.bi-btn:hover{filter:brightness(1.08)}.bi-btn:active{transform:translateY(1px)}.bi-btn:disabled{opacity:.5;cursor:default}'+
  '@media (max-width:760px){.bi-kpis{grid-template-columns:repeat(2,1fr)!important}.bi-hide-m{display:none}}';
@@ -155,6 +155,53 @@ function BancoIncidencias(props){
     ]);
   }
 
+  // PDF con el formato de documentos TransPgso (modules/doc-pdf.js), mismo estilo del comprobante de entrega.
+  function pdf(){
+    if(!lista.length){toast('No hay incidencias para el PDF con estos filtros');return;}
+    var w=window.open('','_blank');
+    var cargar=typeof loadScriptOnce==='function'?loadScriptOnce('doc-pdf','modules/doc-pdf.js'):Promise.resolve();
+    cargar.then(function(){
+      var D=window.__docPDF;if(!D)throw new Error('módulo de documentos no disponible');
+      var e=function(x){return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+      var tabla=function(cabs,filas,anchos){return '<table class="tabla">'+(anchos?'<colgroup>'+anchos.map(function(a){return '<col style="width:'+a+'"/>';}).join('')+'</colgroup>':'')+'<tr>'+cabs.map(function(c){return '<th>'+e(c)+'</th>';}).join('')+'</tr>'+filas.map(function(f){return '<tr>'+f.map(function(v){return '<td>'+v+'</td>';}).join('')+'</tr>';}).join('')+'</table>';};
+      var sec=function(n,t,hh){return '<div class="sec"><h2>'+n+'. '+e(t)+'</h2>'+hh+'</div>';};
+      var tot={n:lista.length,rev:0,pdN:0,pdM:0,ddN:0,ddM:0,sdN:0};
+      var men={},tip={};
+      lista.forEach(function(r){if(r.resuelto)tot.rev++;
+        var x=men[r._men]=men[r._men]||{n:0,pd:0,pdM:0,dd:0,ddM:0,env:0};x.n++;
+        var t=tip[r.motivo]=tip[r.motivo]||{n:0,g:r._grupo};t.n++;
+        if(r._est==='por_descontar'){tot.pdN++;tot.pdM+=r._monto;x.pd++;x.pdM+=r._monto;x.env+=r._envios;}
+        if(r._est==='descontada'){tot.ddN++;tot.ddM+=r._monto;x.dd++;x.ddM+=r._monto;x.env+=r._envios;}
+        if(r._est==='sin_descuento')tot.sdN++;});
+      var menO=Object.keys(men).sort(function(a,b){return (men[b].pdM+men[b].ddM)-(men[a].pdM+men[a].ddM)||men[b].n-men[a].n;});
+      var tipO=Object.keys(tip).sort(function(a,b){return tip[b].n-tip[a].n;});
+      var cuerpo='',n=1;
+      cuerpo+=sec(n++,'Resumen por mensajero',tabla(['Mensajero','Incidencias','Por descontar','Descontadas','Envíos','Monto'],
+        menO.map(function(m){var x=men[m];return ['<b>'+e(m)+'</b>',x.n,x.pd+(x.pd?' ('+money(x.pdM)+')':''),x.dd+(x.dd?' ('+money(x.ddM)+')':''),x.env||'—','<b>'+money(x.pdM+x.ddM)+'</b>'];})
+        .concat([['<b>TOTAL</b>','<b>'+tot.n+'</b>','<b>'+tot.pdN+'</b>','<b>'+tot.ddN+'</b>','','<b>'+money(tot.pdM+tot.ddM)+'</b>']])));
+      cuerpo+=sec(n++,'Resumen por tipo de incidencia',tabla(['Tipo','Nivel','Incidencias','%'],tipO.map(function(t){return [e(t),e(tip[t].g),tip[t].n,Math.round(tip[t].n/tot.n*100)+'%'];}),['56%','14%','15%','15%']));
+      var det='';
+      menO.forEach(function(m){var rs=lista.filter(function(r){return r._men===m;});
+        det+='<h3>'+e(m)+' ('+rs.length+')</h3>'+tabla(['Fecha','Código','Tipo','Comentario','Solución','Descuento','Estado'],
+          rs.map(function(r){return [dmy(r.fecha),'<span style="font-family:JetBrains Mono,monospace;font-weight:700">'+e(r.codigo)+'</span>'+(r.cliente?'<br/><span style="color:#6b6e5c;font-size:9px">'+e(r.cliente)+'</span>':''),
+            '<b style="color:'+(r._grupo==='Crítica'?'#b03030':r._grupo==='Grave'?'#c06a12':'#2e7d4f')+'">'+e(r._grupo)+'</b><br/>'+e(r.motivo),e(r.comentario||'—'),
+            r.resuelto?e(r.resolucion||'')+'<br/><span style="color:#6b6e5c;font-size:9px">'+e(r.resuelto_por||'')+'</span>':'<span style="color:#a8650a;font-weight:700">Sin solución aún</span>',
+            r.a_descuento?('<b>'+money(r._monto)+'</b><br/><span style="color:#6b6e5c;font-size:9px">'+r._envios+' envíos'+(r.semana_pago?' · sem. '+e(r.semana_pago):'')+'</span>'):(r.a_descuento===false?'No aplica':'—'),
+            e(EST[r._est][0])];}),['9%','14%','20%','18%','18%','11%','10%']);});
+      cuerpo+=sec(n++,'Detalle de incidencias',det);
+      var filtros=[fMen?'Mensajero: '+fMen:'',fTipo?'Tipo: '+fTipo:'',fEst!=='todas'?'Estado: '+EST[fEst][0]:'',q?'Búsqueda: '+q:''].filter(Boolean).join(' · ');
+      var per=desde===hasta?dmy(desde):dmy(desde)+' al '+dmy(hasta);
+      D.abrir(w,D.documentoHTML({
+        tipo:'BANCO DE INCIDENCIAS',folio:'',fechaDoc:dmy(hasta),
+        titulo:'Banco de incidencias — '+per,
+        subtitulo:filtros,
+        metaPares:[['Período',per,2],['Incidencias',String(tot.n)],['Revisadas',tot.rev+' de '+tot.n],['Por descontar',tot.pdN+' · '+money(tot.pdM)],['Descontado',tot.ddN+' · '+money(tot.ddM)],['Sin descuento',String(tot.sdN)],['Mensajeros',String(menO.length)]],
+        cuerpo:cuerpo,
+        cierre:'Registro de incidencias reportadas por el equipo de operadores, con la solución aplicada y la decisión de descuento según el Reglamento Operativo. Montos calculados con la tarifa vigente de cada mensajero. Generado desde el sistema de gestión TransPgso.',
+        nombreArchivo:'Banco_incidencias_'+desde+(desde!==hasta?'_a_'+hasta:'')+(fMen?'_'+fMen.replace(/\s+/g,'_'):'')
+      }));
+    }).catch(function(err){try{w&&w.close();}catch(x){}toast('No se pudo generar el PDF: '+(err&&err.message||''));});
+  }
   var PER=[['hoy','Hoy'],['ayer','Ayer'],['semana','Esta semana'],['semana_ant','Semana pasada'],['mes','Este mes'],['dia','Día'],['rango','Rango']];
   var idsSel=Object.keys(sel).filter(function(k){return sel[k];}).map(Number);
 
@@ -166,7 +213,7 @@ function BancoIncidencias(props){
         h('div',null,
           h('div',{style:{fontFamily:'Bebas Neue',fontSize:30,letterSpacing:2.4,color:'#fff',lineHeight:1}},'Banco de incidencias'),
           h('div',{style:{fontSize:12.5,color:SUAVE,marginTop:4,maxWidth:640}},'Todas las incidencias con su solución. Las revisadas que van a descuento se aplican al pago semanal del mensajero.')),
-        h('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},btnVid('Excel',excel,!lista.length),btnVid('Actualizar',function(){cargar();},cargando))),
+        h('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},btnOro('Descargar PDF',pdf,!lista.length),btnVid('Excel',excel,!lista.length),btnVid('Actualizar',function(){cargar();},cargando))),
       h('div',{style:{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',marginTop:14}},
         h('div',{style:{display:'inline-flex',gap:4,padding:4,borderRadius:14,background:'rgba(0,0,0,.35)',border:'1px solid rgba(255,255,255,.08)',boxShadow:'inset 0 2px 6px rgba(0,0,0,.45)',flexWrap:'wrap'}},
           PER.map(function(p){var act=per===p[0];return h('button',{key:p[0],className:'bi-seg',onClick:function(){setPer(p[0]);},style:{padding:'9px 15px',borderRadius:11,border:'1px solid '+(act?'#f7dd8c':'transparent'),background:act?'linear-gradient(180deg,#f7dd8c,#d9b553 55%,#ae8829)':'transparent',color:act?'#1a1d13':'rgba(241,236,218,.82)',fontWeight:800,fontSize:13.5,cursor:'pointer',boxShadow:act?'0 3px 0 #6d531a,inset 0 1px 0 rgba(255,255,255,.55)':'none',whiteSpace:'nowrap'}},p[1]);})),
@@ -224,7 +271,8 @@ function BancoIncidencias(props){
       cargando?h('div',{style:{padding:30,textAlign:'center',color:SUAVE}},'Cargando…'):
       lista.length===0?h('div',{style:{padding:30,textAlign:'center',color:SUAVE}},'Sin incidencias con estos filtros.'):
       h('div',{style:{overflowX:'auto'}},
-        h('table',{className:'bi-tab',style:{width:'100%',borderCollapse:'collapse',fontSize:12.5,color:TXT,minWidth:980}},
+        h('table',{className:'bi-tab',style:{width:'100%',borderCollapse:'collapse',fontSize:12.5,color:TXT,minWidth:1320}},
+          h('colgroup',null,[34,96,150,170,250,230,250,140,150].map(function(w,i){return h('col',{key:i,style:{width:w}});})),
           h('thead',null,h('tr',{style:{background:'rgba(0,0,0,.25)'}},['','Fecha','Código','Mensajero','Tipo','Comentario','Solución','Descuento','Estado'].map(function(c,i){return h('th',{key:i,style:{textAlign:'left',padding:'9px 10px',fontSize:10.5,letterSpacing:1.3,textTransform:'uppercase',color:ORO,fontWeight:900,whiteSpace:'nowrap'}},c);}))),
           h('tbody',null,lista.map(function(r){var col=CG[r._grupo]||ORO;var es=EST[r._est];var editando=rev&&rev.id===r.id;var puedeSel=r._est==='por_descontar';
             return h(React.Fragment,{key:r.id},
