@@ -473,7 +473,8 @@ function exportarCierreHTML(r){
   descargarHTML(titulo+'.html',html);
 }
 
-function exportarFirmasVivoHTML(filtrados,periodoLabel){
+function exportarFirmasVivoHTML(filtrados,periodoLabel,notas){
+  notas=notas||{};
   var filas=filtrados.map(function(e){
     var fotos=parsearFotos(e.fotos_entrega);
     var urls=(e.foto_etiqueta?[e.foto_etiqueta]:[]).concat(fotos.map(function(f){return f.url;}));
@@ -483,6 +484,7 @@ function exportarFirmasVivoHTML(filtrados,periodoLabel){
       +'<div style="font-size:13px;font-weight:700;margin-bottom:2px">'+escHTML(e.cliente||'—')+'</div>'
       +'<div style="font-size:12px;color:#666;margin-bottom:2px">'+escHTML(e.destinatario||'—')+' · '+escHTML(e.comuna||'—')+'</div>'
       +'<div style="font-size:12px;color:#666;margin-bottom:8px">'+escHTML((e.mensajero||'Sin asignar').replace(/,\s*/g,' '))+'</div>'
+      +(notas[e.codigo]?'<div style="font-size:12px;margin-bottom:8px;padding:6px 9px;border-left:3px solid #2e7d4f;background:#F1F8F2;border-radius:6px;white-space:pre-wrap"><b style="color:#2e7d4f">Comentario: </b>'+escHTML(String(notas[e.codigo].nota).trim())+'</div>':'')
       +'<div style="display:flex;flex-wrap:wrap;gap:2px">'+imgsHtml+'</div></div>';
   }).join('');
   var html=estiloBaseHTML('Firmas en Vivo - '+periodoLabel)
@@ -1269,6 +1271,9 @@ function FirmasEnVivo(props){
   var _reportarEnvio=useState(null), reportarEnvio=_reportarEnvio[0], setReportarEnvio=_reportarEnvio[1];
   // 11-11-2026: botón Ver -> mismo detalle del envío que Gestión de Envíos (EnvioDetalleCard), con Anterior/Siguiente.
   var _verFv=useState(null), verFv=_verFv[0], setVerFv=_verFv[1]; // {codigos:[...], i:n}
+  // 11-11-2026: comentario que deja el mensajero al gestionar (quién recibió, RUT, dónde quedó...).
+  // Sale de historial_envios.nota del último registro con el mismo estado actual del envío.
+  var _notas=useState({}), notasGestion=_notas[0], setNotasGestion=_notas[1];
   var _verFvEnv=useState(null), verFvEnv=_verFvEnv[0], setVerFvEnv=_verFvEnv[1];
   var _reportados=useState({}), reportados=_reportados[0], setReportados=_reportados[1];
   var _estadoCounts=useState({}), estadoCounts=_estadoCounts[0], setEstadoCounts=_estadoCounts[1];
@@ -1313,6 +1318,16 @@ function FirmasEnVivo(props){
   // Referencia al 'updated_at' más reciente que ya se cargó, para poder detectar si hay algo
   // nuevo SIN tener que volver a traer las fotos completas de los 200 envíos cada vez.
   var ultimoUpdatedRef=React.useRef(null);
+  function cargarNotas(filas){
+    var estadoDe={};filas.forEach(function(e){estadoDe[e.codigo]=e.estado;});
+    var cods=Object.keys(estadoDe);if(!cods.length){setNotasGestion({});return;}
+    var trozos=[];for(var i=0;i<cods.length;i+=100)trozos.push(cods.slice(i,i+100));
+    Promise.all(trozos.map(function(t){return db.from('historial_envios').select('codigo_envio,estado,nota,usuario,canal,created_at').in('codigo_envio',t).not('nota','is',null).neq('nota','').order('created_at',{ascending:false}).limit(1000);}))
+      .then(function(rs){var m={};rs.forEach(function(r){((r&&r.data)||[]).forEach(function(h){
+        if(m[h.codigo_envio]||h.estado!==estadoDe[h.codigo_envio])return;
+        if(/^(Colecta|Retiro masivo|Cargado|Asignado|Asignación|Importado|Escaneo)/i.test(String(h.nota).trim()))return;
+        m[h.codigo_envio]=h;});});setNotasGestion(m);},function(){});
+  }
   function cargar(){
     var lim=limitesRango(filtro,fechaDesde,fechaHasta);
     if(filtro==='rango'&&(!lim.desde||!lim.hasta)){setEnvios([]);return;}
@@ -1326,6 +1341,7 @@ function FirmasEnVivo(props){
     q.order('updated_at',{ascending:false}).limit(200).then(function(r){
       var filas=(r&&r.data)||[];
       setEnvios(filas);setCargando(false);setUltimaActualizacion(new Date());
+      cargarNotas(filas);
       ultimoUpdatedRef.current=filas.length>0?filas[0].updated_at:null;
     }).catch(function(){setCargando(false);toast&&toast('⚠ Error cargando envíos');});
   }
@@ -1450,7 +1466,7 @@ function FirmasEnVivo(props){
         React.createElement('input',{type:'checkbox',checked:soloConEvidencia,onChange:function(e){setSoloConEvidencia(e.target.checked);}}),'Solo con evidencia cargada'),
       React.createElement('button',{className:'btn-secondary',disabled:cargando,onClick:cargar},cargando?'Actualizando...':'↺ Actualizar'),
       ultimaActualizacion&&React.createElement('span',{style:{fontSize:10,color:'var(--text-soft)'}},'Datos al '+ultimaActualizacion.toLocaleTimeString('es-CL')),
-      React.createElement('button',{className:'btn-secondary',style:{marginLeft:'auto'},onClick:function(){exportarFirmasVivoHTML(filtrados,periodoLabelTexto(filtro,lim));}},'⬇ Exportar a HTML')
+      React.createElement('button',{className:'btn-secondary',style:{marginLeft:'auto'},onClick:function(){exportarFirmasVivoHTML(filtrados,periodoLabelTexto(filtro,lim),notasGestion);}},'⬇ Exportar a HTML')
     ),
 
     cargando&&envios.length===0&&React.createElement('div',{style:{textAlign:'center',padding:'40px 20px',color:'var(--text-soft)'}},'Cargando envíos...'),
@@ -1475,6 +1491,10 @@ function FirmasEnVivo(props){
             React.createElement('span',{style:{display:'inline-flex',alignItems:'center',gap:4,fontSize:11,fontWeight:700,color:'#a87d2a',background:'rgba(200,168,75,0.14)',padding:'3px 8px',borderRadius:20}},'🏍 '+(e.mensajero||'Sin asignar').replace(/,\s*/g,' ')),
             React.createElement('span',{style:{display:'inline-flex',alignItems:'center',gap:4,fontSize:11,fontWeight:700,color:'#1a6b8a',background:'rgba(26,107,138,0.1)',padding:'3px 8px',borderRadius:20}},'🏘 '+(e.comuna||'—'))
           ),
+          notasGestion[e.codigo]&&(function(nt){var adm=/^Admin:/i.test(nt.usuario||'')||nt.canal==='panel_admin';
+            return React.createElement('div',{style:{marginBottom:8,padding:'7px 9px',borderRadius:8,background:'rgba(46,125,79,0.07)',border:'1px solid rgba(46,125,79,0.25)',borderLeft:'3px solid #2e7d4f'}},
+              React.createElement('div',{style:{fontSize:9.5,fontWeight:800,letterSpacing:1.2,textTransform:'uppercase',color:'#2e7d4f',marginBottom:2}},adm?'Comentario de '+String(nt.usuario||'').replace(/^Admin:\s*/i,''):'Comentario del mensajero'),
+              React.createElement('div',{style:{fontSize:12,color:'var(--dark)',fontWeight:600,whiteSpace:'pre-wrap',lineHeight:1.35}},String(nt.nota).trim()));})(notasGestion[e.codigo]),
           todas.length>0?
             React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
               todas.slice(0,6).map(function(f,i){
