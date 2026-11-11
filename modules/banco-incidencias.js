@@ -29,7 +29,7 @@ var EST={sin_revisar:['Sin revisar','#e8b84a'],por_decidir:['Revisada · sin dec
 
 var css='.bi-seg{transition:transform .12s,color .12s}.bi-seg:hover{color:#fff}.bi-seg:active{transform:translateY(1px)}'+
  '.bi-chip{transition:all .15s;cursor:pointer}.bi-chip:hover{transform:translateY(-1px)}'+
- '.bi-tab tbody tr td{color:#f1ecda}.bi-row:hover{background:rgba(232,199,102,.06)!important}'+
+ '.bi-tab tbody tr td{color:#f1ecda;background:transparent!important}.bi-row:hover{background:rgba(232,199,102,.06)!important}'+
  '.bi-in{padding:8px 10px;border-radius:10px;border:1px solid rgba(232,199,102,.4);background:rgba(255,255,255,.95);font-size:13px;color:#1a1d13;outline:none}'+
  '.bi-btn{transition:transform .12s,filter .12s;cursor:pointer}.bi-btn:hover{filter:brightness(1.08)}.bi-btn:active{transform:translateY(1px)}.bi-btn:disabled{opacity:.5;cursor:default}'+
  '@media (max-width:760px){.bi-kpis{grid-template-columns:repeat(2,1fr)!important}.bi-hide-m{display:none}}';
