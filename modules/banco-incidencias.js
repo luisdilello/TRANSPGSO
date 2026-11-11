@@ -213,7 +213,7 @@ function BancoIncidencias(props){
                   rev.desc&&h('div',null,h('div',{style:{fontSize:11,fontWeight:900,letterSpacing:1.2,color:ORO,marginBottom:5}},'ENVÍOS A DESCONTAR'),
                     h('input',{type:'number',min:0,className:'bi-in',style:{width:90},value:rev.envios,onChange:function(e){var v=e.target.value;setRev(function(p){return Object.assign({},p,{envios:v});});}}),
                     h('span',{style:{fontSize:12,color:SUAVE,marginLeft:8}},'≈ '+money((+rev.envios||0)*tarifaDe(r.mensajero)))),
-                  h('div',{style:{display:'flex',gap:8,marginLeft:'auto'}},btnVid('Ver envío',function(){abrirVer(r);}),btnVid('Cancelar',function(){setRev(null);}),btnOro(busy?'Guardando…':'Guardar',guardarRevision,busy)));
+                  h('div',{style:{display:'flex',gap:8,marginLeft:'auto'}},!(verRow&&verRow.id===r.id)&&btnVid('Ver envío',function(){abrirVer(r);}),btnVid('Cancelar',function(){setRev(null);}),btnOro(busy?'Guardando…':'Guardar',guardarRevision,busy)));
   }
   // Ver envío: mismo detalle que el modal de Gestión de Envíos (EnvioDetalleCard), con Anterior/Siguiente.
   var _ver=useState(null),ver=_ver[0],setVer=_ver[1];
