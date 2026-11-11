@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261111142443;
+window.__MODULES_VERSION=20261111151928;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -5746,7 +5746,7 @@ function FotosEntrega(_ref23){let codigo=_ref23.codigo,fotoEtiqueta=_ref23.fotoE
     // Fotos de entrega agrupadas por intento
     intentosEntrega.length>0&&React.createElement("div",null,
       React.createElement("div",{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:1.5,color:'var(--dark)',marginBottom:10}},"📷 FOTOS DE ENTREGA — "+intentosEntrega.reduce((a,it)=>a+(it.fotos||[]).length,0)+" fotos en "+intentosEntrega.length+" intento"+(intentosEntrega.length>1?"s":"")),
-      intentosEntrega.map((it0,ii)=>{const esUlt=ii===intentosEntrega.length-1;const it=Object.assign({},it0,{estado:(esUlt&&estadoEnvio)?estadoEnvio:((it0.correccion_estado&&it0.correccion_estado.a)||it0.estado)});return React.createElement("div",{key:ii,style:{marginBottom:14,borderRadius:10,border:`1px solid ${estadoColor(it.estado)}55`,overflow:'hidden',boxShadow:'0 1px 4px rgba(43,46,32,0.06)'}},
+      intentosEntrega.map((it0,ii)=>{const esUlt=ii===intentosEntrega.length-1;const it=Object.assign({},it0,{estado:it0.estado_final||(it0.correccion_estado&&it0.correccion_estado.a)||it0.estado});return React.createElement("div",{key:ii,style:{marginBottom:14,borderRadius:10,border:`1px solid ${estadoColor(it.estado)}55`,overflow:'hidden',boxShadow:'0 1px 4px rgba(43,46,32,0.06)'}},
         React.createElement("div",{style:{background:`${estadoColor(it.estado)}18`,padding:'10px 14px',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',borderBottom:`1px solid ${estadoColor(it.estado)}33`}},
           React.createElement("span",{style:{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:1,color:estadoColor(it.estado)}},"INTENTO ",it.intento),
           React.createElement("span",{style:{fontSize:11,fontWeight:700,color:estadoColor(it.estado),background:`${estadoColor(it.estado)}22`,padding:'3px 10px',borderRadius:10}},estadoInfo(it.estado)?.label||it.estado),
