@@ -29,7 +29,7 @@ var EST={sin_revisar:['Sin revisar','#e8b84a'],por_decidir:['Revisada · sin dec
 
 var css='.bi-seg{transition:transform .12s,color .12s}.bi-seg:hover{color:#fff}.bi-seg:active{transform:translateY(1px)}'+
  '.bi-chip{transition:all .15s;cursor:pointer}.bi-chip:hover{transform:translateY(-1px)}'+
- '.bi-row:hover{background:rgba(232,199,102,.06)!important}'+
+ '.bi-tab tbody tr td{color:#f1ecda}.bi-row:hover{background:rgba(232,199,102,.06)!important}'+
  '.bi-in{padding:8px 10px;border-radius:10px;border:1px solid rgba(232,199,102,.4);background:rgba(255,255,255,.95);font-size:13px;color:#1a1d13;outline:none}'+
  '.bi-btn{transition:transform .12s,filter .12s;cursor:pointer}.bi-btn:hover{filter:brightness(1.08)}.bi-btn:active{transform:translateY(1px)}.bi-btn:disabled{opacity:.5;cursor:default}'+
  '@media (max-width:760px){.bi-kpis{grid-template-columns:repeat(2,1fr)!important}.bi-hide-m{display:none}}';
@@ -224,7 +224,7 @@ function BancoIncidencias(props){
       cargando?h('div',{style:{padding:30,textAlign:'center',color:SUAVE}},'Cargando…'):
       lista.length===0?h('div',{style:{padding:30,textAlign:'center',color:SUAVE}},'Sin incidencias con estos filtros.'):
       h('div',{style:{overflowX:'auto'}},
-        h('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:12.5,color:TXT,minWidth:980}},
+        h('table',{className:'bi-tab',style:{width:'100%',borderCollapse:'collapse',fontSize:12.5,color:TXT,minWidth:980}},
           h('thead',null,h('tr',{style:{background:'rgba(0,0,0,.25)'}},['','Fecha','Código','Mensajero','Tipo','Comentario','Solución','Descuento','Estado'].map(function(c,i){return h('th',{key:i,style:{textAlign:'left',padding:'9px 10px',fontSize:10.5,letterSpacing:1.3,textTransform:'uppercase',color:ORO,fontWeight:900,whiteSpace:'nowrap'}},c);}))),
           h('tbody',null,lista.map(function(r){var col=CG[r._grupo]||ORO;var es=EST[r._est];var editando=rev&&rev.id===r.id;var puedeSel=r._est==='por_descontar';
             return h(React.Fragment,{key:r.id},
