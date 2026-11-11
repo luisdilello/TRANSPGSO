@@ -183,11 +183,11 @@ function BancoIncidencias(props){
       var det='';
       menO.forEach(function(m){var rs=lista.filter(function(r){return r._men===m;});
         det+='<h3>'+e(m)+' ('+rs.length+')</h3>'+tabla(['Fecha','Código','Tipo','Comentario','Solución','Descuento','Estado'],
-          rs.map(function(r){return [dmy(r.fecha),'<span style="font-family:JetBrains Mono,monospace;font-weight:700">'+e(r.codigo)+'</span>'+(r.cliente?'<br/><span style="color:#6b6e5c;font-size:9px">'+e(r.cliente)+'</span>':''),
+          rs.map(function(r){return ['<span style="white-space:nowrap">'+dmy(r.fecha)+'</span>','<span style="font-family:JetBrains Mono,monospace;font-weight:700">'+e(r.codigo)+'</span>'+(r.cliente?'<br/><span style="color:#6b6e5c;font-size:9px">'+e(r.cliente)+'</span>':''),
             '<b style="color:'+(r._grupo==='Crítica'?'#b03030':r._grupo==='Grave'?'#c06a12':'#2e7d4f')+'">'+e(r._grupo)+'</b><br/>'+e(r.motivo),e(r.comentario||'—'),
             r.resuelto?e(r.resolucion||'')+'<br/><span style="color:#6b6e5c;font-size:9px">'+e(r.resuelto_por||'')+'</span>':'<span style="color:#a8650a;font-weight:700">Sin solución aún</span>',
             r.a_descuento?('<b>'+money(r._monto)+'</b><br/><span style="color:#6b6e5c;font-size:9px">'+r._envios+' envíos'+(r.semana_pago?' · sem. '+e(r.semana_pago):'')+'</span>'):(r.a_descuento===false?'No aplica':'—'),
-            e(EST[r._est][0])];}),['9%','14%','20%','18%','18%','11%','10%']);});
+            e(EST[r._est][0])];}),['12%','14%','19%','17%','17%','11%','10%']);});
       cuerpo+=sec(n++,'Detalle de incidencias',det);
       var filtros=[fMen?'Mensajero: '+fMen:'',fTipo?'Tipo: '+fTipo:'',fEst!=='todas'?'Estado: '+EST[fEst][0]:'',q?'Búsqueda: '+q:''].filter(Boolean).join(' · ');
       var per=desde===hasta?dmy(desde):dmy(desde)+' al '+dmy(hasta);
