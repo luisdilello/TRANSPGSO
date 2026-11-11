@@ -221,7 +221,7 @@ async function comprobanteEnvio(codigo,ventana){
   var cont={n:0},g='';
   if(!intentos.length){g='<p>No hay intentos de entrega registrados para este envío.</p>';}
   intentos.forEach(function(it0,ix){
-    var it=Object.assign({},it0,{estado:(it0.correccion_estado&&it0.correccion_estado.a)||it0.estado});
+    var it=Object.assign({},it0,{estado:(ix===intentos.length-1&&e.estado)?e.estado:((it0.correccion_estado&&it0.correccion_estado.a)||it0.estado)});
     var ii=estadoInfo(it.estado)||{};
     var fotos=(Array.isArray(it.fotos)?it.fotos:[]).filter(function(u){return typeof u==='string'&&u;});
     g+='<h3>Intento '+(it.intento||ix+1)+' · '+esc(ii.label||it.estado||'—')+(it.fecha?' · '+esc(fFH(it.fecha)):'')+'</h3>';
