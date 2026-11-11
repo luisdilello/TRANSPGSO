@@ -1698,10 +1698,17 @@ function SoporteFirmasTab(props){
   var _hist=React.useState([]); var hist=_hist[0]; var setHist=_hist[1];
   var _dirty=React.useState({}); var dirty=_dirty[0]; var setDirty=_dirty[1];
   var _agregar=React.useState({}); var agregar=_agregar[0]; var setAgregar=_agregar[1];
+  // 11-11-2026: comisión por incidencias reportadas que fueron a descuento (Banco de incidencias).
+  var _com=React.useState([]); var comisiones=_com[0]; var setComisiones=_com[1];
 
   function cargarOps(){db.from('soporte_firmas').select('*').eq('activo',true).order('operador').then(function(r){if(r.error){toast&&toast('Error: '+r.error.message);setOps([]);return;}setOps(r.data||[]);});}
   function cargarHist(){db.from('soporte_firmas_pagos').select('*').order('created_at',{ascending:false}).limit(30).then(function(r){setHist((r&&r.data)||[]);});}
   React.useEffect(function(){cargarOps();cargarHist();},[]);
+  React.useEffect(function(){
+    if(!periodo.desde||!periodo.hasta)return;
+    db.from('reportes_operador').select('id,fecha,codigo,comision_operador,comision_monto').eq('a_descuento',true).not('comision_operador','is',null).gte('fecha',periodo.desde).lte('fecha',periodo.hasta).limit(5000)
+      .then(function(r){setComisiones((r&&r.data)||[]);});
+  },[periodo.desde,periodo.hasta]);
   React.useEffect(function(){
     if(!periodo.desde||!periodo.hasta)return;
     setConteo(null);
@@ -1724,7 +1731,10 @@ function SoporteFirmasTab(props){
       var sm=porSemMens[w]||(porSemMens[w]={});sm[k]=(sm[k]||0)+n;
     });
     var tarifa=+op.tarifa_firma||0,sueldo=+op.sueldo||0;
-    return{firmas:total,porSemana:porSemana,porMens:porMens,porSemMens:porSemMens,monto:total*tarifa,sueldo:sueldo,total:total*tarifa+sueldo,tarifa:tarifa};
+    var pn=String(op.operador||'').trim().toUpperCase().split(/\s+/)[0];
+    var mis=comisiones.filter(function(x){return String(x.comision_operador||'').trim().toUpperCase().split(/\s+/)[0]===pn;});
+    var comM=mis.reduce(function(a,x){return a+(+x.comision_monto||0);},0);
+    return{firmas:total,porSemana:porSemana,porMens:porMens,porSemMens:porSemMens,monto:total*tarifa,sueldo:sueldo,comN:mis.length,comM:comM,total:total*tarifa+sueldo+comM,tarifa:tarifa};
   }
   function setCampo(op,campo,valor){
     setOps(function(prev){return prev.map(function(o){return o.id===op.id?Object.assign({},o,{[campo]:valor}):o;});});
@@ -1739,8 +1749,8 @@ function SoporteFirmasTab(props){
   }
   function registrarPago(op){
     var c=calcular(op);
-    if(!window.confirm('Registrar pago a '+op.operador+' del '+periodo.desde+' al '+periodo.hasta+'?\n\n'+c.firmas+' firmas x $'+c.tarifa+' = $'+Math.round(c.monto).toLocaleString('es-CL')+'\nSueldo: $'+Math.round(c.sueldo).toLocaleString('es-CL')+'\nTotal: $'+Math.round(c.total).toLocaleString('es-CL')))return;
-    db.from('soporte_firmas_pagos').insert({operador:op.operador,desde:periodo.desde,hasta:periodo.hasta,firmas:c.firmas,tarifa_firma:c.tarifa,monto_firmas:c.monto,sueldo:c.sueldo,total:c.total,detalle:{porSemana:c.porSemana,porMensajero:c.porMens}}).then(function(r){
+    if(!window.confirm('Registrar pago a '+op.operador+' del '+periodo.desde+' al '+periodo.hasta+'?\n\n'+c.firmas+' firmas x $'+c.tarifa+' = $'+Math.round(c.monto).toLocaleString('es-CL')+'\nSueldo: $'+Math.round(c.sueldo).toLocaleString('es-CL')+(c.comN?'\nComisión incidencias: '+c.comN+' = $'+Math.round(c.comM).toLocaleString('es-CL'):'')+'\nTotal: $'+Math.round(c.total).toLocaleString('es-CL')))return;
+    db.from('soporte_firmas_pagos').insert({operador:op.operador,desde:periodo.desde,hasta:periodo.hasta,firmas:c.firmas,tarifa_firma:c.tarifa,monto_firmas:c.monto,sueldo:c.sueldo,total:c.total,detalle:{porSemana:c.porSemana,porMensajero:c.porMens,comisionIncidencias:{cantidad:c.comN,monto:c.comM}}}).then(function(r){
       if(r.error){toast&&toast('Error: '+r.error.message);return;}
       toast&&toast('Pago registrado');cargarHist();
     });
@@ -1763,7 +1773,7 @@ function SoporteFirmasTab(props){
     cuerpo+=sec(nn++,'Extra por firmas · detalle semanal',tabla(['Semana'].concat(mens).concat(['Firmas','Monto']),filasSem,['Total'].concat(mens.map(function(m){return String(c.porMens[m]||0);})).concat([String(c.firmas),f(c.monto)])));
     cuerpo+=sec(nn++,'Resumen de pago',tabla(['Concepto','Detalle','Monto'],[
       ['Sueldo base mensual','Mes de pago completo',f(c.sueldo)],
-      ['Extra por firmas',c.firmas.toLocaleString('es-CL')+' firmas × '+f(c.tarifa),f(c.monto)]],['Total a pagar','',f(c.total)]));
+      ['Extra por firmas',c.firmas.toLocaleString('es-CL')+' firmas × '+f(c.tarifa),f(c.monto)]].concat(c.comN?[['Comisión por incidencias reportadas',c.comN+' incidencia'+(c.comN!==1?'s':'')+' a descuento',f(c.comM)]]:[]),['Total a pagar','',f(c.total)]));
     var abiertas=sems.filter(function(wk){return estadoSem(wk)[0]!=='Cerrada';}).length;
     cuerpo+='<div class="resultado" style="border-color:#2E7D32;background:#F1F8F2"><div class="gr" style="color:#2E7D32">'+f(c.total)+'</div><div class="dt"><b>Total a pagar a '+e(op.operador)+'</b><br>Mes de pago '+e(periodo.mes||'')+' · semanas del '+d2(periodo.desde)+' al '+d2(periodo.hasta)+(abiertas?'<br>Incluye '+abiertas+' semana(s) aún no cerrada(s): el extra puede aumentar al cierre.':'')+'</div></div>';
     loadScriptOnce('doc-pdf','modules/doc-pdf.js').then(function(){var D=window.__docPDF;
@@ -1780,6 +1790,7 @@ function SoporteFirmasTab(props){
       var c=calcular(op);
       var rows=semanasEntre(periodo.desde,periodo.hasta).map(function(w){var h=new Date(w+'T12:00:00');h.setDate(h.getDate()+6);var n=c.porSemana[w]||0;return['Del '+w.split('-').reverse().join('-')+' al '+fechaISO(h).split('-').reverse().join('-'),n,c.tarifa,n*c.tarifa];});
       rows.push(['Sueldo base mensual','','',c.sueldo]);
+      if(c.comN)rows.push(['Comisión por incidencias ('+c.comN+')','','',c.comM]);
       return{name:op.operador.slice(0,31),headers:['Concepto','Firmas','$ por firma','Monto'],rows:rows,totalsRow:['TOTAL',c.firmas,'',c.total]};
     });
     exportToExcel('Soporte_Firmas_'+periodo.desde+'_al_'+periodo.hasta,hojas);
@@ -1848,6 +1859,7 @@ function SoporteFirmasTab(props){
             React.createElement('div',{style:{borderRadius:16,padding:'16px 18px',background:'linear-gradient(160deg,#2f3325,#1c1f15)',color:'#f3ecd6',boxShadow:'inset 0 1px 0 rgba(255,255,255,.08),0 14px 26px -14px rgba(20,22,15,.7)'}},
               React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:14.5,padding:'4px 0'}},React.createElement('span',null,'Extra por firmas ('+c.firmas.toLocaleString('es-CL')+' × $'+c.tarifa+')'),React.createElement('b',{className:'mono'},fmt(c.monto))),
               React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:14.5,padding:'4px 0'}},React.createElement('span',null,'Sueldo base mensual'),React.createElement('b',{className:'mono'},fmt(c.sueldo))),
+              React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:14.5,padding:'4px 0'}},React.createElement('span',null,'Comisión por incidencias ('+c.comN+')'),React.createElement('b',{className:'mono',style:{color:c.comN?'#7ee0ad':'inherit'}},fmt(c.comM))),
               React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:10,paddingTop:12,borderTop:'1px solid rgba(232,199,102,.35)'}},
                 React.createElement('span',{style:{fontSize:13,fontWeight:800,letterSpacing:1.6,textTransform:'uppercase',color:'#e8c766'}},'Total del mes'),
                 React.createElement('span',{style:{fontFamily:'Bebas Neue',fontSize:44,lineHeight:1,color:'#7ee0ad',textShadow:'0 0 18px rgba(126,224,173,.35)'}},fmt(c.total))))
