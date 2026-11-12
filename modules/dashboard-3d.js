@@ -579,9 +579,26 @@ function DetalleNodo(p){
   var _a=R.useState(null),abierta=_a[0],setAbierta=_a[1];
   var _v=R.useState(null),ver=_v[0],setVer=_v[1];
   var _q=R.useState(''),q=_q[0],setQ=_q[1];
+  // Motivo / comentario del último cambio al estado actual (historial_envios.nota)
+  var _nt=R.useState({}),notas=_nt[0],setNotas=_nt[1];
   var m={},paqs={},vv=p.vivo||{};p.envios.forEach(function(e){if(nodoDe(vv[e.codigo]||e.estado)!==p.k)return;var c=e.comuna&&String(e.comuna).trim()?titulo(norm(e.comuna)):'Sin comuna';m[c]=(m[c]||0)+1;(paqs[c]=paqs[c]||[]).push(e);});
   var lista=Object.keys(m).map(function(c){return{c:c,n:m[c]};}).sort(function(a,b){return b.n-a.n||a.c.localeCompare(b.c,'es');});
   var tot=lista.reduce(function(a,x){return a+x.n;},0),max=lista.length?lista[0].n:1;
+  R.useEffect(function(){
+    if(!abierta)return;var A=window.__app||{},db=A.db;if(!db)return;
+    var arr=abierta==='*'?[].concat.apply([],Object.keys(paqs).map(function(c){return paqs[c];})):(paqs[abierta]||[]);
+    var est={};arr.forEach(function(e){if(notas[e.codigo]===undefined)est[e.codigo]=vv[e.codigo]||e.estado;});
+    var cods=Object.keys(est).slice(0,400);if(!cods.length)return;
+    var vivo=true,trozos=[];for(var i=0;i<cods.length;i+=100)trozos.push(cods.slice(i,i+100));
+    Promise.all(trozos.map(function(t){return db.from('historial_envios').select('codigo_envio,estado,nota,usuario,created_at').in('codigo_envio',t).order('created_at',{ascending:false}).limit(1500);}))
+      .then(function(rs){if(!vivo)return;var nn={};cods.forEach(function(c){nn[c]=null;});
+        rs.forEach(function(r){((r&&r.data)||[]).forEach(function(x){var c=x.codigo_envio;if(nn[c]||x.estado!==est[c])return;var t=String(x.nota||'').trim();
+          if(!t||/^(Estado cambiado|Asignado|Auto-asignado|Retiro masivo|Colecta|Cargado|Importado|Escaneo)/i.test(t)){if(nn[c]===null)nn[c]=undefined;return;}
+          nn[c]={nota:t,usuario:x.usuario,ts:x.created_at};});});
+        Object.keys(nn).forEach(function(c){if(nn[c]===undefined)nn[c]=null;});
+        setNotas(function(o){return Object.assign({},o,nn);});},function(){});
+    return function(){vivo=false;};
+  },[abierta]);
   var nm=function(s){return String(s||'').replace(/,\s*/g,' ').trim();};
   var filtra=function(arr){if(!q)return arr;var s=q.toLowerCase();return arr.filter(function(e){return (String(e.codigo)+' '+(e.destinatario||'')+' '+(e.direccion||'')+' '+(e.cliente||'')+' '+nm(e.mensajero)).toLowerCase().indexOf(s)>=0;});};
   return h('div',{style:{position:'absolute',top:12,left:12,bottom:12,width:abierta?400:300,maxWidth:'calc(100% - 24px)',zIndex:4,display:'flex',flexDirection:'column',borderRadius:16,background:'rgba(16,18,12,.95)',border:'1px solid '+inf[1],boxShadow:'0 18px 40px rgba(0,0,0,.55),0 0 24px '+inf[1]+'44',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',transition:'width .2s',overflow:'hidden'}},
@@ -610,7 +627,10 @@ function DetalleNodo(p){
               !p.cliente&&h('span',{style:{fontSize:10.5,fontWeight:800,color:'#1a1d13',background:'linear-gradient(180deg,#f7dd8c,#d9b553)',padding:'1px 8px',borderRadius:6}},'Ver')),
             e.destinatario!==undefined&&h('div',{style:{fontSize:12,color:'#f1ecda',marginTop:2}},e.destinatario||'—'),
             e.direccion!==undefined&&h('div',{style:{fontSize:11.5,color:e.direccion?'rgba(233,228,210,.7)':'#ff8a3d'}},e.direccion||'Sin dirección'),
-            h('div',{style:{fontSize:11,color:'rgba(233,228,210,.55)',marginTop:1}},[e.cliente,!p.cliente&&nm(e.mensajero)].filter(Boolean).join(' · ')));}),
+            notas[e.codigo]&&h('div',{style:{marginTop:5,padding:'5px 8px',borderRadius:7,background:inf[1]+'1f',border:'1px solid '+inf[1]+'55',fontSize:11.5,color:'#fff',lineHeight:1.35,whiteSpace:'pre-wrap'}},
+              h('span',{style:{fontSize:9.5,fontWeight:900,letterSpacing:1,textTransform:'uppercase',color:inf[1],marginRight:6}},p.k==='entregado'?'Comentario':'Motivo'),notas[e.codigo].nota),
+            notas[e.codigo]===undefined&&h('div',{style:{marginTop:4,fontSize:10.5,color:'rgba(233,228,210,.4)'}},'Buscando motivo…'),
+            h('div',{style:{fontSize:11,color:'rgba(233,228,210,.55)',marginTop:3}},[e.cliente,!p.cliente&&nm(e.mensajero)].filter(Boolean).join(' · ')));}),
           !ps.length&&h('div',{style:{fontSize:12,color:'rgba(233,228,210,.6)',padding:'4px 6px'}},'Sin coincidencias.')));})));
 }
 function CentroControl3D(props){
