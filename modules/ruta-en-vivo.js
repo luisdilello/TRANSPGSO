@@ -23,6 +23,107 @@ function txtHace(m){if(m==null)return 'sin entregas';if(m<1)return 'recién';if(
 var COL={verde:'#36c47f',ambar:'#f0b94a',rojo:'#ff7b70',oro:'#e8c766',azul:'#7fc4e6',suave:'rgba(233,228,210,.66)',txt:'#e9e4d2'};
 function colPct(p){return p==null?'var(--text-soft)':p>=97?'#2e7d4f':p>=90?'#5e9a3a':p>=75?'#b8860b':'#b03030';}
 
+
+// ═══ Vista individual del mensajero en 3D (11-11-2026) ═══
+// Toda la gestión del día de un mensajero en tiempo real: flujo 3D / mapa con sus paquetes
+// (mismo Centro de control del Dashboard, filtrado a su ruta), avance contra la hora, ritmo,
+// hora estimada de término, entregas por hora, últimos movimientos y pendientes.
+// Datos: public.ruta_mensajero_detalle(p_dia, p_mensajero) (mismas reglas que ruta_en_vivo).
+var COLEST={entregado:'#36c47f',reprogramado:'#c77dff',en_bodega_fecha:'#5b8def',cancelado:'#ff5a5a',en_bodega_cancelado:'#ff8a3d',retorno:'#ff8a3d',siniestro:'#ff8a3d',en_ruta:'#e8c766',en_bodega:'#4aa3df'};
+var NOMEST={entregado:'Entregado',reprogramado:'Reprogramado',en_bodega_fecha:'Bodega por fecha',cancelado:'Cancelado',en_bodega_cancelado:'Bodega cancelado',retorno:'Retorno',siniestro:'Siniestro',en_ruta:'En ruta',en_bodega:'En bodega'};
+function MensajeroVivo(p){
+  var db=p.db,f=p.fila||{},nombre=p.mensajero;
+  var _d=R.useState(null),det=_d[0],setDet=_d[1];
+  var _l=R.useState(!!window.__dash3d),listo3d=_l[0],setListo3d=_l[1];
+  R.useEffect(function(){if(!listo3d&&typeof loadScriptOnce==='function')loadScriptOnce('dash3d','modules/dashboard-3d.js').then(function(){setListo3d(true);}).catch(function(){});},[]);
+  function cargar(){db.rpc('ruta_mensajero_detalle',{p_dia:p.dia,p_mensajero:nombre}).then(function(r){if(!r.error)setDet(r.data);});}
+  R.useEffect(function(){setDet(null);cargar();
+    if(!p.esHoy)return;var iv=window.__app&&window.__app.intervaloVisible;
+    if(iv)return iv(cargar,20000,['envios'],5000);
+    var id=setInterval(function(){if(!document.hidden)cargar();},20000);return function(){clearInterval(id);};
+  },[nombre,p.dia]);
+  var paq=(det&&det.paquetes)||[];
+  var envios=R.useMemo(function(){return paq.map(function(x){return {codigo:x.codigo,estado:x.estado,comuna:x.comuna,mensajero:x.mensajero,cliente:x.cliente,destinatario:x.destinatario,direccion:x.direccion,fecha:x.fecha,lat:x.lat,lng:x.lng};});},[det]);
+  var ahora=new Date();
+  var ent=paq.filter(function(x){return x.ts_entrega;});
+  var pend=paq.filter(function(x){return !x.estado_final;});
+  var primera=paq.reduce(function(a,x){var t=new Date(x.ts_salida);return !a||t<a?t:a;},null);
+  var horasRuta=primera?Math.max(0.25,((p.esHoy?ahora:new Date(Math.max.apply(null,ent.map(function(x){return +new Date(x.ts_entrega);}).concat([+primera]))))-primera)/3600000):null;
+  var ritmo=horasRuta&&ent.length?ent.length/horasRuta:null;
+  var eta=p.esHoy&&ritmo&&pend.length?new Date(ahora.getTime()+pend.length/ritmo*3600000):null;
+  var porHora={};ent.forEach(function(x){var hh=+new Intl.DateTimeFormat('en-GB',{timeZone:'America/Santiago',hour:'2-digit',hour12:false}).format(new Date(x.ts_entrega));porHora[hh]=(porHora[hh]||0)+1;});
+  var hs=Object.keys(porHora).map(Number);var h0=Math.min.apply(null,hs.concat([primera?+new Intl.DateTimeFormat('en-GB',{timeZone:'America/Santiago',hour:'2-digit',hour12:false}).format(primera):9])),h1=Math.max.apply(null,hs.concat([p.esHoy?+new Intl.DateTimeFormat('en-GB',{timeZone:'America/Santiago',hour:'2-digit',hour12:false}).format(ahora):h0+1]));
+  var horas=[];for(var hh=h0;hh<=Math.min(23,h1);hh++)horas.push(hh);var maxH=Math.max.apply(null,horas.map(function(x){return porHora[x]||0;}).concat([1]));
+  var movs=paq.filter(function(x){return x.ts_final;}).sort(function(a,b){return new Date(b.ts_final)-new Date(a.ts_final);}).slice(0,12);
+  var gps=det&&det.ubicacion,gpsMin=gps&&gps.updated_at?Math.round((ahora-new Date(gps.updated_at))/60000):null;
+  var E={detenido:['Detenido','#ff5a5a'],atrasado:['Bajo el ritmo','#f0b94a'],ok:['En ruta','#5b8def'],terminado:['Terminó','#36c47f']}[f.estado]||['—','#999'];
+  var ini=String(nombre||'').split(/\s+/).map(function(x){return x[0];}).join('').slice(0,2);
+  var caja={borderRadius:20,background:'radial-gradient(120% 160% at 15% 0%,#3a3f2b 0%,#23271a 50%,#15180f 100%)',border:'1px solid rgba(200,168,75,.35)',boxShadow:'0 18px 38px rgba(20,22,15,.25), inset 0 1px 0 rgba(255,255,255,.07)',color:'#f1ecda'};
+  var vid={borderRadius:14,background:'linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.03))',border:'1px solid rgba(255,255,255,.1)'};
+  var kp=function(l,v,col,sub){return h('div',{key:l,style:Object.assign({},vid,{padding:'11px 13px',minWidth:0})},
+    h('div',{style:{fontSize:10,letterSpacing:1.5,textTransform:'uppercase',color:'rgba(233,228,210,.65)',fontWeight:800}},l),
+    h('div',{style:{fontFamily:'Bebas Neue',fontSize:30,lineHeight:1.05,color:col||'#fff',textShadow:'0 0 14px '+(col||'#fff')+'55',whiteSpace:'nowrap'}},v),
+    sub&&h('div',{style:{fontSize:11,color:'rgba(233,228,210,.65)'}},sub));};
+  var nb=function(t,on,dis){return h('button',{type:'button',onClick:on,disabled:dis,style:{padding:'8px 13px',borderRadius:10,border:'1px solid rgba(232,199,102,.4)',background:'rgba(255,255,255,.06)',color:'#f1ecda',fontWeight:800,fontSize:12,cursor:dis?'default':'pointer',opacity:dis?.4:1,whiteSpace:'nowrap'}},t);};
+  var cerrPct=Math.min(100,pct(f.cerr,f.sal)||0),entPct=Math.min(100,f.pE||0);
+  return h('div',{id:'mv3d',style:{display:'flex',flexDirection:'column',gap:14,marginBottom:18}},
+    h('style',null,'@keyframes mvPulso{0%,100%{box-shadow:0 0 0 0 rgba(232,199,102,.5)}50%{box-shadow:0 0 0 10px rgba(232,199,102,0)}}@media (max-width:760px){.mv-k{grid-template-columns:repeat(2,1fr)!important}.mv-2{grid-template-columns:1fr!important}}'),
+    h('div',{style:Object.assign({},caja,{padding:'16px 18px'})},
+      h('div',{style:{display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}},
+        h('div',{style:{width:58,height:58,borderRadius:'50%',display:'grid',placeItems:'center',fontFamily:'Bebas Neue',fontSize:26,color:'#1a1d13',background:'linear-gradient(180deg,#f7dd8c,#d9b553 55%,#ae8829)',boxShadow:'0 4px 0 #6d531a, 0 8px 20px rgba(200,168,75,.35)',animation:p.esHoy&&f.estado!=='terminado'?'mvPulso 2s infinite':'none'}},ini),
+        h('div',{style:{flex:'1 1 260px',minWidth:0}},
+          h('div',{style:{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}},
+            h('div',{style:{fontFamily:'Bebas Neue',fontSize:32,letterSpacing:2,color:'#fff',lineHeight:1}},nombre),
+            h('span',{style:{display:'inline-flex',alignItems:'center',gap:6,padding:'4px 11px',borderRadius:999,background:E[1]+'26',border:'1px solid '+E[1]+'90',color:'#fff',fontSize:12,fontWeight:800}},h('span',{style:{width:8,height:8,borderRadius:'50%',background:E[1],boxShadow:'0 0 8px '+E[1]}}),E[0])),
+          h('div',{style:{fontSize:12.5,color:'rgba(233,228,210,.75)',marginTop:5}},
+            'Salió '+horaCL(f.primera_salida)+' · Última entrega '+(f.ultima_entrega?horaCL(f.ultima_entrega)+(p.esHoy?' ('+txtHace(f.hEnt)+')':''):'—')+
+            (gps?(' · GPS '+(gpsMin==null?'—':gpsMin<1?'recién':'hace '+gpsMin+' min')):' · Sin GPS'))),
+        h('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},nb('← Anterior',p.onPrev,!p.onPrev),nb('Siguiente →',p.onNext,!p.onNext),nb('Cerrar',p.onClose))),
+      h('div',{className:'mv-k',style:{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10,marginTop:14}},
+        kp('Llevó',fN(f.sal),'#e8c766','piezas del día'),
+        kp('Entregados',fN(f.ent),'#36c47f',fP(f.pE)+' de lo que llevó'),
+        kp('Pendientes',fN(f.pend),f.pend?'#f0b94a':'#9aa08a',f.pend?'por cerrar':'sin pendientes'),
+        kp('Reprog. / cancel.',fN(+f.rep||0)+' / '+fN(+f.can||0),'#c77dff','operativa '+fP(f.pO)),
+        kp('Ritmo',ritmo?ritmo.toFixed(1).replace('.',',')+'/h':'—','#5b8def','entregas por hora'),
+        kp('Termina aprox.',eta?horaCL(eta):(f.pend?'—':'Listo'),eta&&eta.getHours()>=HORA_META?'#ff5a5a':'#fff',eta?(eta.getHours()>=HORA_META?'después de las '+HORA_META+':00':'a este ritmo'):'')),
+      h('div',{style:{marginTop:14}},
+        h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:11.5,color:'rgba(233,228,210,.7)',marginBottom:5,fontWeight:700}},
+          h('span',null,'Avance: '+Math.round(cerrPct)+'% cerrado · '+Math.round(entPct)+'% entregado'),
+          f.esperado!=null&&f.estado!=='terminado'&&h('span',null,'Debería ir en '+Math.round(f.esperado)+'%')),
+        h('div',{style:{position:'relative',height:16,borderRadius:9,background:'rgba(0,0,0,.35)',overflow:'hidden',boxShadow:'inset 0 2px 6px rgba(0,0,0,.45)'}},
+          h('div',{style:{position:'absolute',left:0,top:0,bottom:0,width:cerrPct+'%',background:'rgba(232,199,102,.35)',transition:'width .8s'}}),
+          h('div',{style:{position:'absolute',left:0,top:0,bottom:0,width:entPct+'%',background:'linear-gradient(90deg,#2e7d4f,#36c47f)',boxShadow:'0 0 14px rgba(54,196,127,.6)',borderRadius:9,transition:'width .8s'}}),
+          f.esperado!=null&&f.estado!=='terminado'&&h('div',{style:{position:'absolute',top:0,bottom:0,left:f.esperado+'%',width:3,background:'#ff5a5a',boxShadow:'0 0 8px #ff5a5a'}})))),
+    listo3d&&window.__dash3d?h(window.__dash3d.CentroControl3D,{key:nombre,envios:envios,titulo:'Ruta de '+tit(nombre),subtitulo:'Sus '+paq.length+' paquetes del día en tiempo real: de la bodega a la entrega'}):h('div',{style:Object.assign({},caja,{padding:30,textAlign:'center'})},'Cargando vista 3D…'),
+    h('div',{className:'mv-2',style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}},
+      h('div',{style:Object.assign({},caja,{padding:'14px 16px'})},
+        h('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:1.6,color:'#fff',marginBottom:10}},'Entregas por hora'),
+        horas.length?h('div',{style:{display:'flex',alignItems:'flex-end',gap:6,height:150}},horas.map(function(x){var n=porHora[x]||0;var alto=Math.max(4,n/maxH*120);
+          return h('div',{key:x,style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:4,minWidth:0}},
+            h('div',{style:{fontFamily:'Bebas Neue',fontSize:15,color:n?'#7fe3a8':'rgba(233,228,210,.35)'}},n),
+            h('div',{style:{width:'100%',maxWidth:34,height:alto,borderRadius:'7px 7px 3px 3px',background:n?'linear-gradient(180deg,#5ef0a0,#2e7d4f)':'rgba(255,255,255,.08)',boxShadow:n?'0 0 12px rgba(54,196,127,.45)':'none',transition:'height .6s'}}),
+            h('div',{style:{fontSize:10.5,color:'rgba(233,228,210,.6)',fontWeight:700}},x+'h'));})):h('div',{style:{color:'rgba(233,228,210,.6)',fontSize:12.5}},'Sin entregas todavía.')),
+      h('div',{style:Object.assign({},caja,{padding:'14px 16px'})},
+        h('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:1.6,color:'#fff',marginBottom:10}},'Últimos movimientos'),
+        movs.length?h('div',{style:{display:'flex',flexDirection:'column',gap:6,maxHeight:210,overflowY:'auto'}},movs.map(function(x){var c=COLEST[x.estado_final]||'#aaa';
+          return h('div',{key:x.codigo,style:{display:'flex',gap:10,alignItems:'flex-start',padding:'7px 10px',borderRadius:10,background:'rgba(255,255,255,.04)',borderLeft:'3px solid '+c}},
+            h('div',{style:{fontFamily:'JetBrains Mono',fontSize:11.5,color:'rgba(233,228,210,.7)',whiteSpace:'nowrap'}},horaCL(x.ts_final)),
+            h('div',{style:{minWidth:0,flex:1}},
+              h('div',{style:{fontSize:12.5,fontWeight:800}},h('span',{style:{color:c}},NOMEST[x.estado_final]||x.estado_final),' · '+tit(x.comuna||'')+' · ',h('span',{style:{fontFamily:'JetBrains Mono',fontWeight:600,fontSize:11.5}},x.codigo)),
+              x.nota_final&&!/^Estado cambiado|^Asignado|^Retiro masivo|^Colecta/i.test(x.nota_final)&&h('div',{style:{fontSize:11.5,color:'rgba(233,228,210,.7)',whiteSpace:'pre-wrap'}},x.nota_final)));})):h('div',{style:{color:'rgba(233,228,210,.6)',fontSize:12.5}},'Todavía no cierra ningún paquete.'))),
+    h('div',{style:Object.assign({},caja,{padding:0,overflow:'hidden'})},
+      h('div',{style:{padding:'12px 16px',fontFamily:'Bebas Neue',fontSize:20,letterSpacing:1.6,color:'#fff',borderBottom:'1px solid rgba(255,255,255,.08)'}},'Pendientes ',h('span',{style:{color:'#f0b94a'}},'('+pend.length+')')),
+      !det?h('div',{style:{padding:20,color:'rgba(233,228,210,.6)'}},'Cargando…'):
+      pend.length===0?h('div',{style:{padding:20,color:'#7fe3a8',fontWeight:800}},'Sin pendientes.'):
+      h('div',{style:{overflowX:'auto',maxHeight:320,overflowY:'auto'}},h('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:12.5,minWidth:640}},
+        h('thead',null,h('tr',{style:{background:'rgba(0,0,0,.25)'}},['Código','Cliente','Comuna','Dirección','Salió'].map(function(c){return h('th',{key:c,style:{textAlign:'left',padding:'8px 12px',fontSize:10.5,letterSpacing:1.2,textTransform:'uppercase',color:'#e8c766'}},c);}))),
+        h('tbody',null,pend.map(function(x){var m=Math.round((ahora-new Date(x.ts_salida))/60000);return h('tr',{key:x.codigo,style:{borderTop:'1px solid rgba(255,255,255,.06)'}},
+          h('td',{style:{padding:'7px 12px',fontFamily:'JetBrains Mono',color:'#f1ecda',background:'transparent'}},x.codigo),
+          h('td',{style:{padding:'7px 12px',color:'#f1ecda',background:'transparent'}},x.cliente||'—'),
+          h('td',{style:{padding:'7px 12px',color:'#f1ecda',fontWeight:800,background:'transparent'}},tit(x.comuna||'—')),
+          h('td',{style:{padding:'7px 12px',color:x.direccion?'#f1ecda':'#ff8a3d',background:'transparent'}},x.direccion||'Sin dirección'),
+          h('td',{style:{padding:'7px 12px',color:'rgba(233,228,210,.7)',whiteSpace:'nowrap',background:'transparent'}},horaCL(x.ts_salida)+(p.esHoy?' · '+(m<60?m+' min':Math.floor(m/60)+' h '+(m%60)+' min'):'')));}))))));
+}
 function RutaEnVivo(props){
   var toast=props.toast||function(){};
   var db=props.db||(window.__app&&window.__app.db)||window.db;
@@ -40,6 +141,8 @@ function RutaEnVivo(props){
   var _q=R.useState(''),q=_q[0],setQ=_q[1];
   var _u=R.useState(null),ultima=_u[0],setUltima=_u[1];
   var esHoy=dia===hoyCL();
+  var _sm=R.useState(null),selMen=_sm[0],setSelMen=_sm[1];
+  function abrirMen(m){setSelMen(m);setTimeout(function(){var el=document.getElementById('mv3d');if(el)try{el.scrollIntoView({behavior:'smooth',block:'start'});}catch(e){}},80);}
   function cargar(){
     setCargando(true);
     db.rpc('ruta_en_vivo',{p_dia:dia}).then(function(r){
@@ -149,6 +252,9 @@ function RutaEnVivo(props){
             h('td',null,h('span',{style:{padding:'2px 8px',borderRadius:999,fontSize:11.5,fontWeight:800,color:'#8a5a00',background:'rgba(240,185,74,.2)',border:'1px solid rgba(240,185,74,.6)'}},'ETIQUETA '+fD(x.fecha_etiqueta))),
             h('td',null,h('span',{style:{padding:'2px 8px',borderRadius:999,fontSize:11.5,fontWeight:800,color:c[1],background:c[2]}},c[0])));})))));
     })(),
+    selMen&&(function(){var idx=vis.findIndex(function(x){return x.mensajero===selMen;});var fila=filas.find(function(x){return x.mensajero===selMen;});
+      return h(MensajeroVivo,{key:selMen+dia,db:db,dia:dia,esHoy:esHoy,mensajero:selMen,fila:fila,
+        onPrev:idx>0?function(){setSelMen(vis[idx-1].mensajero);}:null,onNext:idx>=0&&idx<vis.length-1?function(){setSelMen(vis[idx+1].mensajero);}:null,onClose:function(){setSelMen(null);}});})(),
     h('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:12}},
       h('input',{className:'form-input',placeholder:'Buscar mensajero',value:q,onChange:function(e){setQ(e.target.value);},style:{margin:0,maxWidth:240}}),
       chip('todos','Todos'),chip('detenido','Detenidos'),chip('atrasado','Bajo el ritmo'),chip('ok','En ruta'),chip('terminado','Terminaron'),
@@ -162,7 +268,7 @@ function RutaEnVivo(props){
         h('thead',null,h('tr',null,['Mensajero','Estado','Salió','Llevó','Avance'].concat(HORAS.map(function(x){return x+':00';})).concat(['Final','Reprog.','Cancel.','Pend.','% entrega','% operac.','Etiq. otro día','Última entrega']).map(function(c,i){return h('th',{key:i,style:i>=2&&i!==4&&i!==1?{textAlign:'right'}:null},c);}))),
         h('tbody',null,vis.map(function(f){var E=ESTADOS[f.estado];
           return h('tr',{key:f.mensajero},
-            h('td',{style:{fontWeight:700,whiteSpace:'nowrap'}},f.mensajero),
+            h('td',{style:{fontWeight:700,whiteSpace:'nowrap'}},h('span',{onClick:function(){abrirMen(f.mensajero);},title:'Ver su gestión en 3D',style:{cursor:'pointer',borderBottom:'1px dashed rgba(200,168,75,.8)'}},f.mensajero),h('button',{type:'button',onClick:function(){abrirMen(f.mensajero);},style:{marginLeft:8,padding:'2px 9px',borderRadius:6,border:'1px solid #ae8829',background:'linear-gradient(180deg,#f7dd8c,#d9b553)',color:'#1a1d13',fontWeight:800,fontSize:10.5,cursor:'pointer'}},'3D')),
             h('td',null,h('span',{style:{padding:'2px 9px',borderRadius:999,fontSize:11,fontWeight:800,color:E.c,background:E.bg,whiteSpace:'nowrap'}},E.l)),
             h('td',{className:'mono',style:{textAlign:'right'}},horaCL(f.primera_salida)),
             h('td',{className:'mono',style:{textAlign:'right',fontWeight:700}},fN(f.sal)),
