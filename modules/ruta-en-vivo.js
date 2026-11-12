@@ -51,6 +51,7 @@ function MensajeroVivo(p){
   var horasRuta=primera?Math.max(0.25,((p.esHoy?ahora:new Date(Math.max.apply(null,ent.map(function(x){return +new Date(x.ts_entrega);}).concat([+primera]))))-primera)/3600000):null;
   var ritmo=horasRuta&&ent.length?ent.length/horasRuta:null;
   var eta=p.esHoy&&ritmo&&pend.length?new Date(ahora.getTime()+pend.length/ritmo*3600000):null;
+  var tarde=false;if(eta){var hm=minCL(eta),dd=(eta-ahora)/60000;tarde=(minCL(ahora)+dd)>=HORA_META*60;}
   var porHora={};ent.forEach(function(x){var hh=+new Intl.DateTimeFormat('en-GB',{timeZone:'America/Santiago',hour:'2-digit',hour12:false}).format(new Date(x.ts_entrega));porHora[hh]=(porHora[hh]||0)+1;});
   var hs=Object.keys(porHora).map(Number);var h0=Math.min.apply(null,hs.concat([primera?+new Intl.DateTimeFormat('en-GB',{timeZone:'America/Santiago',hour:'2-digit',hour12:false}).format(primera):9])),h1=Math.max.apply(null,hs.concat([p.esHoy?+new Intl.DateTimeFormat('en-GB',{timeZone:'America/Santiago',hour:'2-digit',hour12:false}).format(ahora):h0+1]));
   var horas=[];for(var hh=h0;hh<=Math.min(23,h1);hh++)horas.push(hh);var maxH=Math.max.apply(null,horas.map(function(x){return porHora[x]||0;}).concat([1]));
@@ -85,7 +86,7 @@ function MensajeroVivo(p){
         kp('Pendientes',fN(f.pend),f.pend?'#f0b94a':'#9aa08a',f.pend?'por cerrar':'sin pendientes'),
         kp('Reprog. / cancel.',fN(+f.rep||0)+' / '+fN(+f.can||0),'#c77dff','operativa '+fP(f.pO)),
         kp('Ritmo',ritmo?ritmo.toFixed(1).replace('.',',')+'/h':'—','#5b8def','entregas por hora'),
-        kp('Termina aprox.',eta?horaCL(eta):(f.pend?'—':'Listo'),eta&&eta.getHours()>=HORA_META?'#ff5a5a':'#fff',eta?(eta.getHours()>=HORA_META?'después de las '+HORA_META+':00':'a este ritmo'):'')),
+        kp('Termina aprox.',eta?horaCL(eta):(f.pend?'—':'Listo'),eta&&tarde?'#ff5a5a':'#fff',eta?(tarde?'después de las '+HORA_META+':00':'a este ritmo'):'')),
       h('div',{style:{marginTop:14}},
         h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:11.5,color:'rgba(233,228,210,.7)',marginBottom:5,fontWeight:700}},
           h('span',null,'Avance: '+Math.round(cerrPct)+'% cerrado · '+Math.round(entPct)+'% entregado'),
