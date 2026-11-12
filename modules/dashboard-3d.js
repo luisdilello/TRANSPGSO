@@ -558,24 +558,60 @@ function FeedVivo(p){
 }
 // Detalle por comuna de una estación del flujo (solo comuna y cantidad).
 var NODO_INFO={en_bodega:['En bodega','#4aa3c8','pendientes en bodega'],en_bodega_fecha:['Bodega por fecha','#5b8def','esperando su fecha de entrega'],en_ruta:['En ruta ahora','#e8b84a','todavía en ruta'],entregado:['Entregado','#36c47f','entregados'],reprogramado:['Reprogramado','#b06ad6','reprogramados'],cancelado:['Cancelado y retorno','#e0473f','cancelados, retornos y siniestros']};
+// 11-11-2026: cada comuna del panel se abre y muestra sus paquetes; cada paquete abre la ficha del
+// envío (mismo detalle que Gestión de Envíos) con Anterior/Siguiente. En el portal del cliente solo lista.
+function VerEnvio3D(p){
+  var A=window.__app||{},db=A.db;var cod=p.codigos[p.i];
+  var _e=R.useState(null),env=_e[0],setEnv=_e[1];
+  R.useEffect(function(){var vivo=true;setEnv('cargando');db.from('envios').select('*').eq('codigo',cod).maybeSingle().then(function(q){if(vivo)setEnv(q&&q.data?q.data:{codigo:cod,_noExiste:true});});return function(){vivo=false;};},[cod]);
+  R.useEffect(function(){function k(e){if(e.key==='ArrowRight')p.mover(1);else if(e.key==='ArrowLeft')p.mover(-1);else if(e.key==='Escape')p.onClose();}window.addEventListener('keydown',k);return function(){window.removeEventListener('keydown',k);};},[p.i]);
+  var M=A.Modal,Card=A.EnvioDetalleCard;if(!M)return null;
+  var nb=function(l,d,dis){return h('button',{type:'button',className:'btn-secondary',disabled:dis,onClick:function(){p.mover(d);},style:{padding:'6px 14px',fontSize:12,opacity:dis?.4:1}},l);};
+  return h(M,{title:'Envío · '+cod,sub:(p.i+1)+' de '+p.codigos.length+' · '+p.titulo+' · usa ← → para avanzar',wide:true,onClose:p.onClose},
+    h('div',{style:{display:'flex',justifyContent:'space-between',gap:8,marginBottom:12}},h('div',{style:{display:'flex',gap:6}},nb('← Anterior',-1,p.i===0),nb('Siguiente →',1,p.i>=p.codigos.length-1)),
+      h('button',{type:'button',className:'btn-secondary',style:{padding:'6px 14px',fontSize:12},onClick:p.onClose},'Cerrar')),
+    env==='cargando'||!env?h('div',{style:{padding:30,textAlign:'center',color:'var(--text-soft)'}},'Cargando envío…'):
+    env._noExiste?h('div',{style:{padding:20,textAlign:'center'}},'Este código ya no existe.'):
+    (Card?h(Card,{key:env.codigo,envio:env}):null));
+}
 function DetalleNodo(p){
   var inf=NODO_INFO[p.k]||[p.k,'#e8c766',''];
-  var m={},vv=p.vivo||{};p.envios.forEach(function(e){if(nodoDe(vv[e.codigo]||e.estado)!==p.k)return;var c=e.comuna&&String(e.comuna).trim()?titulo(norm(e.comuna)):'Sin comuna';m[c]=(m[c]||0)+1;});
+  var _a=R.useState(null),abierta=_a[0],setAbierta=_a[1];
+  var _v=R.useState(null),ver=_v[0],setVer=_v[1];
+  var _q=R.useState(''),q=_q[0],setQ=_q[1];
+  var m={},paqs={},vv=p.vivo||{};p.envios.forEach(function(e){if(nodoDe(vv[e.codigo]||e.estado)!==p.k)return;var c=e.comuna&&String(e.comuna).trim()?titulo(norm(e.comuna)):'Sin comuna';m[c]=(m[c]||0)+1;(paqs[c]=paqs[c]||[]).push(e);});
   var lista=Object.keys(m).map(function(c){return{c:c,n:m[c]};}).sort(function(a,b){return b.n-a.n||a.c.localeCompare(b.c,'es');});
   var tot=lista.reduce(function(a,x){return a+x.n;},0),max=lista.length?lista[0].n:1;
-  return h('div',{style:{position:'absolute',top:12,left:12,bottom:12,width:300,maxWidth:'calc(100% - 24px)',zIndex:4,display:'flex',flexDirection:'column',borderRadius:16,background:'rgba(16,18,12,.94)',border:'1px solid '+inf[1],boxShadow:'0 18px 40px rgba(0,0,0,.55),0 0 24px '+inf[1]+'44',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',overflow:'hidden'}},
+  var nm=function(s){return String(s||'').replace(/,\s*/g,' ').trim();};
+  var filtra=function(arr){if(!q)return arr;var s=q.toLowerCase();return arr.filter(function(e){return (String(e.codigo)+' '+(e.destinatario||'')+' '+(e.direccion||'')+' '+(e.cliente||'')+' '+nm(e.mensajero)).toLowerCase().indexOf(s)>=0;});};
+  return h('div',{style:{position:'absolute',top:12,left:12,bottom:12,width:abierta?400:300,maxWidth:'calc(100% - 24px)',zIndex:4,display:'flex',flexDirection:'column',borderRadius:16,background:'rgba(16,18,12,.95)',border:'1px solid '+inf[1],boxShadow:'0 18px 40px rgba(0,0,0,.55),0 0 24px '+inf[1]+'44',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',transition:'width .2s',overflow:'hidden'}},
+    ver&&window.ReactDOM&&ReactDOM.createPortal(h(VerEnvio3D,{codigos:ver.codigos,i:ver.i,titulo:ver.titulo,mover:function(d){setVer(function(v){if(!v)return v;var ni=v.i+d;return ni<0||ni>=v.codigos.length?v:Object.assign({},v,{i:ni});});},onClose:function(){setVer(null);}}),document.body),
     h('div',{style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8,padding:'14px 16px 10px',borderBottom:'1px solid rgba(255,255,255,.08)'}},
       h('div',null,
         h('div',{style:{fontFamily:'Bebas Neue',fontSize:22,letterSpacing:1.6,color:inf[1],lineHeight:1}},inf[0]),
-        h('div',{style:{fontSize:12.5,color:'rgba(233,228,210,.8)',marginTop:4,fontWeight:700}},tot.toLocaleString('es-CL')+' '+inf[2]+' · '+lista.length+' comuna'+(lista.length!==1?'s':''))),
+        h('div',{style:{fontSize:12.5,color:'rgba(233,228,210,.8)',marginTop:4,fontWeight:700}},tot.toLocaleString('es-CL')+' '+inf[2]+' · '+lista.length+' comuna'+(lista.length!==1?'s':'')),
+        h('div',{style:{fontSize:11,color:'rgba(233,228,210,.55)',marginTop:3}},'Toca una comuna para ver sus paquetes')),
       h('button',{type:'button',onClick:p.onClose,title:'Cerrar',style:{width:30,height:30,borderRadius:9,border:'1px solid rgba(255,255,255,.18)',background:'rgba(255,255,255,.06)',color:'#f1ecda',cursor:'pointer',fontSize:16,lineHeight:1,flexShrink:0}},'×')),
+    tot>0&&h('div',{style:{padding:'8px 12px 0'}},h('input',{value:q,onChange:function(e){setQ(e.target.value);if(e.target.value&&!abierta)setAbierta('*');},placeholder:'Buscar código, destinatario, dirección…',style:{width:'100%',boxSizing:'border-box',padding:'7px 10px',borderRadius:9,border:'1px solid rgba(255,255,255,.15)',background:'rgba(255,255,255,.06)',color:'#f1ecda',fontSize:12.5,outline:'none'}})),
     lista.length===0?h('div',{style:{padding:16,fontSize:13,color:'rgba(233,228,210,.7)'}},'No hay envíos en este estado.'):
-    h('div',{style:{overflowY:'auto',padding:'8px 12px 12px'}},lista.map(function(x){var sc=x.c==='Sin comuna';
-      return h('div',{key:x.c,style:{padding:'7px 4px',borderBottom:'1px solid rgba(255,255,255,.05)'}},
-        h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:10}},
-          h('span',{style:{fontSize:13.5,fontWeight:700,color:sc?'#ffcf8a':'#f1ecda'}},x.c),
-          h('span',{style:{fontFamily:'Bebas Neue',fontSize:21,color:'#fff',lineHeight:1}},x.n.toLocaleString('es-CL'))),
-        h('div',{style:{height:5,marginTop:4,borderRadius:4,background:'rgba(255,255,255,.07)',overflow:'hidden'}},h('div',{style:{width:Math.max(3,x.n/max*100)+'%',height:'100%',borderRadius:4,background:inf[1],boxShadow:'0 0 8px '+inf[1]}})));})));
+    h('div',{style:{overflowY:'auto',padding:'8px 12px 12px'}},lista.map(function(x){var sc=x.c==='Sin comuna';var ab=abierta===x.c||abierta==='*';var ps=ab?filtra(paqs[x.c]||[]):[];
+      if(abierta==='*'&&q&&!ps.length)return null;
+      return h('div',{key:x.c,style:{borderBottom:'1px solid rgba(255,255,255,.05)'}},
+        h('div',{onClick:function(){setAbierta(abierta===x.c?null:x.c);},style:{padding:'7px 4px',cursor:'pointer'}},
+          h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:10}},
+            h('span',{style:{fontSize:13.5,fontWeight:700,color:sc?'#ffcf8a':'#f1ecda'}},h('span',{style:{display:'inline-block',width:14,color:inf[1],transition:'transform .15s',transform:ab?'rotate(90deg)':'none'}},'›'),x.c),
+            h('span',{style:{fontFamily:'Bebas Neue',fontSize:21,color:'#fff',lineHeight:1}},x.n.toLocaleString('es-CL'))),
+          h('div',{style:{height:5,marginTop:4,borderRadius:4,background:'rgba(255,255,255,.07)',overflow:'hidden'}},h('div',{style:{width:Math.max(3,x.n/max*100)+'%',height:'100%',borderRadius:4,background:inf[1],boxShadow:'0 0 8px '+inf[1]}}))),
+        ab&&h('div',{style:{padding:'2px 0 8px'}},ps.map(function(e,ix){
+          return h('div',{key:e.codigo,onClick:p.cliente?undefined:function(){setVer({codigos:ps.map(function(z){return z.codigo;}),i:ix,titulo:inf[0]+' · '+x.c});},
+            style:{margin:'4px 0',padding:'7px 9px',borderRadius:9,background:'rgba(255,255,255,.05)',borderLeft:'3px solid '+inf[1],cursor:p.cliente?'default':'pointer'}},
+            h('div',{style:{display:'flex',justifyContent:'space-between',gap:8,alignItems:'center'}},
+              h('span',{style:{fontFamily:'JetBrains Mono',fontSize:12,fontWeight:700,color:'#fff'}},e.codigo),
+              !p.cliente&&h('span',{style:{fontSize:10.5,fontWeight:800,color:'#1a1d13',background:'linear-gradient(180deg,#f7dd8c,#d9b553)',padding:'1px 8px',borderRadius:6}},'Ver')),
+            h('div',{style:{fontSize:12,color:'#f1ecda',marginTop:2}},e.destinatario||'—'),
+            h('div',{style:{fontSize:11.5,color:e.direccion?'rgba(233,228,210,.7)':'#ff8a3d'}},e.direccion||'Sin dirección'),
+            h('div',{style:{fontSize:11,color:'rgba(233,228,210,.55)',marginTop:1}},[e.cliente,!p.cliente&&nm(e.mensajero)].filter(Boolean).join(' · ')));}),
+          !ps.length&&h('div',{style:{fontSize:12,color:'rgba(233,228,210,.6)',padding:'4px 6px'}},'Sin coincidencias.')));})));
 }
 function CentroControl3D(props){
   var envios=props.envios||[];
@@ -691,7 +727,7 @@ function CentroControl3D(props){
         h('div',{ref:refLab,style:{position:'absolute',inset:0,pointerEvents:'none',overflow:'hidden'}}),
         h('div',{ref:refTip,style:{position:'absolute',display:'none',pointerEvents:'none',zIndex:3,minWidth:190,padding:'10px 12px',borderRadius:12,background:'rgba(18,20,13,.92)',border:'1px solid rgba(200,168,75,.6)',color:'#fff',font:'12px DM Sans,system-ui,sans-serif',boxShadow:'0 14px 30px rgba(0,0,0,.45)',backdropFilter:'blur(6px)'}}),
         !envios.length&&h('div',{style:{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(233,228,210,.7)',fontSize:13}},'Sin envíos en el período.'),
-        modo==='flujo'&&nodoSel&&h(DetalleNodo,{k:nodoSel,envios:envios,vivo:vivoRef.current,rev:deltas,onClose:function(){setNodoSel(null);}}),
+        modo==='flujo'&&nodoSel&&h(DetalleNodo,{key:nodoSel,cliente:!!props.cliente,k:nodoSel,envios:envios,vivo:vivoRef.current,rev:deltas,onClose:function(){setNodoSel(null);}}),
         eventos.length>0&&h(FeedVivo,{cliente:!!props.cliente,inicio:inicioVivo.current,eventos:eventos,abierto:feedAbierto,onToggle:function(){setFeedAbierto(!feedAbierto);}}),
         modo==='mapa'&&!err&&envios.length>0&&h('div',{className:'cc3d-hint',style:{position:'absolute',right:16,top:12,fontSize:11.5,fontWeight:700,color:'rgba(233,228,210,.75)',display:'flex',alignItems:'center',gap:6,pointerEvents:'none'}},h('span',{style:{width:8,height:8,borderRadius:'50%',background:'#36ff8f',boxShadow:'0 0 10px #36ff8f'}}),'Cada entrega real enciende un punto de luz en el mapa'),
         modo==='flujo'&&!nodoSel&&!err&&envios.length>0&&h('div',{className:'cc3d-hint',style:{position:'absolute',left:16,bottom:14,fontSize:11.5,fontWeight:700,color:'rgba(233,228,210,.7)'}},'Toca una estación para ver sus comunas'),
