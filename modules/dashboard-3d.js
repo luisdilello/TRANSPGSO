@@ -608,8 +608,8 @@ function DetalleNodo(p){
             h('div',{style:{display:'flex',justifyContent:'space-between',gap:8,alignItems:'center'}},
               h('span',{style:{fontFamily:'JetBrains Mono',fontSize:12,fontWeight:700,color:'#fff'}},e.codigo),
               !p.cliente&&h('span',{style:{fontSize:10.5,fontWeight:800,color:'#1a1d13',background:'linear-gradient(180deg,#f7dd8c,#d9b553)',padding:'1px 8px',borderRadius:6}},'Ver')),
-            h('div',{style:{fontSize:12,color:'#f1ecda',marginTop:2}},e.destinatario||'—'),
-            h('div',{style:{fontSize:11.5,color:e.direccion?'rgba(233,228,210,.7)':'#ff8a3d'}},e.direccion||'Sin dirección'),
+            e.destinatario!==undefined&&h('div',{style:{fontSize:12,color:'#f1ecda',marginTop:2}},e.destinatario||'—'),
+            e.direccion!==undefined&&h('div',{style:{fontSize:11.5,color:e.direccion?'rgba(233,228,210,.7)':'#ff8a3d'}},e.direccion||'Sin dirección'),
             h('div',{style:{fontSize:11,color:'rgba(233,228,210,.55)',marginTop:1}},[e.cliente,!p.cliente&&nm(e.mensajero)].filter(Boolean).join(' · ')));}),
           !ps.length&&h('div',{style:{fontSize:12,color:'rgba(233,228,210,.6)',padding:'4px 6px'}},'Sin coincidencias.')));})));
 }
