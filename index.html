@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261113123141;
+window.__MODULES_VERSION=20261113123939;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -16174,6 +16174,42 @@ var MAPA_ESTILO_NOCHE=[
   {featureType:'road.arterial',elementType:'geometry',stylers:[{color:'#4a4a32'}]},{featureType:'road.highway',elementType:'geometry',stylers:[{color:'#7a6630'}]},{featureType:'road.highway',elementType:'geometry.stroke',stylers:[{color:'#3d3218'}]},
   {featureType:'road',elementType:'labels.text.fill',stylers:[{color:'#a59e7e'}]},{featureType:'water',elementType:'geometry',stylers:[{color:'#0f1a1f'}]},{featureType:'landscape.natural',elementType:'geometry',stylers:[{color:'#22261a'}]}];
 var MAPA_ESTILO_CLARO=[{featureType:'poi',elementType:'labels',stylers:[{visibility:'off'}]}];
+// 13-11-2026: tarjeta moderna (vidrio oscuro) para el globo de un envío en Mapas y Rutas.
+function _escMR(x){return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function iwEnvio3d(e,color,btnId){
+  var est=(typeof estadoInfo==='function'&&estadoInfo(e.estado))||{};
+  var lbl=est.label||String(e.estado||'').replace(/_/g,' ');
+  var men=String(e.mensajero||'').replace(/,\s*/g,' ').trim();
+  return '<div class="mr-iw" style="--c:'+color+'">'+
+    '<div class="mr-iw-top"><span class="mr-iw-chip"><i></i>'+_escMR(lbl)+'</span><span class="mr-iw-cod">'+_escMR(e.codigo)+'</span></div>'+
+    '<div class="mr-iw-nom">'+_escMR(e.destinatario||'Sin destinatario')+'</div>'+
+    '<div class="mr-iw-dir">'+(e.direccion?_escMR(e.direccion):'<span style="color:#ff8a3d">Sin dirección</span>')+'</div>'+
+    '<div class="mr-iw-tags">'+(e.comuna?'<span>'+_escMR(e.comuna)+'</span>':'')+(e.cliente?'<span>'+_escMR(e.cliente)+'</span>':'')+'</div>'+
+    (men?'<div class="mr-iw-men"><b>'+_escMR(men.split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2))+'</b>'+_escMR(men)+'</div>':'')+
+    '<button id="'+btnId+'" class="mr-iw-btn">Ver ficha completa</button></div>';
+}
+(function(){if(document.getElementById('mr-iw-css'))return;var st=document.createElement('style');st.id='mr-iw-css';st.textContent=
+ '.mr-mapa .gm-style .gm-style-iw-c{background:linear-gradient(165deg,#2c3021,#1a1d13)!important;border:1px solid rgba(200,168,75,.55);border-radius:16px!important;padding:0!important;box-shadow:0 18px 40px rgba(0,0,0,.6),0 0 0 1px rgba(0,0,0,.3)!important}'+
+ '.mr-mapa .gm-style .gm-style-iw-d{overflow:hidden!important;padding:0!important}'+
+ '.mr-mapa .gm-style .gm-style-iw-tc::after{background:#1d2015!important}'+
+ '.mr-mapa .gm-style .gm-style-iw-chr{position:absolute;top:0;right:0;z-index:2}'+
+ '.mr-mapa .gm-style .gm-style-iw-chr button{width:34px!important;height:34px!important}'+
+ '.mr-mapa .gm-style .gm-style-iw-chr button span{background-color:#e8c766!important;margin:9px!important;width:16px!important;height:16px!important}'+
+ '.mr-iw{font-family:DM Sans,system-ui,sans-serif;color:#f1ecda;min-width:230px;max-width:280px;padding:14px 16px 14px;position:relative}'+
+ '.mr-iw:before{content:"";position:absolute;left:0;top:0;right:0;height:4px;background:var(--c);box-shadow:0 0 14px var(--c)}'+
+ '.mr-iw-top{display:flex;align-items:center;gap:8px;margin:2px 30px 8px 0;flex-wrap:wrap}'+
+ '.mr-iw-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:#fff;background:color-mix(in srgb,var(--c) 30%,transparent);border:1px solid var(--c)}'+
+ '.mr-iw-chip i{width:7px;height:7px;border-radius:50%;background:var(--c);box-shadow:0 0 8px var(--c)}'+
+ '.mr-iw-cod{font-family:JetBrains Mono,monospace;font-size:11.5px;color:rgba(233,228,210,.7)}'+
+ '.mr-iw-nom{font-weight:800;font-size:15px;color:#fff;line-height:1.25}'+
+ '.mr-iw-dir{font-size:12.5px;color:rgba(233,228,210,.8);margin-top:3px}'+
+ '.mr-iw-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}'+
+ '.mr-iw-tags span{font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;padding:2px 8px;border-radius:6px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#e8dfc0}'+
+ '.mr-iw-men{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;font-weight:700;color:#f1ecda}'+
+ '.mr-iw-men b{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:10px;color:#1a1d13;background:radial-gradient(circle at 35% 30%,#fff2bf,#e3c25c 45%,#8a6a1e);box-shadow:0 2px 6px rgba(0,0,0,.5)}'+
+ '.mr-iw-btn{margin-top:12px;width:100%;padding:9px 12px;border:1px solid #f7dd8c;border-radius:10px;background:linear-gradient(180deg,#f7dd8c,#d9b553 55%,#ae8829);color:#1a1d13;font-weight:900;font-size:12.5px;letter-spacing:.3px;cursor:pointer;box-shadow:0 3px 0 #6d531a,0 6px 14px rgba(200,168,75,.3),inset 0 1px 0 rgba(255,255,255,.55)}'+
+ '.mr-iw-btn:active{transform:translateY(1px)}';
+ document.head.appendChild(st);})();
 function MapaRutas(props){
   var mensajeros=props.mensajeros||[];
   var toastFn=props.toast;
@@ -16397,14 +16433,7 @@ function MapaRutas(props){
         icon:pin3dIcon(color)
       });
       var iw=new google.maps.InfoWindow({
-        content:'<div style="font-family:DM Sans,sans-serif;padding:8px;min-width:180px">'+
-          '<div style="font-weight:700;font-size:13px;margin-bottom:4px">'+e.destinatario+'</div>'+
-          '<div style="font-size:11px;color:#666;margin-bottom:2px">'+e.direccion+'</div>'+
-          '<div style="font-size:11px;color:#666;margin-bottom:6px">'+e.comuna+'</div>'+
-          '<div style="font-size:11px;font-weight:700;color:'+color+'">'+e.estado.replace(/_/g,' ').toUpperCase()+'</div>'+
-          '<div style="font-size:10px;color:#999;margin-top:4px">'+e.codigo+'</div>'+
-          '<button id="tp-iw-btn-'+e.codigo+'" style="margin-top:8px;width:100%;padding:7px 10px;border:none;border-radius:6px;background:linear-gradient(135deg,#d4b050,#C8A84B);color:#1a1d13;font-weight:700;font-size:11px;cursor:pointer;letter-spacing:0.3px;">Ver ficha completa →</button>'+
-          '</div>'
+        content:iwEnvio3d(e,color,'tp-iw-btn-'+e.codigo)
       });
       // Mismo motivo que en buscarYMostrarEnvio: el botón vive en el HTML crudo del InfoWindow,
       // así que hay que enganchar el click en cada 'domready' (no una sola vez), porque el DOM
@@ -16540,11 +16569,9 @@ function MapaRutas(props){
           zIndex:1000
         });
         var iw=new google.maps.InfoWindow({
-          content:'<div style="font-family:DM Sans,sans-serif;padding:8px">'+
-            '<div style="font-weight:700">'+u.mensajero+'</div>'+
-            '<div style="font-size:11px;color:#666;margin-top:4px">'+
-            (mins===0?'Actualizado ahora':mins+' min atrás')+
-            '</div></div>'
+          content:'<div class="mr-iw" style="--c:'+color+'"><div class="mr-iw-top"><span class="mr-iw-chip"><i></i>Mensajero</span></div>'+
+            '<div class="mr-iw-men" style="margin-top:0"><b>'+_escMR(String(u.mensajero||'').split(/\s+/).map(function(w){return w[0]||'';}).join('').slice(0,2))+'</b><span style="font-size:15px;font-weight:800;color:#fff">'+_escMR(u.mensajero)+'</span></div>'+
+            '<div class="mr-iw-dir" style="margin-top:8px">GPS '+(mins===0?'actualizado ahora':'hace '+mins+' min')+(u.accuracy?' · precisión ~'+Math.round(u.accuracy)+' m':'')+'</div></div>'
         });
         marker.addListener('click',function(){iw.open(map,marker);});
         markersMensajerosRef.current[u.mensajero]={marker:marker,iw:iw};
@@ -16721,14 +16748,7 @@ function MapaRutas(props){
           icon:pin3dIcon(color,{size:1.35}),
           animation:google.maps.Animation.BOUNCE});
         setTimeout(function(){marker.setAnimation(null);},2100);
-        var iw=new google.maps.InfoWindow({content:'<div style="font-family:DM Sans,sans-serif;padding:8px;min-width:180px">'+
-          '<div style="font-weight:700;font-size:13px;margin-bottom:4px">'+(e.destinatario||'')+'</div>'+
-          '<div style="font-size:11px;color:#666;margin-bottom:2px">'+e.direccion+'</div>'+
-          '<div style="font-size:11px;color:#666;margin-bottom:6px">'+e.comuna+'</div>'+
-          '<div style="font-size:11px;font-weight:700;color:'+color+'">'+(e.estado||'').replace(/_/g,' ').toUpperCase()+'</div>'+
-          '<div style="font-size:10px;color:#999;margin-top:4px">'+e.codigo+'</div>'+
-          '<button id="tp-iw-btn-'+e.codigo+'" style="margin-top:8px;width:100%;padding:7px 10px;border:none;border-radius:6px;background:linear-gradient(135deg,#d4b050,#C8A84B);color:#1a1d13;font-weight:700;font-size:11px;cursor:pointer;letter-spacing:0.3px;">Ver ficha completa →</button>'+
-          '</div>'});
+        var iw=new google.maps.InfoWindow({content:iwEnvio3d(e,color,'tp-iw-btn-'+e.codigo)});
         // El botón vive dentro del HTML crudo del InfoWindow (Google Maps no deja meter JSX/React
         // ahí), así que el click se conecta cada vez que el InfoWindow termina de pintarse
         // ('domready') en vez de una sola vez -- si no, al reabrir el mismo InfoWindow (re-buscando
@@ -16756,14 +16776,7 @@ function MapaRutas(props){
       position:pos,map:mapObj.current,title:e.destinatario||e.codigo,zIndex:1500,
       icon:pin3dIcon(color,{size:1.35,ring:'#C8A84B'})
     });
-    var iw=new google.maps.InfoWindow({content:'<div style="font-family:DM Sans,sans-serif;padding:8px;min-width:180px">'+
-      '<div style="font-weight:700;font-size:13px;margin-bottom:4px">'+(e.destinatario||'')+'</div>'+
-      '<div style="font-size:11px;color:#666;margin-bottom:2px">'+(e.direccion||'')+'</div>'+
-      '<div style="font-size:11px;color:#666;margin-bottom:6px">'+(e.comuna||'')+'</div>'+
-      '<div style="font-size:11px;font-weight:700;color:'+color+'">'+(e.estado||'').replace(/_/g,' ').toUpperCase()+'</div>'+
-      '<div style="font-size:10px;color:#999;margin-top:4px">'+e.codigo+'</div>'+
-      '<button id="tp-iw-btn-b-'+e.codigo+'" style="margin-top:8px;width:100%;padding:7px 10px;border:none;border-radius:6px;background:linear-gradient(135deg,#d4b050,#C8A84B);color:#1a1d13;font-weight:700;font-size:11px;cursor:pointer;letter-spacing:0.3px;">Ver ficha completa →</button>'+
-      '</div>'});
+    var iw=new google.maps.InfoWindow({content:iwEnvio3d(e,color,'tp-iw-btn-b-'+e.codigo)});
     google.maps.event.addListener(iw,'domready',function(){
       var btn=document.getElementById('tp-iw-btn-b-'+e.codigo);
       if(btn)btn.onclick=function(){if(onVerEnGestion)onVerEnGestion(e.codigo);};
@@ -17617,7 +17630,7 @@ function MapaRutas(props){
 
     // ── MAPA ─────────────────────────────────────────────
     React.createElement('div',{style:{flex:1,position:'relative'}},
-      React.createElement('div',{ref:mapRef,style:{width:'100%',height:'100%',minHeight:500}}),
+      React.createElement('div',{ref:mapRef,className:'mr-mapa',style:{width:'100%',height:'100%',minHeight:500}}),
       // 13-11-2026: control flotante de estilo de mapa + leyenda de estados (vidrio oscuro)
       React.createElement('div',{style:{position:'absolute',left:12,top:isMobile?56:62,zIndex:5,display:'flex',flexDirection:'column',gap:8,pointerEvents:'none'}},
         React.createElement('div',{style:{display:'inline-flex',gap:3,padding:4,borderRadius:13,background:'rgba(20,22,15,.82)',border:'1px solid rgba(200,168,75,.45)',boxShadow:'0 10px 26px rgba(0,0,0,.45)',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',pointerEvents:'auto',alignSelf:'flex-start'}},
