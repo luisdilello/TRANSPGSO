@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261111231118;
+window.__MODULES_VERSION=20261113122925;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -16126,6 +16126,54 @@ function ComunasControl(props){
     )
   );
 }
+// ── 13-11-2026: pines y marcadores 3D para Mapas y Rutas ──────────────────────
+// Pin tipo gota con volumen (gradiente radial, brillo, borde y sombra en el suelo), uno por color,
+// cacheado. Mensajero: moneda dorada con sus iniciales y anillo de color según frescura del GPS.
+var __pin3dCache={};
+function _aclarar(hex,f){var n=parseInt(hex.replace('#',''),16),r=n>>16,g=(n>>8)&255,b=n&255;r=Math.round(r+(255-r)*f);g=Math.round(g+(255-g)*f);b=Math.round(b+(255-b)*f);return 'rgb('+r+','+g+','+b+')';}
+function _oscurecer(hex,f){var n=parseInt(hex.replace('#',''),16),r=n>>16,g=(n>>8)&255,b=n&255;return 'rgb('+Math.round(r*(1-f))+','+Math.round(g*(1-f))+','+Math.round(b*(1-f))+')';}
+function pin3dIcon(color,o){
+  o=o||{};var k=color+'|'+(o.size||1)+'|'+(o.ring||'');if(__pin3dCache[k])return __pin3dCache[k];
+  var id='p'+Math.random().toString(36).slice(2,7);
+  var svg='<svg xmlns="http://www.w3.org/2000/svg" width="40" height="52" viewBox="0 0 40 52"><defs>'+
+    '<radialGradient id="'+id+'g" cx="35%" cy="30%" r="75%"><stop offset="0%" stop-color="'+_aclarar(color,.55)+'"/><stop offset="45%" stop-color="'+color+'"/><stop offset="100%" stop-color="'+_oscurecer(color,.45)+'"/></radialGradient>'+
+    '<radialGradient id="'+id+'s" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="rgba(0,0,0,.45)"/><stop offset="100%" stop-color="rgba(0,0,0,0)"/></radialGradient>'+
+    '<filter id="'+id+'f" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="2" stdDeviation="1.6" flood-color="rgba(0,0,0,.55)"/></filter></defs>'+
+    '<ellipse cx="20" cy="48" rx="9" ry="3.2" fill="url(#'+id+'s)"/>'+
+    (o.ring?'<path d="M20 1.5C10.3 1.5 3 8.6 3 17.8c0 11.6 14.6 26.8 16 28.3a1.4 1.4 0 0 0 2 0C22.4 44.6 37 29.4 37 17.8 37 8.6 29.7 1.5 20 1.5z" fill="'+o.ring+'"/>':'')+
+    '<path d="M20 4C11.7 4 5.5 10.1 5.5 17.9c0 10 12.6 23.6 14 25.1a.7.7 0 0 0 1 0c1.4-1.5 14-15.1 14-25.1C34.5 10.1 28.3 4 20 4z" fill="url(#'+id+'g)" stroke="'+_oscurecer(color,.55)+'" stroke-width="1" filter="url(#'+id+'f)"/>'+
+    '<circle cx="20" cy="17.5" r="5.6" fill="rgba(255,255,255,.92)"/><circle cx="20" cy="17.5" r="3" fill="'+color+'"/>'+
+    '<ellipse cx="14.5" cy="11" rx="4.2" ry="2.4" fill="rgba(255,255,255,.45)" transform="rotate(-30 14.5 11)"/></svg>';
+  var sz=o.size||1,w=Math.round(26*sz),hh=Math.round(34*sz);
+  var ic={url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg),scaledSize:new google.maps.Size(w,hh),anchor:new google.maps.Point(w/2,hh*0.92)};
+  __pin3dCache[k]=ic;return ic;
+}
+function mensajeroIcon3d(nombre,ring){
+  var ini=String(nombre||'').replace(/,/g,' ').trim().split(/\s+/).map(function(x){return x[0]||'';}).join('').slice(0,2).toUpperCase();
+  var id='m'+Math.random().toString(36).slice(2,7);
+  var svg='<svg xmlns="http://www.w3.org/2000/svg" width="64" height="72" viewBox="0 0 64 72"><defs>'+
+    '<radialGradient id="'+id+'g" cx="35%" cy="28%" r="80%"><stop offset="0%" stop-color="#fff2bf"/><stop offset="40%" stop-color="#e3c25c"/><stop offset="100%" stop-color="#8a6a1e"/></radialGradient>'+
+    '<radialGradient id="'+id+'h" cx="50%" cy="50%" r="50%"><stop offset="55%" stop-color="'+ring+'" stop-opacity=".0"/><stop offset="80%" stop-color="'+ring+'" stop-opacity=".45"/><stop offset="100%" stop-color="'+ring+'" stop-opacity="0"/></radialGradient>'+
+    '<radialGradient id="'+id+'s" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="rgba(0,0,0,.5)"/><stop offset="100%" stop-color="rgba(0,0,0,0)"/></radialGradient>'+
+    '<filter id="'+id+'f" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="3" stdDeviation="2.2" flood-color="rgba(0,0,0,.6)"/></filter></defs>'+
+    '<ellipse cx="32" cy="66" rx="16" ry="4.5" fill="url(#'+id+'s)"/>'+
+    '<circle cx="32" cy="31" r="30" fill="url(#'+id+'h)"/>'+
+    '<path d="M32 62 L25 50 L39 50 Z" fill="'+ring+'"/>'+
+    '<circle cx="32" cy="31" r="21" fill="#1a1d13" stroke="'+ring+'" stroke-width="4" filter="url(#'+id+'f)"/>'+
+    '<circle cx="32" cy="31" r="16.5" fill="url(#'+id+'g)" stroke="#6d531a" stroke-width="1"/>'+
+    '<ellipse cx="26" cy="23" rx="7" ry="3.5" fill="rgba(255,255,255,.45)" transform="rotate(-25 26 23)"/>'+
+    '<text x="32" y="37" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="15" fill="#1a1d13">'+ini+'</text></svg>';
+  return {url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg),scaledSize:new google.maps.Size(48,54),anchor:new google.maps.Point(24,50)};
+}
+// Estilos de mapa: "noche" (oscuro con dorado, hace resaltar los pines) y "claro".
+var MAPA_ESTILO_NOCHE=[
+  {elementType:'geometry',stylers:[{color:'#1d2014'}]},{elementType:'labels.text.fill',stylers:[{color:'#c9c2a0'}]},{elementType:'labels.text.stroke',stylers:[{color:'#14160e'}]},
+  {featureType:'administrative',elementType:'geometry.stroke',stylers:[{color:'#5a5233'}]},{featureType:'administrative.locality',elementType:'labels.text.fill',stylers:[{color:'#e8c766'}]},
+  {featureType:'poi',stylers:[{visibility:'off'}]},{featureType:'transit',stylers:[{visibility:'off'}]},
+  {featureType:'road',elementType:'geometry',stylers:[{color:'#3a3d2b'}]},{featureType:'road',elementType:'geometry.stroke',stylers:[{color:'#23261a'}]},
+  {featureType:'road.arterial',elementType:'geometry',stylers:[{color:'#4a4a32'}]},{featureType:'road.highway',elementType:'geometry',stylers:[{color:'#7a6630'}]},{featureType:'road.highway',elementType:'geometry.stroke',stylers:[{color:'#3d3218'}]},
+  {featureType:'road',elementType:'labels.text.fill',stylers:[{color:'#a59e7e'}]},{featureType:'water',elementType:'geometry',stylers:[{color:'#0f1a1f'}]},{featureType:'landscape.natural',elementType:'geometry',stylers:[{color:'#22261a'}]}];
+var MAPA_ESTILO_CLARO=[{featureType:'poi',elementType:'labels',stylers:[{visibility:'off'}]}];
 function MapaRutas(props){
   var mensajeros=props.mensajeros||[];
   var toastFn=props.toast;
@@ -16191,6 +16239,13 @@ function MapaRutas(props){
     if(trailPolylineRef.current){trailPolylineRef.current.setMap(null);trailPolylineRef.current=null;}
   },[mensajeroSeguido]);
   var _ml=React.useState(false);var mapaListo=_ml[0];var setMapaListo=_ml[1];
+  var _est=React.useState(function(){try{return localStorage.getItem('mapa_estilo')||'noche';}catch(e){return 'noche';}});var estiloMapa=_est[0];var setEstiloMapa=_est[1];
+  React.useEffect(function(){
+    try{localStorage.setItem('mapa_estilo',estiloMapa);}catch(e){}
+    var m=mapObj.current;if(!m||!window.google)return;
+    if(estiloMapa==='satelite')m.setOptions({mapTypeId:'hybrid',styles:MAPA_ESTILO_CLARO});
+    else m.setOptions({mapTypeId:'roadmap',styles:estiloMapa==='noche'?MAPA_ESTILO_NOCHE:MAPA_ESTILO_CLARO});
+  },[estiloMapa,mapaListo]);
   var _im=React.useState(window.innerWidth<=768);var isMobile=_im[0];var setIsMobile=_im[1];
   var _pa=React.useState(window.innerWidth>768);var panelAbierto=_pa[0];var setPanelAbierto=_pa[1];
   React.useEffect(function(){
@@ -16339,14 +16394,7 @@ function MapaRutas(props){
         position:pos,
         map:map,
         title:e.destinatario||e.codigo,
-        icon:{
-          path:google.maps.SymbolPath.CIRCLE,
-          scale:7,
-          fillColor:color,
-          fillOpacity:0.9,
-          strokeColor:'#fff',
-          strokeWeight:1.5
-        }
+        icon:pin3dIcon(color)
       });
       var iw=new google.maps.InfoWindow({
         content:'<div style="font-family:DM Sans,sans-serif;padding:8px;min-width:180px">'+
@@ -16464,14 +16512,7 @@ function MapaRutas(props){
       var marker=markersEnviosRef.current[e.codigo];
       if(!marker) return;
       var color=colorEstado(e.estado);
-      marker.setIcon({
-        path:google.maps.SymbolPath.CIRCLE,
-        scale:7,
-        fillColor:color,
-        fillOpacity:0.9,
-        strokeColor:'#fff',
-        strokeWeight:1.5
-      });
+      marker.setIcon(pin3dIcon(color));
     });
   },[envios,mapaListo]);
 
@@ -16488,68 +16529,14 @@ function MapaRutas(props){
       if(markersMensajerosRef.current[u.mensajero]){
         // Actualizar posición
         markersMensajerosRef.current[u.mensajero].marker.setPosition(pos);
-        markersMensajerosRef.current[u.mensajero].marker.setIcon({
-          url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(
-            '<svg xmlns="http://www.w3.org/2000/svg" width="52" height="60" viewBox="0 0 52 60">'+
-  '<defs>'+
-  '<filter id="shadow3d" x="-20%" y="-20%" width="140%" height="140%">'+
-  '<feDropShadow dx="2" dy="4" stdDeviation="3" flood-color="rgba(0,0,0,0.5)"/>'+
-  '</filter>'+
-  '<linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">'+
-  '<stop offset="0%" style="stop-color:#4a4e38"/>'+
-  '<stop offset="100%" style="stop-color:#2a2d1e"/>'+
-  '</linearGradient>'+
-  '<linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">'+
-  '<stop offset="0%" style="stop-color:#e8c84b"/>'+
-  '<stop offset="50%" style="stop-color:#C8A84B"/>'+
-  '<stop offset="100%" style="stop-color:#a07830"/>'+
-  '</linearGradient>'+
-  '</defs>'+
-  '<ellipse cx="26" cy="54" rx="14" ry="4" fill="rgba(0,0,0,0.3)"/>'+
-  '<rect x="3" y="2" width="46" height="46" rx="10" ry="10" fill="url(#bgGrad)" filter="url(#shadow3d)" stroke="#C8A84B" stroke-width="1.5"/>'+
-  '<rect x="5" y="4" width="46" height="46" rx="10" ry="10" fill="url(#bgGrad)" stroke="#C8A84B" stroke-width="1.5"/>'+
-  '<circle cx="28" cy="27" r="18" fill="url(#bgGrad)" stroke="url(#goldGrad)" stroke-width="1"/>'+
-  '<text x="28" y="33" text-anchor="middle" font-size="20" fill="url(#goldGrad)" font-family="serif">⚡</text>'+
-  '<rect x="3" y="44" width="46" height="4" rx="2" fill="#C8A84B" opacity="0.8"/>'+
-  '</svg>'
-          ),
-          scaledSize:new google.maps.Size(52,60),
-          anchor:new google.maps.Point(26,56)
-        });
+        markersMensajerosRef.current[u.mensajero].marker.setIcon(mensajeroIcon3d(u.mensajero,color));
       }else{
         // Crear marker nuevo
         var marker=new google.maps.Marker({
           position:pos,
           map:map,
           title:u.mensajero,
-          icon:{
-            url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(
-              '<svg xmlns="http://www.w3.org/2000/svg" width="52" height="60" viewBox="0 0 52 60">'+
-  '<defs>'+
-  '<filter id="shadow3d" x="-20%" y="-20%" width="140%" height="140%">'+
-  '<feDropShadow dx="2" dy="4" stdDeviation="3" flood-color="rgba(0,0,0,0.5)"/>'+
-  '</filter>'+
-  '<linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">'+
-  '<stop offset="0%" style="stop-color:#4a4e38"/>'+
-  '<stop offset="100%" style="stop-color:#2a2d1e"/>'+
-  '</linearGradient>'+
-  '<linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">'+
-  '<stop offset="0%" style="stop-color:#e8c84b"/>'+
-  '<stop offset="50%" style="stop-color:#C8A84B"/>'+
-  '<stop offset="100%" style="stop-color:#a07830"/>'+
-  '</linearGradient>'+
-  '</defs>'+
-  '<ellipse cx="26" cy="54" rx="14" ry="4" fill="rgba(0,0,0,0.3)"/>'+
-  '<rect x="3" y="2" width="46" height="46" rx="10" ry="10" fill="url(#bgGrad)" filter="url(#shadow3d)" stroke="#C8A84B" stroke-width="1.5"/>'+
-  '<rect x="5" y="4" width="46" height="46" rx="10" ry="10" fill="url(#bgGrad)" stroke="#C8A84B" stroke-width="1.5"/>'+
-  '<circle cx="28" cy="27" r="18" fill="url(#bgGrad)" stroke="url(#goldGrad)" stroke-width="1"/>'+
-  '<text x="28" y="33" text-anchor="middle" font-size="20" fill="url(#goldGrad)" font-family="serif">⚡</text>'+
-  '<rect x="3" y="44" width="46" height="4" rx="2" fill="#C8A84B" opacity="0.8"/>'+
-  '</svg>'
-            ),
-            scaledSize:new google.maps.Size(36,36),
-            anchor:new google.maps.Point(18,18)
-          },
+          icon:mensajeroIcon3d(u.mensajero,color),
           zIndex:1000
         });
         var iw=new google.maps.InfoWindow({
@@ -16631,7 +16618,7 @@ function MapaRutas(props){
       guardarAsignacion(comunaConfirmada,id,m?m.nombre:'');
     });
     quitados.forEach(function(id){quitarAsignacion(comunaConfirmada,id);});
-    if(toastFn)toastFn('✓ '+comunaConfirmada+' actualizado — '+agregados.length+' agregado'+(agregados.length===1?'':'s')+', '+quitados.length+' quitado'+(quitados.length===1?'':'s'));
+    if(toastFn)toastFn(''+comunaConfirmada+' actualizado — '+agregados.length+' agregado'+(agregados.length===1?'':'s')+', '+quitados.length+' quitado'+(quitados.length===1?'':'s'));
     setPanelComuna(null);
   }
   var _d=React.useState(0.40);var op=_d[0];var setOp=_d[1];
@@ -16707,8 +16694,8 @@ function MapaRutas(props){
   // Ubica un envío en el mapa por dirección geocodificada al vuelo (no depende de que
   // esté dentro del filtro de pines actual — busca aparte, sirve para cualquier envío).
   function buscarYMostrarEnvio(e){
-    if(!e.direccion||!e.comuna){if(toastFn)toastFn('⚠ Ese envío no tiene dirección registrada');return;}
-    if(!mapObj.current||!geocoderRef.current){if(toastFn)toastFn('⚠ El mapa todavía está cargando');return;}
+    if(!e.direccion||!e.comuna){if(toastFn)toastFn('Ese envío no tiene dirección registrada');return;}
+    if(!mapObj.current||!geocoderRef.current){if(toastFn)toastFn('El mapa todavía está cargando');return;}
     var existente=markersEnviosRef.current[e.codigo];
     if(existente){
       mapObj.current.panTo(existente.getPosition());
@@ -16716,7 +16703,7 @@ function MapaRutas(props){
       google.maps.event.trigger(existente,'click');
       return;
     }
-    if(toastFn)toastFn('🔍 Buscando '+e.codigo+' en el mapa...');
+    if(toastFn)toastFn('Buscando '+e.codigo+' en el mapa...');
     var dir=(e.direccion||'').trim();
     var com=(e.comuna||'').trim();
     dir=dir.replace(/,?\s*(depto?|apt|of|piso|block|bl|dpto)[.\s]*[0-9a-z-]*/gi,'').trim();
@@ -16731,7 +16718,7 @@ function MapaRutas(props){
         mapObj.current.setZoom(16);
         var color=colorEstado(e.estado);
         var marker=new google.maps.Marker({position:pos,map:mapObj.current,title:e.destinatario||e.codigo,zIndex:2000,
-          icon:{path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:color,fillOpacity:0.95,strokeColor:'#fff',strokeWeight:2},
+          icon:pin3dIcon(color,{size:1.35}),
           animation:google.maps.Animation.BOUNCE});
         setTimeout(function(){marker.setAnimation(null);},2100);
         var iw=new google.maps.InfoWindow({content:'<div style="font-family:DM Sans,sans-serif;padding:8px;min-width:180px">'+
@@ -16753,9 +16740,9 @@ function MapaRutas(props){
         iw.open(mapObj.current,marker);
         marker.addListener('click',function(){iw.open(mapObj.current,marker);});
         markersEnviosRef.current[e.codigo]=marker;
-        if(toastFn)toastFn('📍 '+e.codigo+' localizado');
+        if(toastFn)toastFn(e.codigo+' localizado');
       }else{
-        if(toastFn)toastFn('⚠ No se pudo ubicar la dirección de '+e.codigo+' en el mapa');
+        if(toastFn)toastFn('No se pudo ubicar la dirección de '+e.codigo+' en el mapa');
       }
     });
   }
@@ -16767,7 +16754,7 @@ function MapaRutas(props){
     var color=colorEstado(e.estado);
     var marker=new google.maps.Marker({
       position:pos,map:mapObj.current,title:e.destinatario||e.codigo,zIndex:1500,
-      icon:{path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:color,fillOpacity:0.95,strokeColor:'#C8A84B',strokeWeight:3}
+      icon:pin3dIcon(color,{size:1.35,ring:'#C8A84B'})
     });
     var iw=new google.maps.InfoWindow({content:'<div style="font-family:DM Sans,sans-serif;padding:8px;min-width:180px">'+
       '<div style="font-weight:700;font-size:13px;margin-bottom:4px">'+(e.destinatario||'')+'</div>'+
@@ -16790,10 +16777,10 @@ function MapaRutas(props){
   // período esté cargado en la pestaña Envíos (envios llega por props limitado a ese período,
   // normalmente "Hoy"), así que encuentra un envío de CUALQUIER fecha, no solo las de hoy.
   async function buscarVariosCodigos(codigosRaw){
-    if(!mapObj.current||!geocoderRef.current){if(toastFn)toastFn('⚠ El mapa todavía está cargando');return;}
+    if(!mapObj.current||!geocoderRef.current){if(toastFn)toastFn('El mapa todavía está cargando');return;}
     var codigosUnicos=Array.from(new Set(codigosRaw.map(function(c){return c.toUpperCase();})));
     setBuscandoMasivo(true);
-    if(toastFn)toastFn('🔍 Buscando '+codigosUnicos.length+' envíos...');
+    if(toastFn)toastFn('Buscando '+codigosUnicos.length+' envíos...');
     limpiarBusquedaMasiva();
     var chunks=[];
     for(var ci=0;ci<codigosUnicos.length;ci+=200)chunks.push(codigosUnicos.slice(ci,ci+200));
@@ -16803,7 +16790,7 @@ function MapaRutas(props){
         return db.from('envios').select('codigo,destinatario,direccion,comuna,estado,mensajero,lat,lng').in('codigo',chunk).then(function(r){return r.data||[];}).catch(function(){return [];});
       }));
       respuestas.forEach(function(rows){resultados=resultados.concat(rows);});
-    }catch(err){setBuscandoMasivo(false);if(toastFn)toastFn('⚠ Error buscando: '+err.message);return;}
+    }catch(err){setBuscandoMasivo(false);if(toastFn)toastFn('Error buscando: '+err.message);return;}
     var encontradosMap={};resultados.forEach(function(e){encontradosMap[e.codigo.toUpperCase()]=true;});
     var noEncontrados=codigosUnicos.filter(function(c){return !encontradosMap[c];});
     var conDireccion=resultados.filter(function(e){return e.direccion&&e.comuna;});
@@ -16856,7 +16843,7 @@ function MapaRutas(props){
     }
     setNumResultadosBusqueda(resultados.length);
     setBuscandoMasivo(false);
-    var msg='📍 '+resultados.length+' de '+codigosUnicos.length+' encontrados';
+    var msg=''+resultados.length+' de '+codigosUnicos.length+' encontrados';
     if(sinDireccion>0)msg+=' · '+sinDireccion+' sin dirección';
     if(noEncontrados.length>0)msg+=' · '+noEncontrados.length+' no existen';
     if(toastFn)toastFn(msg);
@@ -16873,7 +16860,7 @@ function MapaRutas(props){
     var tokens=raw.split(/[\s,;]+/).map(function(t){return t.trim();}).filter(Boolean);
     if(tokens.length>1){buscarVariosCodigos(tokens);return;}
     var q=tokens[0];
-    if(toastFn)toastFn('🔍 Buscando '+q+'...');
+    if(toastFn)toastFn('Buscando '+q+'...');
     try{
       var res=await db.from('envios').select('codigo,destinatario,direccion,comuna,estado,mensajero,lat,lng').ilike('codigo',q).limit(1);
       if(res.data&&res.data[0]){buscarYMostrarEnvio(res.data[0]);return;}
@@ -16888,13 +16875,13 @@ function MapaRutas(props){
         mapObj.current.setZoom(15);
         var mk=markersMensajerosRef.current[mMatch.nombre];
         if(mk)mk.iw.open(mapObj.current,mk.marker);
-        if(toastFn)toastFn('📍 '+mMatch.nombre+' localizado en el mapa');
+        if(toastFn)toastFn(''+mMatch.nombre+' localizado en el mapa');
       }else{
         if(toastFn)toastFn('◉ '+mMatch.nombre+' seleccionado — sin GPS activo ahora mismo');
       }
       return;
     }
-    if(toastFn)toastFn('⚠ No se encontró "'+q+'" (ni como código de envío ni como mensajero)');
+    if(toastFn)toastFn('No se encontró "'+q+'" (ni como código de envío ni como mensajero)');
   }
 // Centro aproximado de cada comuna (promedio de los puntos del polígono), calculado
   // una sola vez a partir de RM_GJ — se usa para "parar" el carnet digital de cada
@@ -16995,7 +16982,7 @@ function MapaRutas(props){
     if(centro&&mapObj.current){
       mapObj.current.panTo(centro);
       mapObj.current.setZoom(13);
-      if(toastFn)toastFn('📍 '+m.nombre+' — centrado en su zona');
+      if(toastFn)toastFn(''+m.nombre+' — centrado en su zona');
     }else{
       if(toastFn)toastFn('◉ '+m.nombre+' seleccionado — todavía no tiene comunas asignadas');
     }
@@ -17107,7 +17094,7 @@ function MapaRutas(props){
       var bounds=new google.maps.LatLngBounds();
       path.forEach(function(p){bounds.extend(p);});
       var center=bounds.getCenter();
-      var lbl=new ComunaLabel(center.lat(),center.lng(),'📍 '+zona.nombre);
+      var lbl=new ComunaLabel(center.lat(),center.lng(),''+zona.nombre);
       lbl.setMap(mapObj.current);
       poly.addListener('click',function(){
         if(toastFn)toastFn('Zona: '+zona.nombre+(m?' → '+m.nombre:''));
@@ -17136,8 +17123,8 @@ function MapaRutas(props){
       center:{lat:-33.47,lng:-70.65},zoom:11,
       streetViewControl:false,fullscreenControl:false,
       gestureHandling:'greedy',
-      mapTypeControlOptions:{position:google.maps.ControlPosition.TOP_RIGHT},
-      styles:[{featureType:'poi',elementType:'labels',stylers:[{visibility:'off'}]}]
+      mapTypeControl:false,
+      styles:(function(){try{return localStorage.getItem('mapa_estilo')==='claro'?MAPA_ESTILO_CLARO:MAPA_ESTILO_NOCHE;}catch(e){return MAPA_ESTILO_NOCHE;}})()
     });
 
     // Inicializar geocoder
@@ -17179,7 +17166,7 @@ function MapaRutas(props){
           if(toastFn)toastFn(n+' — '+(m?m.nombre:'')+' quitado');
         }else{
           guardarAsignacion(n,curActivo,m?m.nombre:'');
-          if(toastFn)toastFn(n+' → '+(m?m.nombre:'')+ ' ✓');
+          if(toastFn)toastFn(n+' → '+(m?m.nombre:''));
         }
       }else{
         setPanelComunaRef.current(n);
@@ -17258,7 +17245,7 @@ function MapaRutas(props){
     var saved=await guardarZona(zona);
     setZonas(function(prev){return[...prev,saved];});
     setPanelZona(null);setZonaNombre('');setZonaMensajero('');
-    if(toastFn)toastFn('Zona "'+zona.nombre+'" guardada ✓');
+    if(toastFn)toastFn('Zona "'+zona.nombre+'" guardada');
   }
 
   function exportarMapa(){
@@ -17316,10 +17303,10 @@ function MapaRutas(props){
                 onClick:function(){
                   setMensajeroSeguido(siguiendoEste?null:u.mensajero);
                   setMapaTab('rutas');
-                  if(toastFn)toastFn(siguiendoEste?('Dejaste de seguir a '+u.mensajero):('🎯 Siguiendo a '+u.mensajero+' en el mapa'));
+                  if(toastFn)toastFn(siguiendoEste?('Dejaste de seguir a '+u.mensajero):('Siguiendo a '+u.mensajero+' en el mapa'));
                 },
                 style:{fontSize:10,color:siguiendoEste?'#1a1d13':'var(--gold)',background:siguiendoEste?'var(--gold)':'transparent',border:'1px solid var(--gold)',borderRadius:6,padding:'3px 8px',marginTop:4,cursor:'pointer',fontWeight:700}
-              },siguiendoEste?'🎯 Siguiendo':'🎯 Seguir en mapa'),
+              },siguiendoEste?'Siguiendo':'Seguir en mapa'),
               React.createElement('a',{href:'https://maps.google.com/?q='+u.lat+','+u.lng,target:'_blank',style:{fontSize:10,color:'var(--gold)',textDecoration:'none',marginTop:4,display:'block'}},'Ver en Maps →')
             )
           );
@@ -17372,9 +17359,9 @@ function MapaRutas(props){
           transition:'all 0.2s'}},
           f==='hoy'?'HOY':f==='pendientes'?'PENDIENTES':'TODOS');
       }),
-      pinesOcultosPorLimite>0&&React.createElement('span',{title:'Por rendimiento el mapa dibuja como máximo '+LIMITE_PINES_MAPA+' pines a la vez. Filtra por período o estado para ver el resto.',style:{fontSize:10,color:'#ff6b6b',fontWeight:700,background:'rgba(200,0,0,0.15)',border:'1px solid rgba(255,107,107,0.4)',borderRadius:6,padding:'4px 8px'}},'⚠ '+pinesOcultosPorLimite+' sin mostrar — filtra para verlos'),
+      pinesOcultosPorLimite>0&&React.createElement('span',{title:'Por rendimiento el mapa dibuja como máximo '+LIMITE_PINES_MAPA+' pines a la vez. Filtra por período o estado para ver el resto.',style:{fontSize:10,color:'#ff6b6b',fontWeight:700,background:'rgba(200,0,0,0.15)',border:'1px solid rgba(255,107,107,0.4)',borderRadius:6,padding:'4px 8px'}},''+pinesOcultosPorLimite+' sin mostrar — filtra para verlos'),
       pinFiltroMensajero&&React.createElement('span',{style:{display:'flex',alignItems:'center',gap:6,fontSize:10.5,fontWeight:700,color:'var(--gold)',background:'rgba(200,168,75,0.15)',border:'1px solid var(--gold)',borderRadius:20,padding:'4px 6px 4px 12px'}},
-        '📍 Solo '+pinFiltroMensajero,
+        'Solo '+pinFiltroMensajero,
         React.createElement('button',{onClick:function(){setPinFiltroMensajero(null);},title:'Quitar filtro de mensajero',style:{background:'rgba(255,255,255,0.1)',border:'none',color:'inherit',borderRadius:'50%',width:16,height:16,cursor:'pointer',fontSize:10,lineHeight:'16px',padding:0}},'✕')
       ),
       React.createElement('div',{style:{width:1,height:16,background:'rgba(255,255,255,0.08)',margin:'0 2px'}}),
@@ -17404,7 +17391,7 @@ function MapaRutas(props){
     // ese estado puntual, para verificar uno por uno.
     statsPinMensajero&&React.createElement('div',{style:{padding:'12px 14px',background:'linear-gradient(135deg,rgba(74,159,216,0.18),rgba(74,159,216,0.07))',borderBottom:'2px solid #4a9fd8',flexShrink:0,boxShadow:'0 2px 10px rgba(74,159,216,0.2)'}},
       React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,marginBottom:statsPinMensajero.total>0?10:0,flexWrap:'wrap'}},
-        React.createElement('span',{style:{fontSize:15,color:'#8cc8f0',letterSpacing:1.5,fontFamily:'Bebas Neue',textShadow:'0 0 8px rgba(74,159,216,0.5)'}},'📊 RESUMEN — '+pinFiltroMensajero),
+        React.createElement('span',{style:{fontSize:15,color:'#8cc8f0',letterSpacing:1.5,fontFamily:'Bebas Neue',textShadow:'0 0 8px rgba(74,159,216,0.5)'}},'RESUMEN — '+pinFiltroMensajero),
         React.createElement('span',{style:{fontSize:16,fontWeight:900,color:'#fff',background:'linear-gradient(145deg,#5babe0,#2d7ab8)',border:'1px solid #8cc8f0',borderRadius:8,padding:'5px 16px',boxShadow:'2px 2px 6px rgba(0,0,0,0.3)'}},'Total '+statsPinMensajero.total),
         statsPinMensajero.total===0&&React.createElement('span',{style:{fontSize:11.5,color:'rgba(255,255,255,0.5)'}},'— sin envíos en este período')
       ),
@@ -17455,7 +17442,7 @@ function MapaRutas(props){
     // ── SIDEBAR ──────────────────────────────────────────
     React.createElement('div',{style:isMobile?{width:'100%',flexShrink:0,background:'linear-gradient(180deg,#2b2e20,#1e2118)',borderBottom:'2px solid rgba(200,168,75,0.2)',display:panelAbierto?'flex':'none',flexDirection:'column',overflow:'auto',maxHeight:'45vh',boxShadow:'0 4px 12px rgba(0,0,0,0.3)'}:{width:225,flexShrink:0,background:'linear-gradient(180deg,#2b2e20,#1e2118)',borderRight:'2px solid rgba(200,168,75,0.2)',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'4px 0 12px rgba(0,0,0,0.3)'}},
 
-      React.createElement('div',{style:{padding:'14px 16px',textTransform:'uppercase',letterSpacing:4,color:'var(--gold)',borderBottom:'1px solid rgba(200,168,75,0.2)',fontFamily:'Bebas Neue',fontSize:18,background:'linear-gradient(135deg,rgba(200,168,75,0.08),transparent)',textShadow:'0 0 14px rgba(200,168,75,0.5)',boxShadow:'inset 0 -1px 0 rgba(200,168,75,0.1)'}},'⬡ Mapa de Rutas'),
+      React.createElement('div',{style:{padding:'14px 16px',textTransform:'uppercase',letterSpacing:4,color:'var(--gold)',borderBottom:'1px solid rgba(200,168,75,0.2)',fontFamily:'Bebas Neue',fontSize:18,background:'linear-gradient(135deg,rgba(200,168,75,0.08),transparent)',textShadow:'0 0 14px rgba(200,168,75,0.5)',boxShadow:'inset 0 -1px 0 rgba(200,168,75,0.1)'}},'Mapa de Rutas'),
 
       // Buscador único: código de envío o nombre de mensajero. Ahora es un textarea -- se
       // pueden pegar VARIOS códigos (uno por línea, o separados por espacio/coma) y busca todos
@@ -17464,7 +17451,7 @@ function MapaRutas(props){
         React.createElement('div',{style:{display:'flex',gap:5,alignItems:'flex-start'}},
           React.createElement('textarea',{
             className:'search-box',
-            placeholder:'🔍 Código de envío o mensajero — pega varios (uno por línea) para buscarlos todos',
+            placeholder:'Código de envío o mensajero — pega varios (uno por línea) para buscarlos todos',
             value:busquedaMapa,
             rows:busquedaMapa.split('\n').length>1?Math.min(busquedaMapa.split('\n').length,5):1,
             onChange:function(e){setBusquedaMapa(e.target.value);},
@@ -17484,9 +17471,9 @@ function MapaRutas(props){
             background:buscandoMasivo?'rgba(200,168,75,0.15)':'rgba(200,168,75,0.1)',color:'var(--gold)',
             cursor:buscandoMasivo||!busquedaMapa.trim()?'default':'pointer',fontSize:11,fontFamily:'Bebas Neue',
             letterSpacing:1.5,opacity:!busquedaMapa.trim()?0.4:1}
-        },buscandoMasivo?'Buscando...':'🔍 Buscar en el mapa'),
+        },buscandoMasivo?'Buscando...':'Buscar en el mapa'),
         numResultadosBusqueda>0&&React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:6,fontSize:10.5,color:'var(--gold)',background:'rgba(200,168,75,0.1)',border:'1px solid rgba(200,168,75,0.3)',borderRadius:8,padding:'5px 10px'}},
-          React.createElement('span',null,'📍 '+numResultadosBusqueda+' resultado'+(numResultadosBusqueda===1?'':'s')+' de búsqueda'),
+          React.createElement('span',null,''+numResultadosBusqueda+' resultado'+(numResultadosBusqueda===1?'':'s')+' de búsqueda'),
           React.createElement('button',{onClick:limpiarBusquedaMasiva,title:'Quitar pines de búsqueda',style:{background:'rgba(255,255,255,0.1)',border:'none',color:'inherit',borderRadius:'50%',width:16,height:16,cursor:'pointer',fontSize:10,lineHeight:'16px',padding:0}},'✕')
         )
       ),
@@ -17522,14 +17509,14 @@ function MapaRutas(props){
             color:dibujando?'#F39C12':'#1a1d13',
             boxShadow:dibujando?'0 0 12px rgba(243,156,18,0.25),inset 0 1px 0 rgba(255,255,255,0.05)':'4px 4px 10px rgba(200,168,75,0.35),-2px -2px 6px rgba(0,0,0,0.2),inset 0 1px 0 rgba(255,255,255,0.25)',
             outline:dibujando?'1px solid rgba(243,156,18,0.4)':'none'}
-        },dibujando?'✕ CANCELAR DIBUJO':'⬡ DIBUJAR ZONA'),
+        },dibujando?'✕ CANCELAR DIBUJO':'DIBUJAR ZONA'),
         dibujando&&React.createElement('button',{
           onClick:cerrarPoligono,
           style:{width:'100%',padding:'9px',borderRadius:10,border:'1px solid rgba(76,175,132,0.4)',fontWeight:700,fontSize:12,cursor:'pointer',
             fontFamily:'Bebas Neue',letterSpacing:2,
             background:'linear-gradient(145deg,#359960,#2e7d4f)',color:'#fff',
             boxShadow:'3px 3px 8px rgba(46,125,79,0.35),inset 0 1px 0 rgba(255,255,255,0.2)'}
-        },'✓ CERRAR Y GUARDAR')
+        },'CERRAR Y GUARDAR')
       ),
 
       // Lista mensajeros
@@ -17566,25 +17553,25 @@ function MapaRutas(props){
                   e.stopPropagation();
                   if(!tieneGPS){if(toastFn)toastFn('◉ '+m.nombre+' — sin GPS activo ahora mismo');return;}
                   if(siguiendoEste){setMensajeroSeguido(null);if(toastFn)toastFn('Dejaste de seguir a '+m.nombre);}
-                  else{setMensajeroSeguido(m.nombre);if(toastFn)toastFn('🎯 Siguiendo a '+m.nombre+' en el mapa');}
+                  else{setMensajeroSeguido(m.nombre);if(toastFn)toastFn('Siguiendo a '+m.nombre+' en el mapa');}
                 },
                 style:{flexShrink:0,width:22,height:22,borderRadius:'50%',border:'none',cursor:tieneGPS?'pointer':'default',
                   background:siguiendoEste?'var(--gold)':tieneGPS?'rgba(200,168,75,0.18)':'rgba(255,255,255,0.05)',
                   color:siguiendoEste?'#1a1d13':tieneGPS?'var(--gold)':'rgba(255,255,255,0.2)',
                   fontSize:11,display:'flex',alignItems:'center',justifyContent:'center',padding:0}
-              },'🎯'),
+              },React.createElement('svg',{width:13,height:13,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:2.4,strokeLinecap:'round'},React.createElement('circle',{cx:12,cy:12,r:7}),React.createElement('circle',{cx:12,cy:12,r:2,fill:'currentColor'}),React.createElement('path',{d:'M12 1v4M12 19v4M1 12h4M19 12h4'}))),
               React.createElement('button',{
                 title:pinFiltroMensajero===m.nombre?'Ver todos los pines de nuevo':'Ver solo los pines de '+m.nombre+' en el mapa',
                 onClick:function(e){
                   e.stopPropagation();
                   if(pinFiltroMensajero===m.nombre){setPinFiltroMensajero(null);if(toastFn)toastFn('Mostrando pines de todos los mensajeros');}
-                  else{setPinFiltroMensajero(m.nombre);if(!pinsVisible)setPinsVisible(true);if(toastFn)toastFn('📍 Mostrando solo los pines de '+m.nombre);}
+                  else{setPinFiltroMensajero(m.nombre);if(!pinsVisible)setPinsVisible(true);if(toastFn)toastFn('Mostrando solo los pines de '+m.nombre);}
                 },
                 style:{flexShrink:0,width:22,height:22,borderRadius:'50%',border:'none',cursor:'pointer',
                   background:filtradoEste?'#4a9fd8':'rgba(74,159,216,0.18)',
                   color:filtradoEste?'#0d1a24':'#6bb8ea',
                   fontSize:11,display:'flex',alignItems:'center',justifyContent:'center',padding:0}
-              },'📍'),
+              },React.createElement('svg',{width:12,height:13,viewBox:'0 0 24 26',fill:'currentColor'},React.createElement('path',{d:'M12 1C6.5 1 2.5 5 2.5 10.2c0 6.6 8.4 14.2 9 14.7.3.2.7.2 1 0 .6-.5 9-8.1 9-14.7C21.5 5 17.5 1 12 1zm0 13a4 4 0 1 1 0-8 4 4 0 0 1 0 8z'}))),
               cnt>0&&React.createElement('span',{style:{fontSize:9,color:mc,background:'rgba('+hexToRgb(mc)+',0.15)',border:'1px solid rgba('+hexToRgb(mc)+',0.3)',padding:'2px 6px',borderRadius:10,fontFamily:'JetBrains Mono',fontWeight:700}},cnt),
               zCnt>0&&React.createElement('span',{style:{fontSize:9,color:'#F39C12',background:'rgba(243,156,18,0.12)',border:'1px solid rgba(243,156,18,0.25)',padding:'2px 6px',borderRadius:10,fontFamily:'JetBrains Mono'}},zCnt+'z')
             );
@@ -17631,6 +17618,18 @@ function MapaRutas(props){
     // ── MAPA ─────────────────────────────────────────────
     React.createElement('div',{style:{flex:1,position:'relative'}},
       React.createElement('div',{ref:mapRef,style:{width:'100%',height:'100%',minHeight:500}}),
+      // 13-11-2026: control flotante de estilo de mapa + leyenda de estados (vidrio oscuro)
+      React.createElement('div',{style:{position:'absolute',left:12,bottom:isMobile?12:24,zIndex:5,display:'flex',flexDirection:'column',gap:8,pointerEvents:'none'}},
+        React.createElement('div',{style:{display:'inline-flex',gap:3,padding:4,borderRadius:13,background:'rgba(20,22,15,.82)',border:'1px solid rgba(200,168,75,.45)',boxShadow:'0 10px 26px rgba(0,0,0,.45)',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',pointerEvents:'auto',alignSelf:'flex-start'}},
+          [['noche','Noche'],['claro','Claro'],['satelite','Satélite']].map(function(o){var act=estiloMapa===o[0];
+            return React.createElement('button',{key:o[0],type:'button',onClick:function(){setEstiloMapa(o[0]);},style:{padding:'7px 13px',borderRadius:10,border:'1px solid '+(act?'#f7dd8c':'transparent'),background:act?'linear-gradient(180deg,#f7dd8c,#d9b553 55%,#ae8829)':'transparent',color:act?'#1a1d13':'rgba(241,236,218,.85)',fontWeight:800,fontSize:12,cursor:'pointer',boxShadow:act?'0 3px 0 #6d531a,inset 0 1px 0 rgba(255,255,255,.55)':'none'}},o[1]);})),
+        !isMobile&&React.createElement('div',{style:{padding:'9px 12px',borderRadius:13,background:'rgba(20,22,15,.82)',border:'1px solid rgba(200,168,75,.35)',boxShadow:'0 10px 26px rgba(0,0,0,.45)',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',pointerEvents:'auto',display:'flex',flexDirection:'column',gap:5}},
+          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:1.8,color:'#e8c766'}},'Estados'),
+          [['En ruta / pendiente','#C8A84B'],['Entregado','#2e7d4f'],['Reprogramado','#9c27b0'],['Cancelado','#b03030'],['Siniestro','#e65100'],['En bodega','#1a6b8a']].map(function(x){
+            return React.createElement('div',{key:x[0],style:{display:'flex',alignItems:'center',gap:7,fontSize:11.5,color:'#f1ecda',fontWeight:600}},
+              React.createElement('span',{style:{width:11,height:11,borderRadius:'50% 50% 50% 0',transform:'rotate(-45deg)',background:'radial-gradient(circle at 35% 30%,'+x[1]+'cc,'+x[1]+')',boxShadow:'0 2px 4px rgba(0,0,0,.5)'}}),x[0]);}),
+          React.createElement('div',{style:{display:'flex',alignItems:'center',gap:7,fontSize:11.5,color:'#f1ecda',fontWeight:600,marginTop:2}},
+            React.createElement('span',{style:{width:13,height:13,borderRadius:'50%',background:'radial-gradient(circle at 35% 30%,#fff2bf,#e3c25c 45%,#8a6a1e)',border:'2px solid #4caf84'}}),'Mensajero (GPS al día)'))),
       // Consulta de códigos (12-10-2026)
       !consultaAbierta&&React.createElement('button',{onClick:function(){setConsultaAbierta(true);},
         style:{position:'absolute',top:12,right:60,zIndex:5,padding:'9px 16px',borderRadius:8,border:'1px solid rgba(200,168,75,0.6)',background:'linear-gradient(135deg,#2b2e20,#1e2118)',color:'var(--gold)',fontFamily:'Bebas Neue',letterSpacing:1.5,fontSize:14,cursor:'pointer',boxShadow:'0 4px 14px rgba(0,0,0,0.35)'}
@@ -17697,7 +17696,7 @@ function MapaRutas(props){
         }},
           React.createElement('span',{style:{width:9,height:9,borderRadius:'50%',background:colorFrescura,flexShrink:0,boxShadow:'0 0 6px '+colorFrescura,animation:'pulse 2s infinite'}}),
           React.createElement('div',{style:{flex:1,minWidth:0}},
-            React.createElement('div',{style:{fontSize:11,fontWeight:700,color:'#fff',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},'🎯 '+mensajeroSeguido),
+            React.createElement('div',{style:{fontSize:11,fontWeight:700,color:'#fff',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},''+mensajeroSeguido),
             React.createElement('div',{style:{fontSize:10,color:'rgba(255,255,255,0.5)',marginTop:1}},uSeg?(mins===0?'Actualizado ahora':mins+' min atrás'):'Sin GPS activo ahora mismo')
           ),
           React.createElement('button',{
@@ -17717,7 +17716,7 @@ function MapaRutas(props){
           position:'absolute',top:10,right:10,background:'#22241a',border:'1px solid #C8A84B',
           borderRadius:10,padding:14,minWidth:210,maxHeight:'90vh',overflowY:'auto',zIndex:500,boxShadow:'0 4px 20px rgba(0,0,0,.7)'
         }},
-        React.createElement('div',{style:{color:'#C8A84B',fontWeight:700,fontSize:'.9rem',marginBottom:10}},'📍 '+panelComuna),
+        React.createElement('div',{style:{color:'#C8A84B',fontWeight:700,fontSize:'.9rem',marginBottom:10}},''+panelComuna),
         React.createElement('div',{style:{maxHeight:'42vh',overflowY:'auto',marginBottom:6,paddingRight:2}},
           mensajerosFiltrados.length===0&&React.createElement('div',{style:{fontSize:11,color:'rgba(255,255,255,0.35)',marginBottom:8}},'Sin resultados para "'+busquedaMapa+'"'),
           mensajerosFiltrados.map(function(m,idx){
@@ -17740,7 +17739,7 @@ function MapaRutas(props){
           onClick:function(){setPanelSeleccion([]);},
           style:{width:'100%',padding:'5px',marginTop:4,borderRadius:5,border:'1px solid #5a2020',background:'transparent',color:'#ff8a80',fontSize:'.7rem',cursor:'pointer'}
         },'✕ Quitar todos'),
-        hayCambios&&React.createElement('div',{style:{fontSize:'.65rem',color:'#F39C12',marginTop:8,marginBottom:2,textAlign:'center'}},'⚠ Cambios sin guardar'),
+        hayCambios&&React.createElement('div',{style:{fontSize:'.65rem',color:'#F39C12',marginTop:8,marginBottom:2,textAlign:'center'}},'Cambios sin guardar'),
         React.createElement('button',{
           onClick:confirmarCambiosComuna,
           disabled:!hayCambios,
@@ -17748,7 +17747,7 @@ function MapaRutas(props){
             background:hayCambios?'linear-gradient(145deg,#d4b050,#C8A84B,#a87d2a)':'rgba(255,255,255,0.06)',
             color:hayCambios?'#1a1d13':'rgba(255,255,255,0.3)',fontSize:'.75rem',fontWeight:700,
             cursor:hayCambios?'pointer':'not-allowed',letterSpacing:0.5}
-        },'✓ Confirmar cambios'),
+        },'Confirmar cambios'),
         React.createElement('button',{
           onClick:function(){setPanelComuna(null);},
           style:{width:'100%',padding:'5px',marginTop:4,borderRadius:5,border:'1px solid #3A3D2E',background:'transparent',color:'rgba(255,255,255,0.5)',fontSize:'.7rem',cursor:'pointer'}
@@ -17775,7 +17774,7 @@ function MapaRutas(props){
         React.createElement('div',{style:{display:'flex',gap:6}},
           React.createElement('button',{onClick:guardarZonaFn,
             style:{flex:1,padding:'7px',borderRadius:5,border:'none',fontWeight:700,fontSize:'.75rem',cursor:'pointer',background:'#C8A84B',color:'#1a1c0f'}
-          },'✓ Guardar'),
+          },'Guardar'),
           React.createElement('button',{onClick:function(){setPanelZona(null);setZonaNombre('');setZonaMensajero('');},
             style:{flex:1,padding:'7px',borderRadius:5,border:'none',fontWeight:700,fontSize:'.75rem',cursor:'pointer',background:'#3A3D2E',color:'#FEF8EA'}
           },'✕ Cancelar')
@@ -17808,7 +17807,7 @@ function MapaRutas(props){
               boxShadow:'0 0 6px '+mc+',0 0 12px rgba('+hexToRgb(mc)+',0.3)'}}),
             React.createElement('span',{style:{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
               fontSize:10,color:'rgba(255,255,255,0.75)',letterSpacing:0.5,flex:1}},m.nombre),
-            tieneZona&&React.createElement('span',{style:{fontSize:9,color:'rgba(200,168,75,0.5)'}},'📍')
+            tieneZona&&React.createElement('span',{style:{fontSize:9,color:'rgba(200,168,75,0.5)'}},'')
           );
         })
       ):React.createElement('button',{onClick:function(){setReferenciaAbierta(true);},style:{
@@ -17816,7 +17815,7 @@ function MapaRutas(props){
         border:'1px solid rgba(200,168,75,0.3)',background:'rgba(26,29,19,0.9)',color:'var(--gold)',
         fontFamily:'Bebas Neue',fontSize:11,letterSpacing:1.5,cursor:'pointer',
         boxShadow:'4px 4px 12px rgba(0,0,0,0.4)',backdropFilter:'blur(6px)'
-      }},'🎨 Referencia'))
+      }},'Referencia'))
     )
   ))  // cierra inner flex + wrapper rutas
   ,fichaModalEnvio&&/*#__PURE__*/React.createElement(Modal,{title:'Envío '+fichaModalEnvio.codigo,wide:true,onClose:function(){setFichaModalCodigo(null);}},
