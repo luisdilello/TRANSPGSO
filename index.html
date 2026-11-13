@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261113122925;
+window.__MODULES_VERSION=20261113123141;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -17375,7 +17375,7 @@ function MapaRutas(props){
       React.createElement('span',{style:{fontSize:10,color:'rgba(255,255,255,0.25)',marginLeft:'auto'}},
         envios.filter(function(e){return e.direccion&&e.comuna;}).length,' con dirección')
     ),
-    React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',background:'rgba(0,0,0,0.15)',borderBottom:'1px solid rgba(200,168,75,0.15)',flexShrink:0,flexWrap:'wrap'}},
+    React.createElement('div',{style:{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',background:'linear-gradient(135deg,#23261a,#1a1d13)',borderBottom:'1px solid rgba(200,168,75,0.2)',flexShrink:0,flexWrap:'wrap'}},
       React.createElement('span',{style:{fontSize:10,color:'rgba(255,255,255,0.35)',letterSpacing:1.5,fontFamily:'Bebas Neue',marginRight:2}},'ESTADO'),
       React.createElement('button',{onClick:function(){setEstadoFiltroPin('todos');},style:{padding:'4px 12px',borderRadius:20,border:'1px solid '+(estadoFiltroPin==='todos'?'var(--gold)':'rgba(255,255,255,0.1)'),background:estadoFiltroPin==='todos'?'rgba(200,168,75,0.15)':'transparent',color:estadoFiltroPin==='todos'?'var(--gold)':'rgba(255,255,255,0.4)',cursor:'pointer',fontSize:10.5,fontWeight:700}},'Todos'),
       ESTADOS_ENVIO.map(function(est){
@@ -17619,7 +17619,7 @@ function MapaRutas(props){
     React.createElement('div',{style:{flex:1,position:'relative'}},
       React.createElement('div',{ref:mapRef,style:{width:'100%',height:'100%',minHeight:500}}),
       // 13-11-2026: control flotante de estilo de mapa + leyenda de estados (vidrio oscuro)
-      React.createElement('div',{style:{position:'absolute',left:12,bottom:isMobile?12:24,zIndex:5,display:'flex',flexDirection:'column',gap:8,pointerEvents:'none'}},
+      React.createElement('div',{style:{position:'absolute',left:12,top:isMobile?56:62,zIndex:5,display:'flex',flexDirection:'column',gap:8,pointerEvents:'none'}},
         React.createElement('div',{style:{display:'inline-flex',gap:3,padding:4,borderRadius:13,background:'rgba(20,22,15,.82)',border:'1px solid rgba(200,168,75,.45)',boxShadow:'0 10px 26px rgba(0,0,0,.45)',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',pointerEvents:'auto',alignSelf:'flex-start'}},
           [['noche','Noche'],['claro','Claro'],['satelite','Satélite']].map(function(o){var act=estiloMapa===o[0];
             return React.createElement('button',{key:o[0],type:'button',onClick:function(){setEstiloMapa(o[0]);},style:{padding:'7px 13px',borderRadius:10,border:'1px solid '+(act?'#f7dd8c':'transparent'),background:act?'linear-gradient(180deg,#f7dd8c,#d9b553 55%,#ae8829)':'transparent',color:act?'#1a1d13':'rgba(241,236,218,.85)',fontWeight:800,fontSize:12,cursor:'pointer',boxShadow:act?'0 3px 0 #6d531a,inset 0 1px 0 rgba(255,255,255,.55)':'none'}},o[1]);})),
