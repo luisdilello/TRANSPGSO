@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261113123939;
+window.__MODULES_VERSION=20261113125303;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -16301,7 +16301,12 @@ function MapaRutas(props){
   React.useEffect(function(){setEstadoExpandido(null);},[pinFiltroMensajero]);
 
   var _tab=React.useState('rutas');var mapaTab=_tab[0];var setMapaTab=_tab[1];
-  var _track=React.useState([]);var ubicaciones=_track[0];var setUbicaciones=_track[1];
+  var _track=React.useState([]);var ubicacionesRaw=_track[0];var setUbicaciones=_track[1];
+  // 13-11-2026: mensajeros pausados no aparecen en el mapa (ni GPS, ni tracking, ni cumplimiento).
+  // props.mensajeros ya viene solo con los activos; el GPS se filtra contra esa lista por nombre.
+  var _normMR=function(x){return String(x||'').replace(/,/g,' ').replace(/\s+/g,' ').trim().toUpperCase();};
+  var ubicaciones=React.useMemo(function(){var act={};mensajeros.forEach(function(m){if(m.activo!==false)act[_normMR(m.nombre)]=1;});
+    return ubicacionesRaw.filter(function(u){return act[_normMR(u.mensajero)];});},[ubicacionesRaw,mensajeros]);
 
   // Cargar ubicaciones en tiempo real
   React.useEffect(function(){
@@ -16558,6 +16563,7 @@ function MapaRutas(props){
       if(markersMensajerosRef.current[u.mensajero]){
         // Actualizar posición
         markersMensajerosRef.current[u.mensajero].marker.setPosition(pos);
+        if(!markersMensajerosRef.current[u.mensajero].marker.getMap())markersMensajerosRef.current[u.mensajero].marker.setMap(map);
         markersMensajerosRef.current[u.mensajero].marker.setIcon(mensajeroIcon3d(u.mensajero,color));
       }else{
         // Crear marker nuevo
