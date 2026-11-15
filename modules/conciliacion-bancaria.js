@@ -157,9 +157,10 @@ function ConciliacionBancaria(props){
   var _prod=useState({}),prod=_prod[0],setProd=_prod[1];
   useEffect(function(){
     var p=mes.split('-'),y=+p[0],mm=+p[1];var ini=mes+'-01',fin=iso(new Date(y,mm,0));var antI=iso(new Date(y,mm-2,1)),antF=iso(new Date(y,mm-1,0));
-    Promise.all([db.rpc('conc_produccion_clientes',{p_desde:antI,p_hasta:antF}),db.rpc('conc_produccion_clientes',{p_desde:ini,p_hasta:fin}),
-      db.rpc('conc_produccion_clientes',{p_desde:sumar(antF,-14),p_hasta:antF}),db.rpc('conc_produccion_clientes',{p_desde:ini,p_hasta:sumar(ini,14)})])
-      .then(function(rs){var mapa=function(r){var o={};((r&&r.data)||[]).forEach(function(x){o[x.cliente]=+x.entregados;});return o;};setProd({ant:mapa(rs[0]),act:mapa(rs[1]),antQ2:mapa(rs[2]),actQ1:mapa(rs[3])});});
+    // 15-11-2026: cobro con la misma clasificación del Recibo (Colina, PH, >10, >18 kg, secciones; facturable = entregado + pendientes + siniestro)
+    var R=function(a,b){return db.rpc('conc_cobro_clientes',{p_desde:a,p_hasta:b});};
+    Promise.all([R(antI,antF),R(ini,fin),R(antI.slice(0,8)+'16',antF),R(ini,mes+'-15')])
+      .then(function(rs){var mapa=function(r){var o={};((r&&r.data)||[]).forEach(function(x){o[norm(x.cliente)]={fact:+x.facturables||0,total:+x.total||0};});return o;};setProd({ant:mapa(rs[0]),act:mapa(rs[1]),antQ2:mapa(rs[2]),actQ1:mapa(rs[3])});});
   },[mes]);
 
   // ── clasificación ──
@@ -198,8 +199,8 @@ function ConciliacionBancaria(props){
   // ── clientes ──
   var abonosCli={};delMes.forEach(function(m){if(m.tipo==='abono'&&m._c&&m._c.tipo==='cliente'){var k=norm(m._c.vinculo);(abonosCli[k]=abonosCli[k]||[]).push(m);}});
   var cliRows=((dat&&dat.clientes)||[]).filter(function(c){return c.activo||abonosCli[norm(c.nombre)];}).map(function(c){var k=norm(c.nombre),ci=c.ciclo_pago||'mensual';
-    var ent=ci==='semanal'?(prod.act||{})[k]:ci==='quincenal'?(((prod.antQ2||{})[k]||0)+((prod.actQ1||{})[k]||0)):(prod.ant||{})[k];ent=ent||0;
-    var neto=ent*(+c.tarifa||0),esp=Math.round(neto*(c.paga_iva?1.19:1));var ab=(abonosCli[k]||[]).reduce(function(a,m){return a+(+m.monto);},0);
+    var z={fact:0,total:0},a1=ci==='semanal'?(prod.act||{})[k]:ci==='quincenal'?(prod.antQ2||{})[k]:(prod.ant||{})[k],a2=ci==='quincenal'?(prod.actQ1||{})[k]:null;a1=a1||z;a2=a2||z;
+    var ent=a1.fact+a2.fact,esp=Math.round(a1.total+a2.total);var ab=(abonosCli[k]||[]).reduce(function(a,m){return a+(+m.monto);},0);
     var est=esp<=0?(ab>0?'pagado':'—'):(ab>=esp*0.99?'pagado':(ab>0?'parcial':'pendiente'));return {c:c,ent:ent,esp:esp,ab:ab,est:est,ci:ci};}).filter(function(x){return x.esp>0||x.ab>0;})
     .sort(function(a,b){return b.esp-a.esp;});
   // abonos de alias sin cliente en la tabla
@@ -364,9 +365,9 @@ function ConciliacionBancaria(props){
 
     // clientes
     h('div',{style:Object.assign({},caja,{padding:'16px 18px'})},
-      h(Titulo,{id:'cb-cli',t:'Clientes',s:'Abonos del mes contra la producción del período según el ciclo de pago de cada cliente (mensual = mes anterior · quincenal = 2ª quincena anterior + 1ª del mes · semanal = mes en curso). Monto esperado = entregados × tarifa (+IVA si corresponde), referencial.'}),
+      h(Titulo,{id:'cb-cli',t:'Clientes',s:'Abonos del mes contra la producción del período según el ciclo de pago de cada cliente (mensual = mes anterior · quincenal = 2ª quincena anterior + 1ª del mes · semanal = mes en curso). Monto esperado con la misma clasificación del Recibo de Cobro (Colina, Padre Hurtado, más de 10 y 18 kg, secciones; + IVA si corresponde). No incluye siniestros, retiros ni ajustes manuales del recibo.'}),
       cliRows.length===0?h('div',{style:{color:SUAVE,fontSize:13}},'Sin cobros ni abonos de clientes en '+nomMes(mes)+'.'):
-      h('div',{style:{overflowX:'auto'}},h('table',{className:'cb-tab'},h('thead',null,h('tr',null,['Cliente','Ciclo','Entregados','Esperado','Abonado','Diferencia','Estado'].map(function(c){return h('th',{key:c},c);}))),
+      h('div',{style:{overflowX:'auto'}},h('table',{className:'cb-tab'},h('thead',null,h('tr',null,['Cliente','Ciclo','Facturables','Esperado','Abonado','Diferencia','Estado'].map(function(c){return h('th',{key:c},c);}))),
         h('tbody',null,cliRows.map(function(x){var E={pagado:['Pagado',VERDE],parcial:['Parcial',ORO],pendiente:['Pendiente',ROJO],'—':['—','#9aa08a']}[x.est];
           return h('tr',{key:x.c.nombre},h('td',{style:{fontWeight:800}},x.c.nombre),
             h('td',null,x.c.id?h('select',{className:'cb-in',value:x.ci,onChange:function(e){cambiarCiclo(x.c,e.target.value);},style:{padding:'4px 6px',fontSize:12}},[['mensual','Mensual'],['quincenal','Quincenal'],['semanal','Semanal']].map(function(o){return h('option',{key:o[0],value:o[0]},o[1]);})):'—'),
