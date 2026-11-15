@@ -1,0 +1,22 @@
+name: Prueba de humo
+# Abre el sistema con datos simulados y recorre todas las secciones (tests/smoke.js).
+# Si algo se cae, GitHub avisa por correo y el commit queda marcado en rojo.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  humo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Dependencias
+        run: |
+          npm i --no-save --no-package-lock playwright@1.49.1 react@18.2.0 react-dom@18.2.0 @supabase/supabase-js@2.119.0 xlsx@0.18.5
+          npx playwright install --with-deps chromium
+      - name: Prueba
+        run: node tests/smoke.js

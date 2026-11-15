@@ -112,7 +112,7 @@ if('serviceWorker' in navigator){
 <title>TransPgso — Centro de Operaciones</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261115192631;
+window.__MODULES_VERSION=20261115193833;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -815,6 +815,7 @@ function loadScriptOnce(key, src){
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('/sw.js', {updateViaCache: 'none'})
       .then(function(reg){
+        if(!reg)return;
         if(reg.waiting){
           reg.waiting.postMessage('SKIP_WAITING');
         }
@@ -830,7 +831,7 @@ function loadScriptOnce(key, src){
         // Blindaje: revisar si hay una versión nueva cada 5 minutos,
         // asi la app se auto-actualiza aunque quede abierta horas sin cerrarse
         setInterval(function(){ reg.update().catch(function(){}); }, 300000);
-      });
+      }).catch(function(){});
   }
 
     // PWA Install prompt for Android — antes mostraba un botón flotando fijo en una
@@ -15652,7 +15653,9 @@ async function eliminarZonaDB(id){
 function ComunaLabel(lat,lng,txt){
   this.p=new google.maps.LatLng(lat,lng);this.t=txt;this.d=null;
 }
-ComunaLabel.prototype=Object.create(google.maps.OverlayView.prototype);
+// 15-11-2026: si Google Maps no carga (bloqueado, sin red, acceso desde China) esto antes botaba
+// la app entera en 'INICIANDO SISTEMA'. Ahora solo quedan sin mapa las secciones de mapa.
+ComunaLabel.prototype=Object.create(((window.google&&google.maps&&google.maps.OverlayView)||function(){}).prototype);
 ComunaLabel.prototype.onAdd=function(){
   var d=document.createElement('div');
   d.style.cssText='position:absolute;pointer-events:none;transform:translate(-50%,-50%);font-family:Segoe UI,sans-serif;font-size:11px;font-weight:700;color:#fff;text-shadow:0 0 3px #000,0 0 3px #000;white-space:nowrap;';
@@ -15673,7 +15676,9 @@ ComunaLabel.prototype.onRemove=function(){
 function MensajeroBadge(lat,lng,txt,color,offsetIdx){
   this.p=new google.maps.LatLng(lat,lng);this.t=txt;this.color=color;this.offsetIdx=offsetIdx||0;this.d=null;
 }
-MensajeroBadge.prototype=Object.create(google.maps.OverlayView.prototype);
+// 15-11-2026: si Google Maps no carga (bloqueado, sin red, acceso desde China) esto antes botaba
+// la app entera en 'INICIANDO SISTEMA'. Ahora solo quedan sin mapa las secciones de mapa.
+MensajeroBadge.prototype=Object.create(((window.google&&google.maps&&google.maps.OverlayView)||function(){}).prototype);
 MensajeroBadge.prototype.onAdd=function(){
   var d=document.createElement('div');
   d.style.cssText='position:absolute;pointer-events:none;transform:translate(-50%,-50%);'
