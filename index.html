@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261115192535;
+window.__MODULES_VERSION=20261115192631;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -14016,57 +14016,43 @@ function PortalCliente({usuario,onLogout}){
   var _idi=useState('es'),idiomaCliente=_idi[0],setIdiomaCliente=_idi[1];
   function t(es){return traducirCliente(idiomaCliente,es);}
 
+  // 15-11-2026 (rendimiento): ya no se baja el histórico completo (MR SHENG pasa los 39 mil
+  // envíos y congelaba el navegador). Se carga desde el 1º del mes anterior, que cubre Hoy, Semana
+  // y Mes; si el cliente pide un Rango más antiguo se trae solo el tramo que falta y se suma.
+  var _cd=useState(null),cargadoDesde=_cd[0],setCargadoDesde=_cd[1];
+  function mapEnvCli(e){return{id:e.id,codigo:e.codigo,cliente:e.cliente,destinatario:e.destinatario,telefono:e.telefono,direccion:e.direccion,comuna:e.comuna,fecha:e.fecha,estado:e.estado,mensajero:e.mensajero,monto:e.monto,nota:e.nota,foto_etiqueta:null,historial:[{fecha:e.created_at,estado:e.estado,nota:'Cargado'}]};}
+  async function cargarTramoCliente(desde,hasta){
+    var cols='id,codigo,cliente,destinatario,telefono,direccion,comuna,fecha,estado,mensajero,monto,nota,created_at';
+    var acumulado=[],offset=0,bloque=1000;
+    while(true){
+      var q=db.from('envios').select(cols).eq('cliente',nombreCliente).gte('fecha',desde);if(hasta)q=q.lt('fecha',hasta);
+      var res=await q.order('fecha',{ascending:false}).order('id',{ascending:false}).range(offset,offset+bloque-1);
+      if(res.error)throw res.error;
+      if(!res.data||!res.data.length)break;
+      acumulado=acumulado.concat(res.data);
+      if(res.data.length<bloque)break;offset+=bloque;if(offset>=60000)break;
+    }
+    return acumulado.map(mapEnvCli);
+  }
+  React.useEffect(function(){
+    if(periodo!=='personalizado'||!fechaDesde||!cargadoDesde||fechaDesde>=cargadoDesde)return;
+    var vivo=true;setCargandoHist(true);
+    cargarTramoCliente(fechaDesde,cargadoDesde).then(function(extra){if(!vivo)return;
+      setEnvios(function(arr){var ya={};arr.forEach(function(e){ya[e.codigo]=1;});return arr.concat(extra.filter(function(e){return !ya[e.codigo];}));});
+      setCargadoDesde(fechaDesde);}).catch(function(e){window.__logErr&&window.__logErr('portal_carga',e);}).then(function(){if(vivo)setCargandoHist(false);});
+    return function(){vivo=false;};
+  },[periodo,fechaDesde,cargadoDesde]);
   async function cargarEnviosCliente(){
     setLoading(true);
     setFetchError(false);
-    // OJO: antes 'loading' se apagaba apenas se filtraba el caché local (casi instantáneo),
-    // ANTES de que terminara la consulta real a Supabase. Si la consulta era lenta o fallaba
-    // (ej: conexión del cliente, sesión vencida), la pantalla se quedaba mostrando
-    // "Sin envíos encontrados" como si fuera un resultado confirmado, sin ningún error visible
-    // ni forma de reintentar. Ahora 'loading' solo se apaga cuando la consulta real termina,
-    // y si falla se muestra un aviso con botón para reintentar en vez de una lista vacía falsa.
-    //
-    // Un solo select('*') sin paginar se trunca server-side en Supabase (tope PostgREST) apenas
-    // el cliente supera ~1000 envíos históricos, mostrando un total incompleto sin avisar (mismo
-    // problema ya resuelto en el Dashboard admin). Se pagina en bloques de 1000 para traer siempre
-    // el histórico completo del cliente, PERO mostrando la pantalla apenas llega el primer bloque
-    // (setEnvios/setLoading por bloque) en vez de esperar a que terminen todos los bloques — para
-    // clientes con miles de envíos (ej. MR SHENG, +1000) esto evita que la entrada al portal se
-    // sienta lenta esperando 2-3 vueltas de red antes de mostrar nada.
-    // Tampoco se trae 'fotos_entrega' aquí: no se usa en ningún listado, solo en el detalle de un
-    // envío puntual (FotosEntregaConRecarga ya la trae fresca por su cuenta al abrir el modal),
-    // así que pedirla para el histórico completo era peso muerto en cada carga.
+    var dIni=new Date();var desdeIni=new Date(dIni.getFullYear(),dIni.getMonth()-1,1);desdeIni=desdeIni.getFullYear()+'-'+String(desdeIni.getMonth()+1).padStart(2,'0')+'-01';
     try{
-      // 10-11-2026: lo más reciente primero (índice cliente+fecha): Hoy/Semana/Mes quedan correctos con el primer bloque.
       setCargandoHist(true);
-      var acumulado=[];var offset=0;var bloque=1000;var primero=true;
-      // OJO: 'foto_etiqueta' NO se pide aquí (a proposito). Es una foto en base64 guardada
-      // directo en la fila (puede pesar >100KB cada una) y NO se usa en ningún listado del
-      // portal, solo en el detalle de un envío puntual — y ahí FotosEntregaConRecarga ya la
-      // trae fresca por su cuenta con un select puntual por código (ver más abajo). Pedirla
-      // para TODO el historial de un cliente (cientos o miles de envíos) multiplica el peso
-      // de esta consulta a decenas o cientos de MB y hace que el servidor la cancele por
-      // demorar más de lo permitido (statement timeout) — el cliente terminaba viendo el
-      // portal vacío sin ningún aviso. Mismo criterio que ya se usaba para 'fotos_entrega'.
-      var cols='id,codigo,cliente,destinatario,telefono,direccion,comuna,fecha,estado,mensajero,monto,nota,created_at';
-      while(true){
-        var res=await db.from('envios').select(cols).eq('cliente',nombreCliente).order('fecha',{ascending:false}).order('id',{ascending:false}).range(offset,offset+bloque-1);
-        if(res.error){
-          console.warn('Error cargando envíos del cliente:',res.error.message);
-          if(primero)setFetchError(true);
-          break;
-        }
-        if(!res.data||res.data.length===0)break;
-        acumulado=acumulado.concat(res.data);
-        var sb=acumulado.map(function(e){return{id:e.id,codigo:e.codigo,cliente:e.cliente,destinatario:e.destinatario,telefono:e.telefono,direccion:e.direccion,comuna:e.comuna,fecha:e.fecha,estado:e.estado,mensajero:e.mensajero,monto:e.monto,nota:e.nota,foto_etiqueta:null,historial:[{fecha:e.created_at,estado:e.estado,nota:'Cargado'}]};});
-        setEnvios(sb);
-        if(primero){setLoading(false);primero=false;}
-        if(res.data.length<bloque)break;
-        offset+=bloque;
-        if(offset>=50000)break;
-      }
+      var res0=await cargarTramoCliente(desdeIni,null);
+      setEnvios(res0);setCargadoDesde(desdeIni);setLoading(false);
     }catch(err){
-      console.warn('Error de conexión cargando envíos del cliente:',err&&err.message);
+      console.warn('Error cargando envíos del cliente:',err&&err.message);
+      window.__logErr&&window.__logErr('portal_carga',err);
       setFetchError(true);
     }
     setLoading(false);setCargandoHist(false);
