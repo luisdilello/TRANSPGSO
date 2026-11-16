@@ -9,7 +9,7 @@ var db=window.__app.db, Modal=window.__app.Modal, estadoInfo=window.__app.estado
 var ESTADOS_FIRMAS=[
   {val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#8a6d1a',bg:'rgba(200,168,75,0.15)'},
   {val:'entregado',label:'Entregado',icon:'✅',color:'#2e7d4f',bg:'rgba(46,125,79,0.15)'},
-  {val:'reprogramado',label:'Reprogramado',icon:'📅',color:'#b07d10',bg:'rgba(176,125,16,0.15)'},
+  {val:'reprogramado',label:'Reprogramado',icon:'📅',color:'#9c27b0',bg:'rgba(156,39,176,0.15)'},
   {val:'cancelado',label:'Cancelado',icon:'❌',color:'#b03030',bg:'rgba(176,48,48,0.12)'},
   {val:'siniestro',label:'Siniestro',icon:'⚠️',color:'#b03030',bg:'rgba(176,48,48,0.12)'}
 ];
