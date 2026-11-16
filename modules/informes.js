@@ -705,6 +705,7 @@ function HubInformes(p){
     if(p.ver.cierre)db.rpc('informe_cierre_dia',{p_dia:ayer}).then(function(r){if(r.data){var s=+r.data.salida.total||0,e=+(r.data.final||{}).entregados||0;put('cierre',s?pct(e,s)+' entrega ayer':'Sin salida ayer');}}).catch(function(){});
     if(p.ver.novedades)db.from('cierres_ruta').select('estado_reporte').eq('fecha',hoy).then(function(r){var f=(r&&r.data)||[];put('novedades',!f.length?'Sin reporte hoy':f.some(function(x){return x.estado_reporte==='cerrado';})?'Hoy: cerrado':'Hoy: borrador');}).catch(function(){});
     if(p.ver.libre)db.from('informes').select('id',{count:'exact',head:true}).then(function(r){put('libre',(r&&r.count!=null?fmtN(r.count):'—')+' guardados');}).catch(function(){});
+    if(p.ver.retornos){var m0=hoy.slice(0,7)+'-01';db.from('actas_retorno').select('codigos').gte('fecha',m0).then(function(r){var f=(r&&r.data)||[];var n=f.reduce(function(s,x){return s+(x.codigos||[]).length;},0);put('retornos',f.length+' acta'+(f.length===1?'':'s')+' este mes · '+fmtN(n)+' paq.');}).catch(function(){});}
     if(p.ver.envios)db.from('informe_envios').select('activo').then(function(r){var f=(r&&r.data)||[];put('envios',f.filter(function(x){return x.activo;}).length+' activo'+(f.filter(function(x){return x.activo;}).length===1?'':'s')+' de '+f.length);}).catch(function(){});
     return function(){vivo=false;};
   },[]);
@@ -712,7 +713,8 @@ function HubInformes(p){
     {k:'cierre',t:'Informe de cierre',d:'Automático por día, semana, mes o rango: cortes, mensajeros, clientes y alertas.'},
     {k:'novedades',t:'Novedades del día',d:'Revisión de ruta, firmas, respaldos y pendientes del turno.'},
     {k:'libre',t:'Informe libre',d:'Redacta con plantillas e imágenes; sale con formato TransPgso.'},
-    {k:'envios',t:'Envíos automáticos',d:'Programa qué informe llega por correo, cuándo y a quién.'}
+    {k:'envios',t:'Envíos automáticos',d:'Programa qué informe llega por correo, cuándo y a quién.'},
+    {k:'retornos',t:'Actas de retorno',d:'Se arman solas al marcar retorno: una por cliente y día, en PDF o Excel.'}
   ].filter(function(x){return p.ver[x.k];});
   return h('div',{style:ixCaja({marginBottom:16,padding:'18px 20px'})},
     h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-end',gap:10,flexWrap:'wrap',marginBottom:14}},
@@ -1339,14 +1341,17 @@ function Informes(props){
   var _sub=useState(inicial),sub=_sub[0],setSub=_sub[1];
   // 12-10-2026: la subsección se elige desde el menú desplegable 'Informes' (index.html).
   React.useEffect(function(){if(props.sub)setSub(props.sub);},[props.sub]);
-  var TITULOS={cierre:'Informe de cierre',novedades:'Novedades del día',libre:'Informe libre',envios:'Envíos automáticos'};
+  var TITULOS={cierre:'Informe de cierre',novedades:'Novedades del día',libre:'Informe libre',envios:'Envíos automáticos',retornos:'Actas de retorno'};
+  var puedeRet=props.puedeVerRetornos!=null?!!props.puedeVerRetornos:(puedeCierre||!!props.esAdmin||!!props.esSuperAdmin);
+  var _ar=useState(!!window.ActasRetorno),arListo=_ar[0],setArListo=_ar[1];
+  React.useEffect(function(){if(sub==='retornos'&&!arListo&&typeof loadScriptOnce==='function')loadScriptOnce('acta-retorno','modules/acta-retorno.js').then(function(){setArListo(true);}).catch(function(){});},[sub]);
   var chipStyle=function(active){return active?{background:'rgba(200,168,75,0.18)',borderColor:'var(--gold)',color:'var(--gold)'}:undefined;};
   var opsListo=!!(window.OperacionesNovedades&&window.OperacionesFirmasEnVivo);
   var cargandoOps=h('div',{style:{textAlign:'center',padding:'40px 20px',color:'var(--text-soft)'}},'Cargando...');
   // Las subsecciones de Operaciones usan puedeVerCierre con otro significado: se les pasa una
   // copia de props sin los permisos de Informes para no mezclarlos.
   var opsProps={mensajeros:props.mensajeros,clientes:props.clientes,toast:props.toast,usuario:props.usuario,esAdmin:props.esAdmin,esSuperAdmin:props.esSuperAdmin};
-  var ver={cierre:puedeCierre,novedades:puedeNov,libre:puedeLibre,envios:esAdm};
+  var ver={cierre:puedeCierre,novedades:puedeNov,libre:puedeLibre,envios:esAdm,retornos:puedeRet};
   return h('div',{className:'dashx'},
     h('style',null,'@media (max-width:820px){.informes-grid{grid-template-columns:1fr!important}}.ix-hub-card{transition:transform .3s cubic-bezier(.2,.8,.2,1),box-shadow .3s}.ix-hub-card:hover{transform:perspective(700px) rotateX(7deg) translateY(-4px)}'),
     h(HubInformes,{sub:sub,onSub:setSub,ver:ver}),
@@ -1355,6 +1360,7 @@ function Informes(props){
     sub==='libre'&&puedeLibre&&h(InformeLibre,props),
     sub==='firmas-vivo'&&puedeFV&&(opsListo?h(window.OperacionesFirmasEnVivo,opsProps):cargandoOps),
     sub==='envios'&&esAdm&&h(EnviosAutomaticos,props),
+    sub==='retornos'&&puedeRet&&(arListo&&window.ActasRetorno?h(window.ActasRetorno,{toast:props.toast}):cargandoOps),
     !puedeLibre&&!puedeCierre&&!puedeNov&&!puedeFV&&h('div',{style:{textAlign:'center',padding:'40px 20px',color:'var(--text-soft)'}},'No tienes acceso a ninguna subsección de Informes. Pídele a un administrador que te habilite el permiso desde Permisos.')
   );
 }
