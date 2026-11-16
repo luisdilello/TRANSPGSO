@@ -134,6 +134,8 @@ function ConciliacionBancaria(props){
   var _fm=useState('pendientes'),fMov=_fm[0],setFMov=_fm[1];
   var _q=useState(''),q=_q[0],setQ=_q[1];
   var _dirN=useState(null),dirEd=_dirN[0],setDirEd=_dirN[1];
+  var _gE=useState(!!window.GastosEmpresa),gastosListo=_gE[0],setGastosListo=_gE[1];
+  useEffect(function(){if(!gastosListo&&typeof loadScriptOnce==='function')loadScriptOnce('gastos-empresa','modules/gastos-empresa.js').then(function(){setGastosListo(true);}).catch(function(){});},[]);
 
   async function cargar(){
     setCargando(true);
@@ -316,7 +318,7 @@ function ConciliacionBancaria(props){
         kp('Cargos',money(caMes),NAR,delMes.filter(function(m){return m.tipo==='cargo';}).length+' egresos'),
         kp('Alertas',alertas.length,alertas.length?ROJO:VERDE,alertas.length?'requieren revisión':'sin alertas')),
       h('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginTop:12}},
-        [['cb-carga','Carga'],['cb-alertas','Alertas'],['cb-men','Mensajeros'],['cb-cli','Clientes'],['cb-socio','Socio'],['cb-movs','Movimientos'],['cb-dir','Directorio']].map(function(x){
+        [['cb-carga','Carga'],['cb-gastos','Gastos'],['cb-alertas','Alertas'],['cb-men','Mensajeros'],['cb-cli','Clientes'],['cb-socio','Socio'],['cb-movs','Movimientos'],['cb-dir','Directorio']].map(function(x){
           return h('a',{key:x[0],href:'#'+x[0],onClick:function(e){e.preventDefault();var el=document.getElementById(x[0]);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},style:{padding:'6px 12px',borderRadius:999,border:'1px solid rgba(255,255,255,.14)',background:'rgba(255,255,255,.04)',color:TXT,fontSize:12,fontWeight:800,textDecoration:'none'}},x[1]);}))),
 
     // carga
@@ -337,6 +339,10 @@ function ConciliacionBancaria(props){
         h('div',{style:{marginTop:10,fontSize:13,fontWeight:800,color:vPend.ok?'#7fe3a8':'#ff8a8a'}},vPend.ok?'Cuadra: '+vPend.msg:vPend.msg),
         h('div',{style:{display:'flex',gap:8,marginTop:10}},btnOro(busy?'Guardando…':'Guardar movimientos',confirmarCartola,busy||!vPend.ok),btnVid('Descartar',function(){setPend(null);}))),
       dat.cargas.length>0&&h('div',{style:{marginTop:12,fontSize:12,color:SUAVE}},'Últimas cargas: ',dat.cargas.slice(0,4).map(function(c){return h('span',{key:c.id,style:{marginRight:12}},dmy(c.desde)+' al '+dmy(c.hasta)+' ('+(c.n_nuevos!=null?c.n_nuevos+' nuevos':c.n_mov+' mov.')+')');}))),
+
+    // gastos de la empresa (modules/gastos-empresa.js)
+    h('div',{style:Object.assign({},caja,{padding:'16px 18px'})},
+      gastosListo&&window.GastosEmpresa?h(window.GastosEmpresa,{mes:mes,movs:delMes,toast:toast,onCambio:cargar}):h('div',{id:'cb-gastos',style:{color:SUAVE,fontSize:13}},'Cargando gastos…')),
 
     // alertas
     h('div',{style:Object.assign({},caja,{padding:'16px 18px'})},
