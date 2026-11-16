@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261115225546;
+window.__MODULES_VERSION=20261115230914;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1609,7 +1609,21 @@ async function sbRegistrarHistorialLote(codigos,estado,nota,usuario,canal){try{i
 // dia en particular se sigue paginando con cursor por id hasta agotarlo.
 // build(fechaDia,cursor,limite) debe devolver la query ya armada, ej:
 // (fecha,cursor,limite)=>db.from('envios').select(COLS).eq('fecha',fecha).gt('id',cursor).order('id',{ascending:true}).limit(limite)
-async function fetchPorDiasParalelo(desde,hasta,build){
+// ── Caché de envíos por día en el equipo (15-11-2026) ── Los días ya descargados quedan guardados
+// en IndexedDB. Al abrir el panel se pide UNA firma por día (cantidad + huella de cambios,
+// resumen_dias_envios) y solo se vuelven a bajar los días cuya firma cambió (normalmente solo hoy).
+// Si algo falla (sin IndexedDB, error de la firma) se descarga todo como antes: nunca muestra datos viejos.
+const envCacheDB=(function(){
+  let pdb=null;
+  function abrir(){if(pdb)return pdb;pdb=new Promise(function(res,rej){try{if(!('indexedDB' in window)){rej(new Error('sin idb'));return;}const rq=indexedDB.open('transpgso_cache_envios',1);rq.onupgradeneeded=function(){rq.result.createObjectStore('dias');};rq.onsuccess=function(){res(rq.result);};rq.onerror=function(){rej(rq.error);};}catch(e){rej(e);}});pdb.catch(function(){pdb=null;});return pdb;}
+  function op(modo,fn){return abrir().then(function(d){return new Promise(function(res,rej){const t=d.transaction('dias',modo);const st=t.objectStore('dias');const r=fn(st);t.oncomplete=function(){res(r&&r.result);};t.onerror=function(){rej(t.error);};t.onabort=function(){rej(t.error);};});});}
+  function limpiar(){/* borra días que no se usan hace más de 40 días */op('readwrite',function(st){const lim=Date.now()-40*864e5;const cur=st.openCursor();cur.onsuccess=function(){const c=cur.result;if(!c)return;if(!c.value||!c.value.usado||c.value.usado<lim)c.delete();c.continue();};return null;}).catch(function(){});}
+  setTimeout(limpiar,20000);
+  return{get:function(k){return op('readonly',function(st){return st.get(k);}).catch(function(){return null;});},put:function(k,v){return op('readwrite',function(st){return st.put(v,k);}).catch(function(){});},borrarTodo:function(){return op('readwrite',function(st){return st.clear();}).catch(function(){});}};
+})();
+window.__envCache=envCacheDB;
+async function fetchPorDiasParalelo(desde,hasta,build,cacheKey){
+  if(cacheKey){try{return await fetchPorDiasConCache(desde,hasta,build,cacheKey);}catch(e){console.warn('Caché de envíos: se descarga todo',e&&e.message);}}
   const dias=[];
   let d=new Date(desde+'T12:00:00');
   const fin=new Date(hasta+'T12:00:00');
@@ -1637,6 +1651,30 @@ async function fetchPorDiasParalelo(desde,hasta,build){
     const resultados=await Promise.all(lote.map(traerDia));
     resultados.forEach(function(r){acumulado=acumulado.concat(r);});
   }
+  return acumulado;
+}
+async function fetchPorDiasConCache(desde,hasta,build,cacheKey){
+  const fr=await db.rpc('resumen_dias_envios',{p_desde:desde,p_hasta:hasta});
+  if(fr.error)throw fr.error;
+  const firmas={};(fr.data||[]).forEach(function(x){firmas[String(x.fecha).slice(0,10)]={n:+x.n,f:String(x.firma)};});
+  const dias=[];let d=new Date(desde+'T12:00:00');const fin=new Date(hasta+'T12:00:00');
+  while(d<=fin){dias.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));d.setDate(d.getDate()+1);}
+  const usuario=(lsLoad('session_usuario',null)||{}).email||'';
+  const ahora=Date.now();let bajados=0,guardados=0;
+  async function traerDia(fecha){
+    const fi=firmas[fecha];if(!fi)return [];
+    const clave=usuario+'|'+cacheKey+'|'+fecha;
+    const c=await envCacheDB.get(clave);
+    if(c&&c.n===fi.n&&c.f===fi.f&&Array.isArray(c.rows)){guardados++;if(ahora-(c.usado||0)>864e5)envCacheDB.put(clave,Object.assign({},c,{usado:ahora}));return c.rows;}
+    let acumulado=[];let cursor='00000000-0000-0000-0000-000000000000';
+    while(true){const r=await build(fecha,cursor,1000);if(r.error)throw r.error;const data=r.data||[];if(!data.length)break;acumulado=acumulado.concat(data);if(data.length<1000)break;cursor=data[data.length-1].id;}
+    bajados++;
+    envCacheDB.put(clave,{n:fi.n,f:fi.f,rows:acumulado,usado:ahora});
+    return acumulado;
+  }
+  const TANDA=12;let acumulado=[];
+  for(let i=0;i<dias.length;i+=TANDA){const res=await Promise.all(dias.slice(i,i+TANDA).map(traerDia));res.forEach(function(r){acumulado=acumulado.concat(r);});}
+  if(bajados+guardados>1)console.log('Caché de envíos ('+cacheKey+'): '+guardados+' días desde el equipo, '+bajados+' descargados');
   return acumulado;
 }
 async function fetchPaginadoParalelo(build,cursorInicial){
@@ -3342,7 +3380,7 @@ function Dashboard(_ref7){
           if(!cancelado)setEfectividadAnterior(null);
           return;
         }
-        const datosAnt=await fetchPorDiasParalelo(desdeAnt,hastaAnt,(fecha,cursor,limite)=>db.from('envios').select('id,estado').neq('estado','eliminado').eq('fecha',fecha).gt('id',cursor).order('id',{ascending:true}).limit(limite));
+        const datosAnt=await fetchPorDiasParalelo(desdeAnt,hastaAnt,(fecha,cursor,limite)=>db.from('envios').select('id,estado').neq('estado','eliminado').eq('fecha',fecha).gt('id',cursor).order('id',{ascending:true}).limit(limite),'efe');
         if(cancelado)return;
         const totalAnt=datosAnt.filter(e=>e.estado!=='en_bodega_fecha').length;
         const entAnt=datosAnt.filter(e=>e.estado==='entregado').length;
@@ -3383,7 +3421,7 @@ function Dashboard(_ref7){
         else{const mes=mesFiltro||hoyFE.slice(0,7);const[y,m]=mes.split('-').map(Number);desdeFE=mes+'-01';hastaFE=mes+'-'+String(new Date(y,m,0).getDate()).padStart(2,'0');}
         if(esRefresco&&cursorDash){const res=await traerEnviosCambiados(cursorDash,'id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at,tuvo_siniestro',desdeFE,hastaFE);if(res.completo){cursorDash=res.cursor;if(res.rows.length&&!cancelado)setExtraEnvios(prev=>mezclarPorCodigo(prev,res.rows));return;}cursorDash=null;}
         let marcaDash=null;try{marcaDash=(await marcasCambiosEnvios()).env;}catch(_m){}
-        const acumulado=await fetchPorDiasParalelo(desdeFE,hastaFE,(fecha,cursor,limite)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at,tuvo_siniestro').neq('estado','eliminado').eq('fecha',fecha).gt('id',cursor).order('id',{ascending:true}).limit(limite));
+        const acumulado=await fetchPorDiasParalelo(desdeFE,hastaFE,(fecha,cursor,limite)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at,tuvo_siniestro').neq('estado','eliminado').eq('fecha',fecha).gt('id',cursor).order('id',{ascending:true}).limit(limite),'dash');
         if(!cancelado){setExtraEnvios(acumulado);cursorDash=marcaDash;}
       }catch(e){console.warn('Dashboard fetch extra error:',e.message);}
       if(!cancelado)setCargandoExtra(false);
@@ -3407,7 +3445,7 @@ function Dashboard(_ref7){
         // pagina por pagina, para que un rango grande no tarde varios segundos en cargar.
         if(esRefresco&&cursorRango){const res=await traerEnviosCambiados(cursorRango,'id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at,tuvo_siniestro',desde,hasta);if(res.completo){cursorRango=res.cursor;if(res.rows.length&&!cancelado)setRangoEnvios(prev=>mezclarPorCodigo(prev,res.rows));return;}cursorRango=null;}
         let marcaRango=null;try{marcaRango=(await marcasCambiosEnvios()).env;}catch(_m){}
-        const acumulado=await fetchPorDiasParalelo(desde,hasta,(fecha,cursor,limite)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at,tuvo_siniestro').neq('estado','eliminado').eq('fecha',fecha).gt('id',cursor).order('id',{ascending:true}).limit(limite));
+        const acumulado=await fetchPorDiasParalelo(desde,hasta,(fecha,cursor,limite)=>db.from('envios').select('id,codigo,cliente,destinatario,comuna,fecha,estado,mensajero,monto,fuente,created_at,tuvo_siniestro').neq('estado','eliminado').eq('fecha',fecha).gt('id',cursor).order('id',{ascending:true}).limit(limite),'dash');
         if(!cancelado){setRangoEnvios(acumulado);cursorRango=marcaRango;}
       }catch(e){console.warn('Dashboard fetch rango error:',e.message);}
       if(!cancelado)setCargandoRango(false);
@@ -12408,11 +12446,15 @@ function RiderBarra3D(props){
     }));
 }
 
+// Número en el botón Incidencias = incidencias que el mensajero todavía no ha visto (al abrir la pantalla se marcan vistas).
+function _claveIncidVistas(id){return 'incid_vistas_'+String(id||'');}
+function contarIncidNoVistas(lista,id){try{const v=new Set(lsLoad(_claveIncidVistas(id),[]));return (lista||[]).filter(function(x){return !v.has(x.id);}).length;}catch(e){return 0;}}
+function marcarIncidVistas(lista,id){try{const v=lsLoad(_claveIncidVistas(id),[]);const s=new Set(v);(lista||[]).forEach(function(x){s.add(x.id);});lsSave(_claveIncidVistas(id),Array.from(s).slice(-600));}catch(e){}}
 // Incidencias del mensajero: lo que reportan las operadoras. Solo lectura.
 function IncidenciasRider(props){
   var claro=props.claro;
   var _l=useState(null),lista=_l[0],setLista=_l[1];var _v=useState(null),ver=_v[0],setVer=_v[1];var _err=useState(false),err=_err[0],setErr=_err[1];
-  useEffect(function(){db.rpc('mis_incidencias').then(function(r){if(r.error){setErr(true);setLista([]);return;}setLista(r.data||[]);},function(){setErr(true);setLista([]);});},[]);
+  useEffect(function(){db.rpc('mis_incidencias').then(function(r){if(r.error){setErr(true);setLista([]);return;}setLista(r.data||[]);marcarIncidVistas(r.data||[],props.idVistas);},function(){setErr(true);setLista([]);});},[]);
   var bg=claro?'#f3eddc':'#15180f',panel=claro?'#ffffff':'#22261a',txt=claro?'#2b2e20':'#f1ecda',sub=claro?'#5f5e4c':'#bdb8a2',bd=claro?'rgba(43,46,32,.13)':'rgba(255,255,255,.12)',base=claro?'#d6ccb0':'#0b0c07',caja=claro?'#faf7ef':'rgba(255,255,255,.05)';
   var mesActual=fechaHoyCL().slice(0,7);
   var L=lista||[];var delMes=L.filter(function(x){return String(x.fecha||x.created_at||'').slice(0,7)===mesActual;}).length;
@@ -12453,7 +12495,7 @@ function IncidenciasRider(props){
         React.createElement('button',{type:'button',onClick:function(){setVer(null);},style:{width:'100%',marginTop:12,height:46,borderRadius:12,border:'1px solid '+bd,background:caja,color:txt,fontWeight:800,fontSize:14,cursor:'pointer',fontFamily:'inherit'}},'Cerrar'))));
 }
 
-function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout,mensajeros=_ref32.mensajeros||[];const _abrirDirS=useState(false),abrirDirAlEntrar=_abrirDirS[0],setAbrirDirAlEntrar=_abrirDirS[1];const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87bp=useState(null),clienteRetiroPresel=_useState87bp[0],setClienteRetiroPresel=_useState87bp[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const _useRIA=useState(false),rutaIAActiva=_useRIA[0],setRutaIAActiva=_useRIA[1];const _useSRIA=useState(false),showRutaIA=_useSRIA[0],setShowRutaIA=_useSRIA[1];const _useVG=useState(false),verGanancias=_useVG[0],setVerGanancias=_useVG[1];const _useCH=useState(false),colectaHabilitada=_useCH[0],setColectaHabilitada=_useCH[1];const _cfHoy=useState(null),cierreFlexHoy=_cfHoy[0],setCierreFlexHoy=_cfHoy[1];useEffect(()=>{db.from('cierres_flex').select('updated_at').eq('fecha',fechaHoyCL()).limit(1).then(function(r){var x=r&&r.data&&r.data[0];if(x)setCierreFlexHoy(new Date(x.updated_at).toLocaleTimeString('es-CL',{timeZone:'America/Santiago',hour:'2-digit',minute:'2-digit'}));},function(){});},[]);const _useMas=useState(false),showMas=_useMas[0],setShowMas=_useMas[1];const _useNotif=useState(false),notifActivas=_useNotif[0],setNotifActivas=_useNotif[1];const _useShowAv=useState(false),showAvisos=_useShowAv[0],setShowAvisos=_useShowAv[1];const _useBusq=useState(''),busquedaEnvio=_useBusq[0],setBusquedaEnvio=_useBusq[1];const _usePend=useState(0),pendientesSync=_usePend[0],setPendientesSync=_usePend[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);try{if(/error|no se pudo|fall[oó]|rechaz|sin permiso/i.test(String(msg))&&!/sin se[ñn]al|se guard[oó]|se enviar[aá]/i.test(String(msg)))window.__logErr&&window.__logErr('aviso_mensajero',String(msg).replace(/^[^\wÁÉÍÓÚáéíóúÑñ¿¡]+/,''));}catch(_e){}};window.__errCtx={usuario:usuario&&usuario.nombre||null,rol:'mensajero',app:'rider'};const _rank=useState(null),rankMes=_rank[0],setRankMes=_rank[1];const _incN=useState(0),incPend=_incN[0],setIncPend=_incN[1];const _incOpen=useState(false),showIncid=_incOpen[0],setShowIncid=_incOpen[1];const _rkI=useState(false),showRankInfo=_rkI[0],setShowRankInfo=_rkI[1];useEffect(function(){var vivo=true;function cargarRI(){db.rpc('mi_ranking_mes').then(function(r){if(vivo&&r&&r.data&&r.data[0])setRankMes(r.data[0]);},function(){});db.rpc('mis_incidencias').then(function(r){if(vivo&&r&&r.data)setIncPend(r.data.filter(function(x){return x.a_descuento==null&&!x.resuelto;}).length);},function(){});}cargarRI();var limRI=intervaloVisible(cargarRI,600000);/* 15-11-2026: la oficina registra o revisa una incidencia -> llega al instante */var chInc=null;try{if(usuario.mensajero_id)chInc=db.channel('incid-'+usuario.mensajero_id).on('broadcast',{event:'cambio'},function(){db.rpc('mis_incidencias').then(function(r){if(vivo&&r&&r.data)setIncPend(r.data.filter(function(x){return x.a_descuento==null&&!x.resuelto;}).length);},function(){});}).subscribe();}catch(e){}return function(){vivo=false;if(typeof limRI==='function')limRI();try{if(chInc)db.removeChannel(chInc);}catch(e){}};},[]);const _uTemaRider=useState(()=>lsLoad('rider_tema','light')),tema=_uTemaRider[0],setTema=_uTemaRider[1];useEffect(()=>{lsSave('rider_tema',tema);},[tema]);const T=tema==='light'?{text:'#2b2e20',pageBg:'#FEF8EA',bandaTop:'linear-gradient(180deg,#FEF8EA,#f5edd8)',bandaMid:'linear-gradient(180deg,#f5edd8,#f0e8d0)',panelBg:'#FFFFFF',tint:function(a){return 'rgba(43,46,32,'+a+')';}}:{text:'#ffffff',pageBg:'#1a1d13',bandaTop:'linear-gradient(180deg,#2b2e20,#1e2118)',bandaMid:'linear-gradient(180deg,#1e2118,#1a1d13)',panelBg:'#1a1d14',tint:function(a){return 'rgba(255,255,255,'+a+')';}};const _useClientesRider=useState(()=>lsLoad('clientes',[])),clientesRider=_useClientesRider[0],setClientesRider=_useClientesRider[1];useEffect(function(){db.from('clientes').select('id,nombre,activo').order('nombre').then(function(res){if(res.data&&res.data.length>0){setClientesRider(res.data);lsSave('clientes',res.data);}}).catch(function(){});},[]);useEffect(()=>{
+function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout,mensajeros=_ref32.mensajeros||[];const _abrirDirS=useState(false),abrirDirAlEntrar=_abrirDirS[0],setAbrirDirAlEntrar=_abrirDirS[1];const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87bp=useState(null),clienteRetiroPresel=_useState87bp[0],setClienteRetiroPresel=_useState87bp[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const _useRIA=useState(false),rutaIAActiva=_useRIA[0],setRutaIAActiva=_useRIA[1];const _useSRIA=useState(false),showRutaIA=_useSRIA[0],setShowRutaIA=_useSRIA[1];const _useVG=useState(false),verGanancias=_useVG[0],setVerGanancias=_useVG[1];const _useCH=useState(false),colectaHabilitada=_useCH[0],setColectaHabilitada=_useCH[1];const _cfHoy=useState(null),cierreFlexHoy=_cfHoy[0],setCierreFlexHoy=_cfHoy[1];useEffect(()=>{db.from('cierres_flex').select('updated_at').eq('fecha',fechaHoyCL()).limit(1).then(function(r){var x=r&&r.data&&r.data[0];if(x)setCierreFlexHoy(new Date(x.updated_at).toLocaleTimeString('es-CL',{timeZone:'America/Santiago',hour:'2-digit',minute:'2-digit'}));},function(){});},[]);const _useMas=useState(false),showMas=_useMas[0],setShowMas=_useMas[1];const _useNotif=useState(false),notifActivas=_useNotif[0],setNotifActivas=_useNotif[1];const _useShowAv=useState(false),showAvisos=_useShowAv[0],setShowAvisos=_useShowAv[1];const _useBusq=useState(''),busquedaEnvio=_useBusq[0],setBusquedaEnvio=_useBusq[1];const _usePend=useState(0),pendientesSync=_usePend[0],setPendientesSync=_usePend[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);try{if(/error|no se pudo|fall[oó]|rechaz|sin permiso/i.test(String(msg))&&!/sin se[ñn]al|se guard[oó]|se enviar[aá]/i.test(String(msg)))window.__logErr&&window.__logErr('aviso_mensajero',String(msg).replace(/^[^\wÁÉÍÓÚáéíóúÑñ¿¡]+/,''));}catch(_e){}};window.__errCtx={usuario:usuario&&usuario.nombre||null,rol:'mensajero',app:'rider'};const _rank=useState(null),rankMes=_rank[0],setRankMes=_rank[1];const _incN=useState(0),incPend=_incN[0],setIncPend=_incN[1];const _incOpen=useState(false),showIncid=_incOpen[0],setShowIncid=_incOpen[1];const _rkI=useState(false),showRankInfo=_rkI[0],setShowRankInfo=_rkI[1];useEffect(function(){var vivo=true;function cargarRI(){db.rpc('mi_ranking_mes').then(function(r){if(vivo&&r&&r.data&&r.data[0])setRankMes(r.data[0]);},function(){});db.rpc('mis_incidencias').then(function(r){if(vivo&&r&&r.data)setIncPend(contarIncidNoVistas(r.data,usuario.mensajero_id||usuario.nombre));},function(){});}cargarRI();var limRI=intervaloVisible(cargarRI,600000);/* 15-11-2026: la oficina registra o revisa una incidencia -> llega al instante */var chInc=null;try{if(usuario.mensajero_id)chInc=db.channel('incid-'+usuario.mensajero_id).on('broadcast',{event:'cambio'},function(){db.rpc('mis_incidencias').then(function(r){if(vivo&&r&&r.data)setIncPend(contarIncidNoVistas(r.data,usuario.mensajero_id||usuario.nombre));},function(){});}).subscribe();}catch(e){}return function(){vivo=false;if(typeof limRI==='function')limRI();try{if(chInc)db.removeChannel(chInc);}catch(e){}};},[]);const _uTemaRider=useState(()=>lsLoad('rider_tema','light')),tema=_uTemaRider[0],setTema=_uTemaRider[1];useEffect(()=>{lsSave('rider_tema',tema);},[tema]);const T=tema==='light'?{text:'#2b2e20',pageBg:'#FEF8EA',bandaTop:'linear-gradient(180deg,#FEF8EA,#f5edd8)',bandaMid:'linear-gradient(180deg,#f5edd8,#f0e8d0)',panelBg:'#FFFFFF',tint:function(a){return 'rgba(43,46,32,'+a+')';}}:{text:'#ffffff',pageBg:'#1a1d13',bandaTop:'linear-gradient(180deg,#2b2e20,#1e2118)',bandaMid:'linear-gradient(180deg,#1e2118,#1a1d13)',panelBg:'#1a1d14',tint:function(a){return 'rgba(255,255,255,'+a+')';}};const _useClientesRider=useState(()=>lsLoad('clientes',[])),clientesRider=_useClientesRider[0],setClientesRider=_useClientesRider[1];useEffect(function(){db.from('clientes').select('id,nombre,activo').order('nombre').then(function(res){if(res.data&&res.data.length>0){setClientesRider(res.data);lsSave('clientes',res.data);}}).catch(function(){});},[]);useEffect(()=>{
   if('serviceWorker' in navigator){
     navigator.serviceWorker.ready.then(reg=>reg.pushManager.getSubscription()).then(sub=>{if(sub)setNotifActivas(true);}).catch(()=>{});
   }
@@ -12784,7 +12826,7 @@ const ESTADOS_RIDER=[{val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#C8A84B',
     React.createElement('button',{onClick:()=>setShowAjustes(false),style:{width:'100%',marginTop:16,padding:'12px',borderRadius:10,border:'none',background:T.tint(0.06),color:T.tint(0.5),fontFamily:'Bebas Neue',fontSize:15,letterSpacing:1,cursor:'pointer'}},'Cerrar')
   )
 ),
-showScanner&&/*#__PURE__*/React.createElement(ScannerRider,{usuario:usuario,onScanSuccess:envioNuevo=>{setEnvios(prev=>{const existe=prev.find(e=>e.codigo===envioNuevo.codigo);if(existe)return prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e);return[envioNuevo,...prev];});setShowScanner(false);setEnvioActivo(envioNuevo);},onClose:()=>setShowScanner(false)}),React.createElement(RiderBarra3D,{claro:tema==='light',riderTab:riderTab,showMas:showMas,incPend:incPend,onTab:function(val){if(val==='mas'){setShowMas(true);return;}if(val==='incidencias'){setShowIncid(true);return;}if(val==='scan'){setShowScanner(true);return;}if(val==='asignacion'){setShowAsignacion(true);return;}if(val==='circuit'){const _pend=envios.filter(e=>e.estado==='en_ruta');if(!_pend.length){toast('No tienes envíos en ruta para exportar');return;}abrirExportCircuit(_pend,'Ruta_'+(usuario.nombre||'').split(' ')[0]+'_'+fechaHoyCL(),toast);return;}setRiderTab(val);}}),showRankInfo&&rankMes&&React.createElement(RankingInfoRider,{rank:rankMes,claro:tema==='light',onClose:function(){setShowRankInfo(false);}}),showIncid&&React.createElement(IncidenciasRider,{claro:tema==='light',onClose:function(){setShowIncid(false);db.rpc('mis_incidencias').then(function(r){if(r&&r.data)setIncPend(r.data.filter(function(x){return x.a_descuento==null&&!x.resuelto;}).length);},function(){});}}),
+showScanner&&/*#__PURE__*/React.createElement(ScannerRider,{usuario:usuario,onScanSuccess:envioNuevo=>{setEnvios(prev=>{const existe=prev.find(e=>e.codigo===envioNuevo.codigo);if(existe)return prev.map(e=>e.codigo===envioNuevo.codigo?{...e,...envioNuevo}:e);return[envioNuevo,...prev];});setShowScanner(false);setEnvioActivo(envioNuevo);},onClose:()=>setShowScanner(false)}),React.createElement(RiderBarra3D,{claro:tema==='light',riderTab:riderTab,showMas:showMas,incPend:incPend,onTab:function(val){if(val==='mas'){setShowMas(true);return;}if(val==='incidencias'){setShowIncid(true);return;}if(val==='scan'){setShowScanner(true);return;}if(val==='asignacion'){setShowAsignacion(true);return;}if(val==='circuit'){const _pend=envios.filter(e=>e.estado==='en_ruta');if(!_pend.length){toast('No tienes envíos en ruta para exportar');return;}abrirExportCircuit(_pend,'Ruta_'+(usuario.nombre||'').split(' ')[0]+'_'+fechaHoyCL(),toast);return;}setRiderTab(val);}}),showRankInfo&&rankMes&&React.createElement(RankingInfoRider,{rank:rankMes,claro:tema==='light',onClose:function(){setShowRankInfo(false);}}),showIncid&&React.createElement(IncidenciasRider,{idVistas:usuario.mensajero_id||usuario.nombre,claro:tema==='light',onClose:function(){setShowIncid(false);db.rpc('mis_incidencias').then(function(r){if(r&&r.data)setIncPend(contarIncidNoVistas(r.data,usuario.mensajero_id||usuario.nombre));},function(){});}}),
 showMas&&/*#__PURE__*/React.createElement('div',{onClick:()=>setShowMas(false),style:{position:'fixed',inset:0,background:'rgba(10,12,6,0.75)',WebkitBackdropFilter:'blur(4px)',backdropFilter:'blur(4px)',zIndex:500,display:'flex',alignItems:'flex-end'}},
   /*#__PURE__*/React.createElement('div',{onClick:e=>e.stopPropagation(),style:{width:'100%',background:T.panelBg,borderTop:'1px solid rgba(200,168,75,0.4)',borderRadius:'20px 20px 0 0',padding:'20px 16px calc(20px + env(safe-area-inset-bottom,0px))',boxShadow:'0 -10px 40px rgba(200,168,75,0.15)'}},
     /*#__PURE__*/React.createElement('div',{style:{width:40,height:4,background:'rgba(200,168,75,0.3)',borderRadius:2,margin:'0 auto 18px'}}),
@@ -15572,7 +15614,9 @@ useEffect(()=>{
   // 12-10-2026: la carga completa de 8 días se hace solo la PRIMERA vez (al abrir la app); las
   // siguientes vueltas traen solo los envíos con updated_at posterior al último visto (ver
   // traerEnviosCambiados). Antes cada 3 min se volvían a bajar hasta 8.000 envíos (~4,6 MB).
-  let cursorEnvGlobal=null;
+  // 15-11-2026: el cursor se recuerda entre aperturas (hasta 12 h): al abrir el panel solo se traen los cambios.
+  let cursorEnvGlobal=(function(){try{const c=lsLoad('gestion_envios_cursor',null);const ses=(lsLoad('session_usuario',null)||{}).email;if(c&&c.c&&c.u===ses&&Date.now()-c.t<12*3600000&&lsLoad('gestion_envios',[]).length)return c.c;}catch(e){}return null;})();
+  function guardarCursorGlobal(){try{lsSave('gestion_envios_cursor',{c:cursorEnvGlobal,t:Date.now(),u:(lsLoad('session_usuario',null)||{}).email});}catch(e){}}
   async function intentarSync(){
     if(cursorEnvGlobal){
       try{
@@ -15580,6 +15624,7 @@ useEffect(()=>{
         const res=await traerEnviosCambiados(cursorEnvGlobal,'id,codigo,cliente,destinatario,telefono,direccion,comuna,referencia,fecha,estado,mensajero,monto,en_un_cambio,nota,nota_admin,fuente,peso,valor_siniestro,tuvo_siniestro,created_at,updated_at',fechaHoyCL(desde8),null);
         if(!res.completo){cursorEnvGlobal=null;}// demasiados cambios juntos: la próxima vuelta hace carga completa
         else cursorEnvGlobal=res.cursor;
+        guardarCursorGlobal();
         if(!res.rows.length)return;
         const local=lsLoad('gestion_envios',[]);const mapaLocal={};local.forEach(e=>{mapaLocal[e.codigo]=e;});
         res.rows.forEach(function(sb){
@@ -15621,7 +15666,7 @@ useEffect(()=>{
       });
       const eliminadosInit=new Set(lsLoad('envios_eliminados',[]));
       const final=Object.values(mapaLocal).filter(function(e){return!eliminadosInit.has(e.codigo);});
-      lsSave('gestion_envios',final);setEnviosGestion(final);cursorEnvGlobal=marcaInicial;console.log('✓ Sync inicial:',data.length,'envíos actualizados de los últimos 8 días · '+final.length+' en total');
+      lsSave('gestion_envios',final);setEnviosGestion(final);cursorEnvGlobal=marcaInicial;guardarCursorGlobal();console.log('✓ Sync inicial:',data.length,'envíos actualizados de los últimos 8 días · '+final.length+' en total');
     }catch(e){console.warn('Sync inicial error:',e.message);}
   }
   syncInicial();

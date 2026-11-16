@@ -527,7 +527,7 @@ async function sincronizarDesdeSupabase(){setSincronizando(true);try{
   const rows=(desdeQ&&hastaQ)
     ?await fetchPorDiasParalelo(desdeQ,hastaQ,function(fecha,cursor,limite){
       return db.from('envios').select(COLS).neq('estado','eliminado').eq('fecha',fecha).gt('id',cursor).order('id',{ascending:true}).limit(limite);
-    })
+    },'ge')
     :await fetchPaginadoParalelo(function(cursor,limite){
       let _q=db.from('envios').select(COLS).neq('estado','eliminado');
       if(desdeQ)_q=_q.gte('fecha',desdeQ);
