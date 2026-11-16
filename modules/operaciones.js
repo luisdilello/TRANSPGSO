@@ -1311,8 +1311,9 @@ function FirmasEnVivo(props){
   }
   useEffect(function(){cargarConteos();},[clienteSel,mensajeroSel,filtro,fechaDesde,fechaHasta]);
   useEffect(function(){
-    var iv=setInterval(cargarConteos,25000);
-    return function(){clearInterval(iv);};
+    // 15-11-2026: en tiempo real (canal de cambios); el intervalo queda solo de respaldo.
+    var lim=window.__app.intervaloVisible(cargarConteos,120000,['envios'],4000);
+    return lim;
   },[clienteSel,mensajeroSel,filtro,fechaDesde,fechaHasta]);
 
   // Referencia al 'updated_at' más reciente que ya se cargó, para poder detectar si hay algo
@@ -1371,8 +1372,8 @@ function FirmasEnVivo(props){
         if(masReciente!==ultimoUpdatedRef.current) cargar();
       }).catch(function(){});
     }
-    var iv=setInterval(chequearLiviano,25000);
-    return function(){clearInterval(iv);};
+    var lim=window.__app.intervaloVisible(chequearLiviano,120000,['envios'],2000);
+    return lim;
   },[clienteSel,mensajeroSel,estadoSel,filtro,fechaDesde,fechaHasta]);
 
   // El badge "✓ Reportado" de cada tarjeta antes vivía SOLO en este estado local

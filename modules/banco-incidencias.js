@@ -86,7 +86,7 @@ function BancoIncidencias(props){
       .then(function(r){if(r.error)toast('No se pudo cargar el banco: '+r.error.message);setRows((r&&r.data)||[]);setCargando(false);},function(){setCargando(false);});
   }
   useEffect(function(){cargar();setSel({});},[desde,hasta]);
-  useEffect(function(){var iv=setInterval(function(){if(!document.hidden)cargar(true);},60000);return function(){clearInterval(iv);};},[desde,hasta]);
+  useEffect(function(){return window.__app.intervaloVisible(function(){cargar(true);},300000,['reportes_operador'],2000);},[desde,hasta]);
 
   var tarifaDe=useMemo(function(){var m={};mensajeros.forEach(function(x){m[nm(x.nombre).toUpperCase()]=+x.tarifa||1200;});return function(n){return m[nm(n).toUpperCase()]||1200;};},[mensajeros]);
   // Cada fila enriquecida con tipo/grupo, envíos de descuento y monto estimado.

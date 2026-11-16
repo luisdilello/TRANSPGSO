@@ -32,7 +32,7 @@ function ErroresApp(props){
     try{for(;;){var r=await db.from('errores_app').select('*').gte('created_at',desde).order('created_at',{ascending:false}).range(from,from+999);if(r.error)throw r.error;out=out.concat(r.data||[]);if(!r.data||r.data.length<1000||out.length>=5000)break;from+=1000;}
       setRows(out);}catch(e){toast('No se pudo cargar: '+(e.message||e));setRows([]);}
   }
-  useEffect(function(){cargar();var t=setInterval(cargar,60000);return function(){clearInterval(t);};},[dias]);
+  useEffect(function(){cargar();return window.__app.intervaloVisible(cargar,300000,['errores_app'],3000);},[dias]);
   var lista=(rows||[]).filter(function(e){if(!verRes&&e.resuelto)return false;if(fApp!=='todas'&&e.app!==fApp)return false;if(fUsr&&e.usuario!==fUsr)return false;return true;});
   var grupos=useMemo(function(){var g={};lista.forEach(function(e){var k=firma(e);var x=g[k]=g[k]||{k:k,tipo:e.tipo,mensaje:e.mensaje,items:[],usuarios:{},ultimo:e.created_at,resuelto:true};
     x.items.push(e);if(e.usuario)x.usuarios[e.usuario]=(x.usuarios[e.usuario]||0)+1;if(e.created_at>x.ultimo)x.ultimo=e.created_at;if(!e.resuelto)x.resuelto=false;});

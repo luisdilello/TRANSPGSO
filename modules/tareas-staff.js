@@ -40,7 +40,7 @@ function cargar(){
   });
 }
 var cargado=false;
-cargar();setInterval(cargar,90000);
+cargar();if(window.__app&&window.__app.intervaloVisible)window.__app.intervaloVisible(cargar,300000,['tareas_staff'],3000);else setInterval(cargar,90000);
 document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')cargar();});
 window.__tareasStaff={recargar:cargar};
 })();
