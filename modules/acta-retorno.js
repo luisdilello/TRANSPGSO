@@ -180,7 +180,7 @@ function ActasRetorno(props){
   var chip=function(k,t){var on=rango===k;return h('button',{key:k,type:'button',onClick:function(){setRango(k);},style:{padding:'6px 12px',borderRadius:999,border:'1px solid '+(on?'#e8c766':'rgba(255,255,255,.18)'),background:on?'rgba(232,199,102,.2)':'transparent',color:on?'#ffe59a':C.txt,fontWeight:800,fontSize:12,cursor:'pointer'}},t);};
   var tabB=function(k,t){var on=tab===k;return h('button',{type:'button',onClick:function(){setTab(k);},style:{padding:'8px 14px',border:'none',borderBottom:'3px solid '+(on?'#e8c766':'transparent'),background:'transparent',color:on?'#ffe59a':C.sub,fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1.2,cursor:'pointer'}},t);};
   var th={textAlign:'left',padding:'8px 10px',fontSize:10.5,letterSpacing:.8,textTransform:'uppercase',color:'rgba(233,228,210,.65)',borderBottom:'1px solid rgba(255,255,255,.12)',whiteSpace:'nowrap'};
-  var td={padding:'8px 10px',borderBottom:'1px solid rgba(255,255,255,.06)',fontSize:13,verticalAlign:'top'};
+  var td={padding:'8px 10px',borderBottom:'1px solid rgba(255,255,255,.06)',fontSize:13,verticalAlign:'top',color:C.txt,background:'transparent'};
   return h('div',{style:C.caja},
     h('div',{style:{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',marginBottom:6}},
       boton(C,'‹ Clientes',function(){setCli(null);setSel({});}),
