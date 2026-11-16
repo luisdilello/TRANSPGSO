@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261115234052;
+window.__MODULES_VERSION=20261115234454;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -12457,7 +12457,7 @@ function IncidenciasRider(props){
   useEffect(function(){db.rpc('mis_incidencias').then(function(r){if(r.error){setErr(true);setLista([]);return;}setLista(r.data||[]);marcarIncidVistas(r.data||[],props.idVistas);},function(){setErr(true);setLista([]);});},[]);
   var bg=claro?'#f3eddc':'#15180f',panel=claro?'#ffffff':'#22261a',txt=claro?'#2b2e20':'#f1ecda',sub=claro?'#5f5e4c':'#bdb8a2',bd=claro?'rgba(43,46,32,.13)':'rgba(255,255,255,.12)',base=claro?'#d6ccb0':'#0b0c07',caja=claro?'#faf7ef':'rgba(255,255,255,.05)';
   var mesActual=fechaHoyCL().slice(0,7);
-  var L=lista||[];var delMes=L.filter(function(x){return String(x.fecha||x.created_at||'').slice(0,7)===mesActual;}).length;
+  var L=lista||[];var lunesSem=(function(){var d=new Date(fechaHoyCL()+'T12:00:00');d.setDate(d.getDate()-((d.getDay()+6)%7));return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();var esSem=function(x){return String(x.fecha||(x.created_at?fechaHoyCL(x.created_at):'')).slice(0,10)>=lunesSem;};var delMes=L.filter(esSem).length;
   var sinRev=L.filter(function(x){return x.a_descuento==null&&!x.resuelto;}).length;var aDesc=L.filter(function(x){return x.a_descuento===true;}).length;
   function kpi(v,l,c){return React.createElement('div',{style:{borderRadius:14,padding:'9px 4px 8px',textAlign:'center',background:claro?'linear-gradient(180deg,#ffffff,'+hexAlphaRider(c,.12)+')':'linear-gradient(180deg,'+hexAlphaRider(c,.25)+',#1b1e14)',border:'1px solid '+hexAlphaRider(c,.4),boxShadow:'inset 0 1px 0 rgba(255,255,255,.5), 0 3px 0 '+(claro?hexAlphaRider(c,.45):'#0b0c07')}},
     React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:28,lineHeight:1,color:claro?c:'#fff'}},v),React.createElement('div',{style:{fontSize:9.5,fontWeight:900,letterSpacing:.8,color:claro?c:'#d9d3bd'}},l));}
@@ -12478,7 +12478,7 @@ function IncidenciasRider(props){
       React.createElement('div',{style:{flex:1,lineHeight:1.15}},React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:21,letterSpacing:1.6,color:'#fff'}},'Mis incidencias'),
         React.createElement('div',{style:{fontSize:11.5,fontWeight:700,color:'#d9d3bd'}},'Reportadas por la oficina · solo lectura'))),
     React.createElement('div',{style:{flex:1,overflowY:'auto',padding:12,display:'flex',flexDirection:'column',gap:10}},
-      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:8}},kpi(delMes,'ESTE MES','#5f5e4c'),kpi(sinRev,'SIN REVISAR','#e65100'),kpi(aDesc,'A DESCUENTO','#b03030')),
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:8}},kpi(delMes,'ESTA SEMANA','#5f5e4c'),kpi(L.filter(function(x){return esSem(x)&&x.a_descuento==null&&!x.resuelto;}).length,'SIN REVISAR','#e65100'),kpi(L.filter(function(x){return esSem(x)&&x.a_descuento===true;}).length,'A DESCUENTO','#b03030')),
       lista==null?React.createElement('div',{style:{textAlign:'center',padding:30,color:sub}},'Cargando…'):
       L.length===0?React.createElement('div',{style:{textAlign:'center',padding:30,color:sub,fontWeight:700}},err?'No se pudieron cargar. Intenta de nuevo con señal.':'No tienes incidencias en los últimos 60 días.'):
       semanas.map(function(sem){var abierta=semAbierta[sem.k]!==undefined?semAbierta[sem.k]:sem.idx===0;
