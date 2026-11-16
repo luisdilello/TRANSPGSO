@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261115223202;
+window.__MODULES_VERSION=20261115223438;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -942,7 +942,7 @@ const db=supabase.createClient(SUPA_URL,SUPA_KEY,{global:{fetch:fetchConLimite},
   window.__logErr=function(tipo,mensaje,extra){
     try{
       extra=extra||{};var msg=corto(mensaje&&mensaje.message?mensaje.message:mensaje,1900);
-      if(!msg||/ResizeObserver loop|Script error\.?$|AbortError|The user aborted/i.test(msg))return;
+      if(!msg||/ResizeObserver loop|Script error\.?$|AbortError|The user aborted|not allowed by the user agent|NotAllowedError|play\(\) request was interrupted/i.test(msg))return;
       var clave=tipo+'|'+msg,ahora=Date.now();if(vistos[clave]&&ahora-vistos[clave]<120000)return;vistos[clave]=ahora;
       var c=window.__errCtx||{};
       var fila={ocurrido_at:new Date().toISOString(),usuario:c.usuario||null,rol:c.rol||null,app:c.app||'panel',tipo:corto(tipo,60),mensaje:msg,
