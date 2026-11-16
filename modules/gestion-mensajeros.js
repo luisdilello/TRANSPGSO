@@ -94,7 +94,7 @@ const filtrados=mensajeros.filter(m=>m.nombre.toLowerCase().includes(search.toLo
   if(!nombreFinal){toast('⚠ Ingresa un nombre');return;}
   if(modal==='add'){
     try{
-      const{data:inserted,error:errIns}=await db.from('mensajeros').insert({nombre:nombreFinal,activo:true,tarifa:+form.tarifa,tarifa_retiro:+form.tarifaRetiro||500,extra_periferia:+form.extraPeriferia||0,ver_ganancias:false,colecta_habilitada:false}).select().single();
+      const{data:inserted,error:errIns}=await db.from('mensajeros').insert({nombre:nombreFinal,activo:true,tarifa:+form.tarifa,tarifa_retiro:+form.tarifaRetiro||500,extra_periferia:+form.extraPeriferia||0,ve_periferia:!!form.vePeriferia,ver_ganancias:false,colecta_habilitada:false}).select().single();
       if(errIns){toast('⚠ Error: '+errIns.message);}
       else{
         setMensajeros(prev=>[...prev,{...inserted,id:inserted.id,nombre:nombreFinal,activo:true,tarifa:+form.tarifa,tarifaRetiro:+form.tarifaRetiro||500,extra_periferia:+form.extraPeriferia||0}].sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es')));
@@ -102,9 +102,9 @@ const filtrados=mensajeros.filter(m=>m.nombre.toLowerCase().includes(search.toLo
       }
     }catch(e){toast('⚠ '+e.message);}
   }else{
-    setMensajeros(prev=>prev.map(m=>m.id===modal?{...m,nombre:nombreFinal,tarifa:+form.tarifa,tarifaRetiro:+form.tarifaRetiro||500,extra_periferia:+form.extraPeriferia||0}:m));
+    setMensajeros(prev=>prev.map(m=>m.id===modal?{...m,nombre:nombreFinal,tarifa:+form.tarifa,tarifaRetiro:+form.tarifaRetiro||500,extra_periferia:+form.extraPeriferia||0,ve_periferia:!!form.vePeriferia}:m));
     try{
-      const {error:errUpd}=await db.from('mensajeros').update({nombre:nombreFinal,tarifa:+form.tarifa,tarifa_retiro:+form.tarifaRetiro||500,extra_periferia:+form.extraPeriferia||0}).eq('id',modal);
+      const {error:errUpd}=await db.from('mensajeros').update({nombre:nombreFinal,tarifa:+form.tarifa,tarifa_retiro:+form.tarifaRetiro||500,extra_periferia:+form.extraPeriferia||0,ve_periferia:!!form.vePeriferia}).eq('id',modal);
       if(errUpd)toast('⚠ Error: '+errUpd.message);
       else toast('✓ '+nombreFinal+' · $'+Number(form.tarifa).toLocaleString('es-CL')+'/entrega');
     }catch(e){toast('⚠ '+e.message);}
@@ -187,7 +187,7 @@ const filtrados=mensajeros.filter(m=>m.nombre.toLowerCase().includes(search.toLo
             esAdmin&&h('td',{style:Object.assign({},td,{textAlign:'center'})},sw(!!m.verGanancias,()=>toggleVerGanancias(m.id),'Puede ver la pestaña Ganancias en su app')),
             esAdmin&&h('td',{style:Object.assign({},td,{textAlign:'center'})},sw(!!m.colectaHabilitada,()=>toggleColectaHabilitada(m.id),'Puede usar Colecta en su app')),
             h('td',{style:Object.assign({},td,{textAlign:'right',whiteSpace:'nowrap'})},
-              h('button',{className:'gm-act',onClick:()=>{setForm({nombre:m.nombre,tarifa:m.tarifa,tarifaRetiro:m.tarifaRetiro||500,extraPeriferia:m.extra_periferia||0,bloqueadoNombre:tieneUsuario(m)});setModal(m.id);},style:{border:'1px solid #f7dd8c',background:'linear-gradient(180deg,#f7dd8c,#d9b553 55%,#ae8829)',color:'#1a1d13',boxShadow:'0 2px 0 #6d531a',marginRight:6}},'Editar'),
+              h('button',{className:'gm-act',onClick:()=>{setForm({nombre:m.nombre,tarifa:m.tarifa,tarifaRetiro:m.tarifaRetiro||500,extraPeriferia:m.extra_periferia||0,vePeriferia:!!m.ve_periferia,bloqueadoNombre:tieneUsuario(m)});setModal(m.id);},style:{border:'1px solid #f7dd8c',background:'linear-gradient(180deg,#f7dd8c,#d9b553 55%,#ae8829)',color:'#1a1d13',boxShadow:'0 2px 0 #6d531a',marginRight:6}},'Editar'),
               esAdmin&&h('button',{className:'gm-act',title:'Enviar aviso a este mensajero',onClick:()=>setNotifTarget(m),style:{border:'1px solid rgba(43,46,32,.18)',background:'#fff',color:'#4a4d3a',boxShadow:'0 2px 0 rgba(43,46,32,.15)',marginRight:6}},'Aviso'),
               h('button',{className:'gm-act',onClick:()=>toggleEstado(m.id),style:{border:'1px solid #c0392b',background:'linear-gradient(180deg,#e2574c,#b8352a)',color:'#fff',boxShadow:'0 2px 0 #7a2018',marginRight:6}},'Pausar'),
               h('button',{className:'gm-act',title:'Eliminar',onClick:()=>setConfirmDel(m.id),style:{border:'1px solid rgba(192,57,43,.35)',background:'#fff',color:'#c0392b',boxShadow:'0 2px 0 rgba(192,57,43,.2)',padding:0}},h('svg',{width:14,height:14,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:2.4,strokeLinecap:'round'},h('path',{d:'M6 6l12 12M18 6L6 18'})))));
