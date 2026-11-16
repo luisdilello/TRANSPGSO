@@ -290,13 +290,14 @@ function ConciliacionBancaria(props){
   if(!dat)return h('div',{style:Object.assign({},caja,{padding:30,textAlign:'center'})},cargando?'Cargando conciliación…':'Sin datos');
   var mensajerosNombres=Object.keys(excelPorSem).reduce(function(a,k){Object.keys(excelPorSem[k]).forEach(function(n){if(a.indexOf(n)<0)a.push(n);});return a;},[]).sort();
   var vinculosSug={mensajero:mensajerosNombres,cliente:((dat.clientes||[]).map(function(c){return norm(c.nombre);})),trabajador:[],proveedor:[],socio:['LUIS DI LELLO'],otro:[]};
-  var movLista=delMes.filter(function(m){if(fMov==='pendientes'&&(m._c||m.justificacion))return false;if(fMov==='abonos'&&m.tipo!=='abono')return false;if(fMov==='cargos'&&m.tipo!=='cargo')return false;
+  var esSuper=!!((window.__app||{}).perfil&&window.__app.perfil.esSuperAdmin); // rol Administración: sin la cuenta del socio
+  var movLista=delMes.filter(function(m){if(!esSuper&&m._c&&m._c.tipo==='socio')return false;if(fMov==='pendientes'&&(m._c||m.justificacion))return false;if(fMov==='abonos'&&m.tipo!=='abono')return false;if(fMov==='cargos'&&m.tipo!=='cargo')return false;
     if(q){var s=norm(q);if((norm(m.descripcion)+' '+norm(m._c&&m._c.vinculo)+' '+Math.round(m.monto)).indexOf(s)<0)return false;}return true;}).slice().reverse();
   var mp=mes.split('-');var mesPrev=iso(new Date(+mp[0],+mp[1]-2,1)).slice(0,7),mesNext=iso(new Date(+mp[0],+mp[1],1)).slice(0,7);
   var cerrado=mesInfo.estado==='cerrado';
   var kp=function(l,v,c,s){return h('div',{key:l,style:Object.assign({},vid,{padding:'12px 14px'})},h('div',{style:{fontSize:10.5,letterSpacing:1.5,textTransform:'uppercase',color:SUAVE,fontWeight:800}},l),
     h('div',{style:{fontFamily:'Bebas Neue',fontSize:30,lineHeight:1.05,color:c,textShadow:'0 0 14px '+c+'55',whiteSpace:'nowrap'}},v),s&&h('div',{style:{fontSize:11.5,color:SUAVE}},s));};
-  var TIPOS=[['mensajero','Mensajero'],['cliente','Cliente'],['trabajador','Trabajador'],['proveedor','Proveedor'],['socio','Socio'],['otro','Otro']];
+  var TIPOS=[['mensajero','Mensajero'],['cliente','Cliente'],['trabajador','Trabajador'],['proveedor','Proveedor'],['socio','Socio'],['otro','Otro']].filter(function(t){return esSuper||t[0]!=='socio';});
   var colTipo={mensajero:ORO,cliente:VERDE,trabajador:AZUL,proveedor:'#c77dff',socio:NAR,otro:'#9aa08a'};
   var vPend=pend?validar(pend,sIni,sFin):null;
 
@@ -318,7 +319,7 @@ function ConciliacionBancaria(props){
         kp('Cargos',money(caMes),NAR,delMes.filter(function(m){return m.tipo==='cargo';}).length+' egresos'),
         kp('Alertas',alertas.length,alertas.length?ROJO:VERDE,alertas.length?'requieren revisión':'sin alertas')),
       h('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginTop:12}},
-        [['cb-carga','Carga'],['cb-gastos','Gastos'],['cb-alertas','Alertas'],['cb-men','Mensajeros'],['cb-cli','Clientes'],['cb-socio','Socio'],['cb-movs','Movimientos'],['cb-dir','Directorio']].map(function(x){
+        [['cb-carga','Carga'],['cb-gastos','Gastos'],['cb-alertas','Alertas'],['cb-men','Mensajeros'],['cb-cli','Clientes'],['cb-socio','Socio'],['cb-movs','Movimientos'],['cb-dir','Directorio']].filter(function(x){return esSuper||x[0]!=='cb-socio';}).map(function(x){
           return h('a',{key:x[0],href:'#'+x[0],onClick:function(e){e.preventDefault();var el=document.getElementById(x[0]);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},style:{padding:'6px 12px',borderRadius:999,border:'1px solid rgba(255,255,255,.14)',background:'rgba(255,255,255,.04)',color:TXT,fontSize:12,fontWeight:800,textDecoration:'none'}},x[1]);}))),
 
     // carga
@@ -379,8 +380,8 @@ function ConciliacionBancaria(props){
             h('td',null,x.c.id?h('select',{className:'cb-in',value:x.ci,onChange:function(e){cambiarCiclo(x.c,e.target.value);},style:{padding:'4px 6px',fontSize:12}},[['mensual','Mensual'],['quincenal','Quincenal'],['semanal','Semanal']].map(function(o){return h('option',{key:o[0],value:o[0]},o[1]);})):'—'),
             h('td',null,x.ent.toLocaleString('es-CL')),h('td',null,money(x.esp)),h('td',null,money(x.ab)),h('td',{style:{fontWeight:800,color:x.ab-x.esp>=0?'#7fe3a8':'#ff8a8a'}},money(x.ab-x.esp)),h('td',null,h(Chip,{t:E[0],c:E[1]})));}))))),
 
-    // socio
-    h('div',{style:Object.assign({},caja,{padding:'16px 18px'})},
+    // socio (solo superadmin)
+    esSuper&&h('div',{style:Object.assign({},caja,{padding:'16px 18px'})},
       h(Titulo,{id:'cb-socio',t:'Cuenta corriente socio',s:'Retiros de Luis desde la cuenta de la empresa, con el saldo arrastrado mes a mes (retiros − aportes).'}),
       socio.length===0?h('div',{style:{color:SUAVE,fontSize:13}},'Sin retiros registrados.'):
       h('table',{className:'cb-tab'},h('thead',null,h('tr',null,['Mes','Retiros','Aportes','Saldo arrastrado'].map(function(c){return h('th',{key:c},c);}))),
@@ -405,7 +406,7 @@ function ConciliacionBancaria(props){
     h('div',{style:Object.assign({},caja,{padding:'16px 18px'})},
       h(Titulo,{id:'cb-dir',t:'Directorio de contrapartes ('+dir.length+')',s:'La clave es la descripción del banco: exacta (recomendado, un mismo RUT puede ser dos personas) o "contiene" para nombres de empresa.',der:btnOro('Agregar',function(){setDirEd({patron:'',modo:'exacta',tipo:'mensajero',vinculo:'',concepto:''});})}),
       h('div',{style:{overflowX:'auto',maxHeight:420,overflowY:'auto'}},h('table',{className:'cb-tab'},h('thead',null,h('tr',null,['Descripción en el banco','Modo','Tipo','Corresponde a','Concepto','Monto fijo',''].map(function(c,i){return h('th',{key:i},c);}))),
-        h('tbody',null,dir.map(function(d){return h('tr',{key:d.id,style:{opacity:d.activo?1:.5}},h('td',{style:{fontFamily:'JetBrains Mono',fontSize:12}},d.patron),h('td',null,d.modo),h('td',null,h(Chip,{t:d.tipo,c:colTipo[d.tipo]||ORO})),
+        h('tbody',null,dir.filter(function(d){return esSuper||d.tipo!=='socio';}).map(function(d){return h('tr',{key:d.id,style:{opacity:d.activo?1:.5}},h('td',{style:{fontFamily:'JetBrains Mono',fontSize:12}},d.patron),h('td',null,d.modo),h('td',null,h(Chip,{t:d.tipo,c:colTipo[d.tipo]||ORO})),
           h('td',{style:{fontWeight:800}},d.vinculo),h('td',null,d.concepto||'—'),h('td',null,d.monto_fijo?money(d.monto_fijo):'—'),
           h('td',{style:{whiteSpace:'nowrap'}},btnVid('Editar',function(){setDirEd(Object.assign({},d));},false,{padding:'4px 9px',fontSize:11.5,marginRight:6}),btnVid('Quitar',function(){borrarDir(d);},false,{padding:'4px 9px',fontSize:11.5})));}))))),
 

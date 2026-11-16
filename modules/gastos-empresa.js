@@ -58,6 +58,8 @@ function GastosEmpresa(props){
   var _f=useState(''),fCat=_f[0],setFCat=_f[1];
   var _q=useState(''),q=_q[0],setQ=_q[1];
   var _up=useState(0),subiendo=_up[0],setSubiendo=_up[1];
+  var esSuper=!!(A.perfil&&A.perfil.esSuperAdmin)||!!((window.__app||{}).perfil&&window.__app.perfil.esSuperAdmin);
+  var CATS=esSuper?CATEGORIAS:CATEGORIAS.filter(function(c){return c!=='Retiro del socio';});var IMPS=esSuper?IMPUT:IMPUT.filter(function(o){return o[0]!=='socio';});
   var _mn=useState([]),mensajeros=_mn[0],setMensajeros=_mn[1];
   useEffect(function(){db.from('mensajeros').select('nombre').eq('activo',true).order('nombre').then(function(r){if(r&&r.data)setMensajeros(r.data.map(function(m){return String(m.nombre||'').replace(/,/g,'').replace(/\s+/g,' ').trim();}).filter(Boolean));});},[]);
   function cargar(){var p=mes.split('-');var fin=new Date(+p[0],+p[1],0).getDate();
@@ -170,10 +172,10 @@ function GastosEmpresa(props){
         h('div',{className:'ge-grid',style:{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:10}},
           campo('FECHA DEL GASTO',h('input',Object.assign({},inp,{type:'date',value:ed.fecha,onChange:function(e){upd('fecha',e.target.value);}}))),
           campo('MONTO ($)',h('input',Object.assign({},inp,{inputMode:'numeric',placeholder:'Ej.: 45.990',value:ed.monto?Math.round(numero(ed.monto)).toLocaleString('es-CL'):'',onChange:function(e){upd('monto',String(numero(e.target.value)));},style:Object.assign({},inp.style,{fontWeight:800,fontSize:15})}))),
-          campo('CATEGORÍA',h('select',Object.assign({},inp,{value:ed.categoria,onChange:function(e){upd('categoria',e.target.value);if(e.target.value==='Retiro del socio')upd('imputacion','socio');}}),h('option',{value:''},'Elige una categoría'),CATEGORIAS.map(function(c){return h('option',{key:c,value:c},c);}))),
+          campo('CATEGORÍA',h('select',Object.assign({},inp,{value:ed.categoria,onChange:function(e){upd('categoria',e.target.value);if(e.target.value==='Retiro del socio')upd('imputacion','socio');}}),h('option',{value:''},'Elige una categoría'),CATS.map(function(c){return h('option',{key:c,value:c},c);}))),
           ed.categoria===CAT_ADEL?campo('MENSAJERO',h('select',Object.assign({},inp,{value:ed.mensajero||'',onChange:function(e){upd('mensajero',e.target.value);},style:Object.assign({},inp.style,{fontWeight:800})}),h('option',{value:''},'Elige el mensajero'),
             (ed.mensajero&&mensajeros.indexOf(ed.mensajero)<0?[ed.mensajero]:[]).concat(mensajeros).map(function(n){return h('option',{key:n,value:n},n);}))):
-          campo('IMPUTACIÓN',h('select',Object.assign({},inp,{value:ed.categoria==='Retiro del socio'?'socio':ed.imputacion,disabled:ed.categoria==='Retiro del socio',onChange:function(e){upd('imputacion',e.target.value);}}),IMPUT.map(function(o){return h('option',{key:o[0],value:o[0]},o[1]);}))),
+          campo('IMPUTACIÓN',h('select',Object.assign({},inp,{value:ed.categoria==='Retiro del socio'?'socio':ed.imputacion,disabled:ed.categoria==='Retiro del socio',onChange:function(e){upd('imputacion',e.target.value);}}),IMPS.map(function(o){return h('option',{key:o[0],value:o[0]},o[1]);}))),
           ed.categoria===CAT_ADEL?h('div',{style:{gridColumn:'1 / -1',fontSize:12,color:SUAVE,lineHeight:1.4,padding:'2px 2px 4px'}},'El adelanto queda registrado como pendiente en Pagos y Cobros → Adelantos para descontarlo en el pago del mensajero.'):null,
           ed.categoria!==CAT_ADEL&&campo('PROVEEDOR O A QUIÉN SE PAGÓ',h('input',Object.assign({},inp,{placeholder:'Ej.: Copec, Entel, arrendador…',value:ed.proveedor||'',onChange:function(e){upd('proveedor',e.target.value);}}))),
           ed.categoria!==CAT_ADEL&&campo('RUT DEL PROVEEDOR',h('input',Object.assign({},inp,{placeholder:'Opcional',value:ed.rut_proveedor||'',onChange:function(e){upd('rut_proveedor',e.target.value);},onBlur:function(e){if(e.target.value)upd('rut_proveedor',rutFmt(e.target.value));}}))),
