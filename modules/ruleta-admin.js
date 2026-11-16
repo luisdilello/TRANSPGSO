@@ -4,6 +4,7 @@
 (function(){
 var A=window.__app||{};var db=A.db;var h=React.createElement,useState=React.useState,useEffect=React.useEffect;
 var ORO='#e8c766',TXT='#f1ecda',SUAVE='rgba(233,228,210,.65)',VERDE='#36c47f',ROJO='#ff5a5a',NAR='#ff9d5c';
+var COPA={leyenda:['Leyenda','#ffd84d'],podio:['Podio','#f2cf5b'],oro:['Oro','#e8c766'],plata:['Plata','#d6dbe2'],bronce:['Bronce','#c9824a'],hierro:['Hierro','#8a8275']};
 var TIPOS=[['dinero','Dinero (extra en el pago)'],['consumo','Consumo en el local'],['bencina','Bencina'],['comodin','Comodín (anula 1 incidencia)'],['especie','Especie (polera, gorro…)'],['otro','Otro']];
 var caja={borderRadius:20,background:'radial-gradient(120% 160% at 15% 0%,#3a3f2b 0%,#23271a 50%,#15180f 100%)',border:'1px solid rgba(200,168,75,.35)',boxShadow:'0 18px 38px rgba(20,22,15,.25), inset 0 1px 0 rgba(255,255,255,.07)',color:TXT,padding:'18px 20px'};
 var vid={borderRadius:14,background:'linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.03))',border:'1px solid rgba(255,255,255,.1)'};
@@ -53,12 +54,12 @@ function RuletaAdmin(props){
     h('div',{style:caja},
       h('div',{style:{display:'flex',justifyContent:'space-between',gap:12,flexWrap:'wrap',alignItems:'flex-start'}},
         h('div',null,h('div',{style:{fontFamily:'Bebas Neue',fontSize:32,letterSpacing:2.2,color:'#fff',lineHeight:1}},'Ruleta de incentivos'),
-          h('div',{style:{fontSize:12.5,color:SUAVE,marginTop:4,maxWidth:720}},'Único bono por efectividad. Cada semana (lunes a domingo) gira quien cumple la meta; el giro se hace desde la app a partir del lunes siguiente. El mensajero no ve las probabilidades ni el mínimo de entregas.')),
+          h('div',{style:{fontSize:12.5,color:SUAVE,marginTop:4,maxWidth:720}},'Único bono por efectividad. Cada semana (lunes a domingo) gira quien termina en Copa de Oro o mejor, con la efectividad mínima, sin incidencias y sobre el mínimo oculto de entregas. Se gira desde la app desde el martes siguiente. El mensajero no ve las probabilidades ni el mínimo.')),
         h('div',{style:{display:'flex',alignItems:'center',gap:8}},btn('‹',function(){setSem(sumar(sem,-7));}),
           h('div',{style:{fontFamily:'Bebas Neue',fontSize:21,letterSpacing:1.2,color:ORO,minWidth:150,textAlign:'center'}},dm(sem)+' al '+dm(sumar(sem,6))),btn('›',function(){setSem(sumar(sem,7));}))),
       cfg&&h('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginTop:10,fontSize:12.5,color:SUAVE}},
-        chip(cfg.activa?'Activa':'Apagada',cfg.activa?VERDE:'#9aa08a'),
-        h('span',null,'Meta: '+cfg.min_efectividad+'% de efectividad · mínimo '+cfg.min_entregas+' entregados · '+(cfg.sin_incidencias!==false?'sin incidencias a descuento':'incidencias permitidas')+(cfg.desde?' · desde la semana del '+dm(cfg.desde):'')),
+        chip(cfg.activa?'Activa':'Apagada',cfg.activa?VERDE:'#9aa08a'),chip(cfg.visible?'Visible para mensajeros':'Oculta para mensajeros',cfg.visible?VERDE:NAR),
+        h('span',null,'Meta: Copa de Oro o mejor · '+cfg.min_efectividad+'% de efectividad · mínimo oculto '+cfg.min_entregas+' entregados · '+(cfg.sin_incidencias!==false?'sin incidencias a descuento':'incidencias permitidas')+(cfg.desde?' · desde la semana del '+dm(cfg.desde):'')+' · se abre el '+(['','lunes','martes','miércoles','jueves','viernes','sábado','domingo'][cfg.dia_apertura||2]||'martes')),
         h('span',{style:{marginLeft:'auto'}},'Costo promedio por giro: ',h('b',{style:{color:ORO}},money(costoGiro))),
         esSuper&&btn('Configurar',abrirEd,true)),
       h('div',{className:'ra-k',style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginTop:14}},
@@ -69,9 +70,9 @@ function RuletaAdmin(props){
     h('div',{style:Object.assign({},caja,{padding:0,overflow:'hidden'})},
       h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'14px 18px 8px'}},h('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:1.4,color:'#fff'}},'Mensajeros de la semana'),F.length>0&&btn('Excel',exportar)),
       filas==null?h('div',{style:{padding:'14px 18px',color:SUAVE}},'Cargando…'):F.length===0?h('div',{style:{padding:'14px 18px',color:SUAVE}},'Sin envíos esa semana.'):
-      h('div',{style:{overflowX:'auto'}},h('table',{className:'ra-tab'},h('thead',null,h('tr',null,['Mensajero','Entregados','Efectividad','Incidencias','Califica','Premio','Entregado'].map(function(c){return h('th',{key:c},c);}))),
-        h('tbody',null,F.map(function(x){var g=gPor[x.mensajero];var motivo=x.cumple?'':(!x.cumple_ef?'efectividad':!x.cumple_vol?'entregas':!x.cumple_inc?'incidencias':'fecha de inicio');
-          return h('tr',{key:x.mensajero,style:{opacity:x.cumple?1:.62}},h('td',{style:{fontWeight:800}},x.mensajero),h('td',null,x._ent+' / '+x._tot),
+      h('div',{style:{overflowX:'auto'}},h('table',{className:'ra-tab'},h('thead',null,h('tr',null,['#','Mensajero','Copa','Entregados','Efectividad','Incidencias','Califica','Premio','Entregado'].map(function(c){return h('th',{key:c},c);}))),
+        h('tbody',null,F.slice().sort(function(a,b){return (a.posicion||999)-(b.posicion||999);}).map(function(x){var g=gPor[x.mensajero];var motivo=x.cumple?'':(!x.cumple_copa?'copa':!x.cumple_ef?'efectividad':!x.cumple_vol?'mínimo de entregas':!x.cumple_inc?'incidencias':'fecha de inicio');var cp=COPA[x.nivel]||COPA.hierro;
+          return h('tr',{key:x.mensajero,style:{opacity:x.cumple?1:.62}},h('td',{style:{color:SUAVE}},x.posicion||'—'),h('td',{style:{fontWeight:800}},x.mensajero),h('td',null,chip(cp[0],cp[1])),h('td',null,x._ent+' / '+x._tot),
             h('td',{style:{fontWeight:800,color:x.cumple_ef?'#7fe3a8':'#ff8a8a'}},x.efectividad+'%'),h('td',null,x.cumple_inc?'—':chip('Con descuento',ROJO)),
             h('td',null,x.cumple?chip('Sí',VERDE):chip('No · '+motivo,'#9aa08a')),
             h('td',null,g?h('span',{style:{fontWeight:800,color:ORO}},g.premio_detalle||g.premio_nombre):(x.cumple&&!esActual?h('span',{style:{color:SUAVE}},'Aún no gira'):'—')),
@@ -80,6 +81,7 @@ function RuletaAdmin(props){
       h('div',{style:Object.assign({},caja,{width:'100%',maxWidth:860})},
         h('div',{style:{fontFamily:'Bebas Neue',fontSize:24,letterSpacing:1.6,color:'#fff',marginBottom:10}},'Configurar ruleta'),
         h('div',{style:{display:'flex',gap:12,flexWrap:'wrap',alignItems:'flex-end',marginBottom:12}},
+          h('label',{style:{display:'flex',alignItems:'center',gap:6,fontWeight:800,fontSize:13}},h('input',{type:'checkbox',checked:!!ed.visible,onChange:function(e){var v=e.target.checked;setEd(function(o){return Object.assign({},o,{visible:v});});},style:{width:18,height:18,accentColor:'#C8A84B'}}),'Visible para los mensajeros'),
           h('label',{style:{display:'flex',alignItems:'center',gap:6,fontWeight:800,fontSize:13}},h('input',{type:'checkbox',checked:!!ed.activa,onChange:function(e){var v=e.target.checked;setEd(function(o){return Object.assign({},o,{activa:v});});},style:{width:18,height:18,accentColor:'#C8A84B'}}),'Ruleta activa'),
           [['min_efectividad','Efectividad mínima %',90],['min_entregas','Mínimo de entregados',90]].map(function(f){return h('label',{key:f[0],style:{fontSize:10.5,fontWeight:900,letterSpacing:1,color:ORO,display:'flex',flexDirection:'column',gap:4}},f[1].toUpperCase(),h('input',{className:'ra-in',type:'number',value:ed[f[0]],onChange:function(e){var v=e.target.value;setEd(function(o){var n=Object.assign({},o);n[f[0]]=v;return n;});},style:{width:f[2]+60}}));}),
           h('label',{style:{fontSize:10.5,fontWeight:900,letterSpacing:1,color:ORO,display:'flex',flexDirection:'column',gap:4}},'VÁLIDA DESDE LA SEMANA DEL',h('input',{className:'ra-in',type:'date',value:ed.desde||'',onChange:function(e){var v=e.target.value?lunesDe(e.target.value):'';setEd(function(o){return Object.assign({},o,{desde:v});});}})),
