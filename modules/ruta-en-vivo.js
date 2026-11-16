@@ -160,6 +160,17 @@ function RutaEnVivo(props){
     var id=setInterval(function(){if(!document.hidden)cargar();},30000);
     return function(){clearInterval(id);};
   },[dia,pausa,esHoy]);
+  // 15-11-2026: ubicación GPS de cada mensajero en vivo -> aviso si alguien con pendientes lleva más de 5 min sin enviarla
+  var _ub=R.useState({}),ubic=_ub[0],setUbic=_ub[1];
+  var avisadosRef=R.useRef({});
+  R.useEffect(function(){
+    if(!esHoy)return;
+    function cargarUb(){db.from('ubicaciones_mensajeros').select('mensajero,updated_at,activo').then(function(r){if(r&&r.data){var o={};r.data.forEach(function(u){o[String(u.mensajero||'').toUpperCase().replace(/,/g,'').replace(/\s+/g,' ').trim()]=u;});setUbic(o);}},function(){});}
+    cargarUb();
+    var ch=null;try{ch=db.channel('rv-ubic-'+Math.random().toString(36).slice(2,7)).on('postgres_changes',{event:'*',schema:'public',table:'ubicaciones_mensajeros'},function(pl){var u=pl&&pl.new;if(!u||!u.mensajero)return;var k=String(u.mensajero).toUpperCase().replace(/,/g,'').replace(/\s+/g,' ').trim();setUbic(function(prev){var o=Object.assign({},prev);o[k]=u;return o;});}).subscribe();}catch(e){}
+    var iv=setInterval(function(){if(!document.hidden)cargarUb();},120000);
+    return function(){clearInterval(iv);try{if(ch)db.removeChannel(ch);}catch(e){}};
+  },[esHoy]);
   // reloj para los "hace X min"
   R.useEffect(function(){var id=setInterval(function(){setTick(function(x){return x+1;});},20000);return function(){clearInterval(id);};},[]);
 
@@ -178,9 +189,16 @@ function RutaEnVivo(props){
     return Object.assign({},m,{sal:sal,pend:pend,cerr:cerr,pE:pE,pO:pO,esperado:esperado,hAct:hAct,hEnt:hEnt,estado:estado});
   });
   var T=filas.reduce(function(a,f){a.etq+=+f.etq_futura||0;a.etqP+=+f.etq_futura_pend||0;a.sal+=f.sal;a.ent+=+f.ent||0;a.rep+=+f.rep||0;a.can+=+f.can||0;a.pen+=f.pend;a.otr+=+f.otr||0;HORAS.forEach(function(x,i){a.c[i]+=+((f.cortes||[])[i])||0;});return a;},{sal:0,ent:0,rep:0,can:0,pen:0,otr:0,etq:0,etqP:0,c:[0,0,0,0,0]});
-  var cuenta={todos:filas.length,atrasado:0,detenido:0,terminado:0,ok:0};filas.forEach(function(f){cuenta[f.estado]++;});
+  var GPS_MIN=5;
+  filas.forEach(function(f){var u=ubic[f.mensajero];var m=u&&u.updated_at?Math.floor((ahora-new Date(u.updated_at))/60000):null;f.gpsMin=m;f.gpsApp=u?u.activo!==false:null;f.sinGps=esHoy&&f.pend>0&&(m==null||m>=GPS_MIN);});
+  var sinGps=filas.filter(function(f){return f.sinGps;}).sort(function(a,b){return (b.gpsMin==null?1e9:b.gpsMin)-(a.gpsMin==null?1e9:a.gpsMin);});
+  var cuenta={todos:filas.length,atrasado:0,detenido:0,terminado:0,ok:0,singps:sinGps.length};filas.forEach(function(f){cuenta[f.estado]++;});
+  R.useEffect(function(){var nuevos=sinGps.filter(function(f){return !avisadosRef.current[f.mensajero];});var vigentes={};sinGps.forEach(function(f){vigentes[f.mensajero]=1;});
+    Object.keys(avisadosRef.current).forEach(function(k){if(!vigentes[k])delete avisadosRef.current[k];});
+    if(nuevos.length&&res){nuevos.forEach(function(f){avisadosRef.current[f.mensajero]=1;});toast(nuevos.length===1?nuevos[0].mensajero+' lleva más de '+GPS_MIN+' min sin enviar ubicación':nuevos.length+' mensajeros llevan más de '+GPS_MIN+' min sin enviar ubicación');}
+  },[sinGps.map(function(f){return f.mensajero;}).join('|'),!!res]);
   var prio={detenido:0,atrasado:1,ok:2,terminado:3};
-  var vis=filas.filter(function(f){return (filtro==='todos'||f.estado===filtro)&&(!q||f.mensajero.indexOf(q.toUpperCase())>=0);});
+  var vis=filas.filter(function(f){return (filtro==='todos'||(filtro==='singps'?f.sinGps:f.estado===filtro))&&(!q||f.mensajero.indexOf(q.toUpperCase())>=0);});
   vis.sort(function(a,b){
     if(orden==='nombre')return a.mensajero.localeCompare(b.mensajero);
     if(orden==='llevo')return b.sal-a.sal;
@@ -220,6 +238,7 @@ function RutaEnVivo(props){
         kpi('Pendientes',fN(T.pen),T.pen?COL.ambar:COL.verde,fN(T.rep)+' reprog. · '+fN(T.can)+' cancel.'),
         kpi('% entrega',fP(pEnt),pEnt==null?'#fff':pEnt>=95?COL.verde:pEnt>=80?COL.ambar:COL.rojo,'% operacional '+fP(pOp)),
         kpi('Bajo el ritmo',fN(cuenta.atrasado),cuenta.atrasado?COL.ambar:COL.verde),
+        kpi('Sin ubicación',fN(cuenta.singps),cuenta.singps?COL.rojo:COL.verde,'más de 5 min sin GPS'),
         kpi('Detenidos',fN(cuenta.detenido),cuenta.detenido?COL.rojo:COL.verde,'sin movimiento '+DETENIDO_MIN+'+ min'),
         h('div',{key:'etqk',onClick:function(){setVerEtq(!verEtq);setEtqMen('todos');},title:'Ver la lista de paquetes',style:{flex:'1 1 150px',minWidth:0,cursor:'pointer',borderRadius:14,outline:verEtq?'2px solid '+COL.ambar:'none'}},
           kpi('Etiqueta de otro día',fN(T.etq),T.etq?COL.ambar:'#fff',(T.etq?fN(T.etqP)+' aún pendientes · ':'')+(verEtq?'ocultar lista':'ver lista')))),
@@ -256,9 +275,16 @@ function RutaEnVivo(props){
     selMen&&(function(){var idx=vis.findIndex(function(x){return x.mensajero===selMen;});var fila=filas.find(function(x){return x.mensajero===selMen;});
       return h(MensajeroVivo,{key:selMen+dia,db:db,dia:dia,esHoy:esHoy,mensajero:selMen,fila:fila,
         onPrev:idx>0?function(){setSelMen(vis[idx-1].mensajero);}:null,onNext:idx>=0&&idx<vis.length-1?function(){setSelMen(vis[idx+1].mensajero);}:null,onClose:function(){setSelMen(null);}});})(),
+    esHoy&&sinGps.length>0&&h('div',{style:{marginBottom:14,borderRadius:16,padding:'12px 16px',background:'linear-gradient(180deg,#fff,#fbe1dd)',border:'1px solid rgba(176,48,48,.45)',boxShadow:'0 3px 0 rgba(176,48,48,.35), 0 8px 16px rgba(20,22,15,.08)'}},
+      h('div',{style:{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:8}},
+        h('span',{style:{width:10,height:10,borderRadius:'50%',background:'#b03030',animation:'rvPulso 1.8s infinite',boxShadow:'0 0 0 0 rgba(176,48,48,.7)'}}),
+        h('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:1.2,color:'#8a1f1f'}},sinGps.length+(sinGps.length===1?' mensajero':' mensajeros')+' sin enviar ubicación hace más de '+GPS_MIN+' min'),
+        h('span',{style:{fontSize:12,color:'#6b3a3a'}},'Solo cuenta a quienes todavía tienen pendientes.')),
+      h('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},sinGps.map(function(f){return h('button',{key:f.mensajero,type:'button',onClick:function(){abrirMen(f.mensajero);},title:'Ver su gestión',style:{display:'inline-flex',alignItems:'center',gap:8,padding:'6px 12px',borderRadius:999,border:'1px solid rgba(176,48,48,.4)',background:'#fff',boxShadow:'0 2px 0 rgba(176,48,48,.3)',cursor:'pointer',fontSize:12.5,fontWeight:800,color:'#2b2e20'}},f.mensajero,
+        h('span',{style:{fontWeight:700,color:'#a12626'}},f.gpsMin==null?'nunca hoy':(f.gpsMin>=60?Math.floor(f.gpsMin/60)+' h '+(f.gpsMin%60)+' min':f.gpsMin+' min')+(f.gpsApp===false?' · cerró la app':' · sin señal o app en segundo plano')));}))),
     h('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:12}},
       h('input',{className:'form-input',placeholder:'Buscar mensajero',value:q,onChange:function(e){setQ(e.target.value);},style:{margin:0,maxWidth:240}}),
-      chip('todos','Todos'),chip('detenido','Detenidos'),chip('atrasado','Bajo el ritmo'),chip('ok','En ruta'),chip('terminado','Terminaron'),
+      chip('todos','Todos'),chip('singps','Sin ubicación'),chip('detenido','Detenidos'),chip('atrasado','Bajo el ritmo'),chip('ok','En ruta'),chip('terminado','Terminaron'),
       h('div',{style:{flex:1}}),
       h('select',{className:'form-input',value:orden,onChange:function(e){setOrden(e.target.value);},style:{margin:0,maxWidth:220}},
         h('option',{value:'estado'},'Ordenar: atrasados primero'),h('option',{value:'pct'},'Ordenar: menor % entrega'),h('option',{value:'llevo'},'Ordenar: más piezas'),h('option',{value:'nombre'},'Ordenar: nombre'))),
@@ -270,7 +296,7 @@ function RutaEnVivo(props){
         h('tbody',null,vis.map(function(f){var E=ESTADOS[f.estado];
           return h('tr',{key:f.mensajero},
             h('td',{style:{fontWeight:700,whiteSpace:'nowrap'}},h('span',{onClick:function(){abrirMen(f.mensajero);},title:'Ver su gestión en 3D',style:{cursor:'pointer',borderBottom:'1px dashed rgba(200,168,75,.8)'}},f.mensajero),h('button',{type:'button',onClick:function(){abrirMen(f.mensajero);},style:{marginLeft:8,padding:'2px 9px',borderRadius:6,border:'1px solid #ae8829',background:'linear-gradient(180deg,#f7dd8c,#d9b553)',color:'#1a1d13',fontWeight:800,fontSize:10.5,cursor:'pointer'}},'3D')),
-            h('td',null,h('span',{style:{padding:'2px 9px',borderRadius:999,fontSize:11,fontWeight:800,color:E.c,background:E.bg,whiteSpace:'nowrap'}},E.l)),
+            h('td',null,h('span',{style:{padding:'2px 9px',borderRadius:999,fontSize:11,fontWeight:800,color:E.c,background:E.bg,whiteSpace:'nowrap'}},E.l),f.sinGps&&h('span',{title:'Sin enviar ubicación hace '+(f.gpsMin==null?'todo el día':f.gpsMin+' min'),style:{marginLeft:6,padding:'2px 8px',borderRadius:999,fontSize:10.5,fontWeight:800,color:'#fff',background:'#b03030',whiteSpace:'nowrap'}},'Sin GPS')),
             h('td',{className:'mono',style:{textAlign:'right'}},horaCL(f.primera_salida)),
             h('td',{className:'mono',style:{textAlign:'right',fontWeight:700}},fN(f.sal)),
             h('td',{style:{minWidth:130}},
