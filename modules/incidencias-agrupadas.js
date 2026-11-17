@@ -39,7 +39,7 @@ function IncidenciasAgrupadas(props){
   var _p=useState(false),puede=_p[0],setPuede=_p[1];
   var _s=useState(lunesDe(hoyCL())),sem=_s[0],setSem=_s[1];
   var _i=useState(null),incs=_i[0],setIncs=_i[1];var _r=useState([]),reps=_r[0],setReps=_r[1];
-  var _t=useState(esSuper?'prop':'por'),tab=_t[0],setTab=_t[1];var _q=useState(''),q=_q[0],setQ=_q[1];
+  var _t=useState('prop'),tab=_t[0],setTab=_t[1];var _q=useState(''),q=_q[0],setQ=_q[1];
   var _o=useState({}),abiertas=_o[0],setAbiertas=_o[1];
   var _m=useState(null),modal=_m[0],setModal=_m[1];
   var _v=useState(null),ver=_v[0],setVer=_v[1]; // {incId, i}
@@ -51,9 +51,10 @@ function IncidenciasAgrupadas(props){
     db.from('reportes_operador').select('id,incidencia_id,codigo,cliente,comuna,comentario,reportado_por,created_at,decision,decision_monto,monto_propuesto,decision_por,aprobado_por,resuelto,resolucion,resuelto_por').gte('fecha',sem).lte('fecha',hasta).order('created_at',{ascending:true}).limit(5000).then(function(r){if(!r.error)setReps(r.data||[]);});}
   useEffect(function(){setIncs(null);cargar();var st=A.intervaloVisible?A.intervaloVisible(cargar,300000,['reportes_operador'],2500):null;return function(){if(typeof st==='function')st();};},[sem]);
   var porInc=useMemo(function(){var o={};reps.forEach(function(r){(o[r.incidencia_id]=o[r.incidencia_id]||[]).push(r);});return o;},[reps]);
-  var L=(incs||[]).map(function(i){var rs=porInc[i.id]||[];var quien={};rs.forEach(function(r){var k=primer(r.reportado_por)||'—';quien[k]=(quien[k]||0)+1;});
+  var nSinGest=0;var L=(incs||[]).map(function(i){var rsT=porInc[i.id]||[];var rs=rsT.filter(function(r){return r.resuelto||r.decision;});nSinGest+=rsT.length-rs.length;var quien={};rs.forEach(function(r){var k=primer(r.reportado_por)||'—';quien[k]=(quien[k]||0)+1;});
     var nuevos=i.clasificado_at?rs.filter(function(r){return r.created_at>i.clasificado_at;}).length:0;
-    return Object.assign({},i,{_reps:rs,_veces:rs.length||1,_quien:quien,_ult:rs.length?rs[rs.length-1].created_at:i.created_at,_nuevos:nuevos});});
+    return Object.assign({},i,{_reps:rs,_veces:rs.length||1,_quien:quien,_ult:rs.length?rs[rs.length-1].created_at:i.created_at,_nuevos:nuevos});}).filter(function(i){return i._reps.length>0;});
+  // 17-11-2026: el banco solo muestra piezas ya gestionadas en Operaciones → Incidencias; aquí solo se decide.
   var Lq=L.filter(function(i){if(!q)return true;var s=q.toLowerCase();return (i.mensajero+' '+i.motivo+' '+i._reps.map(function(r){return r.codigo;}).join(' ')).toLowerCase().indexOf(s)>=0;});
   function tienePend(i){return i._reps.some(function(r){return !r.decision&&!r.resuelto;});}function tieneProp(i){return i._reps.some(function(r){return (!r.decision&&r.resuelto)||r.decision==='multa_propuesta';});}
   var nPor=Lq.filter(tienePend).length,nProp=Lq.filter(tieneProp).length;
@@ -67,7 +68,7 @@ function IncidenciasAgrupadas(props){
   function mover(d){setVer(function(v){if(!v||!verInc)return v;var n=v.i+d;if(n<0||n>=verInc._reps.length)return v;return {incId:v.incId,i:n};});}
   function abrirVer(i,idx){setVer({incId:i.id,i:idx||0});}
   var DEC={correctiva:['Correctiva','#7fb0ff'],multa_propuesta:['Multa · falta valor','#ff8a6e'],multa:['Multa','#ff6b57'],descartada:['Descartada','#9aa08a']};
-  function decChip(r){if(!r.decision)return r.resuelto?chip('Gestionada · falta decisión','#ff8a6e'):chip('Por gestionar','#e8b84a');var d=DEC[r.decision];return chip(r.decision==='multa'?'Multa '+money(r.decision_monto):r.decision==='multa_propuesta'&&r.monto_propuesto?'Multa propuesta '+money(r.monto_propuesto):d[0],d[1]);}
+  function decChip(r){if(!r.decision)return r.resuelto?chip('Pendiente','#e8b84a'):chip('Por gestionar','#e8b84a');var d=DEC[r.decision];return chip(r.decision==='multa'?'Multa '+money(r.decision_monto):r.decision==='multa_propuesta'&&r.monto_propuesto?'Multa propuesta '+money(r.monto_propuesto):d[0],d[1]);}
   // acción sobre uno o varios códigos (reportes)
   async function clasificar(ids,acc,montos,nota){if(!ids.length)return false;setBusy(true);
     var r=await db.rpc('clasificar_reportes',{p_ids:ids,p_accion:acc,p_montos:montos||null,p_nota:nota||null});setBusy(false);
@@ -92,8 +93,7 @@ function IncidenciasAgrupadas(props){
       cerrar();toast(r.codigo+' gestionada');cargar();};
   }
   function accionesCodigo(i,r,chico){var b=[];
-    if(!r.decision&&!r.resuelto){if(puede)b.push(boton('Pieza gestionada',function(){gestionar(r);},'g',busy));}
-    else if(!r.decision&&esSuper){b.push(boton('Correctiva',function(){clasificar([r.id],'correctiva');},'c',busy),boton('Multa',function(){abrirMulta(i,[r]);},'m',busy),boton('Descartar',function(){clasificar([r.id],'descartar');},null,busy));}
+    if(!r.decision&&esSuper){b.push(boton('Correctiva',function(){clasificar([r.id],'correctiva');},'c',busy),boton('Multa',function(){abrirMulta(i,[r]);},'m',busy),boton('Descartar',function(){clasificar([r.id],'descartar');},null,busy));}
     else if(r.decision==='multa_propuesta'&&esSuper){b.push(boton('Poner valor',function(){abrirMulta(i,[r]);},'g',busy),boton('Correctiva',function(){clasificar([r.id],'correctiva');},'c',busy));}
     else if(r.decision&&esSuper&&!(i.descontado&&r.decision==='multa'))b.push(boton('Cambiar',function(){clasificar([r.id],'reabrir');},null,busy));
     return b;}
@@ -131,13 +131,13 @@ function IncidenciasAgrupadas(props){
   return h('div',{style:caja},h('style',null,css),
     h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-end',gap:12,flexWrap:'wrap'}},
       h('div',null,h('div',{style:{fontFamily:'Bebas Neue',fontSize:32,letterSpacing:2,color:'#fff',lineHeight:1}},'Incidencias'),
-        h('div',{style:{fontSize:12.5,color:SUAVE,marginTop:4,maxWidth:720}},'Agrupadas por mensajero, día y título. Liz e Hiram reportan; Yohana, Fernando o Luis marcan cada pieza como gestionada; después Luis decide código a código: correctiva, multa o descartar.'+(esSuper?'':puede?' Tú puedes marcar piezas gestionadas.':' Tu usuario solo puede ver.'))),
+        h('div',{style:{fontSize:12.5,color:SUAVE,marginTop:4,maxWidth:720}},'Agrupadas por mensajero, día y título. Aquí llegan solo las piezas ya gestionadas en Operaciones → Incidencias; Luis decide código a código: correctiva, multa o descartar.'+(esSuper?'':' Tu usuario solo puede ver.'))),
       h('div',{style:{display:'flex',gap:8,alignItems:'center'}},boton('‹',function(){setSem(sumar(sem,-7));}),h('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:1.2,color:ORO,minWidth:160,textAlign:'center'}},'Semana '+dm(sem)+' al '+dm(hasta)),boton('›',function(){setSem(sumar(sem,7));}),L.length>0&&boton('Excel',exportar))),
     h('div',{className:'ia-k',style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginTop:14}},
-      kp('Incidencias',L.length,ORO,totVeces+' reportes agrupados'),kp('Por gestionar',L.filter(tienePend).length,'#e8b84a','esperando a Yohana, Fernando o Luis'),
+      kp('Incidencias',L.length,ORO,totVeces+' reportes agrupados'),kp('Falta gestionar',nSinGest,'#e8b84a','piezas en Operaciones → Incidencias'),
       kp('Por decidir',L.filter(tieneProp).length,'#ff8a6e','gestionadas, esperando a Luis'),kp('Multas aprobadas',money(totMultas),'#ff6b57',multas.length+' multa'+(multas.length===1?'':'s')+' · '+multas.filter(function(i){return i.descontado;}).length+' descontadas')),
     h('div',{style:{display:'flex',gap:4,alignItems:'center',flexWrap:'wrap',margin:'14px 0 10px',borderBottom:'1px solid rgba(255,255,255,.1)'}},
-      tabB('por','Por gestionar',nPor),tabB('prop','Por decidir',nProp),tabB('clas','Decididas'),tabB('res','Resumen por mensajero'),
+      tabB('prop','Por decidir',nProp),tabB('clas','Decididas'),tabB('res','Resumen por mensajero'),
       h('input',{className:'ia-in',placeholder:'Buscar mensajero, título o código',value:q,onChange:function(e){setQ(e.target.value);},style:{marginLeft:'auto',width:240,padding:'6px 10px',fontSize:13,marginBottom:6}})),
     incs==null?h('div',{style:{color:SUAVE}},'Cargando…'):
     tab==='res'?(resumen.length===0?h('div',{style:{color:SUAVE,fontWeight:700}},'Sin incidencias esta semana.'):h('div',{style:{overflowX:'auto'}},h('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:13}},
