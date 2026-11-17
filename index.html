@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261117001606;
+window.__MODULES_VERSION=20261117002333;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -12525,7 +12525,7 @@ function IncidenciasRider(props){
                 React.createElement('div',{style:{fontSize:11.5,color:sub,marginTop:2}},x.veces+(x.veces===1?' paquete':' paquetes')+(abierto?'':' · toca para ver los códigos'))),
               React.createElement('span',{style:{padding:'4px 10px',borderRadius:999,fontSize:11,fontWeight:900,background:e[1],color:e[2],whiteSpace:'nowrap'}},x.estado==='multa'&&x.monto?'Multa $'+Math.round(x.monto).toLocaleString('es-CL'):e[0])),
             abierto&&React.createElement('div',{style:{marginTop:10,paddingTop:8,borderTop:'1px solid '+bd}},(x.codigos||[]).map(function(c,i){return React.createElement('div',{key:i,style:{fontSize:12,padding:'4px 0',display:'flex',gap:10}},
-                React.createElement('span',{style:{fontFamily:'monospace',fontWeight:700,minWidth:104}},c.codigo||'—'),React.createElement('span',{style:{color:sub,flex:1}},[c.cliente,c.comuna,c.comentario].filter(Boolean).join(' · ')));}),
+                React.createElement('span',{style:{fontFamily:'monospace',fontWeight:700,minWidth:104}},c.codigo||'—'),React.createElement('span',{style:{color:sub,flex:1}},[c.cliente,c.comuna,c.comentario].filter(Boolean).join(' · ')),(function(){var ee=EST[c.estado]||EST.revision;return React.createElement('span',{style:{padding:'2px 8px',borderRadius:999,fontSize:10.5,fontWeight:900,background:ee[1],color:ee[2],whiteSpace:'nowrap',alignSelf:'center'}},c.estado==='multa'&&c.monto?'Multa $'+Math.round(c.monto).toLocaleString('es-CL'):ee[0]);})());}),
               x.nota&&React.createElement('div',{style:{fontSize:12,marginTop:6,fontWeight:700,color:claro?'#8a6d1f':'#e8c766'}},'Nota: '+x.nota)));}));}),
       React.createElement('div',{style:{flexShrink:0,fontSize:11.5,color:sub,textAlign:'center',padding:'4px 10px 14px'}},'Las incidencias las reporta la oficina. Si tienes dudas, habla con tu supervisor.')));
 }
