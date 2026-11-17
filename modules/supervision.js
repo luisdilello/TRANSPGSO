@@ -133,7 +133,7 @@ function necesidades(N){
   add('reprog',N.reprogramado,'reprogramados por volver a ruta',N.reprogramado>40?2:1,['estado_reprogramado','asignacion','estado_en_bodega_fecha'],'Reasignar');
   add('bodfecha',N.en_bodega_fecha,'paquetes en bodega esperando su fecha de entrega',1,['estado_en_bodega_fecha','asignacion'],'Programar su salida');
   add('cancel',N.cancelado,'cancelados por recibir en bodega',N.cancelado>20?2:1,['estado_en_bodega_cancelado','estado_retorno','estado_cancelado'],'Recibir en bodega');
-  add('incid',N.incidencias_pend,'incidencias de mensajeros sin resolver',N.incidencias_pend>50?2:1,['resuelto','reporte','correccion'],'Revisar y marcar resueltas');
+  add('incid',N.incidencias_pend,'incidencias de mensajeros sin resolver',N.incidencias_pend>50?2:1,['resuelto','reporte','correccion'],'Revisar y marcar piezas gestionadas');
   add('sini',N.siniestros_pend,'siniestros sin confirmar',N.siniestros_pend>5?2:1,['estado_siniestro','correccion'],'Confirmar o descartar');
   var faltan=Math.max(0,(N.riders_con_entregas_hoy||0)-(N.cierres_flex_hoy||0));
   if(N.hora>=17)add('flex',faltan,'mensajeros con entregas hoy sin Cierre Flex subido',faltan>10?2:1,['reporte','resuelto','correccion'],'Pedir el video de cierre');

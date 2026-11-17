@@ -678,7 +678,7 @@ function PanelIncidencias(p){
           return h('div',{key:m.mensajero,style:{padding:'8px 10px',borderRadius:10,background:'rgba(0,0,0,.18)',border:'1px solid rgba(255,255,255,.07)'}},
             h('div',{style:{display:'flex',justifyContent:'space-between',gap:8,alignItems:'baseline'}},
               h('b',{style:{color:'#fff',fontSize:12.5}},m.mensajero),
-              h('span',{style:{fontSize:11.5,fontWeight:800,color:m.resueltas>=m.n?IX.verde:IX.ambar}},m.n+' reporte'+(m.n>1?'s':'')+' · '+m.resueltas+' resuelto'+(m.resueltas===1?'':'s'))),
+              h('span',{style:{fontSize:11.5,fontWeight:800,color:m.resueltas>=m.n?IX.verde:IX.ambar}},m.n+' reporte'+(m.n>1?'s':'')+' · '+m.resueltas+' gestionado'+(m.resueltas===1?'':'s'))),
             h('div',{style:{height:6,borderRadius:4,background:'rgba(255,255,255,.08)',margin:'5px 0',overflow:'hidden'}},h('div',{style:{height:'100%',width:(m.n/maxN*100)+'%',background:'linear-gradient(90deg,#ff7b70,#f0b94a)',borderRadius:4}})),
             h('div',{style:{fontSize:11,color:IX.txt}},h('span',{style:{color:IX.suave}},'Por qué: '),mot),
             h('div',{style:{fontSize:11,color:sol?IX.verde:IX.suave,marginTop:2}},h('span',{style:{color:IX.suave}},'Solución: '),sol||(m.resueltas?'resuelta sin detalle':'sin solución registrada')));})))),

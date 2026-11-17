@@ -39,7 +39,7 @@ function IncidenciasAgrupadas(props){
   var _p=useState(false),puede=_p[0],setPuede=_p[1];
   var _s=useState(lunesDe(hoyCL())),sem=_s[0],setSem=_s[1];
   var _i=useState(null),incs=_i[0],setIncs=_i[1];var _r=useState([]),reps=_r[0],setReps=_r[1];
-  var _t=useState('por'),tab=_t[0],setTab=_t[1];var _q=useState(''),q=_q[0],setQ=_q[1];
+  var _t=useState(esSuper?'prop':'por'),tab=_t[0],setTab=_t[1];var _q=useState(''),q=_q[0],setQ=_q[1];
   var _o=useState({}),abiertas=_o[0],setAbiertas=_o[1];
   var _m=useState(null),modal=_m[0],setModal=_m[1];
   var _v=useState(null),ver=_v[0],setVer=_v[1]; // {incId, i}
@@ -48,14 +48,14 @@ function IncidenciasAgrupadas(props){
   var hasta=sumar(sem,6);
   function cargar(){
     db.from('incidencias').select('*').gte('fecha',sem).lte('fecha',hasta).order('fecha',{ascending:true}).limit(3000).then(function(r){if(r.error){toast('No se pudieron cargar las incidencias: '+r.error.message);setIncs([]);return;}setIncs(r.data||[]);});
-    db.from('reportes_operador').select('id,incidencia_id,codigo,cliente,comuna,comentario,reportado_por,created_at,decision,decision_monto,monto_propuesto,decision_por,aprobado_por').gte('fecha',sem).lte('fecha',hasta).order('created_at',{ascending:true}).limit(5000).then(function(r){if(!r.error)setReps(r.data||[]);});}
+    db.from('reportes_operador').select('id,incidencia_id,codigo,cliente,comuna,comentario,reportado_por,created_at,decision,decision_monto,monto_propuesto,decision_por,aprobado_por,resuelto,resolucion,resuelto_por').gte('fecha',sem).lte('fecha',hasta).order('created_at',{ascending:true}).limit(5000).then(function(r){if(!r.error)setReps(r.data||[]);});}
   useEffect(function(){setIncs(null);cargar();var st=A.intervaloVisible?A.intervaloVisible(cargar,300000,['reportes_operador'],2500):null;return function(){if(typeof st==='function')st();};},[sem]);
   var porInc=useMemo(function(){var o={};reps.forEach(function(r){(o[r.incidencia_id]=o[r.incidencia_id]||[]).push(r);});return o;},[reps]);
   var L=(incs||[]).map(function(i){var rs=porInc[i.id]||[];var quien={};rs.forEach(function(r){var k=primer(r.reportado_por)||'—';quien[k]=(quien[k]||0)+1;});
     var nuevos=i.clasificado_at?rs.filter(function(r){return r.created_at>i.clasificado_at;}).length:0;
     return Object.assign({},i,{_reps:rs,_veces:rs.length||1,_quien:quien,_ult:rs.length?rs[rs.length-1].created_at:i.created_at,_nuevos:nuevos});});
   var Lq=L.filter(function(i){if(!q)return true;var s=q.toLowerCase();return (i.mensajero+' '+i.motivo+' '+i._reps.map(function(r){return r.codigo;}).join(' ')).toLowerCase().indexOf(s)>=0;});
-  function tienePend(i){return i._reps.some(function(r){return !r.decision;});}function tieneProp(i){return i._reps.some(function(r){return r.decision==='multa_propuesta';});}
+  function tienePend(i){return i._reps.some(function(r){return !r.decision&&!r.resuelto;});}function tieneProp(i){return i._reps.some(function(r){return (!r.decision&&r.resuelto)||r.decision==='multa_propuesta';});}
   var nPor=Lq.filter(tienePend).length,nProp=Lq.filter(tieneProp).length;
   var vis=Lq.filter(function(i){return tab==='por'?tienePend(i):tab==='prop'?tieneProp(i):tab==='clas'?(!tienePend(i)&&!tieneProp(i)):true;});
   var multas=L.filter(function(i){return i.estado==='multa';}),totMultas=multas.reduce(function(s,i){return s+(+i.monto||0);},0);
@@ -67,31 +67,44 @@ function IncidenciasAgrupadas(props){
   function mover(d){setVer(function(v){if(!v||!verInc)return v;var n=v.i+d;if(n<0||n>=verInc._reps.length)return v;return {incId:v.incId,i:n};});}
   function abrirVer(i,idx){setVer({incId:i.id,i:idx||0});}
   var DEC={correctiva:['Correctiva','#7fb0ff'],multa_propuesta:['Multa · falta valor','#ff8a6e'],multa:['Multa','#ff6b57'],descartada:['Descartada','#9aa08a']};
-  function decChip(r){if(!r.decision)return chip('Pendiente','#e8b84a');var d=DEC[r.decision];return chip(r.decision==='multa'?'Multa '+money(r.decision_monto):r.decision==='multa_propuesta'&&r.monto_propuesto?'Multa propuesta '+money(r.monto_propuesto):d[0],d[1]);}
+  function decChip(r){if(!r.decision)return r.resuelto?chip('Gestionada · falta decisión','#ff8a6e'):chip('Por gestionar','#e8b84a');var d=DEC[r.decision];return chip(r.decision==='multa'?'Multa '+money(r.decision_monto):r.decision==='multa_propuesta'&&r.monto_propuesto?'Multa propuesta '+money(r.monto_propuesto):d[0],d[1]);}
   // acción sobre uno o varios códigos (reportes)
   async function clasificar(ids,acc,montos,nota){if(!ids.length)return false;setBusy(true);
     var r=await db.rpc('clasificar_reportes',{p_ids:ids,p_accion:acc,p_montos:montos||null,p_nota:nota||null});setBusy(false);
     if(r.error){toast(r.error.message||'No se pudo guardar');return false;}
-    var n=ids.length,s=n===1?'':'s';toast(acc==='correctiva'?n+' código'+s+' como correctiva':acc==='descartar'?n+' código'+s+' descartado'+s:acc==='reabrir'?n+' código'+s+' vuelto'+s+' a pendiente':(esSuper&&montos?'Multa aprobada en '+n+' código'+s:'Multa propuesta en '+n+' código'+s+': falta el valor de Luis'));
+    var n=ids.length,s=n===1?'':'s';toast(acc==='correctiva'?n+' código'+s+' como correctiva':acc==='descartar'?n+' código'+s+' descartado'+s:acc==='reabrir'?n+' código'+s+' vuelto'+s+' a por decidir':'Multa aprobada en '+n+' código'+s);
     setModal(null);cargar();return true;}
   function abrirMulta(i,reps){setModal({i:i,reps:reps,montos:reps.map(function(r){return r.decision==='multa'?String(r.decision_monto||''):r.monto_propuesto?String(r.monto_propuesto):'';}),nota:i.nota||''});}
   async function descontada(i,v){var r=await db.rpc('marcar_incidencia_descontada',{p_id:i.id,p_valor:v});if(r.error){toast(r.error.message);return;}cargar();}
-  function exportar(){var rows=[];L.forEach(function(i){i._reps.forEach(function(r){rows.push([dm(i.fecha),i.mensajero,i.motivo,r.codigo,primer(r.reportado_por),hora(r.created_at),r.comentario||'',r.decision?(DEC[r.decision]||[''])[0]:'Pendiente',r.decision==='multa'?Math.round(+r.decision_monto||0):'',r.decision_por||'',r.aprobado_por||'',i.descontado?'Sí':'']);});});
-    A.exportToExcel('INCIDENCIAS '+dm(sem)+' AL '+dm(hasta),[{name:'Incidencias',headers:['Día','Mensajero','Título','Código','Reportó','Hora','Comentario','Decisión','Multa','Decidió','Aprobó','Descontada'],rows:rows}]);}
+  function exportar(){var rows=[];L.forEach(function(i){i._reps.forEach(function(r){rows.push([dm(i.fecha),i.mensajero,i.motivo,r.codigo,primer(r.reportado_por),hora(r.created_at),r.comentario||'',r.resuelto?(r.resolucion||'Sí'):'',r.resuelto_por||'',r.decision?(DEC[r.decision]||[''])[0]:(r.resuelto?'Por decidir':'Por gestionar'),r.decision==='multa'?Math.round(+r.decision_monto||0):'',r.decision_por||'',r.aprobado_por||'',i.descontado?'Sí':'']);});});
+    A.exportToExcel('INCIDENCIAS '+dm(sem)+' AL '+dm(hasta),[{name:'Incidencias',headers:['Día','Mensajero','Título','Código','Reportó','Hora','Comentario','Gestión','Gestionó','Decisión','Multa','Decidió','Aprobó','Descontada'],rows:rows}]);}
 
-  function accionesCodigo(i,r,chico){var st=chico?{}:null,b=[];
-    if(!r.decision&&puede){b.push(boton('Correctiva',function(){clasificar([r.id],'correctiva');},'c',busy),boton('Multa',function(){if(esSuper)abrirMulta(i,[r]);else clasificar([r.id],'multa');},'m',busy),boton('Descartar',function(){clasificar([r.id],'descartar');},null,busy));}
-    else if(r.decision==='multa_propuesta'&&esSuper){b.push(boton('Aprobar valor',function(){abrirMulta(i,[r]);},'g',busy),boton('Correctiva',function(){clasificar([r.id],'correctiva');},'c',busy));}
-    else if(r.decision&&puede&&(esSuper||r.decision!=='multa')&&!(i.descontado&&r.decision==='multa'))b.push(boton('Cambiar',function(){clasificar([r.id],'reabrir');},null,busy));
+  // 17-11-2026: primero Pieza gestionada (Luis, Yohana o Fernando); después decide solo Luis.
+  function gestionar(r){
+    var f=document.createElement('div');f.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10050;display:flex;align-items:center;justify-content:center;padding:16px';
+    f.innerHTML='<div style="background:#fff;color:#222;border-radius:12px;max-width:420px;width:100%;padding:18px;font-family:inherit"><div style="font-weight:800;font-size:15px;margin-bottom:4px">Pieza gestionada · '+String(r.codigo||'').replace(/</g,'&lt;')+'</div><div style="font-size:12px;color:#777;margin-bottom:10px">Cuenta qué se hizo con la pieza</div><textarea rows="3" placeholder="Cómo se gestionó" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #ccc;border-radius:8px;font-family:inherit;font-size:13px"></textarea><div data-err style="color:#b00020;font-size:12px;min-height:16px;margin-top:4px"></div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px"><button data-x="c" style="padding:8px 14px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer">Cancelar</button><button data-x="o" style="padding:8px 14px;border-radius:8px;border:none;background:#2e7d4f;color:#fff;font-weight:700;cursor:pointer">Pieza gestionada</button></div></div>';
+    document.body.appendChild(f);var ta=f.querySelector('textarea');ta.focus();
+    function cerrar(){if(f.parentNode)f.parentNode.removeChild(f);}
+    f.querySelector('[data-x=c]').onclick=cerrar;
+    f.querySelector('[data-x=o]').onclick=async function(){var v=(ta.value||'').trim();if(v.length<3){f.querySelector('[data-err]').textContent='Escribe cómo se gestionó.';return;}
+      var rr=await db.rpc('resolver_reporte_operador',{p_id:r.id,p_resolucion:v});
+      if(rr.error){f.querySelector('[data-err]').textContent=rr.error.message;return;}
+      cerrar();toast(r.codigo+' gestionada');cargar();};
+  }
+  function accionesCodigo(i,r,chico){var b=[];
+    if(!r.decision&&!r.resuelto){if(puede)b.push(boton('Pieza gestionada',function(){gestionar(r);},'g',busy));}
+    else if(!r.decision&&esSuper){b.push(boton('Correctiva',function(){clasificar([r.id],'correctiva');},'c',busy),boton('Multa',function(){abrirMulta(i,[r]);},'m',busy),boton('Descartar',function(){clasificar([r.id],'descartar');},null,busy));}
+    else if(r.decision==='multa_propuesta'&&esSuper){b.push(boton('Poner valor',function(){abrirMulta(i,[r]);},'g',busy),boton('Correctiva',function(){clasificar([r.id],'correctiva');},'c',busy));}
+    else if(r.decision&&esSuper&&!(i.descontado&&r.decision==='multa'))b.push(boton('Cambiar',function(){clasificar([r.id],'reabrir');},null,busy));
     return b;}
-  function tarjeta(i){var pend=i._reps.filter(function(r){return !r.decision;}),prop=i._reps.filter(function(r){return r.decision==='multa_propuesta';}),mul=i._reps.filter(function(r){return r.decision==='multa';}),cor=i._reps.filter(function(r){return r.decision==='correctiva';});
-    var rojo=mul.length>0||prop.length>0||i._veces>=5,ab=abiertas[i.id]!=null?abiertas[i.id]:(pend.length>0||prop.length>0),e=EST[i.estado]||EST.por_clasificar;
+  function tarjeta(i){var sinG=i._reps.filter(function(r){return !r.decision&&!r.resuelto;}),pend=i._reps.filter(function(r){return !r.decision&&r.resuelto;}),prop=i._reps.filter(function(r){return r.decision==='multa_propuesta';}),mul=i._reps.filter(function(r){return r.decision==='multa';}),cor=i._reps.filter(function(r){return r.decision==='correctiva';});
+    var rojo=mul.length>0||prop.length>0||i._veces>=5,ab=abiertas[i.id]!=null?abiertas[i.id]:(sinG.length>0||pend.length>0||prop.length>0),e=EST[i.estado]||EST.por_clasificar;
     var acciones=[boton('Ver evidencias',function(){abrirVer(i,0);},null,false)];
-    if(pend.length>1&&puede)acciones.push(h('span',{key:'t',style:{fontSize:11,fontWeight:900,color:SUAVE,marginLeft:4}},'Todos los pendientes:'),boton('Correctiva',function(){clasificar(pend.map(function(r){return r.id;}),'correctiva');},'c',busy),boton('Multa',function(){if(esSuper)abrirMulta(i,pend);else clasificar(pend.map(function(r){return r.id;}),'multa');},'m',busy),boton('Descartar',function(){clasificar(pend.map(function(r){return r.id;}),'descartar');},null,busy));
+    if(pend.length>1&&esSuper)acciones.push(h('span',{key:'t',style:{fontSize:11,fontWeight:900,color:SUAVE,marginLeft:4}},'Todas las gestionadas:'),boton('Correctiva',function(){clasificar(pend.map(function(r){return r.id;}),'correctiva');},'c',busy),boton('Multa',function(){abrirMulta(i,pend);},'m',busy),boton('Descartar',function(){clasificar(pend.map(function(r){return r.id;}),'descartar');},null,busy));
     if(prop.length>1&&esSuper)acciones.push(boton('Aprobar las '+prop.length+' multas',function(){abrirMulta(i,prop);},'g',busy));
     if(mul.length>0&&(esSuper||esAdm))acciones.push(h('label',{key:'d',style:{display:'flex',alignItems:'center',gap:6,fontSize:12,fontWeight:800,cursor:'pointer'}},h('input',{type:'checkbox',checked:!!i.descontado,onChange:function(ev){descontada(i,ev.target.checked);},style:{width:16,height:16,accentColor:'#C8A84B'}}),'Descontada'));
-    var resumenTxt=[pend.length?pend.length+' pendiente'+(pend.length>1?'s':''):'',prop.length?prop.length+' multa'+(prop.length>1?'s':'')+' por aprobar':'',mul.length?mul.length+' multa'+(mul.length>1?'s':'')+' '+money(mul.reduce(function(t,r){return t+(+r.decision_monto||0);},0)):'',cor.length?cor.length+' correctiva'+(cor.length>1?'s':''):''].filter(Boolean).join(' · ');
-    return h('div',{key:i.id,style:Object.assign({},vid,{padding:'12px 14px',marginBottom:8,borderColor:prop.length?'rgba(224,83,63,.5)':'rgba(255,255,255,.1)'})},
+    var resumenTxt=[sinG.length?sinG.length+' por gestionar':'',pend.length?pend.length+' por decidir':'',prop.length?prop.length+' multa'+(prop.length>1?'s':'')+' sin valor':'',mul.length?mul.length+' multa'+(mul.length>1?'s':'')+' '+money(mul.reduce(function(t,r){return t+(+r.decision_monto||0);},0)):'',cor.length?cor.length+' correctiva'+(cor.length>1?'s':''):''].filter(Boolean).join(' · ');
+    return h('div',{key:i.id,style:Object.assign({},vid,{padding:'12px 14px',marginBottom:8,borderColor:(pend.length||prop.length)?'rgba(224,83,63,.5)':'rgba(255,255,255,.1)'})},
       h('div',{style:{display:'flex',gap:14,alignItems:'center',flexWrap:'wrap'}},
         contador(i._veces,rojo),
         h('div',{style:{flex:'1 1 260px',minWidth:0,cursor:'pointer'},onClick:function(){setAbiertas(function(o){var n=Object.assign({},o);n[i.id]=!ab;return n;});}},
@@ -101,7 +114,7 @@ function IncidenciasAgrupadas(props){
           !ab&&h('div',{style:{fontSize:11,color:SUAVE,marginTop:4}},'Toca para ver los códigos')),
         h('div',{className:'ia-act',style:{marginLeft:'auto',display:'flex',gap:6,alignItems:'center',flexWrap:'wrap',justifyContent:'flex-end'}},acciones)),
       ab&&h('div',{style:{marginTop:10,borderTop:'1px solid rgba(255,255,255,.08)',paddingTop:6}},i._reps.map(function(r,idx){return h('div',{key:r.id,style:{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',fontSize:12,padding:'7px 0',borderBottom:'1px solid rgba(255,255,255,.05)',color:'#e9e4d2',opacity:r.decision==='descartada'?.55:1}},
-        h('span',{style:{fontFamily:'monospace',minWidth:110,fontWeight:700}},r.codigo||'—'),h('span',{style:{color:SUAVE,minWidth:80}},hora(r.created_at)+' · '+primer(r.reportado_por)),h('span',{style:{flex:'1 1 200px',minWidth:0}},[r.cliente,tit(r.comuna),r.comentario].filter(Boolean).join(' · ')),
+        h('span',{style:{fontFamily:'monospace',minWidth:110,fontWeight:700}},r.codigo||'—'),h('span',{style:{color:SUAVE,minWidth:80}},hora(r.created_at)+' · '+primer(r.reportado_por)),h('span',{style:{flex:'1 1 200px',minWidth:0}},[r.cliente,tit(r.comuna),r.comentario].filter(Boolean).join(' · '),r.resuelto&&r.resolucion?h('div',{style:{fontSize:11.5,color:'#8fd3a8',marginTop:2}},'Gestionada'+(r.resuelto_por?' por '+primer(r.resuelto_por):'')+': '+r.resolucion):null),
         decChip(r),
         h('button',{type:'button',className:'ia-btn',onClick:function(ev){ev.stopPropagation();abrirVer(i,idx);},style:{padding:'5px 12px',borderRadius:8,border:'1px solid rgba(232,199,102,.5)',background:'rgba(232,199,102,.12)',color:ORO,fontWeight:900,fontSize:11.5}},'Ver'),
         accionesCodigo(i,r));}),
@@ -118,19 +131,19 @@ function IncidenciasAgrupadas(props){
   return h('div',{style:caja},h('style',null,css),
     h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-end',gap:12,flexWrap:'wrap'}},
       h('div',null,h('div',{style:{fontFamily:'Bebas Neue',fontSize:32,letterSpacing:2,color:'#fff',lineHeight:1}},'Incidencias'),
-        h('div',{style:{fontSize:12.5,color:SUAVE,marginTop:4,maxWidth:720}},'Agrupadas por mensajero, día y título. Liz e Hiram reportan; Yohana y Fernando clasifican en correctiva o multa; la multa y su valor los aprueba Luis.'+(puede?'':' Tu usuario solo puede ver.'))),
+        h('div',{style:{fontSize:12.5,color:SUAVE,marginTop:4,maxWidth:720}},'Agrupadas por mensajero, día y título. Liz e Hiram reportan; Yohana, Fernando o Luis marcan cada pieza como gestionada; después Luis decide código a código: correctiva, multa o descartar.'+(esSuper?'':puede?' Tú puedes marcar piezas gestionadas.':' Tu usuario solo puede ver.'))),
       h('div',{style:{display:'flex',gap:8,alignItems:'center'}},boton('‹',function(){setSem(sumar(sem,-7));}),h('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:1.2,color:ORO,minWidth:160,textAlign:'center'}},'Semana '+dm(sem)+' al '+dm(hasta)),boton('›',function(){setSem(sumar(sem,7));}),L.length>0&&boton('Excel',exportar))),
     h('div',{className:'ia-k',style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginTop:14}},
-      kp('Incidencias',L.length,ORO,totVeces+' reportes agrupados'),kp('Por clasificar',L.filter(tienePend).length,'#e8b84a','esperando a Yohana o Fernando'),
-      kp('Multas por aprobar',L.filter(tieneProp).length,'#ff8a6e','esperando a Luis'),kp('Multas aprobadas',money(totMultas),'#ff6b57',multas.length+' multa'+(multas.length===1?'':'s')+' · '+multas.filter(function(i){return i.descontado;}).length+' descontadas')),
+      kp('Incidencias',L.length,ORO,totVeces+' reportes agrupados'),kp('Por gestionar',L.filter(tienePend).length,'#e8b84a','esperando a Yohana, Fernando o Luis'),
+      kp('Por decidir',L.filter(tieneProp).length,'#ff8a6e','gestionadas, esperando a Luis'),kp('Multas aprobadas',money(totMultas),'#ff6b57',multas.length+' multa'+(multas.length===1?'':'s')+' · '+multas.filter(function(i){return i.descontado;}).length+' descontadas')),
     h('div',{style:{display:'flex',gap:4,alignItems:'center',flexWrap:'wrap',margin:'14px 0 10px',borderBottom:'1px solid rgba(255,255,255,.1)'}},
-      tabB('por','Por clasificar',nPor),tabB('prop','Multas por aprobar',nProp),tabB('clas','Clasificadas'),tabB('res','Resumen por mensajero'),
+      tabB('por','Por gestionar',nPor),tabB('prop','Por decidir',nProp),tabB('clas','Decididas'),tabB('res','Resumen por mensajero'),
       h('input',{className:'ia-in',placeholder:'Buscar mensajero, título o código',value:q,onChange:function(e){setQ(e.target.value);},style:{marginLeft:'auto',width:240,padding:'6px 10px',fontSize:13,marginBottom:6}})),
     incs==null?h('div',{style:{color:SUAVE}},'Cargando…'):
     tab==='res'?(resumen.length===0?h('div',{style:{color:SUAVE,fontWeight:700}},'Sin incidencias esta semana.'):h('div',{style:{overflowX:'auto'}},h('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:13}},
       h('thead',null,h('tr',null,['Mensajero','Incidencias','Veces reportado','Correctivas','Multas','Monto multas','Descontado','Pendientes'].map(function(c){return h('th',{key:c,style:{textAlign:'left',padding:'8px 10px',fontSize:10.5,letterSpacing:1.2,textTransform:'uppercase',color:ORO,borderBottom:'1px solid rgba(232,199,102,.35)'}},c);}))),
       h('tbody',null,resumen.map(function(x){var td={padding:'8px 10px',borderTop:'1px solid rgba(255,255,255,.06)',color:TXT,background:'transparent'};return h('tr',{key:x.m},h('td',{style:Object.assign({},td,{fontWeight:800})},x.m),h('td',{style:td},x.inc),h('td',{style:td},x.veces),h('td',{style:td},x.corr||'—'),h('td',{style:td},x.mul||'—'),h('td',{style:Object.assign({},td,{color:x.monto?'#ff8a6e':TXT,fontWeight:800})},x.monto?money(x.monto):'—'),h('td',{style:td},x.desc?money(x.desc):'—'),h('td',{style:Object.assign({},td,{color:x.pend?'#e8b84a':TXT})},x.pend||'—'));}))))):
-    vis.length===0?h('div',{style:{color:SUAVE,fontWeight:700,padding:'10px 0'}},tab==='por'?'No hay incidencias por clasificar esta semana.':tab==='prop'?'No hay multas esperando tu valor.':'Sin incidencias clasificadas esta semana.'):
+    vis.length===0?h('div',{style:{color:SUAVE,fontWeight:700,padding:'10px 0'}},tab==='por'?'No hay piezas por gestionar esta semana.':tab==='prop'?'No hay piezas esperando decisión.':'Sin incidencias decididas esta semana.'):
     Object.keys(dias).sort().map(function(f){return h('div',{key:f},h('div',{style:{fontSize:11,fontWeight:900,letterSpacing:1.6,color:ORO,margin:'12px 0 8px'}},diaLargo(f)),dias[f].sort(function(a,b){return b._veces-a._veces;}).map(tarjeta));}),
     ver&&verInc&&verRep&&(function(){var M=A.Modal,Card=A.EnvioDetalleCard,n=verInc._reps.length;
       var nb=function(t,d,dis){return h('button',{type:'button',className:'btn-secondary',disabled:dis,onClick:function(){mover(d);},style:{padding:'6px 14px',fontSize:12,opacity:dis?.4:1}},t);};
