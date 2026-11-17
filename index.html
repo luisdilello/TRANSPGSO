@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261116212022;
+window.__MODULES_VERSION=20261116212259;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -12677,7 +12677,7 @@ function PremiosRuleta(props){var ps=(props.premios||[]).slice().sort(function(a
       React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:24,letterSpacing:1.6,color:props.claro?'#2b2e20':'#fff'}},'Lo que puedes ganar'),
       React.createElement('div',{style:{fontSize:11,fontWeight:800,letterSpacing:1,color:props.claro?'#8a6d1f':'#e8c766'}},ps.length+' PREMIOS')),
     React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:10}},ps.map(function(p,i){var c=p.color||'#C8A84B',claro=_esClaro(c),mayor=i===0&&maxM>0,t=_txtPremio(p),ic=ICONO_PREMIO[p.tipo]||ICONO_PREMIO.otro,fg=claro?'#1a1d13':'#fff';
-      return React.createElement('div',{key:p.id,style:{gridColumn:mayor?'1 / -1':'auto',position:'relative',overflow:'hidden',borderRadius:18,padding:mayor?'16px 16px':'12px 12px 13px',minHeight:mayor?96:104,
+      return React.createElement('div',{key:p.id,style:{gridColumn:mayor?'1 / -1':'auto',position:'relative',overflow:'hidden',borderRadius:18,padding:mayor?'16px 22px':'12px 18px 13px 20px',minHeight:mayor?96:104,
           background:'linear-gradient(140deg,'+_mix(c,.28)+' 0%,'+c+' 45%,'+_mix(c,-.45)+' 100%)',color:fg,
           boxShadow:'inset 0 1px 0 rgba(255,255,255,.45), inset 0 -3px 0 rgba(0,0,0,.18), 0 5px 0 '+_mix(c,-.6)+', 0 12px 22px rgba(20,22,15,.25)'+(mayor?', 0 0 24px rgba(255,214,77,.45)':''),
           display:'flex',flexDirection:mayor?'row':'column',alignItems:mayor?'center':'flex-start',gap:mayor?14:8,animation:mayor?'flotaT 3s ease-in-out infinite':'none'}},
