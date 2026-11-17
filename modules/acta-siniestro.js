@@ -147,7 +147,7 @@ function ActasSiniestro(props){
       var previas={};(f.filas||[]).forEach(function(x){previas[x.codigo]=x;});
       var filas=cods.map(function(c){var e=porC[c]||{},s=sC[c]||{},p=previas[c];
         return {codigo:e.codigo||c,cliente:e.cliente||'',destinatario:e.destinatario||'',direccion:e.direccion||'',comuna:e.comuna||'',fecha:e.fecha||'',estado:e.estado||'',
-          mensajero:s.mensajero||e.mensajero||'',fecha_siniestro:s.fecha_siniestro||'',valor:p?p.valor:(+e.valor_siniestro||''),existe:!!porC[c]};});
+          mensajero:e.mensajero||s.mensajero||'',menSin:(s.mensajero&&e.mensajero&&String(s.mensajero).toUpperCase()!==String(e.mensajero).toUpperCase())?s.mensajero:'',fecha_siniestro:s.fecha_siniestro||'',valor:p?p.valor:(+e.valor_siniestro||''),existe:!!porC[c]};});
       var mens={};filas.forEach(function(x){if(x.mensajero)mens[x.mensajero]=1;});var mk=Object.keys(mens);
       var fs=filas.map(function(x){return x.fecha_siniestro;}).filter(Boolean).sort();
       var cl={};filas.forEach(function(x){if(x.cliente)cl[x.cliente]=1;});var ck=Object.keys(cl);
@@ -204,7 +204,7 @@ function ActasSiniestro(props){
         h('thead',null,h('tr',null,['Código','Cliente','Destinatario','Comuna','Recibido','Estado','Mensajero','Valor declarado',''].map(function(c,i){return h('th',{key:i,style:th},c);}))),
         h('tbody',null,f.filas.map(function(x){return h('tr',{key:x.codigo},
           h('td',{style:Object.assign({},td,{fontFamily:'JetBrains Mono, monospace',fontSize:12.5})},x.codigo),h('td',{style:td},x.cliente||'—'),h('td',{style:td},tit(x.destinatario)||'—'),h('td',{style:td},tit(x.comuna)||'—'),
-          h('td',{style:Object.assign({},td,{whiteSpace:'nowrap'})},dmy(x.fecha)),h('td',{style:td},x.existe?est(x.estado):'—'),h('td',{style:td},tit(x.mensajero)||'—'),
+          h('td',{style:Object.assign({},td,{whiteSpace:'nowrap'})},dmy(x.fecha)),h('td',{style:td},x.existe?est(x.estado):'—'),h('td',{style:td},tit(x.mensajero)||'—',x.menSin?h('div',{style:{fontSize:11,color:'#ffb3a6',fontWeight:700,marginTop:2}},'En Siniestros figura '+tit(x.menSin)):null),
           h('td',{style:td},h('input',{value:x.valor===''||x.valor==null?'':String(x.valor),placeholder:'$',onChange:function(e){valor(x.codigo,e.target.value);},style:Object.assign({},inp,{width:110,padding:'6px 8px'})})),
           h('td',{style:td},h('button',{type:'button',onClick:function(){quitar(x.codigo);},title:'Quitar',style:{border:'none',background:'none',color:'#ff9b9b',fontWeight:900,cursor:'pointer',fontSize:15}},'×')));})),
         total>0&&h('tfoot',null,h('tr',null,h('td',{colSpan:7,style:Object.assign({},td,{fontWeight:800})},'Total valor declarado'),h('td',{colSpan:2,style:Object.assign({},td,{fontWeight:800,color:'#ffe59a'})},money(total)))))))),
