@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261117011336;
+window.__MODULES_VERSION=20261117012707;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -16030,7 +16030,8 @@ avisosAdmin.length>0&&React.createElement('div',{style:{position:'fixed',top:0,l
       ...((puedeVer('operaciones')&&puedeVerSub('operaciones','cierre-diario'))?[{id:'informes|novedades',label:'Novedades del día'}]:[]),
       ...((puedeVer('informes')&&puedeVerSub('informes','libre'))?[{id:'informes|libre',label:'Informe libre'}]:[]),
       ...((puedeVer('informes')&&puedeVerSub('informes','envios'))?[{id:'informes|envios',label:'Envíos automáticos'}]:[]),
-      ...((puedeVer('informes')&&(puedeVerSub('informes','cierre')||(perfil&&(perfil.esAdmin||perfil.esSuperAdmin))))?[{id:'informes|retornos',label:'Actas de retorno'}]:[])
+      ...((puedeVer('informes')&&(puedeVerSub('informes','cierre')||(perfil&&(perfil.esAdmin||perfil.esSuperAdmin))))?[{id:'informes|retornos',label:'Actas de retorno'}]:[]),
+      ...((puedeVer('informes')&&(puedeVerSub('informes','cierre')||(perfil&&(perfil.esAdmin||perfil.esSuperAdmin))))?[{id:'informes|siniestros',label:'Actas de siniestro'}]:[])
     ],
     tab:tab,setTab:irA
   }),
