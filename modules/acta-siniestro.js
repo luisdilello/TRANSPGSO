@@ -16,6 +16,8 @@ function plural(n,s,p){return n+' '+(n===1?s:(p||s+'s'));}
 function hoyCL(){return A.fechaHoyCL?A.fechaHoyCL():new Date().toLocaleDateString('en-CA',{timeZone:'America/Santiago'});}
 var ESTADOS={entregado:'Entregado',en_ruta:'En ruta',en_bodega:'En bodega',siniestro:'Siniestro',retorno:'Retorno',reprogramado:'Reprogramado',cancelado:'Cancelado',en_bodega_cancelado:'En bodega cancelado',en_bodega_fecha:'En bodega (fecha)'};
 function est(e){return ESTADOS[e]||tit(String(e||'').replace(/_/g,' '))||'—';}
+// En un siniestro, 'entregado' es el reenvío del cliente y 'retorno/cancelado' la pieza cancelada (regla de Luis 17-11-2026).
+function estSin(e){return e==='entregado'?'Siniestro · reenvío entregado':(e==='retorno'||e==='cancelado'||e==='en_bodega_cancelado')?'Siniestro · cancelada':e?'Siniestro':'—';}
 
 // Situaciones de siniestro: texto para la redacción y medidas sugeridas.
 var SIT=[
@@ -62,7 +64,7 @@ function htmlActa(a,borrador){
   var dato=function(l,v){return '<div class="dato"><span>'+esc(l)+'</span><b>'+(v?esc(v):'—')+'</b></div>';};
   var parr=function(t){return String(t||'').split(/\n+/).filter(function(x){return x.trim();}).map(function(x){return '<p>'+esc(x.trim())+'</p>';}).join('');};
   var lista=function(t){var L=String(t||'').split(/\n+/).filter(function(x){return x.trim();});return L.length?'<ul>'+L.map(function(x){return '<li>'+esc(x.trim().replace(/^[-•]\s*/,''))+'</li>';}).join('')+'</ul>':'';};
-  var filas=F.map(function(x,i){return '<tr><td class="n">'+(i+1)+'</td><td class="mono">'+esc(x.codigo)+'</td><td>'+esc(x.cliente||'—')+'</td><td>'+esc(tit(x.destinatario)||'—')+'</td><td>'+esc(x.direccion||'—')+'</td><td>'+esc(tit(x.comuna)||'—')+'</td><td class="c">'+dmy(x.fecha)+'</td><td class="c">'+esc(est(x.estado))+'</td>'+(hayValor?'<td class="r">'+(+x.valor?money(x.valor):'—')+'</td>':'')+'</tr>';}).join('');
+  var filas=F.map(function(x,i){return '<tr><td class="n">'+(i+1)+'</td><td class="mono">'+esc(x.codigo)+'</td><td>'+esc(x.cliente||'—')+'</td><td>'+esc(tit(x.destinatario)||'—')+'</td><td>'+esc(x.direccion||'—')+'</td><td>'+esc(tit(x.comuna)||'—')+'</td><td class="c">'+dmy(x.fecha)+'</td><td class="c">'+esc(estSin(x.estado))+'</td>'+(hayValor?'<td class="r">'+(+x.valor?money(x.valor):'—')+'</td>':'')+'</tr>';}).join('');
   var sello=a.anulada?'<div class="sello">ANULADA</div>':borrador?'<div class="sello b">BORRADOR</div>':'';
   return '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
   +'<title>Informe de siniestro '+esc(a.numero||'borrador')+'</title>'
@@ -106,7 +108,7 @@ function htmlActa(a,borrador){
 function abrirHtml(html){var w=window.open('','_blank');if(w){w.document.open();w.document.write(html);w.document.close();}else{var u=URL.createObjectURL(new Blob([html],{type:'text/html'}));window.open(u,'_blank');}}
 function excel(a){var ex=A.exportToExcel;if(!ex)return;var F=a.detalle||[];
   ex('Informe_siniestro_'+(a.numero||'borrador'),[
-    {name:'Piezas',headers:['Código','Cliente','Destinatario','Dirección','Comuna','Recibido','Estado','Valor'],rows:F.map(function(x){return [x.codigo,x.cliente||'',tit(x.destinatario),x.direccion||'',tit(x.comuna),dmy(x.fecha),est(x.estado),+x.valor||''];})},
+    {name:'Piezas',headers:['Código','Cliente','Destinatario','Dirección','Comuna','Recibido','Estado','Valor'],rows:F.map(function(x){return [x.codigo,x.cliente||'',tit(x.destinatario),x.direccion||'',tit(x.comuna),dmy(x.fecha),estSin(x.estado),+x.valor||''];})},
     {name:'Informe',headers:['Campo','Valor'],rows:[['Número',a.numero||''],['Fecha',dmy(a.fecha)],['Dirigido a',a.dirigido_a||''],['Cargo / empresa',a.dirigido_cargo||''],['Situación',nombreSit(a)],['Fecha del hecho',dmy(a.fecha_hecho)],['Lugar',a.lugar||''],['Mensajero',a.mensajero||''],['Descripción',a.relato||''],['Medidas',a.medidas||''],['Emitido por',a.emitida_por||'']]}]);}
 
 var C={txt:'#f1ecda',sub:'rgba(233,228,210,.7)',fila:'rgba(255,255,255,.05)',bd:'rgba(255,255,255,.1)',
@@ -204,7 +206,7 @@ function ActasSiniestro(props){
         h('thead',null,h('tr',null,['Código','Cliente','Destinatario','Comuna','Recibido','Estado','Mensajero','Valor declarado',''].map(function(c,i){return h('th',{key:i,style:th},c);}))),
         h('tbody',null,f.filas.map(function(x){return h('tr',{key:x.codigo},
           h('td',{style:Object.assign({},td,{fontFamily:'JetBrains Mono, monospace',fontSize:12.5})},x.codigo),h('td',{style:td},x.cliente||'—'),h('td',{style:td},tit(x.destinatario)||'—'),h('td',{style:td},tit(x.comuna)||'—'),
-          h('td',{style:Object.assign({},td,{whiteSpace:'nowrap'})},dmy(x.fecha)),h('td',{style:td},x.existe?est(x.estado):'—'),h('td',{style:td},tit(x.mensajero)||'—',x.menSin?h('div',{style:{fontSize:11,color:'#ffb3a6',fontWeight:700,marginTop:2}},'En Siniestros figura '+tit(x.menSin)):null),
+          h('td',{style:Object.assign({},td,{whiteSpace:'nowrap'})},dmy(x.fecha)),h('td',{style:td},x.existe?estSin(x.estado):'—'),h('td',{style:td},tit(x.mensajero)||'—',x.menSin?h('div',{style:{fontSize:11,color:'#ffb3a6',fontWeight:700,marginTop:2}},'En Siniestros figura '+tit(x.menSin)):null),
           h('td',{style:td},h('input',{value:x.valor===''||x.valor==null?'':String(x.valor),placeholder:'$',onChange:function(e){valor(x.codigo,e.target.value);},style:Object.assign({},inp,{width:110,padding:'6px 8px'})})),
           h('td',{style:td},h('button',{type:'button',onClick:function(){quitar(x.codigo);},title:'Quitar',style:{border:'none',background:'none',color:'#ff9b9b',fontWeight:900,cursor:'pointer',fontSize:15}},'×')));})),
         total>0&&h('tfoot',null,h('tr',null,h('td',{colSpan:7,style:Object.assign({},td,{fontWeight:800})},'Total valor declarado'),h('td',{colSpan:2,style:Object.assign({},td,{fontWeight:800,color:'#ffe59a'})},money(total)))))))),
