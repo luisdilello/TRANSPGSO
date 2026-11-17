@@ -132,7 +132,7 @@ function ActasSiniestro(props){
   var _g=useState(false),gen=_g[0],setGen=_g[1];
   var _q=useState(''),q=_q[0],setQ=_q[1];
   function set(o){setF(function(p){return Object.assign({},p,o);});}
-  function cargar(){db.from('actas_siniestro').select('*').order('id',{ascending:false}).limit(500).then(function(r){setActas(r.error?[]:(r.data||[]));});}
+  function cargar(){db.from('actas_siniestro').select('*').eq('anulada',false).order('id',{ascending:false}).limit(500).then(function(r){setActas(r.error?[]:(r.data||[]));});}
   useEffect(cargar,[]);
   var nombresMen=useMemo(function(){return (props.mensajeros||[]).filter(function(m){return m.activo!==false;}).map(function(m){return m.nombre;}).filter(Boolean).sort();},[props.mensajeros]);
   var nombresCli=useMemo(function(){var o={};(f.filas||[]).forEach(function(x){if(x.cliente)o[x.cliente]=1;});(props.clientes||[]).forEach(function(c){var n=c&&(c.nombre||c);if(typeof n==='string')o[n]=1;});return Object.keys(o).sort();},[f.filas,props.clientes]);
@@ -171,8 +171,8 @@ function ActasSiniestro(props){
       toast('Informe '+g.data.numero+' emitido');setF(vacio);setTab('emitidas');cargar();
     }catch(e){if(w&&!w.closed)w.close();toast('No se pudo emitir: '+(e.message||e));}
     setGen(false);}
-  function anular(a){if(!window.confirm('Anular el informe '+a.numero+'? Queda marcado como anulado y el número no se reutiliza.'))return;
-    db.rpc('anular_acta_siniestro',{p_id:a.id}).then(function(r){if(r.error){toast('No se pudo anular: '+r.error.message);return;}toast('Informe '+a.numero+' anulado');cargar();});}
+  function anular(a){if(!window.confirm('Eliminar el informe '+a.numero+'? Se borra del sistema y no se puede recuperar.'))return;
+    db.rpc('eliminar_acta_siniestro',{p_id:a.id}).then(function(r){if(r.error){toast('No se pudo eliminar: '+r.error.message);return;}toast('Informe '+a.numero+' eliminado');cargar();});}
 
   var tabB=function(k,t){var on=tab===k;return h('button',{type:'button',onClick:function(){setTab(k);},style:{padding:'8px 14px',border:'none',borderBottom:'3px solid '+(on?'#e8c766':'transparent'),background:'transparent',color:on?'#ffe59a':C.sub,fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1.2,cursor:'pointer'}},t);};
   var th={textAlign:'left',padding:'8px 10px',fontSize:10.5,letterSpacing:.8,textTransform:'uppercase',color:'rgba(233,228,210,.65)',borderBottom:'1px solid rgba(255,255,255,.12)',whiteSpace:'nowrap'};
@@ -192,7 +192,7 @@ function ActasSiniestro(props){
           h('div',{style:{fontFamily:'JetBrains Mono, monospace',fontWeight:700,fontSize:13,padding:'5px 10px',borderRadius:8,background:'#3A3D2E',color:'#e8c766',whiteSpace:'nowrap'}},a.numero),
           h('div',{style:{flex:'1 1 260px',minWidth:0}},h('div',{style:{fontWeight:800,fontSize:14}},nombreSit(a)+' · '+plural(n,'pieza')+(a.anulada?' · ANULADA':'')),
             h('div',{style:{fontSize:12,color:C.sub}},'Para '+(a.dirigido_a||'—')+(a.mensajero?' · '+tit(a.mensajero):'')+' · '+dmy(a.fecha)+(a.emitida_por?' · emitida por '+tit(a.emitida_por):''))),
-          h('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},boton('Ver informe / PDF',function(){abrirHtml(htmlActa(a));},'prim'),boton('Excel',function(){excel(a);}),esAdmin&&!a.anulada&&boton('Anular',function(){anular(a);},'peligro')));})));}
+          h('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},boton('Ver informe / PDF',function(){abrirHtml(htmlActa(a));},'prim'),boton('Excel',function(){excel(a);}),esAdmin&&!a.anulada&&boton('Eliminar',function(){anular(a);},'peligro')));})));}
 
   var sitBtn=function(s){var on=f.sit===s.k;return h('button',{key:s.k,type:'button',onClick:function(){set({sit:s.k});},style:{padding:'8px 13px',borderRadius:999,border:'1px solid '+(on?'#e8c766':'rgba(255,255,255,.2)'),background:on?'linear-gradient(180deg,rgba(247,221,140,.35),rgba(174,136,41,.25))':'rgba(255,255,255,.04)',color:on?'#ffe59a':C.txt,fontWeight:800,fontSize:12.5,cursor:'pointer'}},s.t);};
   var sec=function(n,t,el){return h('div',{style:{marginBottom:16}},h('div',{style:{fontFamily:'Bebas Neue',fontSize:18,letterSpacing:1.4,color:'#ffe59a',marginBottom:8}},n+'. '+t),el);};
