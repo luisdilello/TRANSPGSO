@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261116204813;
+window.__MODULES_VERSION=20261116212022;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -12608,17 +12608,88 @@ function PeriferiaRider(props){
 // Ruleta de incentivos (16-11-2026): único bono por efectividad. Se gira una vez por semana, por la
 // semana anterior (lunes a domingo), si se cumplieron los requisitos. El premio lo decide el servidor
 // (RPC girar_ruleta). En la app no se muestran las probabilidades ni el mínimo de entregas.
-function ruletaSvg(premios,size){var r=size/2,n=premios.length||1,a=360/n,R=r-16;
-  var s='<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" style="display:block">'+
-  '<defs><radialGradient id="rrim" cx="50%" cy="40%"><stop offset=".8" stop-color="#fff2c2"/><stop offset=".9" stop-color="#d9b553"/><stop offset="1" stop-color="#6d531a"/></radialGradient><radialGradient id="rgl" cx="35%" cy="25%"><stop offset="0" stop-color="rgba(255,255,255,.35)"/><stop offset=".6" stop-color="rgba(255,255,255,0)"/></radialGradient><radialGradient id="rhub" cx="40%" cy="35%"><stop offset="0" stop-color="#fff2c2"/><stop offset=".55" stop-color="#d9b553"/><stop offset="1" stop-color="#6d531a"/></radialGradient></defs>'+
-  '<circle cx="'+r+'" cy="'+r+'" r="'+(r-2)+'" fill="url(#rrim)"/>';
-  for(var i=0;i<n;i++){var a0=(i*a-90-a/2)*Math.PI/180,a1=((i+1)*a-90-a/2)*Math.PI/180,col=premios[i].color||'#C8A84B';
-    s+='<path d="M'+r+' '+r+' L'+(r+R*Math.cos(a0))+' '+(r+R*Math.sin(a0))+' A'+R+' '+R+' 0 0 1 '+(r+R*Math.cos(a1))+' '+(r+R*Math.sin(a1))+' Z" fill="'+col+'" stroke="#f7dd8c" stroke-width="1.5"/>';
-    var am=(i*a-90)*Math.PI/180,tx=r+R*.6*Math.cos(am),ty=r+R*.6*Math.sin(am),claro=/^#(c8a84b|36c47f|e8c766)$/i.test(col);
-    s+='<text x="'+tx+'" y="'+ty+'" fill="'+(claro?'#1a1d13':'#fff')+'" font-family="Bebas Neue,Arial Narrow,Arial" font-size="'+(size/16)+'" letter-spacing="1" text-anchor="middle" dominant-baseline="middle" transform="rotate('+(i*a-90)+' '+tx+' '+ty+')">'+String(premios[i].nombre||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</text>';}
-  for(var k=0;k<n*2;k++){var ak=(k*a/2-90-a/2)*Math.PI/180;s+='<circle cx="'+(r+(r-9)*Math.cos(ak))+'" cy="'+(r+(r-9)*Math.sin(ak))+'" r="3.2" fill="'+(k%2?'#fff':'#ffe59a')+'" stroke="#6d531a" stroke-width="1"/>';}
-  s+='<circle cx="'+r+'" cy="'+r+'" r="'+R+'" fill="url(#rgl)"/><circle cx="'+r+'" cy="'+r+'" r="'+(size*.11)+'" fill="url(#rhub)" stroke="#5a4510" stroke-width="2"/><text x="'+r+'" y="'+(r+1)+'" text-anchor="middle" dominant-baseline="middle" font-family="Bebas Neue,Arial Narrow,Arial" font-size="'+(size/15)+'" fill="#3A3D2E">PGSO</text></svg>';
-  return s;}
+// Ruleta v2 (16-11-2026): segmentos laqueados con degradé propio, aro dorado biselado, luces que
+// corren alrededor, íconos por tipo de premio y el logo real al centro.
+var ICONO_PREMIO={
+  dinero:'M2.5 6.5h19v11h-19z M12 9.2a2.8 2.8 0 1 0 0 5.6a2.8 2.8 0 1 0 0-5.6 M5.5 9.5v5 M18.5 9.5v5',
+  bencina:'M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16 M3 21h13 M4 10h11 M15 8l3 3v7a1.5 1.5 0 0 0 3 0V9l-3-3',
+  consumo:'M4 8h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z M17 10h1.5a2.5 2.5 0 0 1 0 5H16 M7.5 2.5v3 M11.5 2.5v3',
+  comodin:'M12 2.8l8 3v6.2c0 5-3.6 8.2-8 9.2c-4.4-1-8-4.2-8-9.2V5.8z M8.8 12.2l2.3 2.3l4.4-4.6',
+  especie:'M8 3l4 2l4-2l5 3l-2 4.5l-3-1.2V21H8V9.3L5 10.5L3 6z',
+  otro:'M3 8h18v4H3z M5 12v9h14v-9 M12 8v13 M12 8c-2.2-4.5-6.5-3-5-.2 M12 8c2.2-4.5 6.5-3 5-.2'};
+function _hex2rgb(h){h=String(h||'#C8A84B').replace('#','');if(h.length===3)h=h.split('').map(function(c){return c+c;}).join('');var n=parseInt(h,16);return [(n>>16)&255,(n>>8)&255,n&255];}
+function _mix(h,amt){var c=_hex2rgb(h),t=amt>0?255:0,p=Math.abs(amt);return 'rgb('+c.map(function(v){return Math.round(v+(t-v)*p);}).join(',')+')';}
+function _esClaro(h){var c=_hex2rgb(h);return (c[0]*299+c[1]*587+c[2]*114)/1000>150;}
+function _txtPremio(p){var t=p.tipo||'';if(t==='dinero')return {big:p.nombre,small:'EXTRA'};if(t==='bencina')return {big:p.monto?'$'+Math.round(p.monto).toLocaleString('es-CL'):'BENCINA',small:'BENCINA'};
+  if(t==='consumo')return {big:p.monto?'$'+Math.round(p.monto).toLocaleString('es-CL'):'CONSUMO',small:'CONSUMO'};if(t==='comodin')return {big:'COMODÍN',small:'ANTI INCIDENCIA'};if(t==='especie')return {big:String(p.nombre||'').toUpperCase(),small:'TRANSPGSO'};return {big:String(p.nombre||'').toUpperCase(),small:''};}
+function ruletaSvg(premios,size,logo){var r=size/2,n=premios.length||1,a=360/n,Ro=r-size*.035,R=r-size*.085,s=[],esc=function(x){return String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;');};
+  var maxM=premios.reduce(function(m,p){return Math.max(m,(p.tipo==='dinero'?+p.monto:0)||0);},0);
+  s.push('<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" style="display:block;overflow:visible">');
+  s.push('<defs>'+
+   '<linearGradient id="rv2rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff6cf"/><stop offset=".25" stop-color="#e8c766"/><stop offset=".5" stop-color="#8a6d1f"/><stop offset=".75" stop-color="#f2d37a"/><stop offset="1" stop-color="#6d531a"/></linearGradient>'+
+   '<linearGradient id="rv2rim2" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a4510"/><stop offset=".5" stop-color="#d9b553"/><stop offset="1" stop-color="#3d2e0a"/></linearGradient>'+
+   '<radialGradient id="rv2gl" cx="35%" cy="22%" r="75%"><stop offset="0" stop-color="rgba(255,255,255,.42)"/><stop offset=".45" stop-color="rgba(255,255,255,.06)"/><stop offset="1" stop-color="rgba(255,255,255,0)"/></radialGradient>'+
+   '<radialGradient id="rv2vig" cx="50%" cy="50%" r="50%"><stop offset=".55" stop-color="rgba(0,0,0,0)"/><stop offset="1" stop-color="rgba(0,0,0,.45)"/></radialGradient>'+
+   '<radialGradient id="rv2hub" cx="38%" cy="30%"><stop offset="0" stop-color="#fffbe6"/><stop offset=".4" stop-color="#ecc964"/><stop offset=".8" stop-color="#9a7720"/><stop offset="1" stop-color="#5a4510"/></radialGradient>'+
+   '<clipPath id="rv2logo"><circle cx="'+r+'" cy="'+r+'" r="'+(size*.085)+'"/></clipPath>'+
+   premios.map(function(p,i){var c=p.color||'#C8A84B';return '<radialGradient id="rv2s'+i+'" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset=".15" stop-color="'+_mix(c,-.35)+'"/><stop offset=".62" stop-color="'+_mix(c,.12)+'"/><stop offset=".9" stop-color="'+c+'"/><stop offset="1" stop-color="'+_mix(c,-.4)+'"/></radialGradient>';}).join('')+
+   '</defs>');
+  // aro exterior biselado
+  s.push('<circle cx="'+r+'" cy="'+r+'" r="'+(r-1)+'" fill="url(#rv2rim)"/><circle cx="'+r+'" cy="'+r+'" r="'+(Ro+size*.012)+'" fill="url(#rv2rim2)"/><circle cx="'+r+'" cy="'+r+'" r="'+(R+size*.006)+'" fill="#1a1d13"/>');
+  for(var i=0;i<n;i++){var a0=(i*a-90-a/2)*Math.PI/180,a1=((i+1)*a-90-a/2)*Math.PI/180,p=premios[i],c=p.color||'#C8A84B',claro=_esClaro(c),mayor=p.tipo==='dinero'&&+p.monto===maxM&&maxM>0;
+    s.push('<path d="M'+r+' '+r+' L'+(r+R*Math.cos(a0))+' '+(r+R*Math.sin(a0))+' A'+R+' '+R+' 0 0 1 '+(r+R*Math.cos(a1))+' '+(r+R*Math.sin(a1))+' Z" fill="url(#rv2s'+i+')"/>');
+    var am=i*a, t=_txtPremio(p), ic=ICONO_PREMIO[p.tipo]||ICONO_PREMIO.otro, col=claro?'#1a1d13':'#ffffff', sh=claro?'rgba(255,255,255,.55)':'rgba(0,0,0,.55)';
+    var fs=size/(t.big.length>7?15:12.5),maxW=2*R*.6*Math.sin(a/2*Math.PI/180)*.8,tl=Math.min(maxW,fs*.47*t.big.length);
+    s.push('<g transform="rotate('+am+' '+r+' '+r+')">'+
+      '<g transform="translate('+(r-size*.04)+' '+(r-R*.93)+') scale('+(size*.0033)+')"><path d="'+ic+'" fill="none" stroke="'+col+'" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" opacity=".92"/></g>'+
+      '<text x="'+r+'" y="'+(r-R*.6)+'" textLength="'+tl+'" lengthAdjust="spacingAndGlyphs" fill="'+col+'" font-family="Bebas Neue,Arial Narrow,Arial" font-size="'+fs+'" letter-spacing="1" text-anchor="middle" dominant-baseline="middle" style="paint-order:stroke" stroke="'+sh+'" stroke-width="'+(size*.006)+'">'+esc(t.big)+'</text>'+
+      (t.small?'<text x="'+r+'" y="'+(r-R*.44)+'" fill="'+col+'" opacity=".85" font-family="DM Sans,Arial" font-weight="900" font-size="'+(size/34)+'" letter-spacing="2" text-anchor="middle" dominant-baseline="middle">'+esc(t.small)+'</text>':'')+
+      
+      '</g>');}
+  // separadores dorados
+  for(var j=0;j<n;j++){var aj=(j*a-90-a/2)*Math.PI/180;s.push('<line x1="'+r+'" y1="'+r+'" x2="'+(r+R*Math.cos(aj))+'" y2="'+(r+R*Math.sin(aj))+'" stroke="url(#rv2rim)" stroke-width="'+(size*.012)+'" stroke-linecap="round"/>');
+    s.push('<circle cx="'+(r+(R-size*.004)*Math.cos(aj))+'" cy="'+(r+(R-size*.004)*Math.sin(aj))+'" r="'+(size*.014)+'" fill="url(#rv2hub)" stroke="#5a4510" stroke-width="1"/>');}
+  s.push('<circle cx="'+r+'" cy="'+r+'" r="'+R+'" fill="url(#rv2vig)"/><circle cx="'+r+'" cy="'+r+'" r="'+R+'" fill="url(#rv2gl)"/>');
+  // centro: moneda dorada con el logo
+  s.push('<circle cx="'+r+'" cy="'+(r+size*.008)+'" r="'+(size*.13)+'" fill="rgba(0,0,0,.45)"/><circle cx="'+r+'" cy="'+r+'" r="'+(size*.13)+'" fill="url(#rv2hub)" stroke="#5a4510" stroke-width="2"/>'+
+    '<circle cx="'+r+'" cy="'+r+'" r="'+(size*.1)+'" fill="none" stroke="rgba(90,69,16,.55)" stroke-width="2" stroke-dasharray="3 4"/>'+
+    (logo?'<image href="'+logo+'" x="'+(r-size*.085)+'" y="'+(r-size*.085)+'" width="'+(size*.17)+'" height="'+(size*.17)+'" clip-path="url(#rv2logo)" preserveAspectRatio="xMidYMid slice"/><circle cx="'+r+'" cy="'+r+'" r="'+(size*.085)+'" fill="none" stroke="#fff2c2" stroke-width="2"/>':'<text x="'+r+'" y="'+(r+2)+'" text-anchor="middle" dominant-baseline="middle" font-family="Bebas Neue,Arial" font-size="'+(size/12)+'" fill="#3A3D2E">PGSO</text>'));
+  s.push('</svg>');return s.join('');}
+// Luces alrededor del aro (DOM, para animarlas). girando => corren rápido.
+function LucesRuleta(props){var n=props.n||24,size=props.size,R=size/2-size*.022,out=[];
+  for(var i=0;i<n;i++){var ang=i/n*2*Math.PI-Math.PI/2;out.push(React.createElement('span',{key:i,className:'rlz '+(i%2?'rlz-b':'rlz-a'),style:{left:size/2+R*Math.cos(ang)-size*.013,top:size/2+R*Math.sin(ang)-size*.013,width:size*.026,height:size*.026,animationDelay:props.girando?(i*0.04)+'s':'0s'}}));}
+  return React.createElement('div',{className:props.girando?'rlz-wrap rlz-run':'rlz-wrap',style:{position:'absolute',left:0,top:0,width:size,height:size,pointerEvents:'none'}},out);}
+var CSS_RULETA2='@keyframes ruletaPulso{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}'+
+ '.rlz{position:absolute;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0,#fff6cf 30%,#ffd44d 60%,#b8860b 100%);box-shadow:0 0 6px #ffe08a,0 0 14px rgba(255,200,60,.8)}'+
+ '.rlz-a{animation:rlzBlink 1.2s steps(1) infinite}.rlz-b{animation:rlzBlink 1.2s steps(1) infinite .6s}'+
+ '.rlz-run .rlz{animation:rlzChase .5s linear infinite}'+
+ '@keyframes rlzBlink{0%{opacity:1}50%{opacity:.25;box-shadow:none}}@keyframes rlzChase{0%,100%{opacity:.2;box-shadow:none}40%{opacity:1;box-shadow:0 0 8px #fff2c2,0 0 18px rgba(255,200,60,1)}}'+
+ '@keyframes rayos{to{transform:rotate(360deg)}}@keyframes ptrTick{0%,100%{transform:translateX(-50%) rotate(0)}50%{transform:translateX(-50%) rotate(-14deg)}}'+
+ '@keyframes brilloTicket{0%{transform:translateX(-160%) skewX(-20deg)}60%,100%{transform:translateX(320%) skewX(-20deg)}}'+
+ '@keyframes flotaT{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}'+
+ '@keyframes confeti{0%{transform:translateY(-40px) rotate(0);opacity:1}100%{transform:translateY(105vh) rotate(720deg);opacity:.9}}@keyframes estallido{0%{transform:scale(.2);opacity:.9}100%{transform:scale(2.4);opacity:0}}@keyframes entraPremio{0%{transform:scale(.4) rotate(-6deg);opacity:0}60%{transform:scale(1.08) rotate(1deg);opacity:1}100%{transform:scale(1) rotate(0)}}'+
+ '.rul-cuerpo>*{flex-shrink:0}';
+function ConfetiRuleta(){var cols=['#ffe59a','#36c47f','#e65100','#ffffff','#9c27b0','#5b8def','#C8A84B'],out=[];for(var i=0;i<46;i++){out.push(React.createElement('span',{key:i,style:{position:'absolute',top:0,left:(i*37%100)+'%',width:6+(i%3)*3,height:10+(i%4)*3,borderRadius:2,background:cols[i%cols.length],animation:'confeti '+(2.2+(i%5)*.35)+'s cubic-bezier(.2,.6,.4,1) '+((i%9)*.12)+'s infinite'}}));}return React.createElement('div',{style:{position:'absolute',inset:0,overflow:'hidden',pointerEvents:'none'}},out);}
+// Premios como tickets 3D, del más alto al más bajo; el mayor con brillo.
+function PremiosRuleta(props){var ps=(props.premios||[]).slice().sort(function(a,b){return (+b.monto||0)-(+a.monto||0);});var maxM=ps.length?(+ps[0].monto||0):0;
+  return React.createElement('div',null,
+    React.createElement('div',{style:{display:'flex',alignItems:'baseline',justifyContent:'space-between',margin:'2px 4px 8px'}},
+      React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:24,letterSpacing:1.6,color:props.claro?'#2b2e20':'#fff'}},'Lo que puedes ganar'),
+      React.createElement('div',{style:{fontSize:11,fontWeight:800,letterSpacing:1,color:props.claro?'#8a6d1f':'#e8c766'}},ps.length+' PREMIOS')),
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:10}},ps.map(function(p,i){var c=p.color||'#C8A84B',claro=_esClaro(c),mayor=i===0&&maxM>0,t=_txtPremio(p),ic=ICONO_PREMIO[p.tipo]||ICONO_PREMIO.otro,fg=claro?'#1a1d13':'#fff';
+      return React.createElement('div',{key:p.id,style:{gridColumn:mayor?'1 / -1':'auto',position:'relative',overflow:'hidden',borderRadius:18,padding:mayor?'16px 16px':'12px 12px 13px',minHeight:mayor?96:104,
+          background:'linear-gradient(140deg,'+_mix(c,.28)+' 0%,'+c+' 45%,'+_mix(c,-.45)+' 100%)',color:fg,
+          boxShadow:'inset 0 1px 0 rgba(255,255,255,.45), inset 0 -3px 0 rgba(0,0,0,.18), 0 5px 0 '+_mix(c,-.6)+', 0 12px 22px rgba(20,22,15,.25)'+(mayor?', 0 0 24px rgba(255,214,77,.45)':''),
+          display:'flex',flexDirection:mayor?'row':'column',alignItems:mayor?'center':'flex-start',gap:mayor?14:8,animation:mayor?'flotaT 3s ease-in-out infinite':'none'}},
+        React.createElement('span',{style:{position:'absolute',top:0,bottom:0,width:'38%',background:'linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.35),rgba(255,255,255,0))',animation:'brilloTicket '+(mayor?2.6:4.2)+'s ease-in-out infinite',animationDelay:(i*0.35)+'s',pointerEvents:'none'}}),
+        React.createElement('span',{style:{position:'absolute',right:-14,top:'50%',width:28,height:28,marginTop:-14,borderRadius:'50%',background:props.claro?'#f3eddc':'#15180f'}}),
+        React.createElement('span',{style:{position:'absolute',left:-14,top:'50%',width:28,height:28,marginTop:-14,borderRadius:'50%',background:props.claro?'#f3eddc':'#15180f'}}),
+        React.createElement('div',{style:{width:mayor?56:38,height:mayor?56:38,borderRadius:mayor?16:12,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,background:claro?'rgba(0,0,0,.12)':'rgba(255,255,255,.16)',border:'1px solid '+(claro?'rgba(0,0,0,.15)':'rgba(255,255,255,.3)'),position:'relative'}},
+          React.createElement('svg',{width:mayor?32:22,height:mayor?32:22,viewBox:'0 0 24 24'},React.createElement('path',{d:ic,fill:'none',stroke:fg,strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'}))),
+        React.createElement('div',{style:{position:'relative',minWidth:0}},
+          mayor&&React.createElement('div',{style:{display:'inline-block',fontSize:10,fontWeight:900,letterSpacing:2,padding:'2px 8px',borderRadius:999,background:'rgba(0,0,0,.28)',color:'#ffe59a',marginBottom:4}},'PREMIO MAYOR'),
+          React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:mayor?40:30,lineHeight:.95,letterSpacing:1,textShadow:claro?'0 1px 0 rgba(255,255,255,.4)':'0 2px 0 rgba(0,0,0,.35)'}},t.big),
+          React.createElement('div',{style:{fontSize:11.5,fontWeight:800,opacity:.9,marginTop:3,lineHeight:1.25}},p.detalle||t.small)));})));}
 function _ddmmR(s){var p=String(s).slice(0,10).split('-');return p[2]+'-'+p[1];}
 function _semEtqR(l){var d=new Date(String(l).slice(0,10)+'T12:00:00');var e=new Date(d);e.setDate(d.getDate()+6);return _ddmmR(_ymdRider(d))+' al '+_ddmmR(_ymdRider(e));}
 function ruletaDisponible(d){return !!(d&&d.activa&&d.abierta&&d.anterior&&d.anterior.cumple&&!d.giro);}
@@ -12627,7 +12698,7 @@ var NOMBRE_COPA_R={leyenda:'Leyenda',podio:'Podio',oro:'Oro',plata:'Plata',bronc
 function RuletaBannerRider(props){var d=props.data,claro=props.claro;if(!d||!d.activa)return null;
   var disp=ruletaDisponible(d),espera=ruletaEsperaMartes(d),gano=d.giro,ef=d.actual?d.actual.efectividad:0;
   var dorado=disp||gano||espera;
-  return React.createElement('div',{style:{padding:'0 12px 2px'}},React.createElement('style',null,'@keyframes ruletaPulso{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}'),React.createElement('button',{type:'button',onClick:props.onClick,style:{width:'100%',display:'flex',alignItems:'center',gap:12,padding:'11px 14px',borderRadius:16,cursor:'pointer',textAlign:'left',
+  return React.createElement('div',{style:{padding:'0 12px 2px'}},React.createElement('style',null,CSS_RULETA2),React.createElement('button',{type:'button',onClick:props.onClick,style:{width:'100%',display:'flex',alignItems:'center',gap:12,padding:'11px 14px',borderRadius:16,cursor:'pointer',textAlign:'left',
       background:dorado?'linear-gradient(180deg,#4a3a17,#2a2110)':(claro?'linear-gradient(180deg,#ffffff,#ece4cd)':'linear-gradient(180deg,#3a3f2b,#23271a)'),border:'1px solid '+(dorado?'rgba(232,199,102,.65)':(claro?'rgba(43,46,32,.14)':'rgba(232,199,102,.25)')),
       boxShadow:dorado?'inset 0 1px 0 rgba(255,255,255,.12), 0 4px 0 #0b0c07, 0 10px 18px rgba(0,0,0,.3)'+(disp?', 0 0 22px rgba(247,221,140,.35)':''):(claro?'inset 0 1px 0 #fff, 0 4px 0 #d2c7a8':'0 4px 0 #0b0c07'),color:dorado?'#f7dd8c':(claro?'#3a3d2e':'#d9d3bd')}},
     React.createElement('div',{style:{width:44,height:44,borderRadius:'50%',flexShrink:0,background:'conic-gradient(#C8A84B 0 45deg,#3A3D2E 45deg 90deg,#36c47f 90deg 135deg,#3A3D2E 135deg 180deg,#C8A84B 180deg 225deg,#3A3D2E 225deg 270deg,#e65100 270deg 315deg,#3A3D2E 315deg)',border:'3px solid '+(dorado?'#f7dd8c':'#b9b39c'),filter:dorado?'none':'grayscale(.85) opacity(.7)',boxShadow:disp?'0 0 0 4px rgba(247,221,140,.25), 0 0 16px rgba(247,221,140,.6)':'none',animation:disp?'ruletaPulso 1.6s ease-in-out infinite':'none'}}),
@@ -12652,7 +12723,7 @@ function RuletaRider(props){
   var cajaOsc={borderRadius:18,padding:'12px 14px',background:'radial-gradient(120% 160% at 15% 0%,#3a3f2b 0%,#23271a 55%,#15180f 100%)',border:'1px solid rgba(200,168,75,.5)',color:'#f1ecda',boxShadow:'inset 0 1px 0 rgba(255,255,255,.08), 0 4px 0 #0f110a, 0 10px 20px rgba(20,22,15,.25)'};
   var giro=d&&d.giro;
   return React.createElement('div',{style:{position:'fixed',inset:0,zIndex:9000,background:bg,color:txt,display:'flex',flexDirection:'column',fontFamily:'DM Sans,sans-serif'}},
-    React.createElement('style',null,'@keyframes ruletaPulso{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}.rul-cuerpo>*{flex-shrink:0}'),
+    React.createElement('style',null,CSS_RULETA2),
     React.createElement('div',{style:{padding:'10px 12px',paddingTop:'max(10px,env(safe-area-inset-top))',display:'flex',alignItems:'center',gap:10,background:'linear-gradient(180deg,#3a3d2e,#2b2e20)',borderBottom:'2px solid #c8a84b',boxShadow:'0 6px 16px rgba(20,22,15,.28)'}},
       React.createElement(botonHeaderRider,{onClick:function(){if(!girando)props.onClose();},title:'Volver',icono:ICONOS_RIDER.volver}),
       React.createElement('div',{style:{flex:1,lineHeight:1.15}},React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:21,letterSpacing:1.6,color:'#fff'}},'Ruleta de la semana'),
@@ -12673,20 +12744,21 @@ function RuletaRider(props){
         React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12,marginTop:10,fontWeight:700}},React.createElement('span',null,'Incidencias a descuento'),React.createElement('span',{style:{color:a&&a.cumple_inc?'#7fe3a8':'#ff8a8a'}},a&&a.cumple_inc?'Ninguna':'Tienes incidencias')),
         React.createElement('div',{style:{fontSize:11.5,color:'#d9d3bd',marginTop:10,lineHeight:1.4}},a&&a.faltan_98>0&&a.faltan_98<80?'Si entregas tus próximos '+a.faltan_98+' paquetes sin reprogramar ni cancelar, llegas a la meta de efectividad. ':'','Al cerrar la semana, si quedaste en Oro o mejor, con la meta de efectividad y sin incidencias, se activa tu giro. La ruleta se abre el martes siguiente.')),
       React.createElement('div',{style:{position:'relative',flexShrink:0,width:size,height:size+20,margin:'4px auto 0',perspective:900,filter:disp||giro||ruletaEsperaMartes(d)?'none':'grayscale(1) opacity(.55)'}},
-        React.createElement('svg',{width:40,height:52,viewBox:'0 0 40 52',style:{position:'absolute',left:'50%',top:-6,transform:'translateX(-50%)',zIndex:5,filter:'drop-shadow(0 4px 4px rgba(0,0,0,.4))'}},
+        React.createElement('div',{style:{position:'absolute',left:'50%',top:'47%',width:size*1.5,height:size*1.5,marginLeft:-size*.75,marginTop:-size*.75,borderRadius:'50%',background:'repeating-conic-gradient(rgba(255,214,77,.16) 0 7deg,rgba(255,214,77,0) 7deg 20deg)',WebkitMaskImage:'radial-gradient(circle,#000 30%,transparent 70%)',maskImage:'radial-gradient(circle,#000 30%,transparent 70%)',animation:'rayos '+(girando?'3s':'26s')+' linear infinite',pointerEvents:'none'}}),
+        React.createElement('div',{style:{position:'absolute',left:'50%',top:'47%',width:size*1.08,height:size*1.08,marginLeft:-size*.54,marginTop:-size*.54,borderRadius:'50%',background:'radial-gradient(circle,rgba(255,214,77,'+(girando?'.45':'.25')+') 0%,rgba(255,214,77,0) 65%)',pointerEvents:'none',transition:'all .4s'}}),
+        React.createElement('svg',{width:46,height:60,viewBox:'0 0 40 52',style:{position:'absolute',left:'50%',top:-10,transform:'translateX(-50%)',transformOrigin:'50% 25%',zIndex:5,filter:'drop-shadow(0 5px 4px rgba(0,0,0,.5))',animation:girando?'ptrTick .16s ease-in-out infinite':'none'}},
           React.createElement('defs',null,React.createElement('linearGradient',{id:'rptr',x1:0,x2:0,y1:0,y2:1},React.createElement('stop',{offset:0,stopColor:'#fff2c2'}),React.createElement('stop',{offset:.5,stopColor:'#e8c766'}),React.createElement('stop',{offset:1,stopColor:'#8a6d1f'}))),
           React.createElement('path',{d:'M20 50 L4 12 A16 16 0 1 1 36 12 Z',fill:'url(#rptr)',stroke:'#5a4510',strokeWidth:2}),React.createElement('circle',{cx:20,cy:15,r:6,fill:'#3A3D2E'})),
         React.createElement('div',{style:{position:'absolute',left:20,right:20,bottom:0,height:36,borderRadius:'50%',background:'radial-gradient(ellipse at center,rgba(20,22,15,.45),rgba(20,22,15,0) 70%)'}}),
         React.createElement('div',{style:{position:'absolute',left:0,top:0,width:size,height:size,transform:'rotateX(14deg)',transformStyle:'preserve-3d'}},
-          React.createElement('div',{style:{width:size,height:size,borderRadius:'50%',boxShadow:'0 8px 0 #0f110a, 0 18px 30px rgba(0,0,0,.35)',transform:'rotate('+rot+'deg)',transition:rot?'transform 5.4s cubic-bezier(.12,.68,.1,1)':'none'},dangerouslySetInnerHTML:{__html:ruletaSvg(premios,size)}}))),
+          React.createElement('div',{style:{width:size,height:size,borderRadius:'50%',boxShadow:'0 8px 0 #0f110a, 0 18px 30px rgba(0,0,0,.35)',transform:'rotate('+rot+'deg)',transition:rot?'transform 5.4s cubic-bezier(.12,.68,.1,1)':'none'},dangerouslySetInnerHTML:{__html:ruletaSvg(premios,size,'logo.jpg')}}),React.createElement(LucesRuleta,{size:size,n:28,girando:girando}))),
       disp&&React.createElement('button',{type:'button',onClick:girar,disabled:girando,style:{flexShrink:0,height:58,borderRadius:16,border:'1px solid #f7dd8c',background:'linear-gradient(180deg,#f7dd8c,#d9b553 55%,#ae8829)',color:'#1a1d13',fontFamily:'Bebas Neue',fontSize:28,letterSpacing:2,boxShadow:'inset 0 1px 0 rgba(255,255,255,.6), 0 5px 0 #6d531a, 0 12px 20px rgba(174,136,41,.4)',opacity:girando?.7:1,cursor:'pointer'}},girando?'Girando…':'Girar'),
       err&&React.createElement('div',{style:{textAlign:'center',color:'#b03030',fontWeight:800,fontSize:13}},err),
-      React.createElement('div',{style:{borderRadius:16,background:panel,border:'1px solid '+bd,boxShadow:'inset 0 1px 0 rgba(255,255,255,.5), 0 3px 0 '+base,padding:'10px 14px'}},
-        React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:17,letterSpacing:1.3,marginBottom:4}},'Premios'),
-        premios.map(function(x){return React.createElement('div',{key:x.id,style:{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderTop:'1px solid '+bd,fontSize:13,fontWeight:700}},React.createElement('span',{style:{width:12,height:12,borderRadius:4,background:x.color,flexShrink:0}}),x.detalle||x.nombre);})),
+      React.createElement(PremiosRuleta,{premios:premios,claro:claro}),
       React.createElement('div',{style:{fontSize:11.5,color:sub,textAlign:'center',padding:'0 10px 14px'}},'Un giro por semana para quienes terminan en Copa de Oro o mejor, con 98% de efectividad y sin incidencias a descuento.')),
-    res&&React.createElement('div',{style:{position:'fixed',inset:0,zIndex:9100,background:'rgba(10,11,7,.72)',display:'flex',alignItems:'center',justifyContent:'center',padding:22}},
-      React.createElement('div',{style:{width:'100%',maxWidth:360,borderRadius:22,padding:'22px 18px',textAlign:'center',background:'radial-gradient(120% 120% at 50% 0%,#5a4718 0%,#2a2110 60%,#15120a 100%)',border:'2px solid #f7dd8c',boxShadow:'0 0 0 6px rgba(247,221,140,.15), 0 0 60px rgba(247,221,140,.45)',color:'#fff'}},
+    res&&React.createElement('div',{style:{position:'fixed',inset:0,zIndex:9100,background:'rgba(10,11,7,.78)',display:'flex',alignItems:'center',justifyContent:'center',padding:22}},
+      React.createElement(ConfetiRuleta),React.createElement('div',{style:{position:'absolute',left:'50%',top:'50%',width:300,height:300,marginLeft:-150,marginTop:-150,borderRadius:'50%',background:'radial-gradient(circle,rgba(255,229,154,.85),rgba(255,229,154,0) 65%)',animation:'estallido 1.1s ease-out forwards',pointerEvents:'none'}}),
+      React.createElement('div',{style:{animation:'entraPremio .7s cubic-bezier(.2,.9,.3,1.2) both',position:'relative',width:'100%',maxWidth:360,borderRadius:22,padding:'22px 18px',textAlign:'center',background:'radial-gradient(120% 120% at 50% 0%,#5a4718 0%,#2a2110 60%,#15120a 100%)',border:'2px solid #f7dd8c',boxShadow:'0 0 0 6px rgba(247,221,140,.15), 0 0 60px rgba(247,221,140,.45)',color:'#fff'}},
         React.createElement('div',{style:{fontSize:12,fontWeight:900,letterSpacing:2,color:'#f7dd8c'}},'GANASTE'),
         React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:58,lineHeight:1,margin:'8px 0 4px',color:'#ffe59a',textShadow:'0 0 22px rgba(255,229,154,.7)'}},res.nombre),
         React.createElement('div',{style:{fontSize:15,fontWeight:800}},res.detalle||''),
