@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261118104413;
+window.__MODULES_VERSION=20261118121721;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -6141,7 +6141,7 @@ function ImportarPDFColecta(_ref_ipdf){
           // Verificar cuáles ya existen
           var codigos=envios.slice(bi,bi+BATCH).map(function(env){return env.codigo;});
           var existentesMap=new Map();
-          try{var _ex=await conTimeout(db.from('envios').select('codigo,comuna,destinatario,direccion,foto_etiqueta,fecha,estado,fecha_etiqueta').in('codigo',codigos),20000,'verificar duplicados');if(_ex.data)_ex.data.forEach(function(r){existentesMap.set(r.codigo,r);});}catch(e){}
+          try{var _ex=await conTimeout(db.from('envios').select('codigo,cliente,comuna,destinatario,direccion,referencia,nota,fuente,foto_etiqueta,fecha,estado,fecha_etiqueta').in('codigo',codigos),20000,'verificar duplicados');if(_ex.data)_ex.data.forEach(function(r){existentesMap.set(r.codigo,r);});}catch(e){}
           var existentes=existentesMap;
           // Insertar nuevos
           var nuevos=envios.slice(bi,bi+BATCH).filter(function(env){return!existentes.has(env.codigo);}).map(function(env){return{codigo:env.codigo,cliente:env.cliente,destinatario:env.destinatario,telefono:env.telefono,direccion:env.direccion,comuna:env.comuna,referencia:env.referencia||'',fecha_etiqueta:env.fechaEtiqueta||null,fecha:env.fecha,estado:env.estado,mensajero:env.mensajero,monto:env.monto,en_un_cambio:false,nota:env.nota,fuente:env.fuente,foto_etiqueta:env.foto_etiqueta||null};});
@@ -6160,7 +6160,7 @@ function ImportarPDFColecta(_ref_ipdf){
             insertadosPDF+=okCods.length;
             if(okCods.length)sbRegistrarHistorialLote(okCods,'en_bodega','Importado desde PDF Flex ('+arch.nombre+')',nombreAdminPDF,'panel_admin');
           }
-          // Actualizar existentes solo campos vacíos - ya tenemos sus datos del select de arriba,
+          // Actualizar existentes: el PDF prevalece en los datos (ver regla abajo) - ya tenemos sus datos del select de arriba,
           // no hace falta leer de nuevo uno por uno. Las actualizaciones van en paralelo (8 a la vez).
           var existentesArr=envios.slice(bi,bi+BATCH).filter(function(env){return existentes.has(env.codigo);});
           await procesarConcurrencia(existentesArr,async function(env){
@@ -6183,10 +6183,18 @@ function ImportarPDFColecta(_ref_ipdf){
                     monto:env.monto,nota:env.nota,fuente:env.fuente};
                   if(env.foto_etiqueta)upd.foto_etiqueta=env.foto_etiqueta;
                 }else{
-                  if(!curData.comuna&&env.comuna)upd.comuna=env.comuna;
-                  if(!curData.destinatario&&env.destinatario)upd.destinatario=env.destinatario;
-                  if(!curData.direccion&&env.direccion)upd.direccion=env.direccion;
-                  if(!curData.foto_etiqueta&&env.foto_etiqueta)upd.foto_etiqueta=env.foto_etiqueta;
+                  // 18-11-2026 (regla de Luis): EL PDF SIEMPRE PREVALECE en los datos. Si el paquete ya
+                  // existía (colecta, retiro masivo, escaneo o carga manual), el PDF sobrescribe
+                  // destinatario, dirección, comuna, referencia, cliente y foto de la etiqueta, y lo
+                  // marca como fuente 'flex'. No toca estado, mensajero ni fecha de recepción (el hecho
+                  // físico lo registró el mensajero). Solo se escriben valores que el PDF sí trae.
+                  if(env.comuna&&curData.comuna!==env.comuna)upd.comuna=env.comuna;
+                  if(env.destinatario&&curData.destinatario!==env.destinatario)upd.destinatario=env.destinatario;
+                  if(env.direccion&&curData.direccion!==env.direccion)upd.direccion=env.direccion;
+                  if(env.referencia&&curData.referencia!==env.referencia)upd.referencia=env.referencia;
+                  if(env.cliente&&curData.cliente!==env.cliente)upd.cliente=env.cliente;
+                  if(env.foto_etiqueta&&curData.foto_etiqueta!==env.foto_etiqueta)upd.foto_etiqueta=env.foto_etiqueta;
+                  if(curData.fuente!=='flex'){upd.fuente='flex';if(env.nota||curData.nota)upd.nota=env.nota||'';}
                 }
                 // Fecha impresa en la etiqueta: solo informativa (no toca la fecha de recepción).
                 if(env.fechaEtiqueta&&curData.fecha_etiqueta!==env.fechaEtiqueta&&(!curData.fecha_etiqueta||upd.estado==='en_bodega'))upd.fecha_etiqueta=env.fechaEtiqueta;
