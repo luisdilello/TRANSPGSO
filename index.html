@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261117225933;
+window.__MODULES_VERSION=20261117235106;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -12738,7 +12738,7 @@ function RuletaRider(props){
       disp&&React.createElement('button',{type:'button',onClick:girar,disabled:girando,style:{flexShrink:0,height:58,borderRadius:16,border:'1px solid #f7dd8c',background:'linear-gradient(180deg,#f7dd8c,#d9b553 55%,#ae8829)',color:'#1a1d13',fontFamily:'Bebas Neue',fontSize:28,letterSpacing:2,boxShadow:'inset 0 1px 0 rgba(255,255,255,.6), 0 5px 0 #6d531a, 0 12px 20px rgba(174,136,41,.4)',opacity:girando?.7:1,cursor:'pointer'}},girando?'Girando…':'Girar'),
       err&&React.createElement('div',{style:{textAlign:'center',color:'#b03030',fontWeight:800,fontSize:13}},err),
       React.createElement(PremiosRuleta,{premios:premios,claro:claro}),
-      React.createElement('div',{style:{fontSize:11.5,color:sub,textAlign:'center',padding:'0 10px 14px'}},'Un giro por semana para quienes terminan en Copa de Oro o mejor, con 98% de efectividad y sin incidencias a descuento.')),
+      React.createElement('div',{style:{fontSize:11.5,color:sub,textAlign:'center',padding:'0 10px 14px'}},'Un giro por semana para quienes terminan en Copa de Oro o mejor, con 98% de efectividad y sin incidencias (ni correctivas ni multas).')),
     res&&React.createElement('div',{style:{position:'fixed',inset:0,zIndex:9100,background:'rgba(10,11,7,.78)',display:'flex',alignItems:'center',justifyContent:'center',padding:22}},
       React.createElement(ConfetiRuleta),React.createElement('div',{style:{position:'absolute',left:'50%',top:'50%',width:300,height:300,marginLeft:-150,marginTop:-150,borderRadius:'50%',background:'radial-gradient(circle,rgba(255,229,154,.85),rgba(255,229,154,0) 65%)',animation:'estallido 1.1s ease-out forwards',pointerEvents:'none'}}),
       React.createElement('div',{style:{animation:'entraPremio .7s cubic-bezier(.2,.9,.3,1.2) both',position:'relative',width:'100%',maxWidth:360,borderRadius:22,padding:'22px 18px',textAlign:'center',background:'radial-gradient(120% 120% at 50% 0%,#5a4718 0%,#2a2110 60%,#15120a 100%)',border:'2px solid #f7dd8c',boxShadow:'0 0 0 6px rgba(247,221,140,.15), 0 0 60px rgba(247,221,140,.45)',color:'#fff'}},
