@@ -370,6 +370,9 @@ function Analitica(){
   },[]);
 
   var _st=useState('resumen'),subTab=_st[0],setSubTab=_st[1];
+  // 18-11-2026: KPI Mensajeros v2 (modules/kpi-mensajeros.js); la tabla anterior queda como 'Vista clásica'.
+  var _kc=useState(false),kpiClasica=_kc[0],setKpiClasica=_kc[1];var _kv=useState(!!window.KpiMensajerosV2),kpiV2Listo=_kv[0],setKpiV2Listo=_kv[1];
+  useEffect(function(){if(subTab==='kpi'&&!kpiV2Listo&&typeof loadScriptOnce==='function')loadScriptOnce('kpi-mensajeros','modules/kpi-mensajeros.js').then(function(){setKpiV2Listo(true);}).catch(function(){});},[subTab]);
 
   // ---- Filtros del panel "Resumen" (comportamiento sin cambios) ----
   var _f=useState('semana'),filtro=_f[0],setFiltro=_f[1];
@@ -965,7 +968,7 @@ function Analitica(){
       React.createElement('div',{className:'section-title'},'Anal',React.createElement('span',null,'ítica')),
       React.createElement('div',{style:{display:'flex',gap:8}},
         React.createElement('button',{style:subTabStyle(subTab==='resumen'),onClick:function(){setSubTab('resumen');}},'Resumen'),
-        React.createElement('button',{style:subTabStyle(subTab==='kpi'),onClick:function(){setSubTab('kpi');}},'📊 KPI Mensajeros')
+        React.createElement('button',{style:subTabStyle(subTab==='kpi'),onClick:function(){setSubTab('kpi');}},'KPI Mensajeros')
       )
     ),
 
@@ -1034,8 +1037,10 @@ function Analitica(){
       )
     ),
 
-    subTab==='kpi'&&React.createElement(React.Fragment,null,
+    subTab==='kpi'&&!kpiClasica&&(kpiV2Listo&&window.KpiMensajerosV2?React.createElement(window.KpiMensajerosV2,{onClasica:function(){setKpiClasica(true);}}):React.createElement('div',{style:{padding:30,textAlign:'center',color:'#7a7766'}},'Cargando…')),
+    subTab==='kpi'&&kpiClasica&&React.createElement(React.Fragment,null,
       React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:16}},
+        React.createElement('button',{style:btnStyle(true),onClick:function(){setKpiClasica(false);}},'Volver a vista nueva'),
         React.createElement('button',{style:btnStyle(kpiFiltro==='hoy'),onClick:function(){setKpiFiltro('hoy');}},'Hoy'),
         React.createElement('button',{style:btnStyle(kpiFiltro==='ayer'),onClick:function(){setKpiFiltro('ayer');}},'Ayer'),
         React.createElement('button',{style:btnStyle(kpiFiltro==='semana'),onClick:function(){setKpiFiltro('semana');}},'Esta semana'),
