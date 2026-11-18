@@ -586,6 +586,8 @@ function DetalleNodo(p){
   // Motivo / comentario del último cambio al estado actual (historial_envios.nota)
   var _nt=R.useState({}),notas=_nt[0],setNotas=_nt[1];
   var m={},paqs={},vv=p.vivo||{};p.envios.forEach(function(e){if(nodoDe(vv[e.codigo]||e.estado)!==p.k)return;var c=porMen?(String(e.mensajero||'').trim()?String(e.mensajero).replace(/,\s*/g,' ').trim():'Sin mensajero'):(e.comuna&&String(e.comuna).trim()?titulo(norm(e.comuna)):'Sin comuna');m[c]=(m[c]||0)+1;(paqs[c]=paqs[c]||[]).push(e);});
+  // total del día por mensajero (todos los estados) para mostrar 'quedan/total'
+  var totMen={};if(porMen)p.envios.forEach(function(e){var c=String(e.mensajero||'').trim()?String(e.mensajero).replace(/,\s*/g,' ').trim():'Sin mensajero';totMen[c]=(totMen[c]||0)+1;});
   var lista=Object.keys(m).map(function(c){return{c:c,n:m[c]};}).sort(function(a,b){return b.n-a.n||a.c.localeCompare(b.c,'es');});
   var tot=lista.reduce(function(a,x){return a+x.n;},0),max=lista.length?lista[0].n:1;
   R.useEffect(function(){
@@ -622,7 +624,7 @@ function DetalleNodo(p){
         h('div',{onClick:function(){setAbierta(abierta===x.c?null:x.c);},style:{padding:'7px 4px',cursor:'pointer'}},
           h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:10}},
             h('span',{style:{fontSize:13.5,fontWeight:700,color:sc?'#ffcf8a':'#f1ecda'}},h('span',{style:{display:'inline-block',width:14,color:inf[1],transition:'transform .15s',transform:ab?'rotate(90deg)':'none'}},'›'),x.c),
-            h('span',{style:{fontFamily:'Bebas Neue',fontSize:21,color:'#fff',lineHeight:1}},x.n.toLocaleString('es-CL'))),
+            h('span',{style:{fontFamily:'Bebas Neue',fontSize:21,color:'#fff',lineHeight:1,whiteSpace:'nowrap'}},x.n.toLocaleString('es-CL'),porMen&&totMen[x.c]?h('span',{style:{color:'rgba(233,228,210,.55)',fontSize:17}},' / '+totMen[x.c].toLocaleString('es-CL')):null)),
           h('div',{style:{height:5,marginTop:4,borderRadius:4,background:'rgba(255,255,255,.07)',overflow:'hidden'}},h('div',{style:{width:Math.max(3,x.n/max*100)+'%',height:'100%',borderRadius:4,background:inf[1],boxShadow:'0 0 8px '+inf[1]}}))),
         ab&&h('div',{style:{padding:'2px 0 8px'}},ps.map(function(e,ix){
           return h('div',{key:e.codigo,onClick:p.cliente?undefined:function(){setVer({codigos:ps.map(function(z){return z.codigo;}),i:ix,titulo:inf[0]+' · '+x.c});},
