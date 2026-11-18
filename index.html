@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261118121721;
+window.__MODULES_VERSION=20261118125039;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -9777,6 +9777,7 @@ function detenerScanner(){
 }
 
 async function procesarCodigo(codigo){
+  try{window.__metr.ini('escaneo');}catch(_m){}
   if(!codigo||!codigo.trim()){
     // Antes esto se quedaba en silencio con la cámara ya detenida — el mensajero veía la
     // pantalla congelada sin saber si escaneó algo o no. Ahora avisa y deja abierto el botón
@@ -9834,11 +9835,13 @@ async function procesarEnvioEncontrado(data,cod){
       ?'Este paquete está en ruta con '+data.mensajero+'. Si es un error, avisa al administrador.'
       :'Este paquete no está en tu ruta ('+(data.estado||'—')+'). Para tomarlo usa "Asignación".';
     setResultado({codigo:cod,msg:msg,envio:data});
+    try{window.__metr.fin('escaneo',{bloqueado:true});}catch(_m){}
     return;
   }
   playSound('success');
   setModo('ok');
   setResultado({codigo:cod,envio:data});
+  try{window.__metr.fin('escaneo',{ok:true});}catch(_m){}
   onScanSuccess(data);
 }
 
@@ -12756,7 +12759,7 @@ function RuletaRider(props){
         React.createElement('div',{style:{fontSize:12,color:'#d9d3bd',marginTop:10,lineHeight:1.4}},(res.tipo==='dinero'?'Se suma a tu pago de la semana.':'Retíralo en la oficina.'),React.createElement('br'),'Sigue con la meta y la próxima semana vuelves a girar.',res.prueba?React.createElement('div',{style:{marginTop:6,color:'#ffb74d',fontWeight:800}},'Cuenta de prueba: este premio no se registra.'):null),
         React.createElement('button',{type:'button',onClick:function(){setRes(null);},style:{marginTop:16,width:'100%',height:48,borderRadius:14,border:'1px solid #f7dd8c',background:'linear-gradient(180deg,#f7dd8c,#d9b553 55%,#ae8829)',color:'#1a1d13',fontFamily:'Bebas Neue',fontSize:22,letterSpacing:2,boxShadow:'0 4px 0 #6d531a'}},'Listo'))));
 }
-function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout,mensajeros=_ref32.mensajeros||[];const _abrirDirS=useState(false),abrirDirAlEntrar=_abrirDirS[0],setAbrirDirAlEntrar=_abrirDirS[1];const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87bp=useState(null),clienteRetiroPresel=_useState87bp[0],setClienteRetiroPresel=_useState87bp[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const _useRIA=useState(false),rutaIAActiva=_useRIA[0],setRutaIAActiva=_useRIA[1];const _useSRIA=useState(false),showRutaIA=_useSRIA[0],setShowRutaIA=_useSRIA[1];const _useVG=useState(false),verGanancias=_useVG[0],setVerGanancias=_useVG[1];const _useCH=useState(false),colectaHabilitada=_useCH[0],setColectaHabilitada=_useCH[1];const _cfHoy=useState(null),cierreFlexHoy=_cfHoy[0],setCierreFlexHoy=_cfHoy[1];useEffect(()=>{db.from('cierres_flex').select('updated_at').eq('fecha',fechaHoyCL()).limit(1).then(function(r){var x=r&&r.data&&r.data[0];if(x)setCierreFlexHoy(new Date(x.updated_at).toLocaleTimeString('es-CL',{timeZone:'America/Santiago',hour:'2-digit',minute:'2-digit'}));},function(){});},[]);const _useMas=useState(false),showMas=_useMas[0],setShowMas=_useMas[1];const _useNotif=useState(false),notifActivas=_useNotif[0],setNotifActivas=_useNotif[1];const _useShowAv=useState(false),showAvisos=_useShowAv[0],setShowAvisos=_useShowAv[1];const _useBusq=useState(''),busquedaEnvio=_useBusq[0],setBusquedaEnvio=_useBusq[1];const _usePend=useState(0),pendientesSync=_usePend[0],setPendientesSync=_usePend[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);try{if(/error|no se pudo|fall[oó]|rechaz|sin permiso/i.test(String(msg))&&!/sin se[ñn]al|se guard[oó]|se enviar[aá]/i.test(String(msg)))window.__logErr&&window.__logErr('aviso_mensajero',String(msg).replace(/^[^\wÁÉÍÓÚáéíóúÑñ¿¡]+/,''));}catch(_e){}};window.__errCtx={usuario:usuario&&usuario.nombre||null,rol:'mensajero',app:'rider'};const _rank=useState(null),rankMes=_rank[0],setRankMes=_rank[1];const _incN=useState(0),incPend=_incN[0],setIncPend=_incN[1];const _incOpen=useState(false),showIncid=_incOpen[0],setShowIncid=_incOpen[1];const _rkI=useState(false),showRankInfo=_rkI[0],setShowRankInfo=_rkI[1];const _pfD=useState(null),perifData=_pfD[0],setPerifData=_pfD[1];const _pfS=useState(false),showPerif=_pfS[0],setShowPerif=_pfS[1];const _rlD=useState(null),rulData=_rlD[0],setRulData=_rlD[1];const _rlS=useState(false),showRul=_rlS[0],setShowRul=_rlS[1];function cargarRul(){db.rpc('mi_ruleta').then(function(r){if(r&&r.data)setRulData(r.data);},function(){});}function cargarPerif(){cargarRul();var l=_lunesRider(fechaHoyCL());l.setDate(l.getDate()-49);db.rpc('mi_periferia',{p_desde:_ymdRider(l)}).then(function(r){if(r&&r.data)setPerifData(r.data);},function(){});}useEffect(function(){var vivo=true;function cargarRI(){cargarPerif();db.rpc('mi_ranking_semana').then(function(r){if(vivo&&r&&r.data&&r.data[0])setRankMes(r.data[0]);},function(){});db.rpc('mis_incidencias_v2').then(function(r){if(vivo&&r&&r.data)setIncPend(contarIncidNoVistas(r.data,usuario.mensajero_id||usuario.nombre));},function(){});}cargarRI();var limRI=intervaloVisible(cargarRI,600000);/* 15-11-2026: la oficina registra o revisa una incidencia -> llega al instante */var chInc=null;try{if(usuario.mensajero_id)chInc=db.channel('incid-'+usuario.mensajero_id).on('broadcast',{event:'cambio'},function(){db.rpc('mis_incidencias_v2').then(function(r){if(vivo&&r&&r.data)setIncPend(contarIncidNoVistas(r.data,usuario.mensajero_id||usuario.nombre));},function(){});}).subscribe();}catch(e){}return function(){vivo=false;if(typeof limRI==='function')limRI();try{if(chInc)db.removeChannel(chInc);}catch(e){}};},[]);const _uTemaRider=useState(()=>lsLoad('rider_tema','light')),tema=_uTemaRider[0],setTema=_uTemaRider[1];useEffect(()=>{lsSave('rider_tema',tema);},[tema]);const T=tema==='light'?{text:'#2b2e20',pageBg:'#FEF8EA',bandaTop:'linear-gradient(180deg,#FEF8EA,#f5edd8)',bandaMid:'linear-gradient(180deg,#f5edd8,#f0e8d0)',panelBg:'#FFFFFF',tint:function(a){return 'rgba(43,46,32,'+a+')';}}:{text:'#ffffff',pageBg:'#1a1d13',bandaTop:'linear-gradient(180deg,#2b2e20,#1e2118)',bandaMid:'linear-gradient(180deg,#1e2118,#1a1d13)',panelBg:'#1a1d14',tint:function(a){return 'rgba(255,255,255,'+a+')';}};const _useClientesRider=useState(()=>lsLoad('clientes',[])),clientesRider=_useClientesRider[0],setClientesRider=_useClientesRider[1];useEffect(function(){db.from('clientes').select('id,nombre,activo').order('nombre').then(function(res){if(res.data&&res.data.length>0){setClientesRider(res.data);lsSave('clientes',res.data);}}).catch(function(){});},[]);useEffect(()=>{
+function RiderApp(_ref32){let usuario=_ref32.usuario,onLogout=_ref32.onLogout,mensajeros=_ref32.mensajeros||[];const _abrirDirS=useState(false),abrirDirAlEntrar=_abrirDirS[0],setAbrirDirAlEntrar=_abrirDirS[1];const _useState82=useState([]),envios=_useState82[0],setEnvios=_useState82[1];const _useState83=useState(true),loading=_useState83[0],setLoading=_useState83[1];const _useState84=useState(null),envioActivo=_useState84[0],setEnvioActivo=_useState84[1];const _useState85=useState('pendientes'),filtro=_useState85[0],setFiltro=_useState85[1];const _useState86=useState(false),actualizando=_useState86[0],setActualizando=_useState86[1];const _useState87=useState(false),showScanner=_useState87[0],setShowScanner=_useState87[1];const _useState87e=useState('envios'),riderTab=_useState87e[0],setRiderTab=_useState87e[1];const _useState87b=useState(false),showColecta=_useState87b[0],setShowColecta=_useState87b[1];const _useState87bp=useState(null),clienteRetiroPresel=_useState87bp[0],setClienteRetiroPresel=_useState87bp[1];const _useState87c=useState(false),showAsignacion=_useState87c[0],setShowAsignacion=_useState87c[1];const _useState87d=useState(null),riderToast=_useState87d[0],setRiderToast=_useState87d[1];const _useState87f=useState(false),showAjustes=_useState87f[0],setShowAjustes=_useState87f[1];const _useRIA=useState(false),rutaIAActiva=_useRIA[0],setRutaIAActiva=_useRIA[1];const _useSRIA=useState(false),showRutaIA=_useSRIA[0],setShowRutaIA=_useSRIA[1];const _useVG=useState(false),verGanancias=_useVG[0],setVerGanancias=_useVG[1];const _useCH=useState(false),colectaHabilitada=_useCH[0],setColectaHabilitada=_useCH[1];const _cfHoy=useState(null),cierreFlexHoy=_cfHoy[0],setCierreFlexHoy=_cfHoy[1];useEffect(()=>{db.from('cierres_flex').select('updated_at').eq('fecha',fechaHoyCL()).limit(1).then(function(r){var x=r&&r.data&&r.data[0];if(x)setCierreFlexHoy(new Date(x.updated_at).toLocaleTimeString('es-CL',{timeZone:'America/Santiago',hour:'2-digit',minute:'2-digit'}));},function(){});},[]);useEffect(function(){try{window.__metr.activar();window.__metr.add('montaje',performance.now());}catch(_m){}},[]);useEffect(function(){if(!loading&&!window.__metrCarga){window.__metrCarga=1;try{window.__metr.add('apertura',performance.now(),{envios:envios.length});window.__metr.flush();}catch(_m){}}},[loading]);const _useMas=useState(false),showMas=_useMas[0],setShowMas=_useMas[1];const _useNotif=useState(false),notifActivas=_useNotif[0],setNotifActivas=_useNotif[1];const _useShowAv=useState(false),showAvisos=_useShowAv[0],setShowAvisos=_useShowAv[1];const _useBusq=useState(''),busquedaEnvio=_useBusq[0],setBusquedaEnvio=_useBusq[1];const _usePend=useState(0),pendientesSync=_usePend[0],setPendientesSync=_usePend[1];const toast=msg=>{setRiderToast(msg);setTimeout(()=>setRiderToast(null),3000);try{if(/error|no se pudo|fall[oó]|rechaz|sin permiso/i.test(String(msg))&&!/sin se[ñn]al|se guard[oó]|se enviar[aá]/i.test(String(msg)))window.__logErr&&window.__logErr('aviso_mensajero',String(msg).replace(/^[^\wÁÉÍÓÚáéíóúÑñ¿¡]+/,''));}catch(_e){}};window.__errCtx={usuario:usuario&&usuario.nombre||null,rol:'mensajero',app:'rider'};const _rank=useState(null),rankMes=_rank[0],setRankMes=_rank[1];const _incN=useState(0),incPend=_incN[0],setIncPend=_incN[1];const _incOpen=useState(false),showIncid=_incOpen[0],setShowIncid=_incOpen[1];const _rkI=useState(false),showRankInfo=_rkI[0],setShowRankInfo=_rkI[1];const _pfD=useState(null),perifData=_pfD[0],setPerifData=_pfD[1];const _pfS=useState(false),showPerif=_pfS[0],setShowPerif=_pfS[1];const _rlD=useState(null),rulData=_rlD[0],setRulData=_rlD[1];const _rlS=useState(false),showRul=_rlS[0],setShowRul=_rlS[1];function cargarRul(){db.rpc('mi_ruleta').then(function(r){if(r&&r.data)setRulData(r.data);},function(){});}function cargarPerif(){cargarRul();var l=_lunesRider(fechaHoyCL());l.setDate(l.getDate()-49);db.rpc('mi_periferia',{p_desde:_ymdRider(l)}).then(function(r){if(r&&r.data)setPerifData(r.data);},function(){});}useEffect(function(){var vivo=true;function cargarRI(){cargarPerif();db.rpc('mi_ranking_semana').then(function(r){if(vivo&&r&&r.data&&r.data[0])setRankMes(r.data[0]);},function(){});db.rpc('mis_incidencias_v2').then(function(r){if(vivo&&r&&r.data)setIncPend(contarIncidNoVistas(r.data,usuario.mensajero_id||usuario.nombre));},function(){});}cargarRI();var limRI=intervaloVisible(cargarRI,600000);/* 15-11-2026: la oficina registra o revisa una incidencia -> llega al instante */var chInc=null;try{if(usuario.mensajero_id)chInc=db.channel('incid-'+usuario.mensajero_id).on('broadcast',{event:'cambio'},function(){db.rpc('mis_incidencias_v2').then(function(r){if(vivo&&r&&r.data)setIncPend(contarIncidNoVistas(r.data,usuario.mensajero_id||usuario.nombre));},function(){});}).subscribe();}catch(e){}return function(){vivo=false;if(typeof limRI==='function')limRI();try{if(chInc)db.removeChannel(chInc);}catch(e){}};},[]);const _uTemaRider=useState(()=>lsLoad('rider_tema','light')),tema=_uTemaRider[0],setTema=_uTemaRider[1];useEffect(()=>{lsSave('rider_tema',tema);},[tema]);const T=tema==='light'?{text:'#2b2e20',pageBg:'#FEF8EA',bandaTop:'linear-gradient(180deg,#FEF8EA,#f5edd8)',bandaMid:'linear-gradient(180deg,#f5edd8,#f0e8d0)',panelBg:'#FFFFFF',tint:function(a){return 'rgba(43,46,32,'+a+')';}}:{text:'#ffffff',pageBg:'#1a1d13',bandaTop:'linear-gradient(180deg,#2b2e20,#1e2118)',bandaMid:'linear-gradient(180deg,#1e2118,#1a1d13)',panelBg:'#1a1d14',tint:function(a){return 'rgba(255,255,255,'+a+')';}};const _useClientesRider=useState(()=>lsLoad('clientes',[])),clientesRider=_useClientesRider[0],setClientesRider=_useClientesRider[1];useEffect(function(){db.from('clientes').select('id,nombre,activo').order('nombre').then(function(res){if(res.data&&res.data.length>0){setClientesRider(res.data);lsSave('clientes',res.data);}}).catch(function(){});},[]);useEffect(()=>{
   if('serviceWorker' in navigator){
     navigator.serviceWorker.ready.then(reg=>reg.pushManager.getSubscription()).then(sub=>{if(sub)setNotifActivas(true);}).catch(()=>{});
   }
@@ -13453,17 +13456,19 @@ async function guardarConEstado(estadoFinal){
   try{
     // Comprimir todas las fotos en paralelo (4 a la vez) en vez de una por una - esto era un cuello
     // de botella real en la entrega: cada foto esperaba a que la anterior terminara de comprimirse.
+    var _tfm=performance.now();
     const fotosB64Raw=await procesarConcurrencia(fotos,async function(f){
       try{
         return await new Promise(function(res){var img=new Image();img.onload=function(){var MAX=800;var scale=Math.min(1,MAX/Math.max(img.width,img.height));var canvas=document.createElement('canvas');canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);res(canvas.toDataURL('image/jpeg',0.7));};img.onerror=function(){res(null);};img.src=f.data;});
       }catch(e){return null;}
     },4);
     const fotosB64=fotosB64Raw.filter(function(b){return!!b;});
+    try{window.__metr.add('fotos_comprimir',performance.now()-_tfm,{n:fotos.length});}catch(_m){}
     // Si corresponde (Reprogramado con la verificación por geolocalización activa),
     // se intenta capturar el GPS ANTES de armar el payload -- pero esto nunca demora más de ~7s
     // ni bloquea el guardado si falla: si no hay GPS o no hay señal, se guarda igual y solo
     // queda "no verificado" para la futura métrica de Tasa de Gestión.
-    const evidenciaGestion=await calcularEvidenciaGestion(estadoFinal);
+    var _tgm=performance.now();const evidenciaGestion=await calcularEvidenciaGestion(estadoFinal);try{if(performance.now()-_tgm>300)window.__metr.add('gps_gestion',performance.now()-_tgm,{estado:estadoFinal});}catch(_m){}
     // OJO: a partir de aca ya NO se sube nada directo -- se arma el "payload" (fotos comprimidas,
     // video, estado, nota) y se intenta guardar via intentarConColaOffline. Si hay señal, se sube
     // y queda listo al toque. Si no hay señal (o se corta a mitad de la subida), el payload queda
@@ -13781,6 +13786,17 @@ function esErrorDeRed(e){
 // asignacion) registra aca la funcion real que hace el trabajo de red, para que
 // procesarColaOffline sepa como reprocesar cada item guardado.
 const HANDLERS_OFFLINE={};
+// 18-11-2026: medición silenciosa de rendimiento en la app de mensajeros (tabla rider_metricas).
+// No toca la operación ni la cola offline: si no hay señal o falla, las mediciones se descartan.
+window.__metr=(function(){var buf=[],lt={n:0,ms:0,max:0},activo=false,ini={};
+  function disp(){var n=navigator.connection||{},ua=navigator.userAgent||'',m=ua.match(/Android [\d.]+; ([^;)]+)/);var pwa=false;try{pwa=window.matchMedia('(display-mode: standalone)').matches;}catch(e){}
+    return {ua:ua.slice(0,200),modelo:m?m[1].replace(/ Build.*$/,'').trim():(/iPhone/.test(ua)?'iPhone':''),mem:navigator.deviceMemory||null,cpu:navigator.hardwareConcurrency||null,red:n.effectiveType||null,mbps:n.downlink||null,v:window.__MODULES_VERSION||null,pwa:pwa};}
+  function add(e,ms,d){if(!activo)return;buf.push({e:e,ms:Math.round(ms||0),d:d||null,t:new Date().toISOString()});if(buf.length>150)buf.splice(0,buf.length-150);}
+  function flush(){if(!activo)return;if(lt.n){add('trabas',lt.ms,{n:lt.n,max:Math.round(lt.max)});lt={n:0,ms:0,max:0};}
+    if(!buf.length||navigator.onLine===false)return;var ev=buf.splice(0,120);try{db.rpc('registrar_metricas',{p:{eventos:ev,disp:disp()}}).then(function(){},function(){});}catch(e){}}
+  function activar(){if(activo)return;activo=true;try{new PerformanceObserver(function(l){l.getEntries().forEach(function(x){lt.n++;lt.ms+=x.duration;if(x.duration>lt.max)lt.max=x.duration;});}).observe({entryTypes:['longtask']});}catch(e){}
+    setInterval(flush,60000);document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')flush();});}
+  return {activar:activar,add:add,ini:function(k){ini[k]=performance.now();},fin:function(k,d){if(ini[k]==null)return;add(k,performance.now()-ini[k],d);delete ini[k];},flush:flush};})();
 function registrarHandlerOffline(tipo,fn){HANDLERS_OFFLINE[tipo]=fn;}
 registrarHandlerOffline('entrega',sincronizarEntregaOffline);
 // ── Handler offline-safe para Colecta (retiro de paquetes por el mensajero) ── Replica la
@@ -13959,14 +13975,18 @@ registrarHandlerOffline('cierre_flex',async function(payload){
 // guardo al toque. Si el error NO es de red (ej. el servidor la rechazo por una razon real),
 // se relanza tal cual para mostrarlo -- reintentarlo despues no lo va a arreglar solo.
 async function intentarConColaOffline(tipo,payload,mensajero){
+  var _tm=performance.now();
   try{
     await HANDLERS_OFFLINE[tipo](payload);
+    try{window.__metr.add('accion_'+tipo,performance.now()-_tm,{ok:true});}catch(_m){}
     return{offline:false};
   }catch(e){
     if(esErrorDeRed(e)){
       await encolarAccionOffline(tipo,payload,mensajero);
+      try{window.__metr.add('accion_'+tipo,performance.now()-_tm,{offline:true});}catch(_m){}
       return{offline:true};
     }
+    try{window.__metr.add('accion_'+tipo,performance.now()-_tm,{error:String(e&&e.message||e).slice(0,80)});}catch(_m){}
     throw e;
   }
 }
