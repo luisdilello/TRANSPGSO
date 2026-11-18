@@ -332,4 +332,5 @@ function RutaEnVivo(props){
       'Etiq. otro día: paquetes con fecha impresa en la etiqueta posterior al día (informativo, la fecha de recepción no cambia). Mismos números que el Informe de cierre (FERNANDOCHECK no cuenta como ruta).'));
 }
 window.RutaEnVivo=RutaEnVivo;
+window.MensajeroVivo=MensajeroVivo; // 18-11-2026: lo usa la ficha de KPI Mensajeros
 })();
