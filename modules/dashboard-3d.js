@@ -579,9 +579,13 @@ function DetalleNodo(p){
   var _a=R.useState(null),abierta=_a[0],setAbierta=_a[1];
   var _v=R.useState(null),ver=_v[0],setVer=_v[1];
   var _q=R.useState(''),q=_q[0],setQ=_q[1];
+  // 17-11-2026: agrupar por comuna o por mensajero (ver quién sigue con carga). Se recuerda la última elección.
+  var _ag=R.useState(function(){try{return localStorage.getItem('dash3d_agrupar')||'comuna';}catch(e){return 'comuna';}}),agr=_ag[0],setAgrS=_ag[1];
+  var porMen=agr==='mensajero'&&!p.cliente;
+  function setAgr(v){setAgrS(v);setAbierta(null);try{localStorage.setItem('dash3d_agrupar',v);}catch(e){}}
   // Motivo / comentario del último cambio al estado actual (historial_envios.nota)
   var _nt=R.useState({}),notas=_nt[0],setNotas=_nt[1];
-  var m={},paqs={},vv=p.vivo||{};p.envios.forEach(function(e){if(nodoDe(vv[e.codigo]||e.estado)!==p.k)return;var c=e.comuna&&String(e.comuna).trim()?titulo(norm(e.comuna)):'Sin comuna';m[c]=(m[c]||0)+1;(paqs[c]=paqs[c]||[]).push(e);});
+  var m={},paqs={},vv=p.vivo||{};p.envios.forEach(function(e){if(nodoDe(vv[e.codigo]||e.estado)!==p.k)return;var c=porMen?(String(e.mensajero||'').trim()?String(e.mensajero).replace(/,\s*/g,' ').trim():'Sin mensajero'):(e.comuna&&String(e.comuna).trim()?titulo(norm(e.comuna)):'Sin comuna');m[c]=(m[c]||0)+1;(paqs[c]=paqs[c]||[]).push(e);});
   var lista=Object.keys(m).map(function(c){return{c:c,n:m[c]};}).sort(function(a,b){return b.n-a.n||a.c.localeCompare(b.c,'es');});
   var tot=lista.reduce(function(a,x){return a+x.n;},0),max=lista.length?lista[0].n:1;
   R.useEffect(function(){
@@ -606,12 +610,13 @@ function DetalleNodo(p){
     h('div',{style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8,padding:'14px 16px 10px',borderBottom:'1px solid rgba(255,255,255,.08)'}},
       h('div',null,
         h('div',{style:{fontFamily:'Bebas Neue',fontSize:22,letterSpacing:1.6,color:inf[1],lineHeight:1}},inf[0]),
-        h('div',{style:{fontSize:12.5,color:'rgba(233,228,210,.8)',marginTop:4,fontWeight:700}},tot.toLocaleString('es-CL')+' '+inf[2]+' · '+lista.length+' comuna'+(lista.length!==1?'s':'')),
-        h('div',{style:{fontSize:11,color:'rgba(233,228,210,.55)',marginTop:3}},'Toca una comuna para ver sus paquetes')),
+        h('div',{style:{fontSize:12.5,color:'rgba(233,228,210,.8)',marginTop:4,fontWeight:700}},tot.toLocaleString('es-CL')+' '+inf[2]+' · '+lista.length+(porMen?' mensajero':' comuna')+(lista.length!==1?'s':'')),
+        h('div',{style:{fontSize:11,color:'rgba(233,228,210,.55)',marginTop:3}},porMen?'Toca un mensajero para ver sus paquetes':'Toca una comuna para ver sus paquetes')),
       h('button',{type:'button',onClick:p.onClose,title:'Cerrar',style:{width:30,height:30,borderRadius:9,border:'1px solid rgba(255,255,255,.18)',background:'rgba(255,255,255,.06)',color:'#f1ecda',cursor:'pointer',fontSize:16,lineHeight:1,flexShrink:0}},'×')),
+    !p.cliente&&tot>0&&h('div',{style:{display:'flex',gap:4,padding:'8px 12px 0'}},[['comuna','Por comuna'],['mensajero','Por mensajero']].map(function(o){var on=agr===o[0];return h('button',{key:o[0],type:'button',onClick:function(){setAgr(o[0]);},style:{flex:1,padding:'6px 8px',borderRadius:8,border:'1px solid '+(on?inf[1]:'rgba(255,255,255,.15)'),background:on?inf[1]+'33':'rgba(255,255,255,.04)',color:on?'#fff':'rgba(233,228,210,.75)',fontWeight:800,fontSize:12,cursor:'pointer'}},o[1]);})),
     tot>0&&h('div',{style:{padding:'8px 12px 0'}},h('input',{value:q,onChange:function(e){setQ(e.target.value);if(e.target.value&&!abierta)setAbierta('*');},placeholder:'Buscar código, destinatario, dirección…',style:{width:'100%',boxSizing:'border-box',padding:'7px 10px',borderRadius:9,border:'1px solid rgba(255,255,255,.15)',background:'rgba(255,255,255,.06)',color:'#f1ecda',fontSize:12.5,outline:'none'}})),
     lista.length===0?h('div',{style:{padding:16,fontSize:13,color:'rgba(233,228,210,.7)'}},'No hay envíos en este estado.'):
-    h('div',{style:{overflowY:'auto',padding:'8px 12px 12px'}},lista.map(function(x){var sc=x.c==='Sin comuna';var ab=abierta===x.c||abierta==='*';var ps=ab?filtra(paqs[x.c]||[]):[];
+    h('div',{style:{overflowY:'auto',padding:'8px 12px 12px'}},lista.map(function(x){var sc=x.c==='Sin comuna'||x.c==='Sin mensajero';var ab=abierta===x.c||abierta==='*';var ps=ab?filtra(paqs[x.c]||[]):[];
       if(abierta==='*'&&q&&!ps.length)return null;
       return h('div',{key:x.c,style:{borderBottom:'1px solid rgba(255,255,255,.05)'}},
         h('div',{onClick:function(){setAbierta(abierta===x.c?null:x.c);},style:{padding:'7px 4px',cursor:'pointer'}},
@@ -630,7 +635,7 @@ function DetalleNodo(p){
             notas[e.codigo]&&h('div',{style:{marginTop:5,padding:'5px 8px',borderRadius:7,background:inf[1]+'1f',border:'1px solid '+inf[1]+'55',fontSize:11.5,color:'#fff',lineHeight:1.35,whiteSpace:'pre-wrap'}},
               h('span',{style:{fontSize:9.5,fontWeight:900,letterSpacing:1,textTransform:'uppercase',color:inf[1],marginRight:6}},p.k==='entregado'?'Comentario':'Motivo'),notas[e.codigo].nota),
             notas[e.codigo]===undefined&&h('div',{style:{marginTop:4,fontSize:10.5,color:'rgba(233,228,210,.4)'}},'Buscando motivo…'),
-            h('div',{style:{fontSize:11,color:'rgba(233,228,210,.55)',marginTop:3}},[e.cliente,!p.cliente&&nm(e.mensajero)].filter(Boolean).join(' · ')));}),
+            h('div',{style:{fontSize:11,color:'rgba(233,228,210,.55)',marginTop:3}},[e.cliente,porMen?(e.comuna?titulo(norm(e.comuna)):''):(!p.cliente&&nm(e.mensajero))].filter(Boolean).join(' · ')));}),
           !ps.length&&h('div',{style:{fontSize:12,color:'rgba(233,228,210,.6)',padding:'4px 6px'}},'Sin coincidencias.')));})));
 }
 function CentroControl3D(props){
