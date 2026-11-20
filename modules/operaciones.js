@@ -378,7 +378,7 @@ function ReportarModal(props){
           grupos.map(function(g){
             return React.createElement('optgroup',{key:g,label:g},
               CATALOGO_FALTAS_REGLAMENTO.filter(function(f){return f.grupo===g;}).map(function(f){
-                return React.createElement('option',{key:f.label,value:f.label},f.label+(f.envios>0?' (-'+f.envios+')':''));
+                return React.createElement('option',{key:f.label,value:f.label},f.label+(f.monto>0?' ($'+Number(f.monto).toLocaleString('es-CL')+')':''));
               })
             );
           })

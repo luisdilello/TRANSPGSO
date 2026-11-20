@@ -17,8 +17,8 @@ var btnSec={padding:'7px 12px',borderRadius:8,border:'1px solid var(--border)',b
 // Aplica el catálogo guardado sobre el arreglo compartido (mismo objeto: todos los módulos lo ven).
 function aplicarCatalogo(lista){
   var C=A.CATALOGO_FALTAS_REGLAMENTO;if(!C||!Array.isArray(lista)||!lista.length)return;
-  var act=lista.filter(function(f){return f.activo!==false&&f.label;}).map(function(f){return {grupo:f.grupo,label:f.label,envios:+f.envios||0};});
-  act.push({grupo:'Otro',label:'Otro (personalizado)',envios:0});
+  var act=lista.filter(function(f){return f.activo!==false&&f.label;}).map(function(f){return {grupo:f.grupo,label:f.label,envios:+f.envios||0,monto:Math.max(0,Math.round(+f.monto||0))};});
+  act.push({grupo:'Otro',label:'Otro (personalizado)',envios:0,monto:0});
   C.splice.apply(C,[0,C.length].concat(act));
 }
 window.__aplicarCatalogoFaltas=aplicarCatalogo;
@@ -30,10 +30,10 @@ function Faltas(p){
     if(!v||!v.length){v=(A.CATALOGO_FALTAS_REGLAMENTO||[]).filter(function(f){return f.grupo!=='Otro';}).map(function(f,i){return {id:'f'+(i+1),grupo:f.grupo,label:f.label,envios:f.envios,activo:true};});}
     setLista(v);});},[]);
   function cambiar(id,campo,valor){setLista(function(L){return L.map(function(f){return f.id===id?Object.assign({},f,{[campo]:valor}):f;});});setSucio(true);}
-  function agregar(g){setLista(function(L){return L.concat([{id:'f'+Date.now(),grupo:g,label:'',envios:g==='Leve'?1:g==='Grave'?5:15,activo:true,nuevo:true}]);});setSucio(true);}
+  function agregar(g){setLista(function(L){return L.concat([{id:'f'+Date.now(),grupo:g,label:'',envios:0,monto:'',activo:true,nuevo:true}]);});setSucio(true);}
   function mover(id,d){setLista(function(L){var i=L.findIndex(function(f){return f.id===id;});var j=i+d;if(i<0||j<0||j>=L.length)return L;var c=L.slice();var t=c[i];c[i]=c[j];c[j]=t;return c;});setSucio(true);}
   function guardar(){
-    var limpia=lista.filter(function(f){return String(f.label||'').trim();}).map(function(f){return {id:f.id,grupo:f.grupo,label:String(f.label).trim(),envios:Math.max(0,+f.envios||0),activo:f.activo!==false};});
+    var limpia=lista.filter(function(f){return String(f.label||'').trim();}).map(function(f){return {id:f.id,grupo:f.grupo,label:String(f.label).trim(),envios:Math.max(0,+f.envios||0),monto:Math.max(0,Math.round(+String(f.monto||0).replace(/\D/g,'')||0)),activo:f.activo!==false};});
     var vistos={},dup=null;limpia.forEach(function(f){var k=f.label.toLowerCase();if(vistos[k])dup=f.label;vistos[k]=1;});
     if(dup){p.toast&&p.toast('El motivo "'+dup+'" está repetido');return;}
     setGuardando(true);
@@ -45,20 +45,20 @@ function Faltas(p){
   var edit=p.esSuper;
   return h('div',null,
     h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,flexWrap:'wrap',marginBottom:14}},
-      h('div',{style:{fontSize:12.5,color:'var(--text-mid)',maxWidth:760,lineHeight:1.5}},'Estos son los motivos que aparecen al reportar una incidencia (Firmas en Vivo y ficha del envío), en la sección Incidencias y al aplicar multas en Pagos Mensajeros. "Envíos de multa" es la cantidad de envíos que se descuenta al multar. Un motivo desactivado deja de aparecer para reportar, pero los reportes antiguos lo conservan.'+(edit?'':' Solo el Super Admin puede modificarlos.')),
+      h('div',{style:{fontSize:12.5,color:'var(--text-mid)',maxWidth:760,lineHeight:1.5}},'Estos son los motivos que aparecen al reportar una incidencia y en el Banco de incidencias. "Monto de multa" es el valor fijo en pesos que se descuenta al mensajero si se decide multa (igual para todos, sin importar su tarifa); en el Banco aparece ya cargado y se puede ajustar código a código. Un motivo desactivado deja de aparecer para reportar, pero los reportes antiguos lo conservan.'+(edit?'':' Solo el Super Admin puede modificarlos.')),
       edit&&h('button',{type:'button',onClick:guardar,disabled:!sucio||guardando,style:Object.assign({},btnOro,{opacity:(!sucio||guardando)?0.5:1})},guardando?'Guardando…':(sucio?'Guardar cambios':'Sin cambios'))),
     GRUPOS.map(function(g){var L=lista.filter(function(f){return f.grupo===g;});
       return h('div',{key:g,style:Object.assign({},card,{marginBottom:14,borderTop:'4px solid '+CG[g]})},
         h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}},
           h('div',{style:{display:'flex',alignItems:'center',gap:10}},h('span',{style:{fontSize:11,fontWeight:800,letterSpacing:1.2,textTransform:'uppercase',padding:'4px 10px',borderRadius:999,color:'#fff',background:CG[g]}},'Falta '+g),h('span',{style:{fontSize:12,color:'var(--text-soft)'}},L.filter(function(f){return f.activo!==false;}).length+' activos')),
           edit&&h('button',{type:'button',onClick:function(){agregar(g);},style:btnSec},'+ Agregar motivo '+g.toLowerCase())),
-        h('div',{style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 150px 110px'+(edit?' 110px':''),gap:8,fontSize:11,fontWeight:800,letterSpacing:0.8,textTransform:'uppercase',color:'#7a6420',padding:'0 4px 6px'}},h('span',null,'Motivo'),h('span',null,'Nivel'),h('span',null,'Envíos de multa'),edit&&h('span',null,'')),
+        h('div',{style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 150px 140px'+(edit?' 110px':''),gap:8,fontSize:11,fontWeight:800,letterSpacing:0.8,textTransform:'uppercase',color:'#7a6420',padding:'0 4px 6px'}},h('span',null,'Motivo'),h('span',null,'Nivel'),h('span',null,'Monto de multa ($)'),edit&&h('span',null,'')),
         L.length===0&&h('div',{style:{fontSize:12.5,color:'var(--text-soft)',padding:'6px 4px'}},'Sin motivos en este nivel.'),
         L.map(function(f){var off=f.activo===false;
-          return h('div',{key:f.id,style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 150px 110px'+(edit?' 110px':''),gap:8,alignItems:'center',padding:'6px 4px',borderTop:'1px solid rgba(43,46,32,0.06)',opacity:off?0.5:1}},
+          return h('div',{key:f.id,style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 150px 140px'+(edit?' 110px':''),gap:8,alignItems:'center',padding:'6px 4px',borderTop:'1px solid rgba(43,46,32,0.06)',opacity:off?0.5:1}},
             edit?h('input',{value:f.label,autoFocus:!!f.nuevo&&!f.label,placeholder:'Describe la falta',onChange:function(e){cambiar(f.id,'label',e.target.value);},style:Object.assign({},inp,{width:'100%',fontWeight:600})}):h('span',{style:{fontSize:13.5,fontWeight:600}},f.label),
             edit?h('select',{value:f.grupo,onChange:function(e){cambiar(f.id,'grupo',e.target.value);},style:inp},GRUPOS.map(function(x){return h('option',{key:x,value:x},x);})):h('span',null,f.grupo),
-            edit?h('input',{type:'number',min:0,value:f.envios,onChange:function(e){cambiar(f.id,'envios',e.target.value);},style:Object.assign({},inp,{width:'100%'})}):h('span',{style:{fontWeight:800}},f.envios),
+            edit?h('input',{inputMode:'numeric',placeholder:'$0',value:f.monto===''||f.monto==null?'':'$'+Number(String(f.monto).replace(/\D/g,'')||0).toLocaleString('es-CL'),onChange:function(e){cambiar(f.id,'monto',e.target.value.replace(/\D/g,''));},style:Object.assign({},inp,{width:'100%',fontWeight:800})}):h('span',{style:{fontWeight:800}},'$'+Number(f.monto||0).toLocaleString('es-CL')),
             edit&&h('div',{style:{display:'flex',gap:4,justifyContent:'flex-end'}},
               h('button',{type:'button',title:'Subir',onClick:function(){mover(f.id,-1);},style:Object.assign({},btnSec,{padding:'6px 8px'})},'↑'),
               h('button',{type:'button',title:off?'Activar':'Desactivar',onClick:function(){cambiar(f.id,'activo',off);},style:Object.assign({},btnSec,{padding:'6px 8px',color:off?'#2e7d4f':'#b03030'})},off?'Activar':'Quitar')));}));}),

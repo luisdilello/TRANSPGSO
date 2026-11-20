@@ -45,6 +45,8 @@ function IncidenciasAgrupadas(props){
   var _v=useState(null),ver=_v[0],setVer=_v[1]; // {incId, i}
   var _ve=useState(null),verEnv=_ve[0],setVerEnv=_ve[1];var _b=useState(false),busy=_b[0],setBusy=_b[1];
   useEffect(function(){db.rpc('puede_clasificar_incidencias').then(function(r){setPuede(!!(r&&r.data));});},[]);
+  var _cm=useState({}),catMontos=_cm[0],setCatMontos=_cm[1];
+  useEffect(function(){db.from('configuracion').select('valor').eq('clave','faltas_reglamento').maybeSingle().then(function(r){var v=r&&r.data&&Array.isArray(r.data.valor)?r.data.valor:[];var o={};v.forEach(function(f){if(f&&f.label)o[String(f.label).toLowerCase().trim()]=+f.monto||0;});setCatMontos(o);});},[]);
   var hasta=sumar(sem,6);
   function cargar(){
     db.from('incidencias').select('*').gte('fecha',sem).lte('fecha',hasta).order('fecha',{ascending:true}).limit(3000).then(function(r){if(r.error){toast('No se pudieron cargar las incidencias: '+r.error.message);setIncs([]);return;}setIncs(r.data||[]);});
@@ -75,7 +77,9 @@ function IncidenciasAgrupadas(props){
     if(r.error){toast(r.error.message||'No se pudo guardar');return false;}
     var n=ids.length,s=n===1?'':'s';toast(acc==='correctiva'?n+' código'+s+' como correctiva':acc==='descartar'?n+' código'+s+' descartado'+s:acc==='reabrir'?n+' código'+s+' vuelto'+s+' a por decidir':'Multa aprobada en '+n+' código'+s);
     setModal(null);cargar();return true;}
-  function abrirMulta(i,reps){setModal({i:i,reps:reps,montos:reps.map(function(r){return r.decision==='multa'?String(r.decision_monto||''):r.monto_propuesto?String(r.monto_propuesto):'';}),nota:i.nota||''});}
+  // 20-11-2026: el monto parte del valor fijo del catálogo (Sistema → Listado de incidencias) para el motivo.
+  function montoCatalogo(motivo){return catMontos[String(motivo||'').toLowerCase().trim()]||0;}
+  function abrirMulta(i,reps){var mc=montoCatalogo(i.motivo);setModal({i:i,reps:reps,montos:reps.map(function(r){return r.decision==='multa'?String(r.decision_monto||''):r.monto_propuesto?String(r.monto_propuesto):(mc?String(mc):'');}),nota:i.nota||''});}
   async function descontada(i,v){var r=await db.rpc('marcar_incidencia_descontada',{p_id:i.id,p_valor:v});if(r.error){toast(r.error.message);return;}cargar();}
   function exportar(){var rows=[];L.forEach(function(i){i._reps.forEach(function(r){rows.push([dm(i.fecha),i.mensajero,i.motivo,r.codigo,primer(r.reportado_por),hora(r.created_at),r.comentario||'',r.resuelto?(r.resolucion||'Sí'):'',r.resuelto_por||'',r.decision?(DEC[r.decision]||[''])[0]:(r.resuelto?'Por decidir':'Por gestionar'),r.decision==='multa'?Math.round(+r.decision_monto||0):'',r.decision_por||'',r.aprobado_por||'',i.descontado?'Sí':'']);});});
     A.exportToExcel('INCIDENCIAS '+dm(sem)+' AL '+dm(hasta),[{name:'Incidencias',headers:['Día','Mensajero','Título','Código','Reportó','Hora','Comentario','Gestión','Gestionó','Decisión','Multa','Decidió','Aprobó','Descontada'],rows:rows}]);}
