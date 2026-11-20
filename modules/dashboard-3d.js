@@ -576,6 +576,11 @@ function VerEnvio3D(p){
 }
 function DetalleNodo(p){
   var inf=NODO_INFO[p.k]||[p.k,'#e8c766',''];
+  // 20-11-2026: seguimiento de mensajeros (modules/seguimiento.js) — botón Seguir en la vista Por mensajero.
+  var _sg=R.useState(0),setSg=_sg[1];
+  R.useEffect(function(){var off=null,vivo=true;var engancha=function(){if(window.SegMens&&vivo)off=window.SegMens.sub(function(){setSg(function(x){return x+1;});});setSg(function(x){return x+1;});};
+    if(window.SegMens)engancha();else if(window.loadScriptOnce)window.loadScriptOnce('segmens','modules/seguimiento.js').then(engancha,function(){});
+    return function(){vivo=false;if(off)off();};},[]);
   var _a=R.useState(null),abierta=_a[0],setAbierta=_a[1];
   var _v=R.useState(null),ver=_v[0],setVer=_v[1];
   var _q=R.useState(''),q=_q[0],setQ=_q[1];
@@ -623,7 +628,9 @@ function DetalleNodo(p){
       return h('div',{key:x.c,style:{borderBottom:'1px solid rgba(255,255,255,.05)'}},
         h('div',{onClick:function(){setAbierta(abierta===x.c?null:x.c);},style:{padding:'7px 4px',cursor:'pointer'}},
           h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:10}},
-            h('span',{style:{fontSize:13.5,fontWeight:700,color:sc?'#ffcf8a':'#f1ecda'}},h('span',{style:{display:'inline-block',width:14,color:inf[1],transition:'transform .15s',transform:ab?'rotate(90deg)':'none'}},'›'),x.c),
+            h('span',{style:{fontSize:13.5,fontWeight:700,color:sc?'#ffcf8a':'#f1ecda',display:'flex',alignItems:'center',gap:6,minWidth:0}},h('span',{style:{display:'inline-block',width:14,color:inf[1],transition:'transform .15s',transform:ab?'rotate(90deg)':'none'}},'›'),x.c,
+              porMen&&!sc&&window.SegMens&&(function(){var on=window.SegMens.esta(x.c);return h('button',{type:'button',title:on?'Dejar de seguir':'Seguir y recibir avisos',onClick:function(ev){ev.stopPropagation();window.SegMens.toggle(x.c);},
+                style:{marginLeft:4,padding:'2px 8px',borderRadius:6,border:'1px solid '+(on?'#f7dd8c':'rgba(255,255,255,.22)'),background:on?'linear-gradient(180deg,#f7dd8c,#d9b553 55%,#ae8829)':'rgba(255,255,255,.05)',color:on?'#1a1d13':'rgba(233,228,210,.8)',fontSize:10.5,fontWeight:900,cursor:'pointer',whiteSpace:'nowrap'}},on?'Siguiendo':'Seguir');})()),
             h('span',{style:{fontFamily:'Bebas Neue',fontSize:21,color:'#fff',lineHeight:1,whiteSpace:'nowrap'}},x.n.toLocaleString('es-CL'),porMen&&totMen[x.c]?h('span',{style:{color:'rgba(233,228,210,.55)',fontSize:17}},' / '+totMen[x.c].toLocaleString('es-CL')):null)),
           h('div',{style:{height:5,marginTop:4,borderRadius:4,background:'rgba(255,255,255,.07)',overflow:'hidden'}},h('div',{style:{width:Math.max(3,x.n/max*100)+'%',height:'100%',borderRadius:4,background:inf[1],boxShadow:'0 0 8px '+inf[1]}}))),
         ab&&h('div',{style:{padding:'2px 0 8px'}},ps.map(function(e,ix){
