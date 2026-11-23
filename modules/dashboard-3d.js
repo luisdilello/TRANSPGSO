@@ -661,6 +661,11 @@ function CentroControl3D(props){
   var _ul=R.useState([]),eventos=_ul[0],setEventos=_ul[1];
   var _fx=R.useState(false),feedAbierto=_fx[0],setFeedAbierto=_fx[1];
   var _tk=R.useState(0),setTick2=_tk[1];
+  // 23-11-2026: dinero de cobros contra entrega que los mensajeros aún no rinden (RPC dinero_por_rendir).
+  var _pr=R.useState(null),porRendir=_pr[0],setPorRendir=_pr[1];
+  R.useEffect(function(){if(props.cliente)return;var db=window.__app&&window.__app.db;if(!db)return;var vivo=true;
+    function c(){db.rpc('dinero_por_rendir').then(function(r){if(vivo&&r&&r.data)setPorRendir(r.data);},function(){});}
+    c();var iv=setInterval(c,300000);return function(){vivo=false;clearInterval(iv);};},[]);
   R.useEffect(function(){var iv=setInterval(function(){setTick2(function(x){return x+1;});},30000);return function(){clearInterval(iv);};},[]);
   var refNodo=R.useRef(setNodoSel);refNodo.current=setNodoSel;
   var refC=R.useRef(null),refTip=R.useRef(null),refLab=R.useRef(null);
@@ -782,6 +787,8 @@ function CentroControl3D(props){
             ins('Efectividad total',denT>0?p1(ent/denT):'—',f(ent)+' entregados de '+f(denT)+(denT>0&&denT-ent>0?' · '+f(denT-ent)+' sin entregar':''),'#36c47f'),
             ins('Pendientes ahora',f(pend),pend?partes([[c.en_ruta,'en ruta'],[c.en_bodega,'en bodega'],[c.reprogramado,'reprog.']]):'Todo resuelto','#e8b84a'),
             ins('Incidencias',f(inc),inc?partes([[c.siniestro,'siniestros'],[c.retorno,'retornos'],[c.en_bodega_cancelado,'bodega canc.'],[c.cancelado,'cancel.']]):'Sin incidencias','#ff8f86'),
+            !props.cliente&&porRendir&&porRendir.n>0?h('div',{key:'pr',onClick:function(){if(window.__setTab)window.__setTab('por-cobrar');},title:'Ir a Control Por cobrar',style:{cursor:'pointer'}},
+              ins('Dinero por rendir','$'+Math.round(porRendir.total).toLocaleString('es-CL'),f(porRendir.n)+' cobros · '+porRendir.mensajeros.length+' mensajero'+(porRendir.mensajeros.length===1?'':'s')+(porRendir.mensajeros[0]?' · más: '+titulo(porRendir.mensajeros[0].m)+' $'+Math.round(porRendir.mensajeros[0].total).toLocaleString('es-CL'):''),'#ff9a6b')):null,
             ins(props.cliente?'Menor efectividad':'Comuna a revisar',pe?titulo(pe.n):'—',pe?p1(pe.ef)+' · '+f(pe.sinEnt)+' sin entregar de '+f(pe.total-(pe.en_bodega_fecha||0))+(pe.siniestro?' · '+pe.siniestro+' siniestro'+(pe.siniestro>1?'s':''):''):(props.cliente?'Mín. 10 envíos':'Mín. 30 envíos'),'#ff6b5e'),
             mi&&mi.inc>0&&(!pe||mi.n!==pe.n)?ins('Más incidencias',titulo(mi.n),f(mi.inc)+' · '+partes([[mi.siniestro,'sin.'],[mi.retorno,'ret.'],[mi.en_bodega_cancelado,'bod. canc.'],[mi.cancelado,'canc.']]),'#ffb07a'):null,
             ins('Mayor volumen',res.top?titulo(res.top.n):'—',res.top?f(res.top.total)+' envíos · '+p1(res.top.total/(tot||1))+' del total':'','#ffe59a'),
