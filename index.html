@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261123155246;
+window.__MODULES_VERSION=20261123160033;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -16412,6 +16412,46 @@ function PanelComunasSinValidar(props){
 // sin ninguna pantalla para tocarlas (mismo problema que ya tenía 'tarifas_comunas', que Luis
 // pidió explícitamente no repetir: "Yo las administro desde una pantalla nueva"). Gateada igual
 // que Permisos/Calendario de Cobros (solo superadmin) por tocar montos de cobro y pago directo.
+// 23-11-2026: resumen de etiquetas en la pantalla Secciones: para qué sirve + las etiquetas que el
+// sistema ya aplica solo (Colina, PH, +18/+10 kg, normal, Flex/Manual, Por cobrar, En un cambio) y
+// cuántos envíos llevan cada sección personalizada (RPC resumen_etiquetas).
+function EtiquetasResumen(props){var db=props.db;var e=React.createElement;
+  var _p=React.useState('mes'),per=_p[0],setPer=_p[1];var _d=React.useState(null),d=_d[0],setD=_d[1];
+  function rango(k){var hoy=fechaHoyCL();var y=+hoy.slice(0,4),m=+hoy.slice(5,7);if(k==='mes_ant'){m--;if(m<1){m=12;y--;}}var last=new Date(y,m,0).getDate();var mm=String(m).padStart(2,'0');return [y+'-'+mm+'-01',k==='mes'?hoy:y+'-'+mm+'-'+String(last).padStart(2,'0')];}
+  React.useEffect(function(){setD(null);var rg=rango(per);db.rpc('resumen_etiquetas',{p_desde:rg[0],p_hasta:rg[1]}).then(function(r){setD(r.error?{err:r.error.message}:r.data);});},[per]);
+  var n=function(v){return (+v||0).toLocaleString('es-CL');};var T=(d&&d.tipos)||{};var g=function(k){return T[k]||{total:0,entregados:0};};
+  var cards=d&&!d.err?[
+    ['Colina',g('colina'),'Comuna Colina','Tarifa Colina de la ficha del cliente'],
+    ['Padre Hurtado',g('ph'),'Comuna Padre Hurtado','Tarifa PH de la ficha del cliente'],
+    ['Más de 18 kg',g('18kg'),'Peso registrado sobre 18 kg','Tarifa +18 kg del cliente'],
+    ['Más de 10 kg',g('10kg'),'Peso registrado sobre 10 kg','Tarifa +10 kg del cliente'],
+    ['Normal',g('normal'),'Todo lo demás','Tarifa base del cliente'],
+    ['Flex',d.flex||{},'Viene de Mercado Libre (PDF)','Se cobra según su tipo de arriba'],
+    ['Envío Manual',d.manual||{},'Ingresado a mano o por planilla','Se cobra según su tipo de arriba'],
+    ['Por cobrar',d.por_cobrar||{},'Tiene monto a cobrar al destinatario','Se controla en Control Por cobrar'+(d.por_cobrar&&d.por_cobrar.monto?' · '+('$'+n(d.por_cobrar.monto))+' cobrados':'')],
+    ['En un cambio',d.cambio||{},'Entrega y retiro en el mismo viaje','Se marca en la ficha del envío']]:[];
+  var secs=d&&d.secciones?Object.keys(d.secciones):[];
+  var btn=function(k,t){var on=per===k;return e('button',{key:k,type:'button',onClick:function(){setPer(k);},style:{padding:'6px 12px',borderRadius:8,border:'1px solid '+(on?'var(--gold)':'var(--border)'),background:on?'var(--gold)':'#fff',color:on?'#1a1d13':'var(--text)',fontWeight:800,fontSize:12,cursor:'pointer'}},t);};
+  return e('div',null,
+    e('div',{style:{background:'#fff',border:'1px solid var(--border)',borderTop:'3px solid var(--gold)',borderRadius:10,padding:16,marginBottom:16}},
+      e('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:1.2,marginBottom:6}},'Para qué sirve'),
+      e('div',{style:{fontSize:13.5,lineHeight:1.55,color:'var(--text)'}},
+        'Una sección es una etiqueta que le pones a mano a un envío puntual para cobrarlo o pagarlo distinto. Ejemplo: un paquete XXL de MR SHENG que se cobra $8.000 en vez de $1.600 y al mensajero se le paga $3.000 en vez de su tarifa por comuna. ',
+        e('b',null,'La tarifa de la sección reemplaza a la normal'),' solo en ese paquete y solo para el cliente o mensajero que tenga tarifa cargada; si no tiene, ese lado se cobra o paga normal. Se asigna desde la ficha del envío en Gestión de Envíos.')),
+    e('div',{style:{background:'#fff',border:'1px solid var(--border)',borderRadius:10,padding:16,marginBottom:16}},
+      e('div',{style:{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:10}},
+        e('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:1.2,flex:1,minWidth:200}},'Etiquetas que el sistema ya aplica solo'),btn('mes','Este mes'),btn('mes_ant','Mes pasado')),
+      e('div',{style:{fontSize:12.5,color:'var(--text-soft)',marginBottom:12}},'No hay que crearlas: el cobro al cliente las detecta por comuna, peso u origen. Envíos del período (entregados entre paréntesis).'),
+      !d?e('div',{style:{color:'var(--text-soft)',fontSize:13}},'Cargando…'):d.err?e('div',{style:{color:'#b03030',fontSize:13}},'No se pudo cargar: '+d.err):
+      e('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:10}},cards.map(function(c){var v=c[1]||{};var cero=!(+v.total);
+        return e('div',{key:c[0],style:{border:'1px solid var(--border)',borderRadius:10,padding:'10px 12px',background:cero?'#faf8f2':'var(--cream)',opacity:cero?.65:1}},
+          e('div',{style:{display:'flex',alignItems:'baseline',gap:6}},e('span',{style:{fontWeight:800,fontSize:13,flex:1}},c[0]),e('span',{style:{fontFamily:'Bebas Neue',fontSize:24,lineHeight:1}},n(v.total)),e('span',{style:{fontSize:11,color:'var(--text-soft)',fontWeight:700}},'('+n(v.entregados)+')')),
+          e('div',{style:{fontSize:11.5,color:'var(--text-soft)',marginTop:3}},c[2]),
+          e('div',{style:{fontSize:11.5,color:'#7a5f12',fontWeight:700,marginTop:2}},c[3]));})),
+      d&&!d.err&&e('div',{style:{marginTop:14,paddingTop:12,borderTop:'1px solid var(--border)'}},
+        e('div',{style:{fontWeight:800,fontSize:13,marginBottom:6}},'Secciones personalizadas usadas en el período'),
+        secs.length?e('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},secs.map(function(k){var v=d.secciones[k];return e('span',{key:k,style:{padding:'5px 10px',borderRadius:999,background:'var(--cream)',border:'1px solid var(--gold)',fontSize:12,fontWeight:800}},k+' · '+n(v.total)+' envío'+(v.total==1?'':'s'));})):
+        e('div',{style:{fontSize:12.5,color:'var(--text-soft)'}},'Ningún envío tiene una sección asignada en este período.'))));}
 function GestionSecciones(props){
   var clientes=props.clientes||[];
   var mensajeros=props.mensajeros||[];
@@ -16506,7 +16546,8 @@ function GestionSecciones(props){
 
   return React.createElement('div',{style:{padding:16,maxWidth:920,margin:'0 auto'}},
     React.createElement('div',{className:'section-head'},React.createElement('div',{className:'section-title'},'Secciones ',React.createElement('span',null,'(cobro y pago especial)'))),
-    React.createElement('div',{className:'info-banner'},'🏷️ Una Sección es una etiqueta especial que se asigna a un envío puntual (ej. "XXL") desde su ficha en Gestión de Envíos. Si el cliente de ese envío y/o el mensajero asignado tienen una tarifa configurada para esa sección acá abajo, esa tarifa REEMPLAZA (no se suma) la tarifa normal de cobro y/o de pago para ESE paquete puntual. Si no hay tarifa configurada para alguno de los dos, ese lado sigue cobrándose/pagándose normal.'),
+    React.createElement(EtiquetasResumen,{db:db}),
+    React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:1.2,margin:'4px 0 8px'}},'Secciones personalizadas'),
     React.createElement('div',{style:{background:'#fff',border:'1px solid var(--border)',borderTop:'3px solid var(--gold)',borderRadius:10,padding:16,marginBottom:16}},
       React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16}},
         React.createElement('input',{className:'form-input',style:{margin:0},placeholder:'Nombre de la nueva sección (ej. XXL)',value:nuevaSeccion,onChange:function(e){setNuevaSeccion(e.target.value);},onKeyDown:function(e){if(e.key==='Enter')crearSeccion();}}),
