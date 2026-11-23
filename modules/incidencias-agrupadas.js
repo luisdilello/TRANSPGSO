@@ -125,6 +125,47 @@ function IncidenciasAgrupadas(props){
         accionesCodigo(i,r));}),
         i.nota&&h('div',{style:{fontSize:12,color:ORO,marginTop:6}},'Nota: '+i.nota)));}
 
+  // 23-11-2026: informe por mensajero (PDF / HTML) con el formato de documentos TransPgso (modules/doc-pdf.js)
+  function fLarga(f){var d=new Date(f+'T12:00:00');var t=d.toLocaleDateString('es-CL',{weekday:'long',day:'numeric',month:'long',year:'numeric'});return t.charAt(0).toUpperCase()+t.slice(1);}
+  function dmy(f){var p=String(f).slice(0,10).split('-');return p[2]+'-'+p[1]+'-'+p[0];}
+  async function informeMensajero(m,modo){
+    var w=modo==='pdf'?window.open('','_blank'):null;if(w){try{w.document.write('<p style="font-family:sans-serif;padding:30px;color:#555">Preparando informe…</p>');}catch(e){}}
+    try{await (A.loadScriptOnce||window.loadScriptOnce)('doc-pdf','modules/doc-pdf.js');}catch(e){if(w)w.close();toast('No se pudo cargar el generador de documentos');return;}
+    var D=window.__docPDF,E=function(x){return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+    var its=L.filter(function(i){return i.mensajero===m;}).sort(function(a,b){return a.fecha<b.fecha?-1:a.fecha>b.fecha?1:b._veces-a._veces;});
+    var rs=[];its.forEach(function(i){i._reps.forEach(function(r){rs.push(Object.assign({_i:i},r));});});
+    var decTxt=function(r){if(!r.decision)return r.resuelto?'Por decidir':'Por gestionar';if(r.decision==='multa')return 'Multa '+money(r.decision_monto);if(r.decision==='multa_propuesta')return 'Multa propuesta'+(r.monto_propuesto?' '+money(r.monto_propuesto):'');return (DEC[r.decision]||[r.decision])[0];};
+    var col={correctiva:'#1a6b8a',multa:'#b03030',multa_propuesta:'#c0541c',descartada:'#7a7d6a'};
+    var badge=function(r){var c=r.decision?col[r.decision]||'#7a7d6a':'#a07a1a';return '<span class="estado" style="background:'+c+'">'+E(decTxt(r))+'</span>';};
+    var nCor=rs.filter(function(r){return r.decision==='correctiva';}).length,mul=rs.filter(function(r){return r.decision==='multa';}),monto=mul.reduce(function(t,r){return t+(+r.decision_monto||0);},0);
+    var nDes=rs.filter(function(r){return r.decision==='descartada';}).length,nPen=rs.length-nCor-mul.length-nDes;
+    var desc=its.filter(function(i){return i.estado==='multa'&&i.descontado;}).reduce(function(t,i){return t+(+i.monto||0);},0);
+    var periodo=fLarga(sem)+' al '+fLarga(hasta).replace(/^\w/,function(c){return c.toLowerCase();});
+    // 1. por día
+    var porDia=[0,1,2,3,4,5,6].map(function(k){var f=sumar(sem,k),xs=its.filter(function(i){return i.fecha===f;});var n=xs.reduce(function(t,i){return t+i._veces;},0);
+      return '<tr><td style="white-space:nowrap"><b>'+E(diaLargo(f).charAt(0)+diaLargo(f).slice(1).toLowerCase())+'</b></td><td style="text-align:center;font-weight:800">'+(n||'—')+'</td><td>'+(xs.length?xs.map(function(i){return E(i.motivo)+(i._veces>1?' <b>×'+i._veces+'</b>':'');}).join('<br/>'):'<span style="color:#999">Sin incidencias</span>')+'</td></tr>';}).join('');
+    // 2. por falta
+    var F={};rs.forEach(function(r){var k=r._i.motivo;var x=F[k]=F[k]||{n:0,cor:0,mul:0,monto:0,des:0,pen:0};x.n++;if(r.decision==='correctiva')x.cor++;else if(r.decision==='multa'){x.mul++;x.monto+=(+r.decision_monto||0);}else if(r.decision==='descartada')x.des++;else x.pen++;});
+    var porFalta=Object.keys(F).sort(function(a,b){return F[b].n-F[a].n;}).map(function(k){var x=F[k];return '<tr><td>'+E(k)+'</td><td style="text-align:center;font-weight:800">'+x.n+'</td><td>'+[x.cor?x.cor+' correctiva'+(x.cor>1?'s':''):'',x.mul?x.mul+' multa'+(x.mul>1?'s':'')+' ('+money(x.monto)+')':'',x.des?x.des+' descartada'+(x.des>1?'s':''):'',x.pen?x.pen+' pendiente'+(x.pen>1?'s':''):''].filter(Boolean).join(' · ')+'</td></tr>';}).join('');
+    // 3. detalle
+    var det=rs.map(function(r,ix){return '<tr><td style="color:#9a9684">'+(ix+1)+'</td><td style="white-space:nowrap">'+E(dm(r._i.fecha))+'<br/><span style="color:#888">'+E(hora(r.created_at))+' hrs</span></td><td style="font-family:JetBrains Mono,monospace;font-size:10px">'+E(r.codigo||'—')+'</td><td>'+E(r._i.motivo)+(r.comentario?'<br/><span style="color:#6b6e5c">"'+E(r.comentario)+'"</span>':'')+'</td><td>'+E([r.cliente,tit(r.comuna)].filter(Boolean).join(' · ')||'—')+'</td><td>'+E(primer(r.reportado_por)||'—')+(r.resolucion?'<br/><span style="color:#2e7d4f">'+E(r.resolucion)+'</span>':'')+'</td><td>'+badge(r)+'</td></tr>';}).join('');
+    var notas=its.filter(function(i){return i.nota;}).map(function(i){return '<li><b>'+E(dm(i.fecha))+' · '+E(i.motivo)+':</b> '+E(i.nota)+'</li>';}).join('');
+    var cuerpo=D&&'<div class="resultado" style="border-color:'+(mul.length?'#b03030':'#C8A84B')+';background:'+(mul.length?'#fdf0ee':'#FBF6E6')+'"><div class="gr" style="color:'+(mul.length?'#b03030':'#A0842A')+'">'+rs.length+' REPORTE'+(rs.length===1?'':'S')+'</div><div class="dt">'
+      +its.length+' incidencia'+(its.length===1?'':'s')+' en la semana · '+nCor+' correctiva'+(nCor===1?'':'s')+' · '+mul.length+' multa'+(mul.length===1?'':'s')+(monto?' por '+money(monto):'')+(nDes?' · '+nDes+' descartada'+(nDes===1?'':'s'):'')+(nPen?' · '+nPen+' pendiente'+(nPen===1?'':'s')+' de decisión':'')+'</div></div>'
+      +'<div class="sec"><h2>1. Reportes por día</h2><table class="tabla"><tr><th style="width:150px">Día</th><th style="width:70px;text-align:center">Reportes</th><th>Faltas</th></tr>'+porDia+'</table></div>'
+      +'<div class="sec"><h2>2. Resumen por falta</h2><table class="tabla"><tr><th>Falta</th><th style="width:70px;text-align:center">Veces</th><th style="width:220px">Decisión</th></tr>'+(porFalta||'<tr><td colspan="3">Sin reportes</td></tr>')+'</table></div>'
+      +'<div class="sec"><h2>3. Detalle de cada reporte</h2><table class="tabla"><tr><th style="width:22px">#</th><th style="width:62px">Fecha</th><th style="width:96px">Código</th><th>Falta</th><th style="width:110px">Cliente · comuna</th><th style="width:90px">Reportó</th><th style="width:96px">Decisión</th></tr>'+(det||'<tr><td colspan="7">Sin reportes</td></tr>')+'</table></div>'
+      +(notas?'<div class="sec"><h2>4. Notas para el mensajero</h2><ul>'+notas+'</ul></div>':'');
+    var nombre='Incidencias '+tit(m)+' '+dmy(sem)+' al '+dmy(hasta);
+    var html=D.documentoHTML({tipo:'INFORME DE INCIDENCIAS',folio:dm(sem)+' AL '+dm(hasta),fechaDoc:dmy(hoyCL()),
+      titulo:'Informe de incidencias — '+tit(m),subtitulo:'Período evaluado: '+periodo,
+      metaPares:[['Mensajero',tit(m),2],['Período evaluado',dmy(sem)+' al '+dmy(hasta),2],['Incidencias',String(its.length)],['Reportes',String(rs.length)],['Correctivas',String(nCor)],['Multas',mul.length?mul.length+' · '+money(monto):'0'],['Descartadas',String(nDes)],['Pendientes de decisión',String(nPen)],['Descontado del pago',desc?money(desc):'—',2]],
+      cuerpo:cuerpo,firmas:['Mensajero: '+tit(m),'TransPgso SpA · Supervisión'],
+      cierre:'Las incidencias son faltas al protocolo reportadas por el equipo de operaciones y revisadas código a código. Correctiva: aviso formal sin descuento. Multa: monto fijo por falta según el Listado de incidencias vigente, que se descuenta del pago de la semana. Descartada: no hubo falta. Horarios en hora de Chile continental.',
+      nombreArchivo:nombre.replace(/\s+/g,'_')});
+    if(modo==='pdf'){D.abrir(w,html);try{var t0=Date.now(),iv=setInterval(function(){try{if(w.html2pdf&&w.descargarPDF){clearInterval(iv);w.descargarPDF();}else if(Date.now()-t0>15000)clearInterval(iv);}catch(e){clearInterval(iv);}},400);}catch(e){}}
+    else{var b=new Blob([html],{type:'text/html'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=nombre.replace(/\s+/g,'_')+'.html';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href);},30000);}
+  }
   // agrupar por día
   var dias={};vis.forEach(function(i){(dias[i.fecha]=dias[i.fecha]||[]).push(i);});
   var resumen=useMemo(function(){var o={};L.forEach(function(i){var x=o[i.mensajero]=o[i.mensajero]||{veces:0,inc:0,corr:0,mul:0,monto:0,pend:0,desc:0};x.inc++;x.veces+=i._veces;if(i.estado==='correctiva')x.corr++;if(i.estado==='multa'){x.mul++;x.monto+=(+i.monto||0);if(i.descontado)x.desc+=(+i.monto||0);}if(i.estado==='por_clasificar'||i.estado==='multa_propuesta')x.pend++;});
@@ -171,6 +212,7 @@ function IncidenciasAgrupadas(props){
                 return h('div',{key:f,title:diaLargo(f),style:{width:46,padding:'5px 0',borderRadius:10,textAlign:'center',background:n?'rgba(232,199,102,.16)':'rgba(255,255,255,.03)',border:'1px solid '+(n?'rgba(232,199,102,.5)':'rgba(255,255,255,.07)'),opacity:n?1:.55}},
                   h('div',{style:{fontSize:9.5,fontWeight:900,letterSpacing:.8,color:SUAVE}},DIAS[d.getDay()].slice(0,3).toUpperCase()+' '+d.getDate()),
                   h('div',{style:{fontFamily:'Bebas Neue',fontSize:20,lineHeight:1,color:n?'#ffe59a':SUAVE}},n||'—'));})),
+            h('div',{style:{display:'flex',gap:6},onClick:function(ev){ev.stopPropagation();}},boton('PDF',function(){informeMensajero(g.m,'pdf');}),boton('HTML',function(){informeMensajero(g.m,'html');})),
             h('div',{style:{fontSize:18,color:ORO,transform:ab?'rotate(90deg)':'none',transition:'transform .15s',marginLeft:4}},'›')),
           ab&&h('div',{style:{padding:'0 12px 6px',borderTop:'1px solid rgba(255,255,255,.08)'}},
             Object.keys(g.pd).sort().map(function(f){return h('div',{key:f},h('div',{style:{fontSize:11,fontWeight:900,letterSpacing:1.6,color:ORO,margin:'12px 0 8px'}},diaLargo(f)),
