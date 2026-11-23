@@ -18,7 +18,7 @@ function hora(ts){try{return new Date(ts).toLocaleTimeString('es-CL',{timeZone:'
 function money(n){return '$'+Math.round(+n||0).toLocaleString('es-CL');}
 function tit(s){return String(s||'').toLowerCase().replace(/(^|\s)\S/g,function(c){return c.toUpperCase();});}
 function primer(s){return tit(String(s||'').split(' ')[0]);}
-var css='.ia-btn{transition:transform .12s,filter .12s;cursor:pointer}.ia-btn:hover{filter:brightness(1.1)}.ia-btn:active{transform:translateY(1px)}.ia-btn:disabled{opacity:.5;cursor:default}'+
+var css='@media(max-width:900px){.ia-dash{grid-template-columns:1fr!important}}'+'.ia-btn{transition:transform .12s,filter .12s;cursor:pointer}.ia-btn:hover{filter:brightness(1.1)}.ia-btn:active{transform:translateY(1px)}.ia-btn:disabled{opacity:.5;cursor:default}'+
  '.ia-in{padding:9px 11px;border-radius:10px;border:1px solid rgba(232,199,102,.5);background:#fff;font-size:14px;color:#1a1d13;outline:none;box-sizing:border-box}'+
  '.ia-tab{transition:color .15s}.ia-tab:hover{color:#fff}@media (max-width:760px){.ia-act{width:100%;justify-content:flex-start!important;margin-left:0!important}.ia-k{grid-template-columns:repeat(2,1fr)!important}}';
 var caja={borderRadius:20,background:'radial-gradient(120% 160% at 15% 0%,#3a3f2b 0%,#23271a 50%,#15180f 100%)',border:'1px solid rgba(200,168,75,.35)',boxShadow:'0 18px 38px rgba(20,22,15,.25), inset 0 1px 0 rgba(255,255,255,.07)',color:TXT,padding:'18px 20px'};
@@ -46,8 +46,8 @@ function IncidenciasAgrupadas(props){
   var _v=useState(null),ver=_v[0],setVer=_v[1]; // {incId, i}
   var _ve=useState(null),verEnv=_ve[0],setVerEnv=_ve[1];var _b=useState(false),busy=_b[0],setBusy=_b[1];
   useEffect(function(){db.rpc('puede_clasificar_incidencias').then(function(r){setPuede(!!(r&&r.data));});},[]);
-  var _cm=useState({}),catMontos=_cm[0],setCatMontos=_cm[1];
-  useEffect(function(){db.from('configuracion').select('valor').eq('clave','faltas_reglamento').maybeSingle().then(function(r){var v=r&&r.data&&Array.isArray(r.data.valor)?r.data.valor:[];var o={};v.forEach(function(f){if(f&&f.label)o[String(f.label).toLowerCase().trim()]=+f.monto||0;});setCatMontos(o);});},[]);
+  var _cm=useState({}),catMontos=_cm[0],setCatMontos=_cm[1];var _cg=useState({}),catGrupos=_cg[0],setCatGrupos=_cg[1];
+  useEffect(function(){db.from('configuracion').select('valor').eq('clave','faltas_reglamento').maybeSingle().then(function(r){var v=r&&r.data&&Array.isArray(r.data.valor)?r.data.valor:[];var o={};var gg={};v.forEach(function(f){if(f&&f.label){o[String(f.label).toLowerCase().trim()]=+f.monto||0;gg[String(f.label).toLowerCase().trim()]=f.grupo||'';}});setCatMontos(o);setCatGrupos(gg);});},[]);
   var hasta=sumar(sem,6);
   function cargar(){
     db.from('incidencias').select('*').gte('fecha',sem).lte('fecha',hasta).order('fecha',{ascending:true}).limit(3000).then(function(r){if(r.error){toast('No se pudieron cargar las incidencias: '+r.error.message);setIncs([]);return;}setIncs(r.data||[]);});
@@ -183,10 +183,61 @@ function IncidenciasAgrupadas(props){
       kp('Incidencias',L.length,ORO,totVeces+' reportes agrupados'),kp('Falta gestionar',nSinGest,'#e8b84a','piezas en Operaciones → Incidencias'),
       kp('Por decidir',L.filter(tieneProp).length,'#ff8a6e','gestionadas, esperando a Luis'),kp('Multas aprobadas',money(totMultas),'#ff6b57',multas.length+' multa'+(multas.length===1?'':'s')+' · '+multas.filter(function(i){return i.descontado;}).length+' descontadas')),
     h('div',{style:{display:'flex',gap:4,alignItems:'center',flexWrap:'wrap',margin:'14px 0 10px',borderBottom:'1px solid rgba(255,255,255,.1)'}},
-      tabB('prop','Por decidir',nProp),tabB('clas','Decididas'),tabB('res','Resumen por mensajero'),
-      tab!=='res'&&h('div',{style:{marginLeft:'auto',display:'flex',gap:4,marginBottom:6,padding:3,borderRadius:10,background:'rgba(0,0,0,.25)',border:'1px solid rgba(255,255,255,.08)'}},[['men','Por mensajero'],['dia','Por día']].map(function(o){var on=agrupar===o[0];return h('button',{key:o[0],type:'button',onClick:function(){setAgrupar(o[0]);try{localStorage.setItem('ia_agrupar',o[0]);}catch(e){}},style:{padding:'5px 11px',borderRadius:8,border:'none',fontWeight:900,fontSize:12,cursor:'pointer',background:on?'linear-gradient(180deg,#f7dd8c,#d9b553 55%,#ae8829)':'transparent',color:on?'#1a1d13':SUAVE}},o[1]);})),
-      h('input',{className:'ia-in',placeholder:'Buscar mensajero, título o código',value:q,onChange:function(e){setQ(e.target.value);},style:{marginLeft:tab==='res'?'auto':8,width:240,padding:'6px 10px',fontSize:13,marginBottom:6}})),
+      tabB('prop','Por decidir',nProp),tabB('clas','Decididas'),tabB('res','Resumen por mensajero'),tabB('dash','Dashboard'),
+      tab!=='res'&&tab!=='dash'&&h('div',{style:{marginLeft:'auto',display:'flex',gap:4,marginBottom:6,padding:3,borderRadius:10,background:'rgba(0,0,0,.25)',border:'1px solid rgba(255,255,255,.08)'}},[['men','Por mensajero'],['dia','Por día']].map(function(o){var on=agrupar===o[0];return h('button',{key:o[0],type:'button',onClick:function(){setAgrupar(o[0]);try{localStorage.setItem('ia_agrupar',o[0]);}catch(e){}},style:{padding:'5px 11px',borderRadius:8,border:'none',fontWeight:900,fontSize:12,cursor:'pointer',background:on?'linear-gradient(180deg,#f7dd8c,#d9b553 55%,#ae8829)':'transparent',color:on?'#1a1d13':SUAVE}},o[1]);})),
+      h('input',{className:'ia-in',placeholder:'Buscar mensajero, título o código',value:q,onChange:function(e){setQ(e.target.value);},style:{marginLeft:(tab==='res'||tab==='dash')?'auto':8,width:240,padding:'6px 10px',fontSize:13,marginBottom:6}})),
     incs==null?h('div',{style:{color:SUAVE}},'Cargando…'):
+    tab==='dash'?(function(){
+      /* 23-11-2026: dashboard de faltas de la semana: cuáles se reportaron y su % según cuánto se repiten */
+      var Lx=Lq,rs=[];Lx.forEach(function(i){i._reps.forEach(function(r){rs.push({r:r,i:i});});});
+      if(!rs.length)return h('div',{style:{color:SUAVE,fontWeight:700,padding:'10px 0'}},'Sin incidencias esta semana.');
+      var LVC={'Leve':'#f0cf4a','Grave':'#ff9d4d','Crítica':'#ff6b5b'};
+      var F={};rs.forEach(function(x){var k=x.i.motivo||'Sin título';var f=F[k]=F[k]||{k:k,n:0,men:{},cor:0,mul:0,monto:0,des:0,pen:0,dias:{}};f.n++;f.men[x.i.mensajero]=(f.men[x.i.mensajero]||0)+1;f.dias[x.i.fecha]=(f.dias[x.i.fecha]||0)+1;
+        var d=x.r.decision;if(d==='correctiva')f.cor++;else if(d==='multa'){f.mul++;f.monto+=(+x.r.decision_monto||0);}else if(d==='descartada')f.des++;else f.pen++;});
+      var lista=Object.keys(F).map(function(k){return F[k];}).sort(function(a,b){return b.n-a.n;}),tot=rs.length,max=lista[0].n;
+      var pct=function(n){return (Math.round(n*1000/tot)/10).toString().replace('.',',')+'%';};
+      var grupo=function(k){return catGrupos[String(k).toLowerCase().trim()]||'';};
+      var porNivel={};lista.forEach(function(f){var g=grupo(f.k)||'Otro';porNivel[g]=(porNivel[g]||0)+f.n;});
+      var menSet={};rs.forEach(function(x){menSet[x.i.mensajero]=1;});
+      var top3=lista.slice(0,3).reduce(function(t,f){return t+f.n;},0);
+      var dona=function(){var acc=0,seg=lista.slice(0,6).map(function(f,ix){var c=['#e8c766','#ff9d4d','#ff6b5b','#7fb0ff','#8fe0a8','#c9a0ff'][ix];var a0=acc;acc+=f.n/tot*360;return c+' '+a0+'deg '+acc+'deg';});if(acc<360)seg.push('rgba(255,255,255,.12) '+acc+'deg 360deg');return 'conic-gradient('+seg.join(',')+')';};
+      var COLS=['#e8c766','#ff9d4d','#ff6b5b','#7fb0ff','#8fe0a8','#c9a0ff'];
+      return h('div',{style:{display:'flex',flexDirection:'column',gap:14}},
+        h('div',{className:'ia-k',style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10}},
+          kp('Reportes en la semana',tot,ORO,Lx.length+' incidencias agrupadas'),
+          kp('Faltas distintas',lista.length,'#ffe59a','tipos de falta reportados'),
+          kp('Mensajeros con reportes',Object.keys(menSet).length,'#7fb0ff','con al menos una falta'),
+          kp('Falta más repetida',pct(lista[0].n),'#ff8a6e',lista[0].k.length>48?lista[0].k.slice(0,46)+'…':lista[0].k)),
+        h('div',{style:{display:'grid',gridTemplateColumns:'minmax(260px,1fr) 2.2fr',gap:14},className:'ia-dash'},
+          h('div',{style:Object.assign({},vid,{padding:16,display:'flex',flexDirection:'column',alignItems:'center',gap:12})},
+            h('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:1.2,color:'#fff',alignSelf:'flex-start'}},'Reparto de faltas'),
+            h('div',{style:{position:'relative',width:190,height:190,borderRadius:'50%',background:dona(),boxShadow:'0 10px 24px rgba(0,0,0,.35)'}},
+              h('div',{style:{position:'absolute',inset:34,borderRadius:'50%',background:'#23271a',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',boxShadow:'inset 0 2px 8px rgba(0,0,0,.5)'}},
+                h('div',{style:{fontFamily:'Bebas Neue',fontSize:40,lineHeight:1,color:ORO}},tot),h('div',{style:{fontSize:10.5,fontWeight:800,letterSpacing:1.2,color:SUAVE}},'REPORTES'))),
+            h('div',{style:{width:'100%',display:'flex',flexDirection:'column',gap:5}},lista.slice(0,6).map(function(f,ix){return h('div',{key:f.k,style:{display:'flex',gap:8,alignItems:'center',fontSize:12}},h('span',{style:{width:10,height:10,borderRadius:3,background:COLS[ix],flexShrink:0}}),h('span',{style:{flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:TXT}},f.k),h('b',{style:{color:'#fff'}},pct(f.n)));}).concat(lista.length>6?[h('div',{key:'o',style:{fontSize:11.5,color:SUAVE}},'+ '+(lista.length-6)+' faltas más ('+pct(lista.slice(6).reduce(function(t,f){return t+f.n;},0))+')')]:[])),
+            h('div',{style:{width:'100%',borderTop:'1px solid rgba(255,255,255,.08)',paddingTop:10,fontSize:12,color:SUAVE,lineHeight:1.5}},'Las 3 faltas más repetidas suman ',h('b',{style:{color:ORO}},pct(top3)),' de los reportes.'),
+            Object.keys(porNivel).length>1&&h('div',{style:{width:'100%',display:'flex',gap:6,flexWrap:'wrap'}},Object.keys(porNivel).sort(function(a,b){return porNivel[b]-porNivel[a];}).map(function(g){var c=LVC[g]||'#9aa08a';return h('span',{key:g,style:{padding:'4px 10px',borderRadius:999,border:'1px solid '+c,color:c,fontSize:11.5,fontWeight:900}},g+' · '+pct(porNivel[g]));}))),
+          h('div',{style:Object.assign({},vid,{padding:16})},
+            h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:10}},h('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:1.2,color:'#fff'}},'Faltas reportadas, de la más repetida a la menos'),h('div',{style:{fontSize:11.5,color:SUAVE}},'% sobre '+tot+' reportes')),
+            lista.map(function(f,ix){var g=grupo(f.k),c=LVC[g]||ORO,nm=Object.keys(f.men).length,topM=Object.keys(f.men).sort(function(a,b){return f.men[b]-f.men[a];}).slice(0,3);
+              return h('div',{key:f.k,style:{padding:'10px 0',borderTop:ix?'1px solid rgba(255,255,255,.07)':'none'}},
+                h('div',{style:{display:'flex',gap:10,alignItems:'center'}},
+                  h('div',{style:{width:26,fontFamily:'Bebas Neue',fontSize:20,color:SUAVE,textAlign:'right'}},ix+1),
+                  h('div',{style:{flex:1,minWidth:0}},
+                    h('div',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},h('span',{style:{fontWeight:800,fontSize:13.5,color:'#fff'}},f.k),g&&h('span',{style:{padding:'1px 8px',borderRadius:999,fontSize:10,fontWeight:900,color:c,border:'1px solid '+c+'88'}},g.toUpperCase())),
+                    h('div',{style:{position:'relative',height:14,borderRadius:7,background:'rgba(255,255,255,.07)',marginTop:6,overflow:'hidden'}},
+                      h('div',{style:{width:(f.n/max*100)+'%',height:'100%',borderRadius:7,background:'linear-gradient(90deg,'+c+'aa,'+c+')',boxShadow:'0 0 10px '+c+'55'}})),
+                    h('div',{style:{fontSize:11.5,color:SUAVE,marginTop:5}},nm+' mensajero'+(nm===1?'':'s')+': '+topM.map(function(m){return tit(m)+(f.men[m]>1?' ×'+f.men[m]:'');}).join(', ')+(nm>3?' y '+(nm-3)+' más':''),
+                      ' · ',[f.cor?f.cor+' correctiva'+(f.cor>1?'s':''):'',f.mul?f.mul+' multa'+(f.mul>1?'s':'')+' '+money(f.monto):'',f.des?f.des+' descartada'+(f.des>1?'s':''):'',f.pen?f.pen+' por decidir':''].filter(Boolean).join(' · '))),
+                  h('div',{style:{textAlign:'right',minWidth:74}},h('div',{style:{fontFamily:'Bebas Neue',fontSize:30,lineHeight:1,color:c}},pct(f.n)),h('div',{style:{fontSize:11,fontWeight:800,color:SUAVE}},f.n+' reporte'+(f.n===1?'':'s')))));}))),
+        h('div',{style:Object.assign({},vid,{padding:16,overflowX:'auto'})},
+          h('div',{style:{fontFamily:'Bebas Neue',fontSize:20,letterSpacing:1.2,color:'#fff',marginBottom:10}},'Faltas por día'),
+          h('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:12.5}},
+            h('thead',null,h('tr',null,[h('th',{key:'f',style:{textAlign:'left',padding:'6px 8px',color:ORO,fontSize:10.5,letterSpacing:1.2,textTransform:'uppercase'}},'Falta')].concat([0,1,2,3,4,5,6].map(function(k){var f=sumar(sem,k),d=new Date(f+'T12:00:00');return h('th',{key:f,style:{padding:'6px 4px',color:ORO,fontSize:10.5,letterSpacing:1,textAlign:'center'}},DIAS[d.getDay()].slice(0,3).toUpperCase()+' '+d.getDate());}),[h('th',{key:'t',style:{padding:'6px 8px',color:ORO,fontSize:10.5,textAlign:'center'}},'TOTAL')]))),
+            h('tbody',null,lista.map(function(f){var mx=Math.max.apply(null,Object.keys(f.dias).map(function(k){return f.dias[k];}));return h('tr',{key:f.k},
+              [h('td',{key:'f',style:{padding:'6px 8px',borderTop:'1px solid rgba(255,255,255,.06)',color:TXT,maxWidth:380}},f.k)].concat([0,1,2,3,4,5,6].map(function(k){var dd=sumar(sem,k),n=f.dias[dd]||0;return h('td',{key:dd,style:{padding:4,borderTop:'1px solid rgba(255,255,255,.06)',textAlign:'center'}},h('div',{style:{margin:'0 auto',width:34,height:26,borderRadius:7,display:'grid',placeItems:'center',fontWeight:900,fontSize:12.5,color:n?'#1a1d13':'rgba(255,255,255,.25)',background:n?'rgba(232,199,102,'+(0.25+0.75*n/mx)+')':'rgba(255,255,255,.04)'}},n||'—'));}),
+                [h('td',{key:'t',style:{padding:'6px 8px',borderTop:'1px solid rgba(255,255,255,.06)',textAlign:'center',fontWeight:900,color:'#fff'}},f.n)]));})))));
+    })():
     tab==='res'?(resumen.length===0?h('div',{style:{color:SUAVE,fontWeight:700}},'Sin incidencias esta semana.'):h('div',{style:{overflowX:'auto'}},h('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:13}},
       h('thead',null,h('tr',null,['Mensajero','Incidencias','Veces reportado','Correctivas','Multas','Monto multas','Descontado','Pendientes'].map(function(c){return h('th',{key:c,style:{textAlign:'left',padding:'8px 10px',fontSize:10.5,letterSpacing:1.2,textTransform:'uppercase',color:ORO,borderBottom:'1px solid rgba(232,199,102,.35)'}},c);}))),
       h('tbody',null,resumen.map(function(x){var td={padding:'8px 10px',borderTop:'1px solid rgba(255,255,255,.06)',color:TXT,background:'transparent'};return h('tr',{key:x.m},h('td',{style:Object.assign({},td,{fontWeight:800})},x.m),h('td',{style:td},x.inc),h('td',{style:td},x.veces),h('td',{style:td},x.corr||'—'),h('td',{style:td},x.mul||'—'),h('td',{style:Object.assign({},td,{color:x.monto?'#ff8a6e':TXT,fontWeight:800})},x.monto?money(x.monto):'—'),h('td',{style:td},x.desc?money(x.desc):'—'),h('td',{style:Object.assign({},td,{color:x.pend?'#e8b84a':TXT})},x.pend||'—'));}))))):
