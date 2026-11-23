@@ -554,6 +554,26 @@ function AvisoVivo(p){var e=p.ev,col=COL_EST[e.estado]||'#e8c766';
 
 // Actividad en vivo: resumen de los últimos 15 minutos + lista de movimientos (de → a), con motivo
 // cuando es reprogramado/cancelado/retorno. Se ve abajo a la derecha del escenario.
+// 23-11-2026: miniaturas de las fotos que sube el mensajero, en el cuadro En vivo (solo panel interno).
+function fotosDeEnvio(v){try{var a=v;for(var i=0;i<2&&typeof a==='string';i++)a=JSON.parse(a);if(!Array.isArray(a)||!a.length)return null;
+  if(typeof a[0]==='string')return a.filter(function(u){return typeof u==='string'&&/^https?:/.test(u);});
+  var it=a.filter(function(x){return x&&Array.isArray(x.fotos)&&x.fotos.length;});var u=it[it.length-1];return u?u.fotos.filter(function(f){return typeof f==='string'&&/^https?:/.test(f);}):[];}catch(e){return null;}}
+var _cacheFotos={};
+function MiniFotos(p){var _f=R.useState(p.fotos&&p.fotos.length?p.fotos:(_cacheFotos[p.codigo]||null)),f=_f[0],setF=_f[1];
+  R.useEffect(function(){if(f&&f.length)return;var db=window.__app&&window.__app.db;if(!db)return;var vivo=true;
+    var pedir=function(){db.from('envios').select('fotos_entrega').eq('codigo',p.codigo).maybeSingle().then(function(q){if(!vivo)return;var x=fotosDeEnvio(q&&q.data&&q.data.fotos_entrega)||[];if(x.length){_cacheFotos[p.codigo]=x;setF(x);}});};
+    pedir();var t=setTimeout(pedir,20000);return function(){vivo=false;clearTimeout(t);};},[p.codigo]);
+  if(!f||!f.length)return null;
+  return h('div',{style:{display:'flex',gap:5,marginTop:5}},f.slice(0,4).map(function(u,i){return h('img',{key:i,src:u,loading:'lazy',alt:'',onClick:function(ev){ev.stopPropagation();p.onVer(f,i);},
+    style:{width:44,height:44,objectFit:'cover',borderRadius:7,border:'1px solid rgba(232,199,102,.35)',cursor:'zoom-in',background:'#111'}});}),
+    f.length>4?h('span',{style:{alignSelf:'center',fontSize:11,color:'rgba(233,228,210,.6)',fontWeight:800}},'+'+(f.length-4)):null);}
+function VisorFotos(p){var _i=R.useState(p.i||0),i=_i[0],setI=_i[1];var n=p.fotos.length;
+  R.useEffect(function(){function k(e){if(e.key==='Escape')p.onClose();else if(e.key==='ArrowRight')setI(function(x){return (x+1)%n;});else if(e.key==='ArrowLeft')setI(function(x){return (x-1+n)%n;});}window.addEventListener('keydown',k);return function(){window.removeEventListener('keydown',k);};},[]);
+  var nav=function(t,d){return n>1?h('button',{type:'button',onClick:function(ev){ev.stopPropagation();setI(function(x){return (x+d+n)%n;});},style:{width:44,height:44,borderRadius:22,border:'1px solid rgba(255,255,255,.3)',background:'rgba(0,0,0,.5)',color:'#fff',fontSize:20,fontWeight:900,cursor:'pointer'}},t):null;};
+  return ReactDOM.createPortal(h('div',{onClick:p.onClose,style:{position:'fixed',inset:0,zIndex:99999,background:'rgba(0,0,0,.88)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:12,padding:16}},
+    h('div',{style:{color:'#e8c766',font:'800 13px DM Sans,system-ui,sans-serif'}},p.titulo+(n>1?' · '+(i+1)+' de '+n:'')),
+    h('div',{style:{display:'flex',alignItems:'center',gap:12,maxWidth:'100%'}},nav('‹',-1),h('img',{src:p.fotos[i],onClick:function(ev){ev.stopPropagation();},style:{maxWidth:'min(86vw,900px)',maxHeight:'78vh',borderRadius:12,objectFit:'contain'}}),nav('›',1)),
+    h('div',{style:{color:'rgba(255,255,255,.6)',fontSize:12}},'Toca fuera de la foto para cerrar')),document.body);}
 var MALOS={reprogramado:1,cancelado:1,retorno:1,siniestro:1,en_bodega_cancelado:1};
 function FeedVivo(p){
   var ahora=Date.now(),ev=p.eventos,ult=ev.filter(function(e){return ahora-e.t<15*60000;});
@@ -566,6 +586,7 @@ function FeedVivo(p){
   var nm=function(s){return String(s||'').replace(/,\s*/g,' ');};
   var lista=p.abierto?ev:ev.slice(0,2);
   var movil=!!p.movil;
+  var _vz=R.useState(null),visor=_vz[0],setVisor=_vz[1];
   // 23-11-2026: el cuadro En vivo se puede minimizar (se recuerda en este navegador).
   var _mn=R.useState(function(){try{return localStorage.getItem('cc_feed_min')==='1';}catch(e){return false;}}),mini=_mn[0],setMiniS=_mn[1];
   var setMini=function(v){setMiniS(v);try{localStorage.setItem('cc_feed_min',v?'1':'0');}catch(e){}};
@@ -599,7 +620,9 @@ function FeedVivo(p){
             (NOM_EST[e.antes]||e.antes||'')+' → ',h('b',{style:{color:col}},NOM_EST[e.estado]||e.estado),
             ' · '+(e.comuna?titulo(norm(e.comuna)):'Sin comuna')+(!p.cliente&&e.cliente?' · '+e.cliente:'')),
           h('div',{style:{fontSize:10.5,color:'rgba(233,228,210,.5)',fontFamily:'JetBrains Mono',marginTop:1}},e.codigo),
-          malo&&e.nota&&h('div',{style:{fontSize:11.5,color:'#ffb4a8',marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'},title:e.nota},'Motivo: '+e.nota));})));
+          !p.cliente&&(e.estado==='entregado'||e.estado==='reprogramado'||MALOS[e.estado])?h(MiniFotos,{codigo:e.codigo,fotos:e.fotos,onVer:function(f,i){setVisor({fotos:f,i:i,titulo:(nm(e.mensajero)||'')+' · '+e.codigo});}}):null,
+          malo&&e.nota&&h('div',{style:{fontSize:11.5,color:'#ffb4a8',marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'},title:e.nota},'Motivo: '+e.nota));})),
+    visor&&h(VisorFotos,{fotos:visor.fotos,i:visor.i,titulo:visor.titulo,onClose:function(){setVisor(null);}}));
 }
 // Detalle por comuna de una estación del flujo (solo comuna y cantidad).
 var NODO_INFO={en_bodega:['En bodega','#4aa3c8','pendientes en bodega'],en_bodega_fecha:['Bodega por fecha','#5b8def','esperando su fecha de entrega'],en_ruta:['En ruta ahora','#e8b84a','todavía en ruta'],entregado:['Entregado','#36c47f','entregados'],reprogramado:['Reprogramado','#b06ad6','reprogramados'],cancelado:['Cancelado y retorno','#e0473f','cancelados, retornos y siniestros']};
@@ -768,7 +791,7 @@ function CentroControl3D(props){
       if(antes===undefined||antes===nw.estado)return;
       vivoRef.current[nw.codigo]=nw.estado;
       setDeltas(function(d){var x=Object.assign({},d);x[antes]=(x[antes]||0)-1;x[nw.estado]=(x[nw.estado]||0)+1;return x;});
-      setEventos(function(ev){return [{codigo:nw.codigo,antes:antes,estado:nw.estado,mensajero:nw.mensajero,destinatario:nw.destinatario,comuna:nw.comuna,cliente:nw.cliente,nota:nw.nota,t:Date.now()}].concat(ev).slice(0,60);});
+      setEventos(function(ev){return [{codigo:nw.codigo,antes:antes,estado:nw.estado,mensajero:nw.mensajero,destinatario:nw.destinatario,comuna:nw.comuna,cliente:nw.cliente,nota:nw.nota,fotos:fotosDeEnvio(nw.fotos_entrega),t:Date.now()}].concat(ev).slice(0,60);});
       try{refE.current&&refE.current.evento&&refE.current.evento(antes,nw.estado,nw.codigo);}catch(e){}
       // Mapa: punto de luz donde ocurrió (GPS del envío > ubicación actual del mensajero > comuna)
       try{var ColP={entregado:'#36ff8f',reprogramado:'#c77dff',cancelado:'#ff4d4d',retorno:'#ff8a3d',siniestro:'#ff8a3d',en_bodega_cancelado:'#ff4d4d'}[nw.estado];
