@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261120191330;
+window.__MODULES_VERSION=20261123105148;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -12500,6 +12500,7 @@ function IncidenciasRider(props){
   var claro=props.claro;
   var _l=useState(null),lista=_l[0],setLista=_l[1];var _a=useState({}),ab=_a[0],setAb=_a[1];var _err=useState(false),err=_err[0],setErr=_err[1];
   var _s=useState(0),off=_s[0],setOff=_s[1];
+  var _vg=useState('mis'),vista=_vg[0],setVista=_vg[1];
   useEffect(function(){db.rpc('mis_incidencias_v2').then(function(r){if(r.error){setErr(true);setLista([]);return;}var d=r.data||[];setLista(d);marcarIncidVistas(d,props.idVistas);},function(){setErr(true);setLista([]);});},[]);
   var bg=claro?'#f3eddc':'#15180f',panel=claro?'#ffffff':'#22261a',txt=claro?'#2b2e20':'#f1ecda',sub=claro?'#5f5e4c':'#bdb8a2',bd=claro?'rgba(43,46,32,.13)':'rgba(255,255,255,.12)',base=claro?'#d6ccb0':'#0b0c07';
   function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
@@ -12516,9 +12517,13 @@ function IncidenciasRider(props){
     React.createElement('div',{style:{padding:'10px 12px',paddingTop:'max(10px,env(safe-area-inset-top))',display:'flex',alignItems:'center',gap:10,background:'linear-gradient(180deg,#3a3d2e,#2b2e20)',borderBottom:'2px solid #c8a84b',boxShadow:'0 6px 16px rgba(20,22,15,.28)'}},
       React.createElement(botonHeaderRider,{onClick:props.onClose,title:'Volver',icono:ICONOS_RIDER.volver}),
       React.createElement('div',{style:{flex:1,lineHeight:1.15}},React.createElement('div',{style:{fontFamily:'Bebas Neue',fontSize:21,letterSpacing:1.6,color:'#fff'}},'Mis incidencias'),
-        React.createElement('div',{style:{fontSize:11.5,fontWeight:700,color:'#d9d3bd'}},(off===0?'Esta semana · ':'')+dd(lun)+' al '+dd(domS))),
-      React.createElement('button',{type:'button',onClick:function(){setOff(off+1);},style:{width:36,height:36,borderRadius:10,border:'1px solid rgba(232,199,102,.4)',background:'rgba(255,255,255,.06)',color:'#e8c766',fontWeight:900,fontSize:18}},'‹'),
-      React.createElement('button',{type:'button',disabled:off===0,onClick:function(){setOff(Math.max(0,off-1));},style:{width:36,height:36,borderRadius:10,border:'1px solid rgba(232,199,102,.4)',background:'rgba(255,255,255,.06)',color:'#e8c766',fontWeight:900,fontSize:18,opacity:off===0?.4:1}},'›')),
+        React.createElement('div',{style:{fontSize:11.5,fontWeight:700,color:'#d9d3bd'}},vista==='guia'?'Todas las faltas y su descuento':(off===0?'Esta semana · ':'')+dd(lun)+' al '+dd(domS))),
+      vista==='mis'&&React.createElement('button',{type:'button',onClick:function(){setOff(off+1);},style:{width:36,height:36,borderRadius:10,border:'1px solid rgba(232,199,102,.4)',background:'rgba(255,255,255,.06)',color:'#e8c766',fontWeight:900,fontSize:18}},'‹'),
+      vista==='mis'&&React.createElement('button',{type:'button',disabled:off===0,onClick:function(){setOff(Math.max(0,off-1));},style:{width:36,height:36,borderRadius:10,border:'1px solid rgba(232,199,102,.4)',background:'rgba(255,255,255,.06)',color:'#e8c766',fontWeight:900,fontSize:18,opacity:off===0?.4:1}},'›')),
+    /* 23-11-2026: pestaña Guía de faltas (modules/guia-faltas.js), mismo estilo que el video de incidencias */
+    React.createElement('div',{style:{display:'flex',gap:6,padding:'8px 12px',background:claro?'#ebe3cc':'#1d2016',borderBottom:'1px solid '+bd,flexShrink:0}},
+      [['mis','Mis incidencias'],['guia','Guía de faltas']].map(function(o){var on=vista===o[0];return React.createElement('button',{key:o[0],type:'button',onClick:function(){setVista(o[0]);},style:{flex:1,padding:'9px 6px',borderRadius:12,border:'1px solid '+(on?'#c8a84b':bd),background:on?'linear-gradient(180deg,#f7dd8c,#d9b553 55%,#ae8829)':(claro?'#fff':'rgba(255,255,255,.05)'),color:on?'#1a1d13':txt,fontWeight:900,fontSize:13,boxShadow:on?'0 3px 0 #6d531a':'0 2px 0 '+base}},o[1]);})),
+    vista==='guia'?React.createElement(GuiaFaltasHost,null):
     React.createElement('div',{style:{flex:1,overflowY:'auto',padding:12,display:'flex',flexDirection:'column',gap:10}},
       React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,flexShrink:0}},kpi(nRev,'EN REVISIÓN',claro?'#8a6d1f':'#ffe59a'),kpi(nCor,'CORRECTIVAS',claro?'#1a6b8a':'#a9c8ff'),kpi(nMul,'MULTAS',claro?'#b03030':'#ffa494')),
       (nCor+nMul)>0&&React.createElement('div',{style:{flexShrink:0,padding:'10px 12px',borderRadius:14,background:'linear-gradient(180deg,#4a3a17,#2a2110)',color:'#f7dd8c',fontSize:12,fontWeight:800}},'Esta semana no hay giro de ruleta: tienes incidencias clasificadas.'),
@@ -12540,6 +12545,10 @@ function IncidenciasRider(props){
               x.nota&&React.createElement('div',{style:{fontSize:12,marginTop:6,fontWeight:700,color:claro?'#8a6d1f':'#e8c766'}},'Nota: '+x.nota)));}));}),
       React.createElement('div',{style:{flexShrink:0,fontSize:11.5,color:sub,textAlign:'center',padding:'4px 10px 14px'}},'Las incidencias las reporta la oficina. Si tienes dudas, habla con tu supervisor.')));
 }
+function GuiaFaltasHost(){var _r=useState(!!window.GuiaFaltasRider),ok=_r[0],setOk=_r[1];var _f=useState(false),fallo=_f[0],setFallo=_f[1];
+  useEffect(function(){if(ok)return;loadScriptOnce('guia-faltas','modules/guia-faltas.js').then(function(){setOk(!!window.GuiaFaltasRider);},function(){setFallo(true);});},[]);
+  if(ok)return React.createElement(window.GuiaFaltasRider,null);
+  return React.createElement('div',{style:{flex:1,display:'grid',placeItems:'center',background:'#15180f',color:'#cfc9b2',fontSize:13,padding:20,textAlign:'center'}},fallo?'No se pudo abrir la guía. Revisa tu señal e inténtalo de nuevo.':'Cargando guía…');}
 function _ymdRider(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function _lunesRider(s){var d=new Date(String(s).slice(0,10)+'T12:00:00');d.setDate(d.getDate()-((d.getDay()+6)%7));return d;}
 var _DIAS_RIDER=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
