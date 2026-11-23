@@ -426,11 +426,42 @@ function montarFlujo(T,cont,cnt,ui){
     var pct=k==='en_bodega'||k==='en_bodega_fecha'||k==='en_ruta'?'':(salieron?' · '+Math.round(vals[k]/salieron*100)+'%':'');
     el.innerHTML='<div style="font-family:Bebas Neue;font-size:'+(chico?20:30)+'px;line-height:1;color:#fff;text-shadow:0 0 18px '+n.c+',0 3px 0 rgba(0,0,0,.4)">'+mostrar.toLocaleString('es-CL')+'</div>'
       +'<div style="margin-top:3px;padding:'+(chico?'1px 6px':'2px 10px')+';border-radius:999px;background:rgba(20,22,15,.75);border:1px solid '+n.c+';color:#fff;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif">'+n.l+(k==='en_ruta'?' ahora':'')+pct+'</div>'+(chico?'':k==='en_ruta'?'<div style="margin-top:3px;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif;color:rgba(233,228,210,.8)">salieron '+salieron.toLocaleString('es-CL')+'</div>':(subNodo(k)?'<div style="margin-top:3px;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif;color:rgba(233,228,210,.8)">'+subNodo(k)+'</div>':''))
-    /* 23-11-2026: dinero de cobros contra entrega aún sin rendir, colgando de la estación Entregado */
-    var pr=window.__ccPorRendir;if(k==='entregado'&&pr&&pr.n>0)el.innerHTML+='<div style="margin-top:5px;display:inline-flex;align-items:center;gap:6px;padding:'+(chico?'2px 7px':'3px 11px')+';border-radius:999px;background:linear-gradient(180deg,#b3261e,#7a140f);border:1px solid #ff8a7a;box-shadow:0 0 14px rgba(255,90,70,.55);color:#fff;font:800 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif"><span style="font-family:Bebas Neue;font-size:'+(chico?13:16)+'px;letter-spacing:.5px">$'+Math.round(pr.total).toLocaleString('es-CL')+'</span>por rendir · '+pr.n+'</div>';}
+}
   ui.labels.innerHTML='';var labs=Object.keys(nodos).map(function(k){var el=document.createElement('div');
     el.style.cssText='position:absolute;transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer;text-align:center;white-space:nowrap';el.title='Ver por comuna';el.onclick=function(){ui.onNodo&&ui.onNodo(k);};
-    var L={el:el,k:k};pintar(L);ui.labels.appendChild(el);return L;});E.repintar=function(){labs.forEach(pintar);};
+    var L={el:el,k:k};pintar(L);ui.labels.appendChild(el);return L;});
+  // 23-11-2026: billete flotante "Dinero por rendir" junto a Entregado. Muestra el dinero de cobros contra entrega
+  // que los mensajeros aún no rinden; baja a $0 solo cuando un administrativo registra la rendición.
+  var billete=(function(){if(ui.cliente)return null;
+    var cv=document.createElement('canvas');cv.width=1024;cv.height=480;var g2=cv.getContext('2d');
+    function dibujar(activo){var x=g2;x.clearRect(0,0,1024,480);
+      var gr=x.createLinearGradient(0,0,1024,480);gr.addColorStop(0,activo?'#3f7a4a':'#4a5148');gr.addColorStop(.5,activo?'#2c5e37':'#3a403a');gr.addColorStop(1,activo?'#1f4428':'#2b302b');x.fillStyle=gr;x.fillRect(0,0,1024,480);
+      x.strokeStyle=activo?'rgba(232,199,102,.9)':'rgba(200,200,190,.5)';x.lineWidth=14;x.strokeRect(18,18,988,444);x.lineWidth=3;x.strokeRect(44,44,936,392);
+      x.globalAlpha=.12;x.strokeStyle='#e8c766';x.lineWidth=2;for(var i=-480;i<1024;i+=26){x.beginPath();x.moveTo(i,44);x.lineTo(i+400,436);x.stroke();}x.globalAlpha=1;
+      x.fillStyle=activo?'rgba(232,199,102,.18)':'rgba(255,255,255,.08)';x.beginPath();x.arc(250,240,150,0,Math.PI*2);x.fill();
+      x.strokeStyle=activo?'#e8c766':'#bbb';x.lineWidth=8;x.beginPath();x.arc(250,240,150,0,Math.PI*2);x.stroke();
+      x.fillStyle=activo?'#f7dd8c':'#d8d8d0';x.font='bold 230px "Bebas Neue", Impact, sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText('$',250,250);
+      x.fillStyle=activo?'#f1ecda':'#cfcfc6';x.textAlign='left';x.font='bold 92px "Bebas Neue", Impact, sans-serif';x.fillText('POR RENDIR',440,200);
+      x.font='bold 44px "DM Sans", Arial, sans-serif';x.fillStyle=activo?'#e8c766':'#aaa';x.fillText('TRANSPGSO · COBROS',444,290);
+      x.font='bold 40px "Bebas Neue", Impact, sans-serif';x.fillStyle=activo?'rgba(247,221,140,.8)':'#999';x.fillText('$',80,100);x.fillText('$',920,420);}
+    dibujar(true);var tx=new T.CanvasTexture(cv);if(T.sRGBEncoding)tx.encoding=T.sRGBEncoding;tx.anisotropy=8;
+    var mt=new T.MeshStandardMaterial({map:tx,roughness:0.45,metalness:0.15,emissive:new T.Color('#2c5e37'),emissiveIntensity:0.35,side:T.DoubleSide});
+    var grp=new T.Group();var hoja=new T.Mesh(new T.BoxGeometry(7.2,3.4,0.07),mt);hoja.castShadow=true;grp.add(hoja);
+    // segundo billete detrás, levemente girado (fajo)
+    var h2=new T.Mesh(new T.BoxGeometry(7.2,3.4,0.07),mt);h2.position.set(0.35,-0.25,-0.18);h2.rotation.z=0.08;grp.add(h2);
+    var pos=[27,0,-9];grp.position.set(pos[0],6,pos[2]);E.sc.add(grp);
+    var anillo=new T.Mesh(new T.RingGeometry(2.6,3.1,64),new T.MeshBasicMaterial({color:'#ff7a5c',transparent:true,opacity:0.55,side:T.DoubleSide}));anillo.rotation.x=-Math.PI/2;anillo.position.set(pos[0],0.06,pos[2]);E.sc.add(anillo);
+    var luz=new T.PointLight('#ffcf7a',1.2,18);luz.position.set(pos[0],7,pos[2]+3);E.sc.add(luz);
+    var el=document.createElement('div');el.style.cssText='position:absolute;transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer;text-align:center;white-space:nowrap';el.title='Ir a Control Por cobrar';el.onclick=function(){if(window.__setTab)window.__setTab('por-cobrar');};ui.labels.appendChild(el);
+    var activo=true;
+    function pintarB(){var pr=window.__ccPorRendir||{total:0,n:0,mensajeros:[]};var on=pr.n>0;if(on!==activo){activo=on;dibujar(on);tx.needsUpdate=true;mt.emissiveIntensity=on?0.35:0.05;anillo.material.color.set(on?'#ff7a5c':'#7a7d6a');luz.intensity=on?1.2:0.2;}
+      var top=(pr.mensajeros||[]).slice(0,3).map(function(m){return titulo(m.m)+' $'+Math.round(m.total).toLocaleString('es-CL');}).join(' · ');
+      el.innerHTML='<div style="font-family:Bebas Neue;font-size:'+(chico?20:30)+'px;line-height:1;color:'+(on?'#ffd9a0':'#cfd3c4')+';text-shadow:0 0 18px '+(on?'#ff7a5c':'#7a7d6a')+',0 3px 0 rgba(0,0,0,.4)">$'+Math.round(pr.total||0).toLocaleString('es-CL')+'</div>'
+        +'<div style="margin-top:3px;padding:'+(chico?'1px 6px':'2px 10px')+';border-radius:999px;background:'+(on?'linear-gradient(180deg,#b3261e,#7a140f)':'rgba(20,22,15,.75)')+';border:1px solid '+(on?'#ff8a7a':'#7a7d6a')+';color:#fff;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif">Dinero por rendir'+(on?' · '+pr.n+(pr.n===1?' cobro':' cobros'):'')+'</div>'
+        +(chico?'':'<div style="margin-top:3px;font:700 11px DM Sans,system-ui,sans-serif;color:rgba(233,228,210,.8)">'+(on?(pr.mensajeros.length+' mensajero'+(pr.mensajeros.length===1?'':'s')+(top?' · '+top:'')):'todo rendido')+'</div>');}
+    pintarB();
+    return {grp:grp,anillo:anillo,el:el,pintar:pintarB,pos:pos,activo:function(){return activo;}};})();
+  E.repintar=function(){labs.forEach(pintar);if(billete)billete.pintar();};
   // Datos frescos del servidor (cada refresco en tiempo real): reemplaza conteos sin reconstruir la escena.
   E.actualizar=function(cntN){
     Object.keys(vals).forEach(function(k){vals[k]=0;});det={};
@@ -467,6 +498,9 @@ function montarFlujo(T,cont,cnt,ui){
     pistas.forEach(function(P){for(var li=0;li<P.n;li++){var f=((li/P.n)+t*P.vel)%1;P.cur.getPointAt(f,tmpQ);P.cur.getTangentAt(f,tmpQ2);quat.setFromAxisAngle(eje,Math.atan2(-tmpQ2.z,tmpQ2.x));tmpQ.y=0.08;mtx.compose(tmpQ,quat,new T.Vector3(1,1,1));P.mesh.setMatrixAt(li,mtx);}P.mesh.instanceMatrix.needsUpdate=true;});
     var i=0;curvas.forEach(function(c){for(var j=0;j<c.n;j++){var f=(fase[i]+t*vel[i])%1;c.cur.getPointAt(f,tmp);pos[i*3]=tmp.x+off[i][0];pos[i*3+1]=tmp.y+off[i][1];pos[i*3+2]=tmp.z+off[i][0]*0.6;i++;}});
     pg.attributes.position.needsUpdate=true;
+    if(billete){var on=billete.activo();billete.grp.position.y=6+Math.sin(t*1.3)*0.45;billete.grp.rotation.y=Math.sin(t*0.5)*0.55-0.35;billete.grp.rotation.z=Math.sin(t*0.9)*0.06;
+      var sc2=1+((t*0.5)%1)*0.5;billete.anillo.scale.set(sc2,sc2,1);billete.anillo.material.opacity=(on?0.6:0.25)*(1-((t*0.5)%1));
+      v.set(billete.pos[0],billete.grp.position.y+2.6,billete.pos[2]);var pb=proyectar(E,v,cont);billete.el.style.display=pb.vis?'block':'none';billete.el.style.left=pb.x+'px';billete.el.style.top=pb.y+'px';}
     // Etiquetas sin superponerse: se proyectan, se ordenan por altura y la que choca con otra se sube.
     var cajasL=labs.map(function(L){var s=silos[L.k];v.set(s.n.p[0]+0.6,Math.max(s.hm*1.4,s.hp)+1.6,s.n.p[2]);var p=proyectar(E,v,cont);var w=L.el.offsetWidth||90,hh=L.el.offsetHeight||40;return{L:L,x:p.x,y:p.y,w:w,h:hh,vis:p.vis};});
     cajasL.sort(function(a,b){return b.y-a.y;});
@@ -735,7 +769,7 @@ function CentroControl3D(props){
     if(!keyEscena)return;
     if(!envios.length)return;
     Promise.all([cargarThree(),modo==='mapa'?cargarGeo():null]).then(function(rr){var T=rr[0],geo=rr[1];if(!vivo||!refC.current)return;
-      var ui={lo:res.lo,hi:res.hi,tip:refTip.current,labels:refLab.current,onNodo:function(k){refNodo.current(function(prev){return k&&prev!==k?k:(k?null:null);});},onLost:function(){setTimeout(function(){setGen(function(g){return g+1;});},800);}};
+      var ui={cliente:!!props.cliente,lo:res.lo,hi:res.hi,tip:refTip.current,labels:refLab.current,onNodo:function(k){refNodo.current(function(prev){return k&&prev!==k?k:(k?null:null);});},onLost:function(){setTimeout(function(){setGen(function(g){return g+1;});},800);}};
       try{var cntVivo=Object.assign({},res.cnt);Object.keys(vivoRef.current).length&&Object.keys(deltasRef.current).forEach(function(k){cntVivo[k]=Math.max(0,(cntVivo[k]||0)+deltasRef.current[k]);});
         E=modo==='flujo'?montarFlujo(T,refC.current,cntVivo,ui):montarMapa(T,refC.current,res.datos,ui,geo);refE.current=E;window.__cc3dE=E;reintRef.current=0;}
       catch(e){console.error('[cc3d]',e);
