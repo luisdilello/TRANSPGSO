@@ -449,10 +449,10 @@ function montarFlujo(T,cont,cnt,ui){
     var grp=new T.Group();var hoja=new T.Mesh(new T.BoxGeometry(7.2,3.4,0.07),mt);hoja.castShadow=true;grp.add(hoja);
     // segundo billete detrás, levemente girado (fajo)
     var h2=new T.Mesh(new T.BoxGeometry(7.2,3.4,0.07),mt);h2.position.set(0.35,-0.25,-0.18);h2.rotation.z=0.08;grp.add(h2);
-    var pos=[31,0,-21];grp.scale.setScalar(1.7);grp.position.set(pos[0],7,pos[2]);E.sc.add(grp);
-    var anillo=new T.Mesh(new T.RingGeometry(4.2,4.9,64),new T.MeshBasicMaterial({color:'#ff7a5c',transparent:true,opacity:0.55,side:T.DoubleSide}));anillo.rotation.x=-Math.PI/2;anillo.position.set(pos[0],0.06,pos[2]);E.sc.add(anillo);
-    var luz=new T.PointLight('#ffcf7a',1.2,18);luz.position.set(pos[0],7,pos[2]+3);E.sc.add(luz);
-    var el=document.createElement('div');el.style.cssText='position:absolute;transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer;text-align:center;white-space:nowrap';el.title='Ir a Control Por cobrar';el.onclick=function(){if(window.__setTab)window.__setTab('por-cobrar');};ui.labels.appendChild(el);
+    var pos=[-3,0,-18];grp.scale.setScalar(1.05);grp.position.set(pos[0],5.5,pos[2]);E.sc.add(grp);hoja.userData.k='por_rendir';h2.userData.k='por_rendir';grp.userData.k='por_rendir';clicables.push(grp);
+    var anillo=new T.Mesh(new T.RingGeometry(2.8,3.3,64),new T.MeshBasicMaterial({color:'#ff7a5c',transparent:true,opacity:0.55,side:T.DoubleSide}));anillo.rotation.x=-Math.PI/2;anillo.position.set(pos[0],0.06,pos[2]);E.sc.add(anillo);
+    var luz=new T.PointLight('#ffcf7a',1.2,18);luz.position.set(pos[0],5.5,pos[2]+3);E.sc.add(luz);
+    var el=document.createElement('div');el.style.cssText='position:absolute;transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer;text-align:center;white-space:nowrap';el.title='Ver mensajeros con dinero por rendir';el.onclick=function(){ui.onNodo&&ui.onNodo('por_rendir');};ui.labels.appendChild(el);
     var activo=true;
     function pintarB(){var pr=window.__ccPorRendir||{total:0,n:0,mensajeros:[]};var on=pr.n>0;if(on!==activo){activo=on;dibujar(on);tx.needsUpdate=true;mt.emissiveIntensity=on?0.35:0.05;anillo.material.color.set(on?'#ff7a5c':'#7a7d6a');luz.intensity=on?1.2:0.2;}
       var top=(pr.mensajeros||[]).slice(0,1).map(function(m){return titulo(m.m)+' $'+Math.round(m.total).toLocaleString('es-CL');}).join(' · ');
@@ -498,9 +498,9 @@ function montarFlujo(T,cont,cnt,ui){
     pistas.forEach(function(P){for(var li=0;li<P.n;li++){var f=((li/P.n)+t*P.vel)%1;P.cur.getPointAt(f,tmpQ);P.cur.getTangentAt(f,tmpQ2);quat.setFromAxisAngle(eje,Math.atan2(-tmpQ2.z,tmpQ2.x));tmpQ.y=0.08;mtx.compose(tmpQ,quat,new T.Vector3(1,1,1));P.mesh.setMatrixAt(li,mtx);}P.mesh.instanceMatrix.needsUpdate=true;});
     var i=0;curvas.forEach(function(c){for(var j=0;j<c.n;j++){var f=(fase[i]+t*vel[i])%1;c.cur.getPointAt(f,tmp);pos[i*3]=tmp.x+off[i][0];pos[i*3+1]=tmp.y+off[i][1];pos[i*3+2]=tmp.z+off[i][0]*0.6;i++;}});
     pg.attributes.position.needsUpdate=true;
-    if(billete){var on=billete.activo();billete.grp.position.y=7+Math.sin(t*1.3)*0.55;billete.grp.rotation.y=Math.sin(t*0.5)*0.55-0.35;billete.grp.rotation.z=Math.sin(t*0.9)*0.06;
+    if(billete){var on=billete.activo();billete.grp.position.y=5.5+Math.sin(t*1.3)*0.45;billete.grp.rotation.y=Math.sin(t*0.5)*0.55-0.35;billete.grp.rotation.z=Math.sin(t*0.9)*0.06;
       var sc2=1+((t*0.5)%1)*0.5;billete.anillo.scale.set(sc2,sc2,1);billete.anillo.material.opacity=(on?0.6:0.25)*(1-((t*0.5)%1));
-      v.set(billete.pos[0],billete.grp.position.y+3.9,billete.pos[2]);var pb=proyectar(E,v,cont);billete.el.style.display=pb.vis?'block':'none';billete.el.style.left=pb.x+'px';billete.el.style.top=pb.y+'px';}
+      v.set(billete.pos[0],billete.grp.position.y+2.6,billete.pos[2]);var pb=proyectar(E,v,cont);billete.el.style.display=pb.vis?'block':'none';billete.el.style.left=pb.x+'px';billete.el.style.top=pb.y+'px';}
     // Etiquetas sin superponerse: se proyectan, se ordenan por altura y la que choca con otra se sube.
     var cajasL=labs.map(function(L){var s=silos[L.k];v.set(s.n.p[0]+0.6,Math.max(s.hm*1.4,s.hp)+1.6,s.n.p[2]);var p=proyectar(E,v,cont);var w=L.el.offsetWidth||90,hh=L.el.offsetHeight||40;return{L:L,x:p.x,y:p.y,w:w,h:hh,vis:p.vis};});
     cajasL.sort(function(a,b){return b.y-a.y;});
@@ -610,6 +610,25 @@ function VerEnvio3D(p){
     env._noExiste?h('div',{style:{padding:20,textAlign:'center'}},'Este código ya no existe.'):
     (Card?h(Card,{key:env.codigo,envio:env}):null));
 }
+// 23-11-2026: panel del billete "Dinero por rendir": mensajeros con cobros pendientes, monto y antigüedad.
+function PanelPorRendir(p){var d=p.data||{total:0,n:0,mensajeros:[]};var C='#ff9a6b';var ms=d.mensajeros||[];
+  var hoy=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Santiago'}));
+  var dias=function(f){if(!f)return '';var x=new Date(f+'T12:00:00');var n=Math.max(0,Math.round((hoy-x)/864e5));return n===0?'hoy':n===1?'desde ayer':'hace '+n+' días';};
+  var max=ms.reduce(function(a,m){return Math.max(a,+m.total||0);},0)||1;var $=function(v){return '$'+Math.round(+v||0).toLocaleString('es-CL');};
+  return h('div',{style:{position:'absolute',top:12,left:12,bottom:12,width:340,maxWidth:'calc(100% - 24px)',zIndex:4,display:'flex',flexDirection:'column',borderRadius:16,background:'rgba(16,18,12,.95)',border:'1px solid '+C,boxShadow:'0 18px 40px rgba(0,0,0,.55),0 0 24px '+C+'44',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',overflow:'hidden'}},
+    h('div',{style:{padding:'14px 16px 10px',borderBottom:'1px solid rgba(255,255,255,.08)',display:'flex',alignItems:'flex-start',gap:10}},
+      h('div',{style:{flex:1}},h('div',{style:{font:'800 11px DM Sans,system-ui,sans-serif',letterSpacing:2,color:C,textTransform:'uppercase'}},'Dinero por rendir'),
+        h('div',{style:{fontFamily:'Bebas Neue',fontSize:34,lineHeight:1.05,color:'#fff'}},$(d.total)),
+        h('div',{style:{fontSize:12,color:'rgba(233,228,210,.75)',fontWeight:700}},(d.n||0)+(d.n===1?' cobro':' cobros')+' · '+ms.length+' mensajero'+(ms.length===1?'':'s'))),
+      h('button',{type:'button',onClick:p.onClose,style:{background:'none',border:'1px solid rgba(255,255,255,.2)',color:'#fff',borderRadius:8,width:28,height:28,cursor:'pointer',fontWeight:800}},'×')),
+    h('div',{style:{flex:1,overflowY:'auto',padding:'8px 12px'}},
+      ms.length?ms.map(function(m){return h('div',{key:m.m,style:{padding:'9px 4px',borderBottom:'1px solid rgba(255,255,255,.06)'}},
+        h('div',{style:{display:'flex',alignItems:'baseline',gap:8}},h('div',{style:{flex:1,color:'#fff',fontWeight:800,fontSize:13}},titulo(m.m)),h('div',{style:{fontFamily:'Bebas Neue',fontSize:20,color:'#ffd9a0'}},$(m.total))),
+        h('div',{style:{height:5,borderRadius:3,background:'rgba(255,255,255,.08)',margin:'5px 0 4px'}},h('div',{style:{height:'100%',width:Math.max(4,Math.round((+m.total||0)/max*100))+'%',borderRadius:3,background:'linear-gradient(90deg,#b3261e,'+C+')'}})),
+        h('div',{style:{fontSize:11.5,color:'rgba(233,228,210,.65)',fontWeight:700}},(m.n||0)+(m.n===1?' cobro':' cobros')+(m.desde?' · pendiente '+dias(m.desde):'')));})
+      :h('div',{style:{padding:24,textAlign:'center',color:'rgba(233,228,210,.7)',fontWeight:700}},'Todo rendido. No hay dinero pendiente.')),
+    h('div',{style:{padding:12,borderTop:'1px solid rgba(255,255,255,.08)'}},
+      h('button',{type:'button',onClick:function(){if(window.__setTab)window.__setTab('por-cobrar');},style:{width:'100%',padding:'11px 14px',borderRadius:10,border:'none',cursor:'pointer',fontWeight:800,fontSize:13,color:'#2b2410',background:'linear-gradient(180deg,#f7dd8c,#d9b553 55%,#ae8829)'}},'Ir a Control Por cobrar')));}
 function DetalleNodo(p){
   var inf=NODO_INFO[p.k]||[p.k,'#e8c766',''];
   // 20-11-2026: seguimiento de mensajeros (modules/seguimiento.js) — botón Seguir en la vista Por mensajero.
@@ -802,7 +821,8 @@ function CentroControl3D(props){
         h('div',{ref:refLab,style:{position:'absolute',inset:0,pointerEvents:'none',overflow:'hidden'}}),
         h('div',{ref:refTip,style:{position:'absolute',display:'none',pointerEvents:'none',zIndex:3,minWidth:190,padding:'10px 12px',borderRadius:12,background:'rgba(18,20,13,.92)',border:'1px solid rgba(200,168,75,.6)',color:'#fff',font:'12px DM Sans,system-ui,sans-serif',boxShadow:'0 14px 30px rgba(0,0,0,.45)',backdropFilter:'blur(6px)'}}),
         !envios.length&&h('div',{style:{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(233,228,210,.7)',fontSize:13}},'Sin envíos en el período.'),
-        modo==='flujo'&&nodoSel&&h(DetalleNodo,{key:nodoSel,cliente:!!props.cliente,k:nodoSel,envios:envios,vivo:vivoRef.current,rev:deltas,onClose:function(){setNodoSel(null);}}),
+        modo==='flujo'&&nodoSel==='por_rendir'&&h(PanelPorRendir,{key:'pr',data:porRendir,onClose:function(){setNodoSel(null);}}),
+        modo==='flujo'&&nodoSel&&nodoSel!=='por_rendir'&&h(DetalleNodo,{key:nodoSel,cliente:!!props.cliente,k:nodoSel,envios:envios,vivo:vivoRef.current,rev:deltas,onClose:function(){setNodoSel(null);}}),
         eventos.length>0&&h(FeedVivo,{cliente:!!props.cliente,inicio:inicioVivo.current,eventos:eventos,abierto:feedAbierto,onToggle:function(){setFeedAbierto(!feedAbierto);}}),
         modo==='mapa'&&!err&&envios.length>0&&h('div',{className:'cc3d-hint',style:{position:'absolute',right:16,top:12,fontSize:11.5,fontWeight:700,color:'rgba(233,228,210,.75)',display:'flex',alignItems:'center',gap:6,pointerEvents:'none'}},h('span',{style:{width:8,height:8,borderRadius:'50%',background:'#36ff8f',boxShadow:'0 0 10px #36ff8f'}}),'Cada entrega real enciende un punto de luz en el mapa'),
         modo==='flujo'&&!nodoSel&&!err&&envios.length>0&&h('div',{className:'cc3d-hint',style:{position:'absolute',left:16,bottom:14,fontSize:11.5,fontWeight:700,color:'rgba(233,228,210,.7)'}},'Toca una estación para ver sus comunas'),
