@@ -25,11 +25,11 @@ function RuletaAdmin(props){
   var _s=useState(sumar(lunesDe(hoy()),-7)),sem=_s[0],setSem=_s[1];
   var _f=useState(null),filas=_f[0],setFilas=_f[1];var _g=useState([]),giros=_g[0],setGiros=_g[1];
   function cargarCfg(){db.from('ruleta_config').select('valor').eq('id',1).maybeSingle().then(function(r){if(r&&r.data)setCfg(r.data.valor);});}
-  function cargarSem(){setFilas(null);
-    db.rpc('ruleta_semana_panel',{p_lunes:sem}).then(function(r){if(r.error){toast('No se pudo cargar la semana: '+r.error.message);setFilas([]);return;}setFilas(r.data||[]);});
+  function cargarSem(vaciar){if(vaciar===true)setFilas(null);
+    db.rpc('ruleta_semana_panel',{p_lunes:sem}).then(function(r){if(r.error){if(vaciar===true)toast('No se pudo cargar la semana: '+r.error.message);setFilas(function(prev){return prev||[];});return;}setFilas(r.data||[]);});
     db.from('ruleta_giros').select('*').eq('semana',sem).then(function(r){if(!r.error)setGiros(r.data||[]);});}
   useEffect(cargarCfg,[]);
-  useEffect(function(){cargarSem();var st=A.intervaloVisible?A.intervaloVisible(cargarSem,300000,['envios'],15000):null;return function(){if(typeof st==='function')st();};},[sem]);
+  useEffect(function(){cargarSem(true);var st=A.intervaloVisible?A.intervaloVisible(cargarSem,300000,['envios'],15000):null;return function(){if(typeof st==='function')st();};},[sem]);
   var gPor={};giros.forEach(function(g){gPor[String(g.mensajero).toUpperCase().trim()]=g;});
   var F=filas||[],calif=F.filter(function(x){return x.cumple;});
   var dinero=giros.filter(function(g){return g.tipo==='dinero';}).reduce(function(s,g){return s+(+g.monto||0);},0);
@@ -37,7 +37,7 @@ function RuletaAdmin(props){
   var esActual=sem===lunesDe(hoy());
   async function marcar(g,v){var quien='';try{var u=await db.auth.getUser();quien=(u.data&&u.data.user&&u.data.user.email)||'';}catch(e){}
     var r=await db.from('ruleta_giros').update({entregado:v,entregado_por:v?quien:null,entregado_at:v?new Date().toISOString():null}).eq('id',g.id);if(r.error){toast('No se pudo guardar: '+r.error.message);return;}cargarSem();}
-  function exportar(){var rows=F.map(function(x){var g=gPor[x.mensajero];return [x.mensajero,x._ent,x._tot,x.efectividad,x.cumple_inc?'No':'Sí',x.cumple?'Sí':'No',g?g.premio_detalle||g.premio_nombre:'',g&&g.tipo==='dinero'?Math.round(g.monto):'',g?(g.entregado?'Sí':'No'):''];});
+  function exportar(){var rows=F.map(function(x){var g=gPor[x.mensajero];return [x.mensajero,x._ent,x._tot,x.efectividad,x.cumple_inc?'No':[(+x.correctivas?x.correctivas+' correctiva(s)':''),(+x.multas?x.multas+' multa(s)':'')].filter(Boolean).join(' · ')||'Sí',x.cumple?'Sí':'No',g?g.premio_detalle||g.premio_nombre:'',g&&g.tipo==='dinero'?Math.round(g.monto):'',g?(g.entregado?'Sí':'No'):''];});
     A.exportToExcel('RULETA SEMANA '+dm(sem)+' AL '+dm(sumar(sem,6)),[{name:'Ruleta',headers:['Mensajero','Entregados','Asignados','Efectividad %','Incidencias a descuento','Califica','Premio','Monto extra','Entregado'],rows:rows}]);}
   // configuración
   function abrirEd(){setEd(JSON.parse(JSON.stringify(cfg)));}
@@ -73,7 +73,7 @@ function RuletaAdmin(props){
       h('div',{style:{overflowX:'auto'}},h('table',{className:'ra-tab'},h('thead',null,h('tr',null,['#','Mensajero','Copa','Entregados','Efectividad','Incidencias','Califica','Premio','Entregado'].map(function(c){return h('th',{key:c},c);}))),
         h('tbody',null,F.slice().sort(function(a,b){return (a.posicion||999)-(b.posicion||999);}).map(function(x){var g=gPor[x.mensajero];var motivo=x.cumple?'':(!x.cumple_copa?'copa':!x.cumple_ef?'efectividad':!x.cumple_vol?'mínimo de entregas':!x.cumple_inc?'incidencias':'fecha de inicio');var cp=COPA[x.nivel]||COPA.hierro;
           return h('tr',{key:x.mensajero,style:{opacity:x.cumple?1:.62}},h('td',{style:{color:SUAVE}},x.posicion||'—'),h('td',{style:{fontWeight:800}},x.mensajero),h('td',null,chip(cp[0],cp[1])),h('td',null,x._ent+' / '+x._tot),
-            h('td',{style:{fontWeight:800,color:x.cumple_ef?'#7fe3a8':'#ff8a8a'}},x.efectividad+'%'),h('td',null,x.cumple_inc?'—':chip('Con descuento',ROJO)),
+            h('td',{style:{fontWeight:800,color:x.cumple_ef?'#7fe3a8':'#ff8a8a'}},x.efectividad+'%'),h('td',null,x.cumple_inc?'—':h('span',{style:{display:'inline-flex',gap:4,flexWrap:'wrap'}},(+x.correctivas?chip(x.correctivas+' correctiva'+(+x.correctivas>1?'s':''),NAR):null),(+x.multas?chip(x.multas+' multa'+(+x.multas>1?'s':''),ROJO):null),(!(+x.correctivas)&&!(+x.multas)?chip((x.incidencias||'')+' incidencia'+(+x.incidencias>1?'s':''),ROJO):null))),
             h('td',null,x.cumple?chip('Sí',VERDE):chip('No · '+motivo,'#9aa08a')),
             h('td',null,g?h('span',{style:{fontWeight:800,color:ORO}},g.premio_detalle||g.premio_nombre):(x.cumple&&!esActual?h('span',{style:{color:SUAVE}},'Aún no gira'):'—')),
             h('td',null,g?h('label',{style:{display:'flex',alignItems:'center',gap:6,cursor:'pointer'}},h('input',{type:'checkbox',checked:!!g.entregado,onChange:function(e){marcar(g,e.target.checked);},style:{width:17,height:17,accentColor:'#C8A84B'}}),g.entregado?'Entregado':'Pendiente'):'—'));}))))),
