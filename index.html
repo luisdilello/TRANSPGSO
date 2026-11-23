@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261123160745;
+window.__MODULES_VERSION=20261123162459;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -14135,6 +14135,7 @@ var TRAD_CLIENTE={
   'Mapa':{en:'Map',zh:'地图'},
   'Carga de Envíos':{en:'Upload Shipments',zh:'上传包裹'},
   'Retornos':{en:'Returns',zh:'退货'},
+  'Por cobrar':{en:'Cash on delivery',zh:'代收货款'},
   'Mi ':{en:'My ',zh:'我的'},
   'Mis ':{en:'My ',zh:'我的'},
   'Mapa de ':{en:'Delivery ',zh:'配送'},
@@ -14787,7 +14788,7 @@ function PortalCliente({usuario,onLogout}){
     ),
     // Nav
     React.createElement('div',{className:'nav'+(navMobileOpenCli?' nav-open':'')},
-      [{id:'dashboard',label:'Dashboard'},{id:'envios',label:'Mis Envíos'},{id:'mapa',label:'Mapa'},{id:'etiquetas',label:'Carga de Envíos'},{id:'retornos',label:'Retornos'}].map(function(nv){
+      [{id:'dashboard',label:'Dashboard'},{id:'envios',label:'Mis Envíos'},{id:'mapa',label:'Mapa'},{id:'etiquetas',label:'Carga de Envíos'},{id:'retornos',label:'Retornos'},{id:'cobros',label:'Por cobrar'}].map(function(nv){
         return React.createElement('button',{key:nv.id,className:'nav-btn '+(tab===nv.id?'active':''),onClick:function(){irACli(nv.id);}},t(nv.label));
       })
     ),
@@ -14875,7 +14876,8 @@ function PortalCliente({usuario,onLogout}){
       // Etiquetas tab
       tab==='mapa'&&React.createElement(MapaCliente,{nombreCliente:nombreCliente,idioma:idiomaCliente,periodo:periodo,setPeriodo:setPeriodo,fechaDesde:fechaDesde,setFechaDesde:setFechaDesde,fechaHasta:fechaHasta,setFechaHasta:setFechaHasta}),
       tab==='etiquetas'&&React.createElement(EtiquetasCliente,{nombreCliente:nombreCliente,envios:envios,setEnvios:setEnvios,idioma:idiomaCliente}),
-      tab==='retornos'&&React.createElement(ModuloLazy,{id:'acta-retorno',src:'modules/acta-retorno.js',comp:'ActasRetorno',props:{cliente:nombreCliente}})
+      tab==='retornos'&&React.createElement(ModuloLazy,{id:'acta-retorno',src:'modules/acta-retorno.js',comp:'ActasRetorno',props:{cliente:nombreCliente}}),
+      tab==='cobros'&&React.createElement(ModuloLazy,{id:'cobros-cliente',src:'modules/cobros-cliente.js',comp:'CobrosCliente',props:{cliente:nombreCliente}})
     ),
 
     // Modal detalle envío -- misma ficha (fotos + historial, sin mensajero) que usa el buscador
