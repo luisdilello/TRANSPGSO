@@ -84,7 +84,9 @@ async function estadosActuales(cods){var o={},liqs={};if(!cods||!cods.length)ret
   if(ids.length){var q=await db.from('liquidaciones_cobro').select('id,numero,estado,pagada_fecha').in('id',ids);(q.data||[]).forEach(function(l){liqs[l.id]=l;});}
   return {env:o,liqs:liqs};}
 async function verActa(tipo,a,w){w=w||window.open('','_blank');if(w){try{w.document.write('<p style="font-family:sans-serif;padding:30px;color:#555">Preparando acta…</p>');}catch(e){}}
-  var c=[];try{c=await urlsComprobantes(a);}catch(e){}try{var ea=await estadosActuales(a.codigos||(a.detalle||[]).map(function(x){return x.codigo;}));a=Object.assign({},a,{_est:ea});}catch(e){}var html=htmlActa(tipo,a,c);if(w&&!w.closed){w.document.open();w.document.write(html);w.document.close();}}
+  var c=[];try{c=await urlsComprobantes(a);}catch(e){}
+  try{var evs=await cargarEvidencias(a.codigos||(a.detalle||[]).map(function(x){return x.codigo;}));var fl=[];Object.keys(evs).forEach(function(k){evs[k].forEach(function(e){fl.push(e);});});
+    var fs=await firmarEvidencias(fl);c=c.concat(fs.map(function(e){return {path:e.path,url:e.url,tipo:e.mime,nombre:(TIPO_EV[e.tipo]?TIPO_EV[e.tipo][0]:'Evidencia')+' · '+e.codigo+' · '+(e.nombre||''),subido_por:e.subido_por,subido_at:e.created_at};}));}catch(e){}try{var ea=await estadosActuales(a.codigos||(a.detalle||[]).map(function(x){return x.codigo;}));a=Object.assign({},a,{_est:ea});}catch(e){}var html=htmlActa(tipo,a,c);if(w&&!w.closed){w.document.open();w.document.write(html);w.document.close();}}
 function excelActa(tipo,a){var ex=A.exportToExcel;if(!ex)return;var F=a.detalle||[];ex((tipo==='ren'?'Rendicion_':'Liquidacion_')+a.numero,[{name:'Detalle',headers:['Código','Fecha','Cliente','Mensajero','Destinatario','Forma','Destino del pago','Monto'],rows:F.map(function(x){return [x.codigo,dmy(x.fecha),x.cliente||'',x.mensajero||'',x.destinatario||'',formaTxt(x),(DEST[destinoDe(x)]||[''])[0],valor(x)];})}]);}
 
 // ── UI (v2, 18-11-2026): misma línea visual del sistema (caja oscura oliva/oro), flujo en 3 pasos
@@ -119,8 +121,8 @@ function tick(on){return h('div',{style:{width:20,height:20,borderRadius:6,flex:
   background:on?'linear-gradient(180deg,#f7dd8c,#d9b553)':'transparent',color:'#1a1d13',fontWeight:900,fontSize:13,lineHeight:1}},on?'✓':'');}
 var inp={padding:'10px 12px',borderRadius:10,border:'1px solid rgba(200,168,75,.4)',background:'rgba(0,0,0,.25)',color:'#f1ecda',fontSize:14,fontWeight:700,fontFamily:'inherit',outline:'none',width:'100%',boxSizing:'border-box'};
 var CSS='.pc-md{display:grid;grid-template-columns:minmax(250px,320px) 1fr;gap:14px;align-items:start}.pc-pasos{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}'
-  +'.pc-fila{display:grid;grid-template-columns:24px 1.2fr 1.4fr 1fr auto auto;gap:12px;align-items:center}'
-  +'@media (max-width:900px){.pc-md{grid-template-columns:1fr}.pc-pasos{grid-template-columns:1fr}.pc-fila{grid-template-columns:24px 1fr auto auto}.pc-fila .pc-x{display:none}}'
+  +'.pc-fila{display:grid;grid-template-columns:24px 1.2fr 1.4fr 1fr auto auto auto;gap:12px;align-items:center}'
+  +'@media (max-width:900px){.pc-md{grid-template-columns:1fr}.pc-pasos{grid-template-columns:1fr}.pc-fila{grid-template-columns:24px 1fr auto auto auto}.pc-fila .pc-x{display:none}}'
   +'.pc-it{transition:background .12s}.pc-it:hover{background:rgba(255,255,255,.07)!important}.pc-seg button{flex:1}';
 
 function SelectorArchivos(p){var ref=React.useRef(null);var L=p.archivos||[];
@@ -167,14 +169,53 @@ function ModalComprobantes(p){var m=p.m,a=m.a,liq=m.tipo==='liq';var toast=p.toa
         boton('Ver acta',function(){verActa(m.tipo,a);}),
         pagando?boton(busy?'Guardando…':'Marcar como pagada',marcarPagada,'prim',busy):boton(busy?'Subiendo…':'Subir al acta',subir,'prim',busy||!arch.length))));}
 
+// 23-11-2026: evidencia por paquete (cobro al destinatario o pago al cliente). Tabla evidencias_cobro + bucket comprobantes-cobro.
+var TIPO_EV={cobro:['Evidencia de cobro','Lo que pagó el destinatario (transferencia, foto del efectivo)'],pago:['Evidencia de pago','Pago de TransPgso o del mensajero al cliente']};
+async function cargarEvidencias(cods){var o={};if(!cods||!cods.length)return o;
+  for(var i=0;i<cods.length;i+=200){var r=await db.from('evidencias_cobro').select('*').in('codigo',cods.slice(i,i+200)).order('id');(r.data||[]).forEach(function(e){(o[e.codigo]=o[e.codigo]||[]).push(e);});}return o;}
+async function firmarEvidencias(L){if(!L.length)return [];var r=await db.storage.from(BUCKET).createSignedUrls(L.map(function(x){return x.path;}),60*60*24*7);
+  return L.map(function(x,i){return Object.assign({},x,{url:(r.data&&r.data[i]&&r.data[i].signedUrl)||''});});}
+function botonEvi(codigo,n,abrir){return h('button',{type:'button',title:'Adjuntar evidencia de cobro o de pago',onClick:function(ev){ev.stopPropagation();abrir(codigo);},style:{padding:'5px 10px',borderRadius:8,border:'1px solid '+(n?'rgba(87,201,138,.6)':'rgba(255,255,255,.2)'),background:n?'rgba(87,201,138,.14)':'rgba(255,255,255,.05)',color:n?'#7fe0a8':'#f1ecda',fontWeight:900,fontSize:11.5,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}},n?'Evidencia ('+n+')':'Evidencia');}
+function ModalEvidencia(p){var toast=p.toast;var _t=useState(p.tipo||'cobro'),tipo=_t[0],setTipo=_t[1];var _f=useState([]),arch=_f[0],setArch=_f[1];var _b=useState(false),busy=_b[0],setBusy=_b[1];var _l=useState(null),lista=_l[0],setLista=_l[1];
+  function recargar(){cargarEvidencias([p.codigo]).then(function(o){return firmarEvidencias(o[p.codigo]||[]);}).then(setLista).catch(function(){setLista([]);});}
+  useEffect(recargar,[]);
+  async function subir(){if(!arch.length)return;setBusy(true);try{for(var i=0;i<arch.length;i++){var f=arch[i];var ext=(f.name.split('.').pop()||'bin').toLowerCase().replace(/[^a-z0-9]/g,'');
+      var path='envio/'+p.codigo.replace(/[^A-Za-z0-9_-]/g,'')+'/'+tipo+'_'+Date.now()+'_'+i+'.'+ext;
+      var up=await db.storage.from(BUCKET).upload(path,f,{contentType:f.type||'application/octet-stream',upsert:false});if(up.error)throw new Error('No se pudo subir '+f.name+': '+up.error.message);
+      var ins=await db.from('evidencias_cobro').insert({codigo:p.codigo,tipo:tipo,path:path,nombre:f.name,mime:f.type,size:f.size});if(ins.error)throw new Error(ins.error.message);}
+    setArch([]);toast('Evidencia guardada');recargar();p.onCambio();}catch(e){toast(e.message);}finally{setBusy(false);}}
+  async function quitar(c){if(!window.confirm('Quitar la evidencia "'+(c.nombre||'')+'"?'))return;setBusy(true);var d=await db.from('evidencias_cobro').delete().eq('id',c.id);if(d.error){setBusy(false);toast(d.error.message);return;}
+    await db.storage.from(BUCKET).remove([c.path]);setBusy(false);recargar();p.onCambio();}
+  return h('div',{onClick:function(e){if(e.target===e.currentTarget&&!busy)p.onClose();},style:{position:'fixed',inset:0,zIndex:9999,background:'rgba(10,11,7,.6)',display:'grid',placeItems:'center',padding:16}},
+    h('div',{style:Object.assign({},K.caja,{width:'min(640px,100%)',maxHeight:'90vh',overflowY:'auto',padding:'20px 22px',boxSizing:'border-box'})},
+      h('div',{style:{display:'flex',alignItems:'flex-start',gap:12,marginBottom:14}},
+        h('div',{style:{flex:1}},h('div',{style:{fontFamily:'Bebas Neue',fontSize:26,letterSpacing:1.3,lineHeight:1}},'Evidencia del paquete'),
+          h('div',{style:{fontSize:12.5,fontWeight:700,color:K.sub,marginTop:4,fontFamily:'JetBrains Mono, monospace'}},p.codigo+(p.info?' · '+p.info:''))),
+        h('button',{type:'button',onClick:function(){if(!busy)p.onClose();},style:{border:'none',background:'rgba(255,255,255,.08)',color:K.txt,width:32,height:32,borderRadius:10,cursor:'pointer',fontSize:18,fontWeight:900}},'×')),
+      eti('¿Qué vas a adjuntar?'),
+      h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,margin:'8px 0 12px'}},Object.keys(TIPO_EV).map(function(k){var on=tipo===k;
+        return h('button',{key:k,type:'button',onClick:function(){setTipo(k);},style:{textAlign:'left',padding:'10px 12px',borderRadius:12,cursor:'pointer',fontFamily:'inherit',border:'1px solid '+(on?'#e8c766':'rgba(255,255,255,.14)'),background:on?'rgba(232,199,102,.16)':'rgba(0,0,0,.2)',color:K.txt}},
+          h('div',{style:{fontWeight:900,fontSize:13,color:on?'#f7dd8c':K.txt}},TIPO_EV[k][0]),h('div',{style:{fontSize:11.5,fontWeight:700,color:K.sub,marginTop:2}},TIPO_EV[k][1]));})),
+      h(SelectorArchivos,{archivos:arch,setArchivos:setArch,texto:'Foto o PDF'}),
+      h('div',{style:{marginTop:16}},eti('Adjuntas'+(lista&&lista.length?' ('+lista.length+')':'')),
+        lista==null?h('div',{style:{color:K.sub,fontWeight:700,marginTop:8}},'Cargando…'):lista.length===0?h('div',{style:{color:K.dim,fontWeight:700,marginTop:8,fontSize:13}},'Este paquete aún no tiene evidencia.'):
+        h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:10,marginTop:8}},lista.map(function(c){var img=/^image\//.test(c.mime||'');
+          return h('div',{key:c.id,style:{borderRadius:12,background:K.fila,border:'1px solid '+K.bd,overflow:'hidden'}},
+            h('a',{href:c.url,target:'_blank',rel:'noopener',style:{display:'grid',placeItems:'center',height:110,background:'rgba(0,0,0,.25)',color:K.oro,fontWeight:900,textDecoration:'none',fontFamily:'Bebas Neue',fontSize:22,letterSpacing:1}},img?h('img',{src:c.url,alt:'',style:{width:'100%',height:'100%',objectFit:'cover'}}):'PDF'),
+            h('div',{style:{padding:'7px 9px'}},h('div',{style:{fontSize:11,fontWeight:900,color:c.tipo==='pago'?'#7fe0a8':K.oro}},TIPO_EV[c.tipo]?TIPO_EV[c.tipo][0]:c.tipo),
+              h('div',{style:{fontSize:11.5,fontWeight:800,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},c.nombre||'Archivo'),
+              h('div',{style:{fontSize:10.5,color:K.dim,fontWeight:700}},new Date(c.created_at).toLocaleDateString('es-CL',{timeZone:'America/Santiago'})+(c.subido_por?' · '+tit(c.subido_por):'')),
+              h('button',{type:'button',onClick:function(){quitar(c);},disabled:busy,style:{marginTop:5,border:'none',background:'none',color:K.rojo,fontWeight:800,fontSize:11.5,cursor:'pointer',padding:0,fontFamily:'inherit'}},'Quitar')));}))),
+      h('div',{style:{display:'flex',justifyContent:'flex-end',gap:8,marginTop:18}},boton('Cerrar',p.onClose),boton(busy?'Subiendo…':'Guardar evidencia',subir,'prim',busy||!arch.length))));}
 function PorCobrar(props){
   var toast=props.toast||function(m){alert(m);};var esAdmin=!!(A.perfil&&(A.perfil.esAdmin||A.perfil.esSuperAdmin));
   var _t=useState('rendir'),tab=_t[0],setTab=_t[1];var _p=useState(null),pend=_p[0],setPend=_p[1];
   var _r=useState(null),rens=_r[0],setRens=_r[1];var _l=useState(null),liqs=_l[0],setLiqs=_l[1];
   var _sm=useState(''),selMen=_sm[0],setSelMen=_sm[1];var _sc=useState(''),selCli=_sc[0],setSelCli=_sc[1];
   var _sel=useState({}),sel=_sel[0],setSel=_sel[1];var _rec=useState(''),recibido=_rec[0],setRecibido=_rec[1];var _fr=useState('Efectivo'),formaRec=_fr[0],setFormaRec=_fr[1];var _nt=useState(''),nota=_nt[0],setNota=_nt[1];var _fa=useState([]),archivos=_fa[0],setArchivos=_fa[1];var _md=useState(null),modal=_md[0],setModal=_md[1];
+  var _ev=useState({}),evi=_ev[0],setEvi=_ev[1];var _me=useState(null),modalEv=_me[0],setModalEv=_me[1];var _al=useState([]),archL=_al[0],setArchL=_al[1];
   var _per=useState('semana_ant'),per=_per[0],setPer=_per[1];var _busy=useState(false),busy=_busy[0],setBusy=_busy[1];var _mes=useState(hoyCL().slice(0,7)),mes=_mes[0],setMes=_mes[1];
-  function cargar(){db.rpc('por_cobrar_pendientes',{p_desde:'2026-11-01'}).then(function(r){if(r.error){toast('No se pudo cargar: '+r.error.message);setPend([]);return;}setPend(r.data||[]);});
+  function cargar(){db.rpc('por_cobrar_pendientes',{p_desde:'2026-11-01'}).then(function(r){if(r.error){toast('No se pudo cargar: '+r.error.message);setPend([]);return;}setPend(r.data||[]);cargarEvidencias((r.data||[]).map(function(x){return x.codigo;})).then(setEvi).catch(function(){});});
     db.from('rendiciones_cobro').select('*').order('id',{ascending:false}).limit(500).then(function(r){setRens(r.data||[]);});
     db.from('liquidaciones_cobro').select('*').order('id',{ascending:false}).limit(500).then(function(r){setLiqs(r.data||[]);});}
   useEffect(cargar,[]);
@@ -212,7 +253,9 @@ function PorCobrar(props){
     var total=tot(items),directo=tot(items.filter(function(x){return destinoDe(x)==='cliente';}));setBusy(true);var w=window.open('','_blank');
     var r=await db.rpc('crear_liquidacion_cobro',{p:{cliente:selCli,desde:rg[0],hasta:rg[1],codigos:items.map(function(x){return x.codigo;}),total_cobrado:total,directo_cliente:directo,a_transferir:total-directo,nota:nota,detalle:items}});
     setBusy(false);if(r.error){if(w)w.close();toast('No se pudo emitir: '+r.error.message);return;}
-    var g=await db.from('liquidaciones_cobro').select('*').eq('id',r.data).single();if(g.data)await verActa('liq',g.data,w);
+    var g=await db.from('liquidaciones_cobro').select('*').eq('id',r.data).single();
+    if(g.data&&archL.length){try{var cpl=await subirComprobantes('liq',g.data,archL);if(cpl)g.data.comprobantes=cpl;}catch(e){toast(e.message);}}setArchL([]);
+    if(g.data)await verActa('liq',g.data,w);
     toast('Liquidación '+(g.data&&g.data.numero)+' emitida');setSel({});setNota('');cargar();}
   function pagar(l){setModal({tipo:'liq',a:l,pagar:true});}
   function eliminar(tipo,a){if(!window.confirm('Eliminar '+a.numero+'? Los paquetes vuelven a quedar pendientes.'))return;db.rpc('eliminar_acta_cobro',{p_tipo:tipo,p_id:a.id}).then(function(r){if(r.error){toast(r.error.message);return;}toast(a.numero+' eliminada');cargar();});}
@@ -273,7 +316,7 @@ function PorCobrar(props){
                 h('div',{style:{minWidth:0}},h('div',{style:{fontFamily:'JetBrains Mono, monospace',fontWeight:700,fontSize:12.5}},x.codigo),h('div',{style:{fontSize:11.5,color:K.sub,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},x.cliente||'—')),
                 h('div',{className:'pc-x',style:{fontSize:12.5,fontWeight:700,minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},tit(x.destinatario)),
                 h('div',{className:'pc-x'},sinInf?pill(x.cobro_forma==='transferencia'?'Transferencia sin cuenta':'Forma sin informar',K.ambar,'rgba(247,197,90,.1)'):pill(formaTxt(x),K.sub)),
-                h('div',{style:{fontFamily:'Bebas Neue',fontSize:21,textAlign:'right'}},money(valor(x))),botonVer(x.codigo));}));})),
+                h('div',{style:{fontFamily:'Bebas Neue',fontSize:21,textAlign:'right'}},money(valor(x))),botonEvi(x.codigo,(evi[x.codigo]||[]).length,function(c){setModalEv({codigo:c,info:tit(x.destinatario||'')+' · '+money(valor(x))});}),botonVer(x.codigo));}));})),
         // Paso b: confirmar monto y forma
         h('div',{style:{display:'flex',alignItems:'center',gap:8,margin:'18px 0 10px'}},h('span',{style:{fontFamily:'Bebas Neue',fontSize:15,color:'#1a1d13',background:'#e8c766',borderRadius:6,padding:'1px 7px'}},'B'),h('b',{style:{fontSize:13.5}},'Confirma cuánto te entregó y cómo')),
         h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(290px,1fr))',gap:12}},
@@ -327,9 +370,10 @@ function PorCobrar(props){
             h('div',{style:{minWidth:0}},h('div',{style:{fontFamily:'JetBrains Mono, monospace',fontWeight:700,fontSize:12.5}},x.codigo),h('div',{style:{fontSize:11.5,color:K.sub,fontWeight:700}},dmy(x.fecha)+' · '+tit(x.mensajero))),
             h('div',{className:'pc-x',style:{fontSize:12.5,fontWeight:700,minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},tit(x.destinatario)),
             h('div',{className:'pc-x'},noRen?pill('Mensajero aún no rinde',K.ambar,'rgba(247,197,90,.1)'):pill(d[0],d[1])),
-            h('div',{style:{fontFamily:'Bebas Neue',fontSize:21,textAlign:'right'}},money(valor(x))),botonVer(x.codigo));}),
+            h('div',{style:{fontFamily:'Bebas Neue',fontSize:21,textAlign:'right'}},money(valor(x))),botonEvi(x.codigo,(evi[x.codigo]||[]).length,function(c){setModalEv({codigo:c,info:tit(x.destinatario||'')+' · '+money(valor(x))});}),botonVer(x.codigo));}),
           itemsC.length===0&&h('div',{style:{color:K.sub,fontWeight:700,padding:10}},'Sin paquetes.')),
         h('label',{style:{display:'flex',flexDirection:'column',gap:6,marginTop:14}},eti('Observación (opcional)'),h('input',{value:nota,onChange:function(e){setNota(e.target.value);},placeholder:'Ej: transferencia a cuenta Banco Estado',style:inp})),
+        h('div',{style:{marginTop:12}},eti('Comprobante del pago al cliente (opcional)'),h(SelectorArchivos,{archivos:archL,setArchivos:setArchL,texto:'Si ya le transferiste, adjunta el comprobante; queda en el anexo del acta'})),
         h('div',{style:{marginTop:16,padding:'14px 16px',borderRadius:14,background:'rgba(0,0,0,.25)',border:'1px solid '+K.bdOro,display:'flex',alignItems:'center',gap:18,flexWrap:'wrap'}},
           h('div',null,eti('Cobrado'),h('div',{style:{fontFamily:'Bebas Neue',fontSize:24,lineHeight:1}},money(totL))),
           h('div',{style:{color:K.dim,fontWeight:900}},'−'),
@@ -370,7 +414,7 @@ function PorCobrar(props){
             h('div',{style:{textAlign:'right'}},h('div',{style:{fontFamily:'Bebas Neue',fontSize:20}},money(r.rec)),d===0?pill('Cuadra',K.verde):pill((d<0?'Faltó ':'Sobró ')+money(Math.abs(d)),d<0?K.rojo:K.verde)));})),
         caja(null,titulo('Liquidaciones a clientes ('+liqMes.length+')','Lo que debemos transferir y lo ya pagado'),liqMes.length===0?h('div',{style:{color:K.sub,fontWeight:700}},'Ninguna este mes.'):liqMes.map(function(a){return filaActa(a,true);}))),
       caja(null,titulo('Actas de rendición ('+rensMes.length+')','Firmadas por cada mensajero al entregar lo cobrado'),rensMes.length===0?h('div',{style:{color:K.sub,fontWeight:700}},'Ninguna este mes.'):rensMes.map(function(a){return filaActa(a,false);})));}
-  return h('div',{style:{color:K.txt}},cabecera,cuerpo,modal&&h(ModalComprobantes,{key:modal.a.id+modal.tipo,m:modal,toast:toast,onClose:function(){setModal(null);},onCambio:cargar}));
+  return h('div',{style:{color:K.txt}},cabecera,cuerpo,modal&&h(ModalComprobantes,{key:modal.a.id+modal.tipo,m:modal,toast:toast,onClose:function(){setModal(null);},onCambio:cargar}),modalEv&&h(ModalEvidencia,{key:modalEv.codigo,codigo:modalEv.codigo,info:modalEv.info,tipo:tab==='liquidar'?'pago':'cobro',toast:toast,onClose:function(){setModalEv(null);},onCambio:function(){cargarEvidencias((pend||[]).map(function(x){return x.codigo;})).then(setEvi).catch(function(){});}}));
 }
 window.PorCobrar=PorCobrar;
 })();
