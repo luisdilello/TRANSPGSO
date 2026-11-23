@@ -89,12 +89,21 @@ function avatar(n,col){return h('div',{style:{width:38,height:38,borderRadius:12
   background:'rgba(232,199,102,.12)',border:'1px solid '+(col||K.bdOro),color:col||K.oro}},iniciales(n).toUpperCase());}
 function pill(t,col,fondo){return h('span',{style:{padding:'3px 9px',borderRadius:999,fontSize:11,fontWeight:900,color:col,background:fondo||'rgba(255,255,255,.06)',border:'1px solid '+col+'55',whiteSpace:'nowrap'}},t);}
 function diasPill(d){return d==null?null:d<=0?pill('De hoy',K.verde):pill(d===1?'1 día':d+' días',d>=2?K.rojo:K.ambar);}
+// 23-11-2026: botón Ver en cada paquete: abre la ficha completa del envío (fotos, historial) sin perder lo marcado.
+function verEnvio(codigo){var M=A.Modal,Card=A.EnvioDetalleCard;var el=document.createElement('div');document.body.appendChild(el);var root=ReactDOM.createRoot?ReactDOM.createRoot(el):null;
+  function cerrar(){try{root?root.unmount():ReactDOM.unmountComponentAtNode(el);}catch(e){}if(el.parentNode)el.parentNode.removeChild(el);}
+  function pintar(cont){var v=M?h(M,{title:'Envío · '+codigo,wide:true,onClose:cerrar},cont):h('div',{style:{position:'fixed',inset:0,zIndex:9990,background:'rgba(0,0,0,.6)',overflowY:'auto',padding:16},onClick:function(ev){if(ev.target===ev.currentTarget)cerrar();}},h('div',{style:{maxWidth:900,margin:'0 auto',background:'#fff',borderRadius:16,padding:16,color:'#2b2e20'}},cont));
+    if(root)root.render(v);else ReactDOM.render(v,el);}
+  pintar(h('div',{style:{padding:30,textAlign:'center',color:'#777'}},'Cargando envío…'));
+  db.from('envios').select('*').eq('codigo',codigo).maybeSingle().then(function(r){if(!r||!r.data){pintar(h('div',{style:{padding:20,textAlign:'center',color:'#777'}},'Este código no existe en Envíos.'));return;}
+    pintar(Card?h(Card,{key:codigo,envio:r.data}):h('div',null,'No disponible'));},function(){pintar(h('div',{style:{padding:20,textAlign:'center',color:'#777'}},'No se pudo cargar el envío.'));});}
+function botonVer(codigo){return h('button',{type:'button',title:'Ver envío',onClick:function(ev){ev.stopPropagation();verEnvio(codigo);},style:{padding:'5px 12px',borderRadius:8,border:'1px solid rgba(232,199,102,.5)',background:'rgba(232,199,102,.12)',color:'#e8c766',fontWeight:900,fontSize:11.5,cursor:'pointer',fontFamily:'inherit'}},'Ver');}
 function tick(on){return h('div',{style:{width:20,height:20,borderRadius:6,flex:'0 0 20px',display:'grid',placeItems:'center',border:'1.5px solid '+(on?'#e8c766':'rgba(255,255,255,.3)'),
   background:on?'linear-gradient(180deg,#f7dd8c,#d9b553)':'transparent',color:'#1a1d13',fontWeight:900,fontSize:13,lineHeight:1}},on?'✓':'');}
 var inp={padding:'10px 12px',borderRadius:10,border:'1px solid rgba(200,168,75,.4)',background:'rgba(0,0,0,.25)',color:'#f1ecda',fontSize:14,fontWeight:700,fontFamily:'inherit',outline:'none',width:'100%',boxSizing:'border-box'};
 var CSS='.pc-md{display:grid;grid-template-columns:minmax(250px,320px) 1fr;gap:14px;align-items:start}.pc-pasos{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}'
-  +'.pc-fila{display:grid;grid-template-columns:24px 1.2fr 1.4fr 1fr auto;gap:12px;align-items:center}'
-  +'@media (max-width:900px){.pc-md{grid-template-columns:1fr}.pc-pasos{grid-template-columns:1fr}.pc-fila{grid-template-columns:24px 1fr auto}.pc-fila .pc-x{display:none}}'
+  +'.pc-fila{display:grid;grid-template-columns:24px 1.2fr 1.4fr 1fr auto auto;gap:12px;align-items:center}'
+  +'@media (max-width:900px){.pc-md{grid-template-columns:1fr}.pc-pasos{grid-template-columns:1fr}.pc-fila{grid-template-columns:24px 1fr auto auto}.pc-fila .pc-x{display:none}}'
   +'.pc-it{transition:background .12s}.pc-it:hover{background:rgba(255,255,255,.07)!important}.pc-seg button{flex:1}';
 
 function SelectorArchivos(p){var ref=React.useRef(null);var L=p.archivos||[];
@@ -247,7 +256,7 @@ function PorCobrar(props){
                 h('div',{style:{minWidth:0}},h('div',{style:{fontFamily:'JetBrains Mono, monospace',fontWeight:700,fontSize:12.5}},x.codigo),h('div',{style:{fontSize:11.5,color:K.sub,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},x.cliente||'—')),
                 h('div',{className:'pc-x',style:{fontSize:12.5,fontWeight:700,minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},tit(x.destinatario)),
                 h('div',{className:'pc-x'},sinInf?pill(x.cobro_forma==='transferencia'?'Transferencia sin cuenta':'Forma sin informar',K.ambar,'rgba(247,197,90,.1)'):pill(formaTxt(x),K.sub)),
-                h('div',{style:{fontFamily:'Bebas Neue',fontSize:21,textAlign:'right'}},money(valor(x))));}));})),
+                h('div',{style:{fontFamily:'Bebas Neue',fontSize:21,textAlign:'right'}},money(valor(x))),botonVer(x.codigo));}));})),
         // Paso b: confirmar monto y forma
         h('div',{style:{display:'flex',alignItems:'center',gap:8,margin:'18px 0 10px'}},h('span',{style:{fontFamily:'Bebas Neue',fontSize:15,color:'#1a1d13',background:'#e8c766',borderRadius:6,padding:'1px 7px'}},'B'),h('b',{style:{fontSize:13.5}},'Confirma cuánto te entregó y cómo')),
         h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(290px,1fr))',gap:12}},
@@ -300,7 +309,7 @@ function PorCobrar(props){
             h('div',{style:{minWidth:0}},h('div',{style:{fontFamily:'JetBrains Mono, monospace',fontWeight:700,fontSize:12.5}},x.codigo),h('div',{style:{fontSize:11.5,color:K.sub,fontWeight:700}},dmy(x.fecha)+' · '+tit(x.mensajero))),
             h('div',{className:'pc-x',style:{fontSize:12.5,fontWeight:700,minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},tit(x.destinatario)),
             h('div',{className:'pc-x'},noRen?pill('Mensajero aún no rinde',K.ambar,'rgba(247,197,90,.1)'):pill(d[0],d[1])),
-            h('div',{style:{fontFamily:'Bebas Neue',fontSize:21,textAlign:'right'}},money(valor(x))));}),
+            h('div',{style:{fontFamily:'Bebas Neue',fontSize:21,textAlign:'right'}},money(valor(x))),botonVer(x.codigo));}),
           itemsC.length===0&&h('div',{style:{color:K.sub,fontWeight:700,padding:10}},'Sin paquetes.')),
         h('label',{style:{display:'flex',flexDirection:'column',gap:6,marginTop:14}},eti('Observación (opcional)'),h('input',{value:nota,onChange:function(e){setNota(e.target.value);},placeholder:'Ej: transferencia a cuenta Banco Estado',style:inp})),
         h('div',{style:{marginTop:16,padding:'14px 16px',borderRadius:14,background:'rgba(0,0,0,.25)',border:'1px solid '+K.bdOro,display:'flex',alignItems:'center',gap:18,flexWrap:'wrap'}},
