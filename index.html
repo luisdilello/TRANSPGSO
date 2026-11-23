@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261123135556;
+window.__MODULES_VERSION=20261123140905;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -12914,7 +12914,7 @@ useEffect(function(){
 // Reprogramado (ver el checkbox "⚠️ Reportar posible siniestro" en EnvioAccion) -- el envío queda
 // como Reprogramado normal y un admin debe confirmarlo desde "⚠ Siniestros" para que recién ahí
 // se convierta en un siniestro real.
-const ESTADOS_RIDER=[{val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#C8A84B',bg:'rgba(200,168,75,0.15)'},{val:'entregado',label:'Entregado',icon:'✅',color:'#2e7d4f',bg:'rgba(46,125,79,0.15)'},{val:'reprogramado',label:'Reprogramado',icon:'📅',color:'#9c27b0',bg:'rgba(156,39,176,0.15)'},{val:'cancelado',label:'Cancelado',icon:'❌',color:'#b03030',bg:'rgba(176,48,48,0.12)'}];async function cargarEnvios(){setLoading(true);try{const nombreRider=normNombre(usuario.nombre);
+const ESTADOS_RIDER=[{val:'en_ruta',label:'En Ruta',icon:'🚴',color:'#C8A84B',bg:'rgba(200,168,75,0.15)'},{val:'entregado',label:'Entregado',icon:'✅',color:'#2e7d4f',bg:'rgba(46,125,79,0.15)'},{val:'reprogramado',label:'Reprogramado',icon:'📅',color:'#9c27b0',bg:'rgba(156,39,176,0.15)'},{val:'cancelado',label:'Cancelado',icon:'❌',color:'#b03030',bg:'rgba(176,48,48,0.12)'}];async function cargarEnvios(){try{cargarPorRendir();}catch(_pr){}setLoading(true);try{const nombreRider=normNombre(usuario.nombre);
     const partes=nombreRider.split(' ');
     const primerNombre=partes[0];
     const apellido=partes[1]||partes[0];
