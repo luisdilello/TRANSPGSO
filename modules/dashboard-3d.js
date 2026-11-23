@@ -425,10 +425,12 @@ function montarFlujo(T,cont,cnt,ui){
   function pintar(L){var k=L.k,n=nodos[k],el=L.el;var mostrar=Math.round(vals[k]*factorCuenta);
     var pct=k==='en_bodega'||k==='en_bodega_fecha'||k==='en_ruta'?'':(salieron?' · '+Math.round(vals[k]/salieron*100)+'%':'');
     el.innerHTML='<div style="font-family:Bebas Neue;font-size:'+(chico?20:30)+'px;line-height:1;color:#fff;text-shadow:0 0 18px '+n.c+',0 3px 0 rgba(0,0,0,.4)">'+mostrar.toLocaleString('es-CL')+'</div>'
-      +'<div style="margin-top:3px;padding:'+(chico?'1px 6px':'2px 10px')+';border-radius:999px;background:rgba(20,22,15,.75);border:1px solid '+n.c+';color:#fff;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif">'+n.l+(k==='en_ruta'?' ahora':'')+pct+'</div>'+(chico?'':k==='en_ruta'?'<div style="margin-top:3px;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif;color:rgba(233,228,210,.8)">salieron '+salieron.toLocaleString('es-CL')+'</div>':(subNodo(k)?'<div style="margin-top:3px;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif;color:rgba(233,228,210,.8)">'+subNodo(k)+'</div>':''));}
+      +'<div style="margin-top:3px;padding:'+(chico?'1px 6px':'2px 10px')+';border-radius:999px;background:rgba(20,22,15,.75);border:1px solid '+n.c+';color:#fff;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif">'+n.l+(k==='en_ruta'?' ahora':'')+pct+'</div>'+(chico?'':k==='en_ruta'?'<div style="margin-top:3px;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif;color:rgba(233,228,210,.8)">salieron '+salieron.toLocaleString('es-CL')+'</div>':(subNodo(k)?'<div style="margin-top:3px;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif;color:rgba(233,228,210,.8)">'+subNodo(k)+'</div>':''))
+    /* 23-11-2026: dinero de cobros contra entrega aún sin rendir, colgando de la estación Entregado */
+    var pr=window.__ccPorRendir;if(k==='entregado'&&pr&&pr.n>0)el.innerHTML+='<div style="margin-top:5px;display:inline-flex;align-items:center;gap:6px;padding:'+(chico?'2px 7px':'3px 11px')+';border-radius:999px;background:linear-gradient(180deg,#b3261e,#7a140f);border:1px solid #ff8a7a;box-shadow:0 0 14px rgba(255,90,70,.55);color:#fff;font:800 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif"><span style="font-family:Bebas Neue;font-size:'+(chico?13:16)+'px;letter-spacing:.5px">$'+Math.round(pr.total).toLocaleString('es-CL')+'</span>por rendir · '+pr.n+'</div>';}
   ui.labels.innerHTML='';var labs=Object.keys(nodos).map(function(k){var el=document.createElement('div');
     el.style.cssText='position:absolute;transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer;text-align:center;white-space:nowrap';el.title='Ver por comuna';el.onclick=function(){ui.onNodo&&ui.onNodo(k);};
-    var L={el:el,k:k};pintar(L);ui.labels.appendChild(el);return L;});
+    var L={el:el,k:k};pintar(L);ui.labels.appendChild(el);return L;});E.repintar=function(){labs.forEach(pintar);};
   // Datos frescos del servidor (cada refresco en tiempo real): reemplaza conteos sin reconstruir la escena.
   E.actualizar=function(cntN){
     Object.keys(vals).forEach(function(k){vals[k]=0;});det={};
@@ -664,7 +666,7 @@ function CentroControl3D(props){
   // 23-11-2026: dinero de cobros contra entrega que los mensajeros aún no rinden (RPC dinero_por_rendir).
   var _pr=R.useState(null),porRendir=_pr[0],setPorRendir=_pr[1];
   R.useEffect(function(){if(props.cliente)return;var db=window.__app&&window.__app.db;if(!db)return;var vivo=true;
-    function c(){db.rpc('dinero_por_rendir').then(function(r){if(vivo&&r&&r.data)setPorRendir(r.data);},function(){});}
+    function c(){db.rpc('dinero_por_rendir').then(function(r){if(vivo&&r&&r.data){setPorRendir(r.data);window.__ccPorRendir=r.data;try{refE.current&&refE.current.repintar&&refE.current.repintar();}catch(e){}}},function(){});}
     c();var iv=setInterval(c,300000);return function(){vivo=false;clearInterval(iv);};},[]);
   R.useEffect(function(){var iv=setInterval(function(){setTick2(function(x){return x+1;});},30000);return function(){clearInterval(iv);};},[]);
   var refNodo=R.useRef(setNodoSel);refNodo.current=setNodoSel;
