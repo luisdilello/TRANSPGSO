@@ -149,13 +149,27 @@ function IncidenciasAgrupadas(props){
     var porFalta=Object.keys(F).sort(function(a,b){return F[b].n-F[a].n;}).map(function(k){var x=F[k];return '<tr><td>'+E(k)+'</td><td style="text-align:center;font-weight:800">'+x.n+'</td><td>'+[x.cor?x.cor+' correctiva'+(x.cor>1?'s':''):'',x.mul?x.mul+' multa'+(x.mul>1?'s':'')+' ('+money(x.monto)+')':'',x.des?x.des+' descartada'+(x.des>1?'s':''):'',x.pen?x.pen+' pendiente'+(x.pen>1?'s':''):''].filter(Boolean).join(' · ')+'</td></tr>';}).join('');
     // 3. detalle
     var det=rs.map(function(r,ix){return '<tr><td style="color:#9a9684">'+(ix+1)+'</td><td style="white-space:nowrap">'+E(dm(r._i.fecha))+'<br/><span style="color:#888">'+E(hora(r.created_at))+' hrs</span></td><td style="font-family:JetBrains Mono,monospace;font-size:10px">'+E(r.codigo||'—')+'</td><td>'+E(r._i.motivo)+(r.comentario?'<br/><span style="color:#6b6e5c">"'+E(r.comentario)+'"</span>':'')+'</td><td>'+E([r.cliente,tit(r.comuna)].filter(Boolean).join(' · ')||'—')+'</td><td>'+E(primer(r.reportado_por)||'—')+(r.resolucion?'<br/><span style="color:#2e7d4f">'+E(r.resolucion)+'</span>':'')+'</td><td>'+badge(r)+'</td></tr>';}).join('');
+    // 5. evidencia de la entrega de cada paquete afectado (23-11-2026)
+    var evid='';try{var cods=[];rs.forEach(function(r){if(r.codigo&&cods.indexOf(r.codigo)<0)cods.push(r.codigo);});
+      if(cods.length){var EV={};for(var q=0;q<cods.length;q+=150){var rq=await A.db.from('envios').select('codigo,estado,destinatario,comuna,fotos_entrega,foto_etiqueta').in('codigo',cods.slice(q,q+150));(rq.data||[]).forEach(function(e){EV[e.codigo]=e;});}
+        var pj=function(v){if(v==null)return null;if(typeof v!=='string')return v;try{var x=JSON.parse(v);return typeof x==='string'?pj(x):x;}catch(e){return null;}};
+        var fotosDe=function(e){var arr=pj(e.fotos_entrega);if(!Array.isArray(arr)||!arr.length)return [];if(typeof arr[0]==='string')return arr.filter(function(u){return typeof u==='string'&&u;});
+          var ints=arr.filter(function(x){return x&&typeof x==='object'&&Array.isArray(x.fotos)&&x.fotos.length;});var ul=ints[ints.length-1];return ul?ul.fotos.filter(function(u){return typeof u==='string'&&u;}):[];};
+        var nf=0;evid=cods.map(function(c){var e=EV[c];var faltas=rs.filter(function(r){return r.codigo===c;}).map(function(r){return r._i.motivo;}).filter(function(v,i,arr){return arr.indexOf(v)===i;}).join(' · ');
+          var head='<p style="margin:10px 0 6px"><b style="font-family:JetBrains Mono,monospace">'+E(c)+'</b> — '+E(faltas)+(e?'<br/><span style="color:#6b6e5c">'+E([tit(e.destinatario||''),tit(e.comuna||''),(A.estadoInfo&&A.estadoInfo(e.estado)||{}).label||e.estado].filter(Boolean).join(' · '))+'</span>':'')+'</p>';
+          var fs=e?fotosDe(e):[];if(!fs.length&&e&&e.foto_etiqueta)fs=[e.foto_etiqueta];
+          if(!fs.length)return head+'<p style="color:#999;margin:0 0 10px">Sin fotografías de entrega registradas.</p>';
+          var figs=fs.slice(0,4).map(function(u,k){nf++;return '<figure><img src="'+E(u)+'" crossorigin="anonymous"/><figcaption><b>Figura '+nf+'.</b> '+E(c)+' · foto '+(k+1)+' de '+fs.length+'</figcaption></figure>';});
+          var filas='';for(var k=0;k<figs.length;k+=2)filas+='<div class="figs'+(figs.length===1?' uno':'')+'">'+figs.slice(k,k+2).join('')+'</div>';
+          return head+filas;}).join('');}}catch(e){evid='';}
     var notas=its.filter(function(i){return i.nota;}).map(function(i){return '<li><b>'+E(dm(i.fecha))+' · '+E(i.motivo)+':</b> '+E(i.nota)+'</li>';}).join('');
     var cuerpo=D&&'<div class="resultado" style="border-color:'+(mul.length?'#b03030':'#C8A84B')+';background:'+(mul.length?'#fdf0ee':'#FBF6E6')+'"><div class="gr" style="color:'+(mul.length?'#b03030':'#A0842A')+'">'+rs.length+' REPORTE'+(rs.length===1?'':'S')+'</div><div class="dt">'
       +its.length+' incidencia'+(its.length===1?'':'s')+' en la semana · '+nCor+' correctiva'+(nCor===1?'':'s')+' · '+mul.length+' multa'+(mul.length===1?'':'s')+(monto?' por '+money(monto):'')+(nDes?' · '+nDes+' descartada'+(nDes===1?'':'s'):'')+(nPen?' · '+nPen+' pendiente'+(nPen===1?'':'s')+' de decisión':'')+'</div></div>'
       +'<div class="sec"><h2>1. Reportes por día</h2><table class="tabla"><tr><th style="width:150px">Día</th><th style="width:70px;text-align:center">Reportes</th><th>Faltas</th></tr>'+porDia+'</table></div>'
       +'<div class="sec"><h2>2. Resumen por falta</h2><table class="tabla"><tr><th>Falta</th><th style="width:70px;text-align:center">Veces</th><th style="width:220px">Decisión</th></tr>'+(porFalta||'<tr><td colspan="3">Sin reportes</td></tr>')+'</table></div>'
       +'<div class="sec"><h2>3. Detalle de cada reporte</h2><table class="tabla"><tr><th style="width:22px">#</th><th style="width:62px">Fecha</th><th style="width:96px">Código</th><th>Falta</th><th style="width:110px">Cliente · comuna</th><th style="width:90px">Reportó</th><th style="width:96px">Decisión</th></tr>'+(det||'<tr><td colspan="7">Sin reportes</td></tr>')+'</table></div>'
-      +(notas?'<div class="sec"><h2>4. Notas para el mensajero</h2><ul>'+notas+'</ul></div>':'');
+      +(notas?'<div class="sec"><h2>4. Notas para el mensajero</h2><ul>'+notas+'</ul></div>':'')
+      +(evid?'<div class="sec"><h2>'+(notas?'5':'4')+'. Evidencia de la entrega de cada paquete</h2>'+evid+'</div>':'');
     var nombre='Incidencias '+tit(m)+' '+dmy(sem)+' al '+dmy(hasta);
     var html=D.documentoHTML({tipo:'INFORME DE INCIDENCIAS',folio:dm(sem)+' AL '+dm(hasta),fechaDoc:dmy(hoyCL()),
       titulo:'Informe de incidencias — '+tit(m),subtitulo:'Período evaluado: '+periodo,

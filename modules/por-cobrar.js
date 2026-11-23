@@ -26,7 +26,10 @@ function valor(x){return +(x.cobro_monto||x.monto)||0;}
 // ── Actas (HTML imprimible) ──────────────────────────────────────────
 function htmlActa(tipo,a,comp){comp=comp||[];
   var F=a.detalle||[],ren=tipo==='ren';var o=location.origin;
-  var filas=F.map(function(x,i){return '<tr><td class="n">'+(i+1)+'</td><td class="m">'+esc(x.codigo)+'</td><td>'+dmy(x.fecha)+'</td><td>'+esc(ren?(x.cliente||'—'):tit(x.mensajero||'—'))+'</td><td>'+esc(tit(x.destinatario||'—'))+'</td><td>'+esc(formaTxt(x))+'</td><td>'+esc((DEST[destinoDe(x)]||['—'])[0])+'</td><td class="r">'+money(valor(x))+'</td></tr>';}).join('');
+  var EA=a._est||{env:{},liqs:{}};var dirCli=ren&&a.forma_recibo===DIRECTO;
+  var estF=function(x){var v=Object.assign({},x,EA.env[x.codigo]||{});return estadoDinero(v,EA.liqs);};
+  var cuenta={};F.forEach(function(x){var k=estF(x)[0].split(' · ')[0];cuenta[k]=(cuenta[k]||0)+valor(x);});
+  var filas=F.map(function(x,i){var ef=estF(x);return '<tr><td class="n">'+(i+1)+'</td><td class="m">'+esc(x.codigo)+'</td><td>'+dmy(x.fecha)+'</td><td>'+esc(ren?(x.cliente||'—'):tit(x.mensajero||'—'))+'</td><td>'+esc(tit(x.destinatario||'—'))+'</td><td>'+esc(formaTxt(x))+'</td><td>'+esc((DEST[destinoDe(x)]||['—'])[0])+'</td><td style="font-weight:700;color:'+ef[1]+'">'+esc(ef[0])+'</td><td class="r">'+money(valor(x))+'</td></tr>';}).join('');
   var resumen=ren?[['Mensajero',tit(a.mensajero)],['Paquetes',String(F.length)],['Total a rendir',money(a.total_esperado)],['Monto recibido',money(a.monto_recibido)],['Forma de recibo',a.forma_recibo||'—'],['Diferencia',money((+a.monto_recibido||0)-(+a.total_esperado||0))]]
     :[['Cliente',a.cliente],['Período',(a.desde?dmy(a.desde):'—')+' al '+(a.hasta?dmy(a.hasta):'—')],['Paquetes',String(F.length)],['Total cobrado a destinatarios',money(a.total_cobrado)],['Pagado directo al cliente',money(a.directo_cliente)],['A transferir por TransPgso',money(a.a_transferir)]];
   var dif=ren?(+a.monto_recibido||0)-(+a.total_esperado||0):0;
@@ -42,12 +45,13 @@ function htmlActa(tipo,a,comp){comp=comp||[];
   +'<div class="acc"><button onclick="window.print()">Descargar PDF / Imprimir</button><button class="s" onclick="window.close()">Cerrar</button></div><div class="hoja">'
   +'<div class="cab"><div><img src="'+o+'/logo.jpg" alt="TransPgso" style="border-radius:10px"><p>'+EMP.n+' · RUT '+EMP.rut+'<br>'+EMP.dir+' · '+EMP.mail+'</p></div><div><div class="tipo">'+(ren?'Acta de rendición':'Liquidación de cobros')+'</div><div style="text-align:right"><span class="num">N° '+esc(a.numero)+'</span></div><p style="text-align:right">Santiago, '+largo(a.fecha||hoyCL())+'</p></div></div>'
   +'<div class="res">'+resumen.map(function(r,i){return '<div><span>'+r[0]+'</span><b'+(ren&&i===5?' class="dif"':'')+'>'+esc(r[1])+'</b></div>';}).join('')+'</div>'
-  +'<div class="tot"><span style="font-weight:800">'+(ren?'Recibido por TransPgso':'Monto a transferir al cliente')+'</span><b>'+money(ren?a.monto_recibido:a.a_transferir)+'</b></div>'
+  +'<div class="tot"><span style="font-weight:800">'+(ren?(dirCli?'Pagado por el mensajero directo al cliente':'Recibido por TransPgso'):'Monto a transferir al cliente')+'</span><b>'+money(ren?a.monto_recibido:a.a_transferir)+'</b></div>'
   +(!ren&&a.estado==='pagada'?'<div class="tot" style="background:#dff3e7;border-color:#57c98a"><span style="font-weight:800">PAGADA el '+dmy(a.pagada_fecha)+(a.pagada_ref?' · Ref. '+esc(a.pagada_ref):'')+'</span></div>':'')
-  +'<h2>Detalle de paquetes por cobrar</h2><table><thead><tr><th>#</th><th>Código</th><th>Fecha</th><th>'+(ren?'Cliente':'Mensajero')+'</th><th>Destinatario</th><th>Forma</th><th>Destino del pago</th><th style="text-align:right">Monto</th></tr></thead><tbody>'+filas+'</tbody></table>'
+  +'<h2>Estado actual del dinero</h2><div class="res" style="margin-top:0">'+Object.keys(cuenta).map(function(k){return '<div><span>'+esc(k)+'</span><b>'+money(cuenta[k])+'</b></div>';}).join('')+'</div>'
+  +'<h2>Detalle de paquetes por cobrar</h2><table><thead><tr><th>#</th><th>Código</th><th>Fecha</th><th>'+(ren?'Cliente':'Mensajero')+'</th><th>Destinatario</th><th>Forma</th><th>Al cobrar</th><th>Estado actual</th><th style="text-align:right">Monto</th></tr></thead><tbody>'+filas+'</tbody></table>'
   +(a.nota?'<div class="decl"><b>Observaciones:</b> '+esc(a.nota)+'</div>':'')
-  +'<div class="decl">'+(ren?'El mensajero entrega a TransPgso SpA los montos cobrados a destinatarios en los paquetes detallados, que quedaron en su poder (efectivo o transferencias a su cuenta). Ambas partes firman en conformidad.':'TransPgso SpA informa al cliente los montos cobrados a sus destinatarios en el período. El monto a transferir excluye los pagos que los destinatarios hicieron directamente a la cuenta del cliente.')+'</div>'
-  +'<div class="firmas"><div><b>'+(ren?'Entrega: '+esc(tit(a.mensajero)):'Emite: TransPgso SpA')+'</b>'+(ren?'Mensajero':esc(tit(a.emitida_por||'')))+'</div><div><b>'+(ren?'Recibe: TransPgso SpA':'Recibe: '+esc(a.cliente))+'</b>'+(ren?esc(tit(a.recibido_por||'')):'Cliente')+'</div></div>'
+  +'<div class="decl">'+(ren?(dirCli?'El mensajero declara haber transferido directamente al cliente (vendedor) los montos cobrados a destinatarios en los paquetes detallados. TransPgso SpA deja constancia y no vuelve a transferir estos montos al cliente.':'El mensajero entrega a TransPgso SpA los montos cobrados a destinatarios en los paquetes detallados, que quedaron en su poder (efectivo o transferencias a su cuenta). Ambas partes firman en conformidad.'):'TransPgso SpA informa al cliente los montos cobrados a sus destinatarios en el período. El monto a transferir excluye los pagos que los destinatarios hicieron directamente a la cuenta del cliente.')+'</div>'
+  +'<div class="firmas"><div><b>'+(ren?'Entrega: '+esc(tit(a.mensajero)):'Emite: TransPgso SpA')+'</b>'+(ren?'Mensajero':esc(tit(a.emitida_por||'')))+'</div><div><b>'+(ren?(dirCli?'Recibe: '+esc(F.map(function(x){return x.cliente;}).filter(function(v,i,arr){return v&&arr.indexOf(v)===i;}).join(', ')||'Cliente'):'Recibe: TransPgso SpA'):'Recibe: '+esc(a.cliente))+'</b>'+(ren?(dirCli?'Cliente · registra '+esc(tit(a.recibido_por||'')):esc(tit(a.recibido_por||''))):'Cliente')+'</div></div>'
   +'</div>'
   +(comp.length?'<div class="hoja anexo"><div class="cab"><div><img src="'+o+'/logo.jpg" alt="TransPgso" style="border-radius:10px"></div><div><div class="tipo">Anexo · comprobantes de pago</div><div style="text-align:right"><span class="num">N° '+esc(a.numero)+'</span></div><p style="text-align:right">'+comp.length+' comprobante'+(comp.length>1?'s':'')+' adjunto'+(comp.length>1?'s':'')+'</p></div></div>'
     +comp.map(function(c,i){var img=/^image\//.test(c.tipo||'');var pie='<div class="cpie"><b>Comprobante '+(i+1)+'</b> · '+esc(c.nombre||'')+(c.subido_por?' · subido por '+esc(tit(c.subido_por)):'')+(c.subido_at?' · '+esc(new Date(c.subido_at).toLocaleString('es-CL',{timeZone:'America/Santiago',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})):'')+'</div>';
@@ -66,8 +70,21 @@ async function subirComprobantes(tipo,a,files){var last=null;
   return last;}
 async function urlsComprobantes(a){var L=a.comprobantes||[];if(!L.length)return [];var r=await db.storage.from(BUCKET).createSignedUrls(L.map(function(x){return x.path;}),60*60*24*7);
   return L.map(function(x,i){return Object.assign({},x,{url:(r.data&&r.data[i]&&r.data[i].signedUrl)||''});});}
+// 23-11-2026: estado actual del dinero de cada paquete (dónde está finalmente el pago).
+var DIRECTO='Transferencia directa al cliente';
+function estadoDinero(x,liqs){var L=x.liquidacion_id&&liqs?liqs[x.liquidacion_id]:null;
+  if(x.cobro_destino==='cliente')return ['Pagado directo al cliente','#1f6b40'];
+  if(L&&L.estado==='pagada')return ['Pagado al cliente · '+L.numero+(L.pagada_fecha?' · '+dmy(L.pagada_fecha):''),'#1f6b40'];
+  if(L)return ['En TransPgso · '+L.numero+' por pagar','#1f5fa8'];
+  if(x.rendicion_id||x.cobro_destino==='transpgso')return ['En TransPgso · por pagar al cliente','#1f5fa8'];
+  return ['En poder del mensajero','#8a5a00'];}
+async function estadosActuales(cods){var o={},liqs={};if(!cods||!cods.length)return {env:o,liqs:liqs};
+  for(var i=0;i<cods.length;i+=200){var r=await db.from('envios').select('codigo,cobro_destino,rendicion_id,liquidacion_id').in('codigo',cods.slice(i,i+200));(r.data||[]).forEach(function(e){o[e.codigo]=e;});}
+  var ids=[];Object.keys(o).forEach(function(k){var l=o[k].liquidacion_id;if(l&&ids.indexOf(l)<0)ids.push(l);});
+  if(ids.length){var q=await db.from('liquidaciones_cobro').select('id,numero,estado,pagada_fecha').in('id',ids);(q.data||[]).forEach(function(l){liqs[l.id]=l;});}
+  return {env:o,liqs:liqs};}
 async function verActa(tipo,a,w){w=w||window.open('','_blank');if(w){try{w.document.write('<p style="font-family:sans-serif;padding:30px;color:#555">Preparando acta…</p>');}catch(e){}}
-  var c=[];try{c=await urlsComprobantes(a);}catch(e){}var html=htmlActa(tipo,a,c);if(w&&!w.closed){w.document.open();w.document.write(html);w.document.close();}}
+  var c=[];try{c=await urlsComprobantes(a);}catch(e){}try{var ea=await estadosActuales(a.codigos||(a.detalle||[]).map(function(x){return x.codigo;}));a=Object.assign({},a,{_est:ea});}catch(e){}var html=htmlActa(tipo,a,c);if(w&&!w.closed){w.document.open();w.document.write(html);w.document.close();}}
 function excelActa(tipo,a){var ex=A.exportToExcel;if(!ex)return;var F=a.detalle||[];ex((tipo==='ren'?'Rendicion_':'Liquidacion_')+a.numero,[{name:'Detalle',headers:['Código','Fecha','Cliente','Mensajero','Destinatario','Forma','Destino del pago','Monto'],rows:F.map(function(x){return [x.codigo,dmy(x.fecha),x.cliente||'',x.mensajero||'',x.destinatario||'',formaTxt(x),(DEST[destinoDe(x)]||[''])[0],valor(x)];})}]);}
 
 // ── UI (v2, 18-11-2026): misma línea visual del sistema (caja oscura oliva/oro), flujo en 3 pasos
@@ -262,10 +279,11 @@ function PorCobrar(props){
         h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(290px,1fr))',gap:12}},
           h('label',{style:{display:'flex',flexDirection:'column',gap:6}},eti('Monto recibido'),h('input',{value:recibido===''?'':Number(recibido).toLocaleString('es-CL'),placeholder:money(esp),inputMode:'numeric',onChange:function(e){setRecibido(e.target.value.replace(/\D/g,''));},style:Object.assign({},inp,{fontSize:18,fontFamily:'Bebas Neue',letterSpacing:1})}),
             h('span',{style:{fontSize:11.5,color:K.dim,fontWeight:700}},'Déjalo vacío si entregó exacto')),
-          h('div',{style:{display:'flex',flexDirection:'column',gap:6}},eti('Cómo lo entrega'),h('div',{className:'pc-seg',style:{display:'flex',gap:6,flexWrap:'wrap'}},[['Efectivo','Efectivo'],['Transferencia a TransPgso','Transferencia'],['Descuento en su pago','Desc. en su pago']].map(function(o){var on=formaRec===o[0];
+          h('div',{style:{display:'flex',flexDirection:'column',gap:6}},eti('Cómo lo entrega'),h('div',{className:'pc-seg',style:{display:'flex',gap:6,flexWrap:'wrap'}},[['Efectivo','Efectivo'],['Transferencia a TransPgso','Transf. a TransPgso'],['Transferencia directa al cliente','Pagó directo al cliente'],['Descuento en su pago','Desc. en su pago']].map(function(o){var on=formaRec===o[0];
             return h('button',{key:o[0],type:'button',onClick:function(){setFormaRec(o[0]);},style:{padding:'10px 8px',borderRadius:10,fontWeight:800,fontSize:12.5,cursor:'pointer',fontFamily:'inherit',border:'1px solid '+(on?'#e8c766':'rgba(255,255,255,.14)'),background:on?'rgba(232,199,102,.18)':'rgba(0,0,0,.2)',color:on?'#f7dd8c':K.sub}},o[1]);}))),
           h('label',{style:{display:'flex',flexDirection:'column',gap:6,gridColumn:'1 / -1'}},eti('Observación (opcional)'),h('input',{value:nota,onChange:function(e){setNota(e.target.value);},placeholder:'Ej: faltó un billete, lo trae mañana',style:inp}))),
-        h('div',{style:{marginTop:12}},eti('Comprobante de transferencia (opcional)'),h(SelectorArchivos,{archivos:archivos,setArchivos:setArchivos,texto:'Adjunta la foto o PDF si el mensajero te transfirió'})),
+        h('div',{style:{marginTop:12}},eti(formaRec==='Transferencia directa al cliente'?'Comprobante del pago al cliente (opcional)':formaRec==='Transferencia a TransPgso'?'Comprobante de la transferencia del mensajero (opcional)':'Respaldo (opcional)'),h(SelectorArchivos,{archivos:archivos,setArchivos:setArchivos,texto:formaRec==='Transferencia directa al cliente'?'Adjunta la transferencia que el mensajero hizo directo al vendedor':formaRec==='Transferencia a TransPgso'?'Adjunta la transferencia que el mensajero hizo a TransPgso':'Foto del efectivo recibido u otro respaldo'}),
+          h('div',{style:{fontSize:11.5,color:K.dim,marginTop:6,fontWeight:700}},formaRec==='Transferencia directa al cliente'?'Estos paquetes quedan como pagados directo al cliente y no se le vuelven a transferir en la liquidación.':'El comprobante del pago de TransPgso al cliente se adjunta después, en el paso Liquidar.')),
         // Paso c: emitir
         h('div',{style:{marginTop:16,padding:'14px 16px',borderRadius:14,background:'rgba(0,0,0,.25)',border:'1px solid '+K.bdOro,display:'flex',alignItems:'center',gap:16,flexWrap:'wrap'}},
           h('div',null,eti('Recibes'),h('div',{style:{fontFamily:'Bebas Neue',fontSize:36,lineHeight:1,color:'#f7dd8c'}},money(rec))),
