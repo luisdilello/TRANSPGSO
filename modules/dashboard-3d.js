@@ -449,7 +449,7 @@ function montarFlujo(T,cont,cnt,ui){
     var grp=new T.Group();var hoja=new T.Mesh(new T.BoxGeometry(7.2,3.4,0.07),mt);hoja.castShadow=true;grp.add(hoja);
     // segundo billete detrás, levemente girado (fajo)
     var h2=new T.Mesh(new T.BoxGeometry(7.2,3.4,0.07),mt);h2.position.set(0.35,-0.25,-0.18);h2.rotation.z=0.08;grp.add(h2);
-    var pos=[33,0,-6];grp.scale.setScalar(1.7);grp.position.set(pos[0],7,pos[2]);E.sc.add(grp);
+    var pos=[31,0,-21];grp.scale.setScalar(1.7);grp.position.set(pos[0],7,pos[2]);E.sc.add(grp);
     var anillo=new T.Mesh(new T.RingGeometry(4.2,4.9,64),new T.MeshBasicMaterial({color:'#ff7a5c',transparent:true,opacity:0.55,side:T.DoubleSide}));anillo.rotation.x=-Math.PI/2;anillo.position.set(pos[0],0.06,pos[2]);E.sc.add(anillo);
     var luz=new T.PointLight('#ffcf7a',1.2,18);luz.position.set(pos[0],7,pos[2]+3);E.sc.add(luz);
     var el=document.createElement('div');el.style.cssText='position:absolute;transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer;text-align:center;white-space:nowrap';el.title='Ir a Control Por cobrar';el.onclick=function(){if(window.__setTab)window.__setTab('por-cobrar');};ui.labels.appendChild(el);
