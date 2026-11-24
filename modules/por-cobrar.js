@@ -20,6 +20,9 @@ function lunes(s){var d=new Date(s+'T12:00:00');d.setDate(d.getDate()-((d.getDay
 function diasDesde(ts){if(!ts)return null;return Math.floor((Date.now()-new Date(ts).getTime())/86400000);}
 var DEST={mensajero:['En poder del mensajero','#8a5a00','#fbefd2'],transpgso:['Transferido a TransPgso','#1f5fa8','#e3eefb'],cliente:['Transferido al cliente','#1f6b40','#dff3e7']};
 function destinoDe(x){return x.cobro_destino||'mensajero';}
+// 24-11-2026: solo Luis (superadmin) puede liquidar envíos cuyo dinero aún tiene el mensajero; solo él elimina actas o quita comprobantes.
+function esLuis(){return !!(A.perfil&&A.perfil.esSuperAdmin);}
+function bloqueadoLiq(x){return !esLuis()&&!x.rendicion_id&&destinoDe(x)==='mensajero';}
 function formaTxt(x){return x.cobro_forma==='transferencia'?'Transferencia':x.cobro_forma==='efectivo'?'Efectivo':'Sin informar';}
 function valor(x){return +(x.cobro_monto||x.monto)||0;}
 
@@ -166,7 +169,7 @@ function ModalComprobantes(p){var m=p.m,a=m.a,liq=m.tipo==='liq';var toast=p.toa
             h('a',{href:c.url,target:'_blank',rel:'noopener',style:{display:'grid',placeItems:'center',height:110,background:'rgba(0,0,0,.25)',color:K.oro,fontWeight:900,textDecoration:'none',fontFamily:'Bebas Neue',fontSize:22,letterSpacing:1}},img?h('img',{src:c.url,alt:'',style:{width:'100%',height:110,objectFit:'cover'}}):'PDF'),
             h('div',{style:{padding:'7px 9px'}},h('div',{style:{fontSize:11.5,fontWeight:800,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},c.nombre||'Comprobante'),
               h('div',{style:{fontSize:10.5,color:K.dim,fontWeight:700}},c.subido_at?new Date(c.subido_at).toLocaleDateString('es-CL',{timeZone:'America/Santiago'}):''),
-              h('button',{type:'button',onClick:function(){quitar(c);},disabled:busy,style:{marginTop:5,border:'none',background:'none',color:K.rojo,fontWeight:800,fontSize:11.5,cursor:'pointer',padding:0,fontFamily:'inherit'}},'Quitar')));}))),
+              esLuis()&&h('button',{type:'button',onClick:function(){quitar(c);},disabled:busy,style:{marginTop:5,border:'none',background:'none',color:K.rojo,fontWeight:800,fontSize:11.5,cursor:'pointer',padding:0,fontFamily:'inherit'}},'Quitar')));}))),
       h('div',{style:{display:'flex',justifyContent:'flex-end',gap:8,marginTop:18,flexWrap:'wrap'}},
         boton('Ver acta',function(){verActa(m.tipo,a);}),
         pagando?boton(busy?'Guardando…':'Marcar como pagada',marcarPagada,'prim',busy):boton(busy?'Subiendo…':'Subir al acta',subir,'prim',busy||!arch.length))));}
@@ -207,7 +210,7 @@ function ModalEvidencia(p){var toast=p.toast;var _t=useState(p.tipo||'cobro'),ti
             h('div',{style:{padding:'7px 9px'}},h('div',{style:{fontSize:11,fontWeight:900,color:c.tipo==='pago'?'#7fe0a8':K.oro}},TIPO_EV[c.tipo]?TIPO_EV[c.tipo][0]:c.tipo),
               h('div',{style:{fontSize:11.5,fontWeight:800,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},c.nombre||'Archivo'),
               h('div',{style:{fontSize:10.5,color:K.dim,fontWeight:700}},new Date(c.created_at).toLocaleDateString('es-CL',{timeZone:'America/Santiago'})+(c.subido_por?' · '+tit(c.subido_por):'')),
-              h('button',{type:'button',onClick:function(){quitar(c);},disabled:busy,style:{marginTop:5,border:'none',background:'none',color:K.rojo,fontWeight:800,fontSize:11.5,cursor:'pointer',padding:0,fontFamily:'inherit'}},'Quitar')));}))),
+              esLuis()&&h('button',{type:'button',onClick:function(){quitar(c);},disabled:busy,style:{marginTop:5,border:'none',background:'none',color:K.rojo,fontWeight:800,fontSize:11.5,cursor:'pointer',padding:0,fontFamily:'inherit'}},'Quitar')));}))),
       h('div',{style:{display:'flex',justifyContent:'flex-end',gap:8,marginTop:18}},boton('Cerrar',p.onClose),boton(busy?'Subiendo…':'Guardar evidencia',subir,'prim',busy||!arch.length))));}
 function PorCobrar(props){
   var toast=props.toast||function(m){alert(m);};var esAdmin=!!(A.perfil&&(A.perfil.esAdmin||A.perfil.esSuperAdmin));
@@ -236,7 +239,7 @@ function PorCobrar(props){
   function elegirMen(k){setSelMen(k);var o={};porRendir.forEach(function(x){if(x.mensajero===k)o[x.codigo]=true;});setSel(o);setRecibido('');setNota('');setFormaRec('Efectivo');setArchivos([]);}
   function marcarPeriodo(cli,p){var hoy=hoyCL(),rg;var pp=p||per;
     if(pp==='semana_ant'){var l=addD(lunes(hoy),-7);rg=[l,addD(l,6)];}else if(pp==='semana'){var l2=lunes(hoy);rg=[l2,addD(l2,6)];}else if(pp==='mes_ant'){var d=new Date(hoy.slice(0,4),+hoy.slice(5,7)-2,1);rg=[ymd(d),ymd(new Date(d.getFullYear(),d.getMonth()+1,0))];}else{rg=[ymd(new Date(hoy.slice(0,4),+hoy.slice(5,7)-1,1)),hoy];}
-    var o={};porLiquidar.forEach(function(x){if(x.cliente===cli&&x.fecha>=rg[0]&&x.fecha<=rg[1])o[x.codigo]=true;});setSel(o);}
+    var o={};porLiquidar.forEach(function(x){if(x.cliente===cli&&x.fecha>=rg[0]&&x.fecha<=rg[1]&&!bloqueadoLiq(x))o[x.codigo]=true;});setSel(o);}
   function elegirCli(k){setSelCli(k);setNota('');marcarPeriodo(k);}
   function irTab(k){setTab(k);setSel({});
     if(k==='rendir'&&!selMen&&porMen[0])elegirMen(porMen[0].men);else if(k==='rendir'&&selMen)elegirMen(selMen);
@@ -371,21 +374,21 @@ function PorCobrar(props){
           return h('div',null,
             h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,margin:'16px 0 4px',flexWrap:'wrap'}},
               h('div',{style:{display:'flex',alignItems:'center',gap:8}},h('span',{style:{fontFamily:'Bebas Neue',fontSize:15,color:'#1a1d13',background:'#e8c766',borderRadius:6,padding:'1px 7px'}},'B'),h('b',{style:{fontSize:13.5}},'Marca los envíos que entran en esta liquidación'),h('span',{style:{fontSize:12,color:K.sub,fontWeight:700}},selL.length+' de '+itemsC.length+' marcados')),
-              h('button',{type:'button',onClick:function(){var o={};itemsC.forEach(function(x){o[x.codigo]=!todosC;});setSel(o);},style:{background:'none',border:'none',color:K.oro,fontWeight:800,fontSize:12.5,cursor:'pointer',fontFamily:'inherit'}},todosC?'Desmarcar todos':'Marcar todos')),
+              h('button',{type:'button',onClick:function(){var o={};itemsC.forEach(function(x){o[x.codigo]=!todosC&&!bloqueadoLiq(x);});setSel(o);},style:{background:'none',border:'none',color:K.oro,fontWeight:800,fontSize:12.5,cursor:'pointer',fontFamily:'inherit'}},todosC?'Desmarcar todos':'Marcar todos')),
             h('div',{style:{fontSize:12,color:K.sub,fontWeight:600,marginBottom:10}},'El período de arriba marca solo los envíos de esas fechas. Puedes marcar o desmarcar cualquiera tocándolo.'),
-            GR.map(function(g){var its=itemsC.filter(function(x){return dondeDe(x)===g[0];});if(!its.length)return null;var marc=its.filter(function(x){return sel[x.codigo];});var todosG=marc.length===its.length;
+            GR.map(function(g){var its=itemsC.filter(function(x){return dondeDe(x)===g[0];});if(!its.length)return null;var marc=its.filter(function(x){return sel[x.codigo];});var todosG=marc.length===its.length;var lock=g[0]==='men'&&!esLuis();
               return h('div',{key:g[0],style:{marginBottom:12,borderRadius:14,border:'1px solid '+g[3]+'44',background:'rgba(0,0,0,.14)',overflow:'hidden'}},
                 h('div',{style:{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',padding:'10px 12px',borderBottom:'1px solid '+g[3]+'33',background:g[3]+'14'}},
                   h('span',{style:{width:10,height:10,borderRadius:'50%',background:g[3],flexShrink:0}}),
-                  h('div',{style:{flex:1,minWidth:200}},h('div',{style:{fontWeight:900,fontSize:13.5,color:g[3]}},g[1]+' · '+plural(its.length,'envío')),h('div',{style:{fontSize:11.5,color:K.sub,fontWeight:700}},g[2])),
+                  h('div',{style:{flex:1,minWidth:200}},h('div',{style:{fontWeight:900,fontSize:13.5,color:g[3]}},g[1]+' · '+plural(its.length,'envío')),h('div',{style:{fontSize:11.5,color:K.sub,fontWeight:700}},lock?'Bloqueado: solo Luis puede liquidar dinero que el mensajero aún no rinde. Primero hay que recibir la rendición en el paso 1.':g[2])),
                   h('div',{style:{textAlign:'right'}},h('div',{style:{fontFamily:'Bebas Neue',fontSize:22,lineHeight:1}},money(tot(its))),h('div',{style:{fontSize:11,color:K.sub,fontWeight:700}},marc.length+' marcados')),
-                  h('button',{type:'button',onClick:function(){var o=Object.assign({},sel);its.forEach(function(x){o[x.codigo]=!todosG;});setSel(o);},style:{background:'none',border:'1px solid '+g[3]+'66',borderRadius:8,padding:'5px 9px',color:g[3],fontWeight:800,fontSize:11.5,cursor:'pointer',fontFamily:'inherit'}},todosG?'Quitar todos':'Marcar todos')),
+                  lock?h('span',{style:{fontSize:11.5,fontWeight:900,color:g[3],border:'1px solid '+g[3]+'66',borderRadius:8,padding:'5px 9px'}},'Bloqueado'):h('button',{type:'button',onClick:function(){var o=Object.assign({},sel);its.forEach(function(x){o[x.codigo]=!todosG;});setSel(o);},style:{background:'none',border:'1px solid '+g[3]+'66',borderRadius:8,padding:'5px 9px',color:g[3],fontWeight:800,fontSize:11.5,cursor:'pointer',fontFamily:'inherit'}},todosG?'Quitar todos':'Marcar todos')),
                 h('div',{style:{display:'flex',flexDirection:'column',gap:3,padding:6}},its.map(function(x){var on=!!sel[x.codigo];var fuera=x.fecha<rgP[0]||x.fecha>rgP[1];
-                  return h('div',{key:x.codigo,className:'pc-it pc-fila',onClick:function(){toggle(x.codigo);},style:{padding:'9px 11px',borderRadius:10,cursor:'pointer',background:on?K.filaOn:K.fila,border:'1px solid '+(on?'rgba(232,199,102,.4)':'transparent')}},
-                    tick(on),
+                  return h('div',{key:x.codigo,className:'pc-it pc-fila',onClick:function(){if(lock)return;toggle(x.codigo);},style:{padding:'9px 11px',borderRadius:10,cursor:lock?'not-allowed':'pointer',background:on?K.filaOn:K.fila,border:'1px solid '+(on?'rgba(232,199,102,.4)':'transparent')}},
+                    lock?h('div',{title:'Solo Luis',style:{width:20,height:20,borderRadius:6,display:'grid',placeItems:'center',border:'1.5px dashed rgba(255,255,255,.3)',color:K.dim,fontSize:11,fontWeight:900}},'—'):tick(on),
                     h('div',{style:{minWidth:0}},h('div',{style:{fontFamily:'JetBrains Mono, monospace',fontWeight:700,fontSize:12.5}},x.codigo),h('div',{style:{fontSize:11.5,color:K.sub,fontWeight:700}},dmy(x.fecha)+' · '+tit(x.mensajero))),
                     h('div',{className:'pc-x',style:{fontSize:12.5,fontWeight:700,minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},tit(x.destinatario)),
-                    h('div',{className:'pc-x'},on?pill('Incluido',K.oro,'rgba(232,199,102,.12)'):fuera?pill('Fuera del período',K.dim):pill('No incluido',K.dim)),
+                    h('div',{className:'pc-x'},lock?pill('Esperando rendición',K.ambar):on?pill('Incluido',K.oro,'rgba(232,199,102,.12)'):fuera?pill('Fuera del período',K.dim):pill('No incluido',K.dim)),
                     h('div',{style:{fontFamily:'Bebas Neue',fontSize:21,textAlign:'right',color:g[0]==='cliente'?K.verde:K.txt}},money(valor(x))),botonEvi(x.codigo,(evi[x.codigo]||[]).length,function(c){setModalEv({codigo:c,info:tit(x.destinatario||'')+' · '+money(valor(x))});}),botonVer(x.codigo));})));}),
             itemsC.length===0&&h('div',{style:{color:K.sub,fontWeight:700,padding:10}},'Sin paquetes.'));})(),
         h('label',{style:{display:'flex',flexDirection:'column',gap:6,marginTop:14}},eti('Observación (opcional)'),h('input',{value:nota,onChange:function(e){setNota(e.target.value);},placeholder:'Ej: transferencia a cuenta Banco Estado',style:inp})),
@@ -411,7 +414,7 @@ function PorCobrar(props){
       liq&&(a.estado==='pagada'?pill('Pagada '+dmy(a.pagada_fecha),K.verde):pill('Por pagar',K.ambar)),
       boton('Ver / PDF',function(){verActa(liq?'liq':'ren',a);},'prim'),boton('Comprobantes'+((a.comprobantes||[]).length?' ('+a.comprobantes.length+')':''),function(){setModal({tipo:liq?'liq':'ren',a:a});}),boton('Excel',function(){excelActa(liq?'liq':'ren',a);}),
       liq&&a.estado!=='pagada'&&boton('Marcar pagada',function(){pagar(a);}),
-      esAdmin&&!(liq&&a.estado==='pagada')&&boton('Eliminar',function(){eliminar(liq?'liquidacion':'rendicion',a);},'peligro'));};
+      esLuis()&&!(liq&&a.estado==='pagada')&&boton('Eliminar',function(){eliminar(liq?'liquidacion':'rendicion',a);},'peligro'));};
     cuerpo=h('div',{style:{display:'flex',flexDirection:'column',gap:14}},
       caja(null,h('div',{style:{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:14}},
           h('div',{style:{fontFamily:'Bebas Neue',fontSize:24,letterSpacing:1.3,flex:1}},'Informe de ',h('span',{style:{color:K.oro}},MESES[+mes.slice(5,7)-1]+' '+mes.slice(0,4))),
