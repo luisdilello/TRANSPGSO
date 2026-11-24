@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261124080636;
+window.__MODULES_VERSION=20261124092333;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -5365,11 +5365,7 @@ function EnvioDetalleCard(_ref_edc){
       // documento TransPgso (modules/doc-pdf.js), para responder consultas de clientes.
       React.createElement('div',{style:{display:'flex',justifyContent:'flex-end',alignItems:'center',gap:8,marginBottom:10}},
         pdfMsg&&React.createElement('span',{style:{fontSize:11,color:'var(--danger)'}},pdfMsg),
-        React.createElement('button',{className:'btn-secondary',type:'button',style:{padding:'6px 14px',fontSize:12},onClick:function(){
-          setPdfMsg('');var w=window.open('','_blank');
-          loadScriptOnce('doc-pdf','modules/doc-pdf.js').then(function(){return window.__docPDF.comprobanteEnvio(envio.codigo,w);})
-            .catch(function(err){try{w&&w.close();}catch(e2){}setPdfMsg('No se pudo generar el PDF: '+(err&&err.message||''));});
-        }},'Exportar PDF')),
+        React.createElement(BotonPDFIdiomas,{codigo:envio.codigo,style:{padding:'6px 14px',fontSize:12},onError:function(err){setPdfMsg('No se pudo generar el PDF: '+(err&&err.message||''));}})),
       /*#__PURE__*/React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12,fontSize:13}},
         [['Código',envio.codigo],['Cliente',envio.cliente],['Destinatario',envio.destinatario],
          ['Teléfono',envio.telefono],['Dirección',envio.direccion],['Comuna',envio.comuna],['Mensajero',envio.mensajero],
@@ -5439,7 +5435,19 @@ const ESTADOS_ENVIO=[
   // efectividad (Dashboard, Top Mensajeros, Calendario, KPI de Analítica) porque no es una
   // falla de entrega — sigue facturándose normal al cliente.
   {val:'en_bodega_fecha',label:'En Bodega por Fecha de Entrega',color:'#2f6fbd',bg:'rgba(47,111,189,0.1)',icon:'📦📅',soloAdmin:true}
-];function estadoInfo(val){return ESTADOS_ENVIO.find(e=>e.val===val)||ESTADOS_ENVIO[0];}function estadoBadge(val){const info=estadoInfo(val);return/*#__PURE__*/React.createElement("span",{style:{padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,letterSpacing:0.5,background:info.bg,color:info.color,whiteSpace:'nowrap'}},info.label);}function abrirVentanaEtiquetas(lista,logoSrc){const win=window.open('','_blank','width=500,height=700');const etiquetasHTML=lista.map(e=>{const qrData=e.codigo;return`
+];
+// 24-11-2026: Exportar PDF del envío en español, inglés o chino (clientes chinos). Usado en Consulta Express y Gestión de Envíos.
+function BotonPDFIdiomas(props){var _a=React.useState(false),ab=_a[0],setAb=_a[1];var ref=React.useRef(null);
+  React.useEffect(function(){if(!ab)return;function f(ev){if(ref.current&&!ref.current.contains(ev.target))setAb(false);}document.addEventListener('mousedown',f);document.addEventListener('touchstart',f);return function(){document.removeEventListener('mousedown',f);document.removeEventListener('touchstart',f);};},[ab]);
+  function ir(lg){setAb(false);var w=window.open('','_blank');loadScriptOnce('doc-pdf','modules/doc-pdf.js').then(function(){return window.__docPDF.comprobanteEnvio(props.codigo,w,lg);}).catch(function(err){try{w&&w.close();}catch(e2){}if(props.onError)props.onError(err);else alert('No se pudo generar el PDF: '+(err&&err.message||''));});}
+  var op=function(lg,t,s){return React.createElement('button',{key:lg,type:'button',onClick:function(){ir(lg);},style:{display:'flex',alignItems:'baseline',gap:8,width:'100%',textAlign:'left',padding:'9px 12px',border:'none',borderBottom:'1px solid rgba(0,0,0,.06)',background:'#fff',cursor:'pointer',fontSize:13,fontWeight:700,color:'#2b2e20'}},t,React.createElement('span',{style:{fontSize:11,color:'#8a8873',fontWeight:600}},s));};
+  return React.createElement('div',{ref:ref,style:{position:'relative',display:'inline-block'}},
+    React.createElement('button',{className:props.className||'btn-secondary',type:'button',style:props.style,onClick:function(){setAb(!ab);}},'Exportar PDF ▾'),
+    ab&&React.createElement('div',{style:{position:'absolute',right:0,top:'calc(100% + 6px)',zIndex:50,minWidth:190,borderRadius:10,overflow:'hidden',background:'#fff',border:'1px solid rgba(200,168,75,.5)',boxShadow:'0 12px 28px rgba(0,0,0,.18)'}},
+      React.createElement('div',{style:{padding:'7px 12px',fontSize:10.5,fontWeight:800,letterSpacing:1.2,color:'#A0842A',background:'#fbf6e6'}},'IDIOMA DEL DOCUMENTO'),
+      op('es','Español',''),op('en','English','Inglés'),op('zh','中文','Chino')));}
+window.BotonPDFIdiomas=BotonPDFIdiomas;
+function estadoInfo(val){return ESTADOS_ENVIO.find(e=>e.val===val)||ESTADOS_ENVIO[0];}function estadoBadge(val){const info=estadoInfo(val);return/*#__PURE__*/React.createElement("span",{style:{padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,letterSpacing:0.5,background:info.bg,color:info.color,whiteSpace:'nowrap'}},info.label);}function abrirVentanaEtiquetas(lista,logoSrc){const win=window.open('','_blank','width=500,height=700');const etiquetasHTML=lista.map(e=>{const qrData=e.codigo;return`
       <div class="etiqueta${(e.enUnCambio||(+e.monto>0))?' pc':''}">
         <div class="hdr">
           <div class="logo-area">
