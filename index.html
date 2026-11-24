@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261124161132;
+window.__MODULES_VERSION=20261124162259;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -1775,7 +1775,15 @@ function busVivoConectar(){
   try{
     let ch=db.channel('pgso-bus-'+Math.random().toString(36).slice(2,8));
     ['envios','retiros','colectas','siniestros','reportes_operador','tareas_staff','errores_app','prestamos_mensajeros','movimientos_pago_mensajero'].forEach(function(t){ch=ch.on('postgres_changes',{event:'*',schema:'public',table:t},function(){busVivoAvisar(t);});});
-    busVivo.canal=ch.subscribe(function(st){busVivo.estado=st;if(st==='CHANNEL_ERROR'||st==='TIMED_OUT'||st==='CLOSED'){try{db.removeChannel(busVivo.canal);}catch(e){}busVivo.canal=null;setTimeout(function(){if(Object.keys(busVivo.subs).some(function(k){return busVivo.subs[k].size;}))busVivoConectar();},5000);}});
+    /* 24-11-2026: removeChannel dispara otra vez el estado CLOSED dentro de este mismo callback y se
+       llamaba a sí mismo sin fin ("Maximum call stack size exceeded", cientos por semana). Ahora se ignoran
+       los avisos de un canal que ya no es el actual y la limpieza ocurre una sola vez, fuera del callback. */
+    var miCanal=null;
+    miCanal=ch.subscribe(function(st){if(busVivo.canal!==miCanal)return;busVivo.estado=st;
+      if(st==='CHANNEL_ERROR'||st==='TIMED_OUT'||st==='CLOSED'){var viejo=miCanal;busVivo.canal=null;
+        setTimeout(function(){try{db.removeChannel(viejo);}catch(e){}},0);
+        setTimeout(function(){if(Object.keys(busVivo.subs).some(function(k){return busVivo.subs[k].size;}))busVivoConectar();},5000);}});
+    busVivo.canal=miCanal;
   }catch(e){busVivo.canal=null;}
 }
 window.__busVivo=busVivo;
@@ -9468,7 +9476,9 @@ function AsignacionRider(_ref_ar){
         // cuando el match vino del fallback ilike, ambos pueden diferir y un .eq('codigo',cod)
         // no actualizaba ninguna fila (0 filas afectadas, sin error) mostrando éxito falso.
         const eraDeOtro=data.mensajero&&normNombre(data.mensajero)!==normNombre(usuario.nombre)&&(data.estado==='en_ruta'||data.estado==='asignado');
-        await db.from('envios').update({estado:'en_ruta',mensajero:usuario.nombre}).eq('codigo',data.codigo);
+        // 24-11-2026: supabase no lanza excepción ante un error: antes un rechazo del servidor se contaba como asignado.
+        const _ru=await db.from('envios').update({estado:'en_ruta',mensajero:usuario.nombre}).eq('codigo',data.codigo);
+        if(_ru&&_ru.error)throw _ru.error;
         sbRegistrarHistorial(data.codigo,'en_ruta',eraDeOtro?'Reasignado por escaneo (antes: '+data.mensajero+')':'Auto-asignado por escaneo',usuario.nombre,'app_mensajero');
         const env={...data,estado:'en_ruta',mensajero:usuario.nombre};
         if(onEnviosUpdate) onEnviosUpdate(env);
@@ -9493,7 +9503,7 @@ function AsignacionRider(_ref_ar){
     setGuardando(false);
     if(ok>0||offline>0) playSound('success');
     setFinalizado(true);
-    const msg=(ok>0||offline>0)?'✓ '+ok+' en ruta'+(offline>0?' · '+offline+' guardados en el celular, se confirman solos':'')+(noExiste>0?' · '+noExiste+' no encontrados':'')+(err>0?' · '+err+' rechazados':''):'⚠ No se pudo confirmar — verifica conexión';
+    const msg=(ok>0||offline>0)?'✓ '+ok+' en ruta'+(offline>0?' · '+offline+' guardados en el celular, se confirman solos':'')+(noExiste>0?' · '+noExiste+' no encontrados':'')+(err>0?' · '+err+' rechazados':''):(err>0||noExiste>0)?'⚠ Ninguno quedó en ruta'+(err>0?' · '+err+' rechazados (toca cada uno para ver el motivo)':'')+(noExiste>0?' · '+noExiste+' no encontrados':''):'⚠ No se pudo confirmar — verifica conexión';
     toast(msg);
   }
 
@@ -12562,7 +12572,7 @@ function DetalleIncidRider(props){var x=props.x,claro=props.claro,EST=props.EST;
   var hora=function(ts){try{return new Date(ts).toLocaleTimeString('es-CL',{timeZone:'America/Santiago',hour:'2-digit',minute:'2-digit',hour12:false});}catch(er){return '';}};
   var chip=function(ee,t){return React.createElement('span',{style:{padding:'3px 10px',borderRadius:999,fontSize:11,fontWeight:900,background:ee[1],color:ee[2],whiteSpace:'nowrap'}},t||ee[0]);};
   var fila=function(l,v){return React.createElement('div',{style:{display:'flex',gap:10,padding:'7px 0',borderBottom:'1px solid '+bd,fontSize:13}},React.createElement('span',{style:{color:sub,minWidth:96,fontWeight:700}},l),React.createElement('span',{style:{flex:1,fontWeight:700}},v));};
-  var miniFotos=function(arr){return arr&&arr.length?React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginTop:8}},arr.slice(0,6).map(function(u,i){return React.createElement('img',{key:i,src:u,loading:'lazy',onClick:function(){setFoto(u);},style:{width:64,height:64,objectFit:'cover',borderRadius:10,border:'1px solid '+bd,cursor:'zoom-in'}});})):null;};
+  var miniFotos=function(arr){if(!Array.isArray(arr))arr=[];return arr.length?React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginTop:8}},arr.slice(0,6).map(function(u,i){return React.createElement('img',{key:i,src:u,loading:'lazy',onClick:function(){setFoto(u);},style:{width:64,height:64,objectFit:'cover',borderRadius:10,border:'1px solid '+bd,cursor:'zoom-in'}});})):null;};
   return React.createElement('div',{style:{position:'fixed',inset:0,zIndex:9500,background:bg,color:txt,display:'flex',flexDirection:'column',fontFamily:'DM Sans,sans-serif'}},
     React.createElement('div',{style:{padding:'10px 12px',paddingTop:'max(10px,env(safe-area-inset-top))',display:'flex',alignItems:'center',gap:10,background:'linear-gradient(180deg,#3a3d2e,#2b2e20)',borderBottom:'2px solid #c8a84b'}},
       React.createElement(botonHeaderRider,{onClick:props.onClose,title:'Volver',icono:ICONOS_RIDER.volver}),

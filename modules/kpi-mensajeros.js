@@ -159,7 +159,7 @@ function Vivo(props){
   var avisados=React.useRef({});
   function cargar(){db.rpc('ruta_en_vivo',{p_dia:dia}).then(function(r){if(r.error){toast('No se pudo cargar la ruta: '+r.error.message);return;}setRes(r.data);setUltima(new Date());},function(){});}
   useEffect(function(){cargar();if(pausa||!esHoy)return;var iv=A.intervaloVisible;if(iv)return iv(cargar,30000,['envios'],8000);var id=setInterval(function(){if(!document.hidden)cargar();},30000);return function(){clearInterval(id);};},[pausa,dia]);
-  useEffect(function(){setRk({});db.rpc('ranking_semana',{p_lunes:lunes(dia)}).then(function(r){if(r&&r.data){var o={};r.data.forEach(function(x){o[normN(x.n)]=x;});setRk(o);}},function(){});},[dia]);
+  useEffect(function(){setRk({});db.rpc('ranking_semana_staff',{p_lunes:lunes(dia)}).then(function(r){if(r&&r.data){var o={};r.data.forEach(function(x){o[normN(x.n)]=x;});setRk(o);}},function(){});},[dia]);
   useEffect(function(){
     function cargarUb(){db.from('ubicaciones_mensajeros').select('mensajero,updated_at,activo').then(function(r){if(r&&r.data){var o={};r.data.forEach(function(u){o[normN(u.mensajero)]=u;});setUbic(o);}},function(){});}
     cargarUb();var ch=null;try{ch=db.channel('kpm-ubic-'+Math.random().toString(36).slice(2,7)).on('postgres_changes',{event:'*',schema:'public',table:'ubicaciones_mensajeros'},function(pl){var u=pl&&pl.new;if(!u||!u.mensajero)return;setUbic(function(prev){var o=Object.assign({},prev);o[normN(u.mensajero)]=u;return o;});}).subscribe();}catch(e){}
