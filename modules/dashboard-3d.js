@@ -441,7 +441,7 @@ function montarFlujo(T,cont,cnt,ui){
       x.fillStyle=activo?'rgba(232,199,102,.18)':'rgba(255,255,255,.08)';x.beginPath();x.arc(250,240,150,0,Math.PI*2);x.fill();
       x.strokeStyle=activo?'#e8c766':'#bbb';x.lineWidth=8;x.beginPath();x.arc(250,240,150,0,Math.PI*2);x.stroke();
       x.fillStyle=activo?'#f7dd8c':'#d8d8d0';x.font='bold 230px "Bebas Neue", Impact, sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText('$',250,250);
-      x.fillStyle=activo?'#f1ecda':'#cfcfc6';x.textAlign='left';x.font='bold 92px "Bebas Neue", Impact, sans-serif';x.fillText(CLI?'POR PAGARTE':'POR RENDIR',440,200);
+      x.fillStyle=activo?'#f1ecda':'#cfcfc6';x.textAlign='left';x.font='bold '+(CLI?74:92)+'px "Bebas Neue", Impact, sans-serif';x.fillText(CLI?'TE LO DEBEMOS':'POR RENDIR',440,200);
       x.font='bold 44px "DM Sans", Arial, sans-serif';x.fillStyle=activo?'#e8c766':'#aaa';x.fillText(CLI?'TUS COBROS · TRANSPGSO':'TRANSPGSO · COBROS',444,290);
       x.font='bold 40px "Bebas Neue", Impact, sans-serif';x.fillStyle=activo?'rgba(247,221,140,.8)':'#999';x.fillText('$',80,100);x.fillText('$',920,420);}
     dibujar(true);var tx=new T.CanvasTexture(cv);if(T.sRGBEncoding)tx.encoding=T.sRGBEncoding;tx.anisotropy=8;
@@ -457,8 +457,8 @@ function montarFlujo(T,cont,cnt,ui){
     function pintarB(){var pr=window.__ccPorRendir||{total:0,n:0,mensajeros:[]};var on=pr.n>0;if(on!==activo){activo=on;dibujar(on);tx.needsUpdate=true;mt.emissiveIntensity=on?0.35:0.05;anillo.material.color.set(on?'#ff7a5c':'#7a7d6a');luz.intensity=on?1.2:0.2;}
       var top=(pr.mensajeros||[]).slice(0,1).map(function(m){return titulo(m.m)+' $'+Math.round(m.total).toLocaleString('es-CL');}).join(' · ');
       el.innerHTML='<div style="font-family:Bebas Neue;font-size:'+(chico?20:30)+'px;line-height:1;color:'+(on?'#ffd9a0':'#cfd3c4')+';text-shadow:0 0 18px '+(on?'#ff7a5c':'#7a7d6a')+',0 3px 0 rgba(0,0,0,.4)">$'+Math.round(pr.total||0).toLocaleString('es-CL')+'</div>'
-        +'<div style="margin-top:3px;padding:'+(chico?'1px 6px':'2px 10px')+';border-radius:999px;background:'+(on?'linear-gradient(180deg,#b3261e,#7a140f)':'rgba(20,22,15,.75)')+';border:1px solid '+(on?'#ff8a7a':'#7a7d6a')+';color:#fff;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif">'+(CLI?'Por pagarte':'Dinero por rendir')+(on?' · '+pr.n+(pr.n===1?' cobro':' cobros'):'')+'</div>'
-        +(chico?'':'<div style="margin-top:3px;font:700 11px DM Sans,system-ui,sans-serif;color:rgba(233,228,210,.8)">'+(CLI?(on?'cobrado a tus destinatarios · ver detalle':'todo pagado'):(on?(pr.mensajeros.length+' mensajero'+(pr.mensajeros.length===1?'':'s')+(top?' · más: '+top:'')):'todo rendido'))+'</div>');}
+        +'<div style="margin-top:3px;padding:'+(chico?'1px 6px':'2px 10px')+';border-radius:999px;background:'+(on?'linear-gradient(180deg,#b3261e,#7a140f)':'rgba(20,22,15,.75)')+';border:1px solid '+(on?'#ff8a7a':'#7a7d6a')+';color:#fff;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif">'+(CLI?'Te lo debemos':'Dinero por rendir')+(on?' · '+pr.n+(pr.n===1?' cobro':' cobros'):'')+'</div>'
+        +(chico?'':'<div style="margin-top:3px;font:700 11px DM Sans,system-ui,sans-serif;color:rgba(233,228,210,.8)">'+(CLI?(on?'total a la fecha · toca para ver el detalle':'estás al día'):(on?(pr.mensajeros.length+' mensajero'+(pr.mensajeros.length===1?'':'s')+(top?' · más: '+top:'')):'todo rendido'))+'</div>');}
     pintarB();
     return {grp:grp,anillo:anillo,el:el,pintar:pintarB,pos:pos,activo:function(){return activo;}};})();
   E.repintar=function(){labs.forEach(pintar);if(billete)billete.pintar();};
@@ -786,9 +786,9 @@ function CentroControl3D(props){
   var _pr=R.useState(null),porRendir=_pr[0],setPorRendir=_pr[1];
   // 24-11-2026: en el portal del cliente el billete muestra lo cobrado a sus destinatarios que aún está por pagarle (solo sus envíos).
   R.useEffect(function(){if(!props.cliente)return;var db=window.__app&&window.__app.db;if(!db)return;var vivo=true;
-    function c(){var hoy=new Date().toLocaleDateString('en-CA',{timeZone:'America/Santiago'});var d=new Date(hoy+'T12:00:00');d.setDate(d.getDate()-180);
-      db.rpc('mis_cobros_cliente',{p_desde:d.toISOString().slice(0,10),p_hasta:hoy}).then(function(r){if(!vivo||!r||r.error||!r.data)return;
-        var L=(r.data.envios||[]).filter(function(x){return x.dinero==='por_pagar'||x.dinero==='en_liquidacion';});
+    function c(){var hoy=new Date().toLocaleDateString('en-CA',{timeZone:'America/Santiago'});
+      db.rpc('mis_cobros_cliente',{p_desde:hoy,p_hasta:hoy}).then(function(r){if(!vivo||!r||r.error||!r.data)return;
+        var L=r.data.pendientes||[];
         window.__ccPorRendir={total:L.reduce(function(a,x){return a+(+x.cobrado_monto||+x.monto||0);},0),n:L.length,mensajeros:[],cliente:true};
         try{refE.current&&refE.current.repintar&&refE.current.repintar();}catch(e){}},function(){});}
     c();var iv=setInterval(c,300000);return function(){vivo=false;clearInterval(iv);};},[]);

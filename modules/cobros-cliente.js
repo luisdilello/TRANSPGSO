@@ -51,11 +51,13 @@ function CobrosCliente(props){
   var E=(d&&d.envios)||[],L=(d&&d.liquidaciones)||[];
   var grupo=function(k){return E.filter(function(x){return est(x)===k;});};var suma=function(a){return a.reduce(function(s,x){return s+val(x);},0);};
   var gPag=grupo('pagado'),gDir=grupo('directo'),gDeb=grupo('debemos'),gCam=grupo('camino'),gDev=grupo('devuelto');
-  var cobrado=suma(gPag)+suma(gDir)+suma(gDeb),recibido=suma(gPag)+suma(gDir),debemos=suma(gDeb);var pct=cobrado?Math.round(recibido*100/cobrado):0;
-  var enLiq=gDeb.filter(function(x){return x.liq_numero;}),sinLiq=gDeb.filter(function(x){return !x.liq_numero;});
+  // 24-11-2026: lo que te debemos es el total a la fecha (no depende del período), igual que el billete del Dashboard.
+  var P=(d&&d.pendientes)||gDeb;
+  var cobrado=suma(gPag)+suma(gDir)+suma(gDeb),recibido=suma(gPag)+suma(gDir),debemos=suma(P);var pct=cobrado?Math.round(recibido*100/cobrado):0;
+  var enLiq=P.filter(function(x){return x.liq_numero;}),sinLiq=P.filter(function(x){return !x.liq_numero;});
   var liqPend=L.filter(function(l){return l.estado!=='pagada';}),liqPag=L.filter(function(l){return l.estado==='pagada';});
   var envDeLiq=function(n){return E.filter(function(x){return x.liq_numero===n;});};
-  var lista=E.filter(function(x){var k=est(x);if(filtro==='pagados'&&!(k==='pagado'||k==='directo'))return false;if(filtro!=='todos'&&filtro!=='pagados'&&k!==filtro)return false;
+  var lista=(filtro==='debemos'?P:E).filter(function(x){var k=est(x);if(filtro==='pagados'&&!(k==='pagado'||k==='directo'))return false;if(filtro!=='todos'&&filtro!=='pagados'&&k!==filtro)return false;
     if(q){var s=q.toLowerCase();return String(x.codigo).toLowerCase().indexOf(s)>=0||String(x.destinatario||'').toLowerCase().indexOf(s)>=0;}return true;});
   function excel(){if(!A.exportToExcel)return;var rg=rango(per);
     A.exportToExcel('Cobros_'+String((d&&d.cliente)||'').replace(/\s+/g,'_')+'_'+dmy(rg[0])+'_al_'+dmy(rg[1]),[
@@ -64,7 +66,7 @@ function CobrosCliente(props){
   var perBtn=function(k,t){var on=per===k;return h('button',{key:k,type:'button',onClick:function(){setPer(k);setFiltro('todos');},style:{padding:'7px 13px',borderRadius:10,border:'1px solid '+(on?'#d9b553':'rgba(43,46,32,.14)'),background:on?'#fbf3dc':'#fff',color:on?'#7a5f12':C.sub,fontWeight:800,fontSize:12.5,cursor:'pointer',fontFamily:'inherit'}},t);};
   var titulo=function(t,s,der){return h('div',{style:{display:'flex',alignItems:'flex-end',gap:10,flexWrap:'wrap',marginBottom:12}},h('div',{style:{flex:1,minWidth:200}},h('div',{style:{fontFamily:'Bebas Neue',fontSize:24,letterSpacing:1.4,color:'#3A3D2E',lineHeight:1}},t),s?h('div',{style:{fontSize:12.5,color:C.sub,fontWeight:600,marginTop:3}},s):null),der||null);};
   var paso=function(n,t,s){return h('div',{style:{flex:'1 1 200px',display:'flex',gap:10,alignItems:'flex-start'}},h('span',{style:{width:24,height:24,borderRadius:8,flexShrink:0,display:'grid',placeItems:'center',background:'#3A3D2E',color:'#f7dd8c',fontWeight:900,fontSize:12}},n),h('div',null,h('div',{style:{fontWeight:800,fontSize:13}},t),h('div',{style:{fontSize:12,color:C.sub}},s)));};
-  var tabs=[['todos','Todos',E.length],['debemos','Te lo debemos',gDeb.length],['pagados','Pagados',gPag.length+gDir.length],['camino','En camino',gCam.length],['devuelto','Devueltos',gDev.length]];
+  var tabs=[['todos','Todos',E.length],['debemos','Te lo debemos',P.length],['pagados','Pagados',gPag.length+gDir.length],['camino','En camino',gCam.length],['devuelto','Devueltos',gDev.length]];
 
   return h('div',{style:{color:C.txt}},
     h('style',null,'.cc-res{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}.cc-fila{display:grid;grid-template-columns:1.6fr .7fr 1fr .7fr 118px;gap:12px;align-items:center}.cc-liq{display:grid;grid-template-columns:auto 1fr auto auto;gap:14px;align-items:center}'
@@ -78,11 +80,11 @@ function CobrosCliente(props){
         h('div',{className:'cc-res'},
           [['Cobramos a tus clientes',cobrado,(gPag.length+gDir.length+gDeb.length)+' envíos entregados con cobro','#3A3D2E','todos'],
            ['Ya lo recibiste',recibido,pct+'% de lo cobrado',C.verde,'pagados'],
-           ['Te lo debemos',debemos,debemos?gDeb.length+' envío'+(gDeb.length===1?'':'s')+' · va en tu próximo pago':'Estás al día',C.ambar,'debemos']].map(function(t){var on=filtro===t[4]&&t[4]!=='todos';
+           ['Te lo debemos hoy',debemos,debemos?P.length+' envío'+(P.length===1?'':'s')+' · total a la fecha, de cualquier período':'Estás al día',C.ambar,'debemos']].map(function(t){var on=filtro===t[4]&&t[4]!=='todos';
             return h('div',{key:t[0],onClick:function(){setFiltro(t[4]);document.getElementById('cc-detalle')&&document.getElementById('cc-detalle').scrollIntoView({behavior:'smooth',block:'start'});},style:{cursor:'pointer',padding:'14px 16px',borderRadius:16,background:on?'#fbf3dc':C.fila,border:'1px solid '+(on?'#d9b553':C.bd)}},
               h('div',{style:{fontSize:12,fontWeight:800,color:C.sub}},t[0]),h('div',{style:{fontFamily:'Bebas Neue',fontSize:38,lineHeight:1.05,color:t[3]}},money(t[1])),h('div',{style:{fontSize:12,color:C.sub,fontWeight:700}},t[2]));})),
         h('div',{style:{marginTop:14}},
-          h('div',{style:{height:10,borderRadius:6,background:'#efe9d8',overflow:'hidden',display:'flex'}},h('div',{style:{width:pct+'%',background:'linear-gradient(90deg,#2e9a5e,#1f7a48)'}}),h('div',{style:{width:(100-pct)+'%',background:debemos?'repeating-linear-gradient(45deg,#e8c766,#e8c766 6px,#f2d98d 6px,#f2d98d 12px)':'transparent'}})),
+          h('div',{style:{height:10,borderRadius:6,background:'#efe9d8',overflow:'hidden',display:'flex'}},h('div',{style:{width:pct+'%',background:'linear-gradient(90deg,#2e9a5e,#1f7a48)'}}),h('div',{style:{width:(100-pct)+'%',background:suma(gDeb)?'repeating-linear-gradient(45deg,#e8c766,#e8c766 6px,#f2d98d 6px,#f2d98d 12px)':'transparent'}})),
           h('div',{style:{display:'flex',gap:16,flexWrap:'wrap',marginTop:8,fontSize:12,color:C.sub,fontWeight:700}},
             h('span',null,h('b',{style:{color:C.verde}},'■ '),'Recibido'),h('span',null,h('b',{style:{color:'#d9b553'}},'■ '),'Pendiente'),
             gCam.length?h('span',null,'Además, ',h('b',{style:{color:C.azul}},gCam.length+' en camino'),' por '+money(suma(gCam))+' (se cobran al entregar)'):null,
