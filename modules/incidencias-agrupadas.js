@@ -51,7 +51,7 @@ function IncidenciasAgrupadas(props){
   var hasta=sumar(sem,6);
   function cargar(){
     db.from('incidencias').select('*').gte('fecha',sem).lte('fecha',hasta).order('fecha',{ascending:true}).limit(3000).then(function(r){if(r.error){toast('No se pudieron cargar las incidencias: '+r.error.message);setIncs([]);return;}setIncs(r.data||[]);});
-    db.from('reportes_operador').select('id,incidencia_id,codigo,cliente,comuna,comentario,reportado_por,created_at,decision,decision_monto,monto_propuesto,decision_por,aprobado_por,resuelto,resolucion,resuelto_por').gte('fecha',sem).lte('fecha',hasta).order('created_at',{ascending:true}).limit(5000).then(function(r){if(!r.error)setReps(r.data||[]);});}
+    db.from('reportes_operador').select('id,incidencia_id,codigo,cliente,comuna,comentario,reportado_por,created_at,decision,decision_monto,monto_propuesto,decision_por,aprobado_por,resuelto,resolucion,resuelto_por,evidencias').gte('fecha',sem).lte('fecha',hasta).order('created_at',{ascending:true}).limit(5000).then(function(r){if(!r.error)setReps((r.data||[]).map(function(x){return x.codigo?x:Object.assign({},x,{codigo:'Directo',_directo:true});}));});}
   useEffect(function(){setIncs(null);cargar();var st=A.intervaloVisible?A.intervaloVisible(cargar,300000,['reportes_operador'],2500):null;return function(){if(typeof st==='function')st();};},[sem]);
   var porInc=useMemo(function(){var o={};reps.forEach(function(r){(o[r.incidencia_id]=o[r.incidencia_id]||[]).push(r);});return o;},[reps]);
   var nSinGest=0;var L=(incs||[]).map(function(i){var rsT=porInc[i.id]||[];var rs=rsT.filter(function(r){return r.resuelto||r.decision;});nSinGest+=rsT.length-rs.length;var quien={};rs.forEach(function(r){var k=primer(r.reportado_por)||'—';quien[k]=(quien[k]||0)+1;});
@@ -65,7 +65,7 @@ function IncidenciasAgrupadas(props){
   var multas=L.filter(function(i){return i.estado==='multa';}),totMultas=multas.reduce(function(s,i){return s+(+i.monto||0);},0);
 
   var verInc=ver?L.find(function(x){return x.id===ver.incId;}):null;var verRep=verInc?verInc._reps[ver.i]:null;
-  useEffect(function(){if(!verRep||!verRep.codigo){setVerEnv(verRep?{_noExiste:true}:null);return;}var vivo=true;setVerEnv('cargando');
+  useEffect(function(){if(!verRep||!verRep.codigo||verRep._directo){setVerEnv(verRep?{_noExiste:true}:null);return;}var vivo=true;setVerEnv('cargando');
     db.from('envios').select('*').eq('codigo',verRep.codigo).maybeSingle().then(function(q){if(vivo)setVerEnv(q&&q.data?q.data:{codigo:verRep.codigo,_noExiste:true});});return function(){vivo=false;};},[verRep&&verRep.id]);
   useEffect(function(){if(!ver)return;function k(e){if(e.key==='ArrowRight')mover(1);if(e.key==='ArrowLeft')mover(-1);if(e.key==='Escape')setVer(null);}window.addEventListener('keydown',k);return function(){window.removeEventListener('keydown',k);};},[ver,verInc&&verInc._reps.length]);
   function mover(d){setVer(function(v){if(!v||!verInc)return v;var n=v.i+d;if(n<0||n>=verInc._reps.length)return v;return {incId:v.incId,i:n};});}
@@ -150,7 +150,7 @@ function IncidenciasAgrupadas(props){
     // 3. detalle
     var det=rs.map(function(r,ix){return '<tr><td style="color:#9a9684">'+(ix+1)+'</td><td style="white-space:nowrap">'+E(dm(r._i.fecha))+'<br/><span style="color:#888">'+E(hora(r.created_at))+' hrs</span></td><td style="font-family:JetBrains Mono,monospace;font-size:10px">'+E(r.codigo||'—')+'</td><td>'+E(r._i.motivo)+(r.comentario?'<br/><span style="color:#6b6e5c">"'+E(r.comentario)+'"</span>':'')+'</td><td>'+E([r.cliente,tit(r.comuna)].filter(Boolean).join(' · ')||'—')+'</td><td>'+E(primer(r.reportado_por)||'—')+(r.resolucion?'<br/><span style="color:#2e7d4f">'+E(r.resolucion)+'</span>':'')+'</td><td>'+badge(r)+'</td></tr>';}).join('');
     // 5. evidencia de la entrega de cada paquete afectado (23-11-2026)
-    var evid='';try{var cods=[];rs.forEach(function(r){if(r.codigo&&cods.indexOf(r.codigo)<0)cods.push(r.codigo);});
+    var evid='';try{var cods=[];rs.forEach(function(r){if(r.codigo&&!r._directo&&cods.indexOf(r.codigo)<0)cods.push(r.codigo);});
       if(cods.length){var EV={};for(var q=0;q<cods.length;q+=150){var rq=await A.db.from('envios').select('codigo,estado,destinatario,comuna,fotos_entrega,foto_etiqueta').in('codigo',cods.slice(q,q+150));(rq.data||[]).forEach(function(e){EV[e.codigo]=e;});}
         var pj=function(v){if(v==null)return null;if(typeof v!=='string')return v;try{var x=JSON.parse(v);return typeof x==='string'?pj(x):x;}catch(e){return null;}};
         var fotosDe=function(e){var arr=pj(e.fotos_entrega);if(!Array.isArray(arr)||!arr.length)return [];if(typeof arr[0]==='string')return arr.filter(function(u){return typeof u==='string'&&u;});
@@ -291,6 +291,10 @@ function IncidenciasAgrupadas(props){
             h('div',{style:{fontSize:13,color:'#e8c766',marginTop:3,fontWeight:800}},verRep.codigo+' · '+hora(verRep.created_at)+' · reportó '+primer(verRep.reportado_por)+(verRep.comentario?' · "'+verRep.comentario+'"':''))),
           h('div',{style:{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}},decChip(verRep),accionesCodigo(verInc,verRep))),
         h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}},nb('← Anterior',-1,ver.i===0),h('span',{style:{fontSize:12,fontWeight:800,color:'var(--text-soft)'}},'Paquete '+(ver.i+1)+' de '+n),nb('Siguiente →',1,ver.i>=n-1)),
+        verRep._directo?h('div',{style:{padding:16,borderRadius:12,background:'var(--cream,#fbf6e6)',border:'1px solid rgba(200,168,75,.35)'}},
+          h('div',{style:{fontWeight:900,marginBottom:6}},'Reporte directo al mensajero (sin código de paquete)'),
+          h('div',{style:{fontSize:13,marginBottom:8}},verRep.comentario||'Sin comentario.'),
+          (verRep.evidencias||[]).length?h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:10}},(verRep.evidencias||[]).map(function(u,k){return h('a',{key:k,href:u,target:'_blank',rel:'noopener'},h('img',{src:u,style:{width:'100%',height:220,objectFit:'cover',borderRadius:10,border:'1px solid rgba(0,0,0,.1)'}}));})):h('div',{style:{fontSize:12,color:'var(--text-soft)'}},'Sin imágenes adjuntas.')):
         verEnv==='cargando'||!verEnv?h('div',{style:{padding:30,textAlign:'center',color:'var(--text-soft)'}},'Cargando envío…'):
         verEnv._noExiste?h('div',{style:{padding:20,textAlign:'center',color:'var(--text-soft)'}},'Este código no existe en Envíos.'):
         (Card?h(Card,{key:verEnv.codigo,envio:verEnv}):h('div',null,'No disponible')));

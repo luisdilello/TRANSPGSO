@@ -83,7 +83,7 @@ function BancoIncidencias(props){
   function cargar(silencio){
     if(!silencio)setCargando(true);
     db.from('reportes_operador').select('*').gte('fecha',desde).lte('fecha',hasta).order('fecha',{ascending:false}).order('created_at',{ascending:false}).limit(5000)
-      .then(function(r){if(r.error)toast('No se pudo cargar el banco: '+r.error.message);setRows((r&&r.data)||[]);setCargando(false);},function(){setCargando(false);});
+      .then(function(r){if(r.error)toast('No se pudo cargar el banco: '+r.error.message);setRows(((r&&r.data)||[]).map(function(x){return x.codigo?x:Object.assign({},x,{codigo:'Directo',_directo:true});}));setCargando(false);},function(){setCargando(false);});
   }
   useEffect(function(){cargar();setSel({});},[desde,hasta]);
   useEffect(function(){return window.__app.intervaloVisible(function(){cargar(true);},300000,['reportes_operador'],2000);},[desde,hasta]);

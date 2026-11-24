@@ -535,6 +535,46 @@ function copiarTexto(txt,toast,msg){
   if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(ok,function(){fallback();});}else fallback();
   function fallback(){var ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');ok();}catch(e){toast&&toast('No se pudo copiar');}document.body.removeChild(ta);}
 }
+// 24-11-2026: reporte directo al mensajero (faltas que no dependen de un paquete, ej. no enviar los
+// pantallazos de salida de bodega). Queda en reportes_operador con codigo=null y sigue el flujo normal:
+// el mensajero lo ve en su app, se marca 'Pieza gestionada' aquí y Luis decide en el Banco de incidencias.
+function ReportarMensajeroModal(props){var h=React.createElement,toast=props.toast;
+  var _m=useState([]),mens=_m[0],setMens=_m[1];var _f=useState([]),faltas=_f[0],setFaltas=_f[1];
+  var _sm=useState(''),men=_sm[0],setMen=_sm[1];var _sf=useState(''),falta=_sf[0],setFalta=_sf[1];var _fe=useState(fechaHoyCL()),fecha=_fe[0],setFecha=_fe[1];
+  var _c=useState(''),com=_c[0],setCom=_c[1];var _a=useState([]),arch=_a[0],setArch=_a[1];var _b=useState(false),busy=_b[0],setBusy=_b[1];var _e=useState(''),err=_e[0],setErr=_e[1];
+  useEffect(function(){
+    db.from('mensajeros').select('nombre').eq('activo',true).order('nombre').then(function(r){setMens(((r&&r.data)||[]).map(function(x){return String(x.nombre||'').replace(/,\s*/g,' ').trim();}).filter(Boolean));});
+    db.from('configuracion').select('valor').eq('clave','faltas_reglamento').maybeSingle().then(function(r){var v=r&&r.data&&Array.isArray(r.data.valor)?r.data.valor:[];setFaltas(v.filter(function(f){return f&&f.label&&f.activo!==false;}));});},[]);
+  var grupos={};faltas.forEach(function(f){var g=f.grupo||'Otras';(grupos[g]=grupos[g]||[]).push(f);});
+  var min=sumarDias(fechaHoyCL(),-14);
+  async function enviar(){setErr('');if(!men){setErr('Elige el mensajero.');return;}if(!falta){setErr('Elige la falta.');return;}if(fecha<min||fecha>fechaHoyCL()){setErr('La fecha debe estar entre los últimos 14 días.');return;}
+    setBusy(true);try{var urls=[];
+      for(var i=0;i<arch.length;i++){var fl=arch[i];var ext=(fl.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';var path='incidencias/directo_'+Date.now()+'_'+i+'.'+ext;
+        var up=await db.storage.from('evidencias').upload(path,fl,{contentType:fl.type||'image/jpeg',upsert:false});if(up.error)throw new Error('No se pudo subir '+fl.name+': '+up.error.message);
+        urls.push(db.storage.from('evidencias').getPublicUrl(path).data.publicUrl);}
+      var yo='';try{var q=await db.rpc('mi_nombre_staff');yo=(q&&q.data)||'';}catch(e){}
+      var ins=await db.from('reportes_operador').insert({fecha:fecha,codigo:null,mensajero:men.toUpperCase(),motivo:falta,comentario:com.trim()||null,reportado_por:yo||null,evidencias:urls.length?urls:null});
+      if(ins.error)throw new Error(ins.error.message);
+      toast&&toast('Reportado a '+men);props.onDone&&props.onDone();props.onClose();}
+    catch(e){setErr(e.message);}finally{setBusy(false);}}
+  var lab=function(t){return h('div',{style:{fontSize:11,fontWeight:800,letterSpacing:1,textTransform:'uppercase',color:'var(--text-soft)',margin:'12px 0 5px'}},t);};
+  return h('div',{onClick:function(e){if(e.target===e.currentTarget&&!busy)props.onClose();},style:{position:'fixed',inset:0,zIndex:10000,background:'rgba(0,0,0,.5)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}},
+    h('div',{style:{background:'#fff',borderRadius:14,width:'min(520px,100%)',maxHeight:'92vh',overflowY:'auto',padding:'18px 20px',boxShadow:'0 20px 50px rgba(0,0,0,.3)'}},
+      h('div',{style:{fontFamily:'Bebas Neue',fontSize:24,letterSpacing:1.2}},'Reportar a mensajero'),
+      h('div',{style:{fontSize:12.5,color:'var(--text-soft)',marginTop:2}},'Para faltas que no dependen de un paquete (ej. no enviar los pantallazos de salida de bodega). El mensajero lo ve en su app y sigue el flujo normal: pieza gestionada y decisión en el Banco de incidencias.'),
+      lab('Mensajero'),h('select',{className:'form-input',value:men,onChange:function(e){setMen(e.target.value);},style:{width:'100%'}},h('option',{value:''},'Elige un mensajero…'),mens.map(function(m){return h('option',{key:m,value:m},m);})),
+      lab('Falta'),h('select',{className:'form-input',value:falta,onChange:function(e){setFalta(e.target.value);},style:{width:'100%'}},h('option',{value:''},'Elige la falta…'),
+        Object.keys(grupos).map(function(g){return h('optgroup',{key:g,label:g},grupos[g].map(function(f){return h('option',{key:f.id||f.label,value:f.label},f.label);}));})),
+      lab('Fecha de la falta'),h('input',{type:'date',className:'form-input',value:fecha,min:min,max:fechaHoyCL(),onChange:function(e){setFecha(e.target.value);},style:{width:200}}),
+      lab('Comentario'),h('textarea',{className:'form-input',value:com,onChange:function(e){setCom(e.target.value);},rows:3,placeholder:'Qué pasó (lo verá el mensajero)',style:{width:'100%',resize:'vertical'}}),
+      lab('Evidencia (opcional)'),h('input',{type:'file',accept:'image/*',multiple:true,onChange:function(e){setArch(Array.prototype.slice.call(e.target.files||[]));}}),
+      arch.length?h('div',{style:{fontSize:12,color:'var(--text-soft)',marginTop:4}},arch.length+' imagen'+(arch.length===1?'':'es')+' seleccionada'+(arch.length===1?'':'s')):null,
+      err&&h('div',{style:{color:'#b03030',fontSize:12.5,fontWeight:700,marginTop:10}},err),
+      h('div',{style:{display:'flex',justifyContent:'flex-end',gap:8,marginTop:16}},
+        h('button',{type:'button',className:'btn-secondary',disabled:busy,onClick:props.onClose},'Cancelar'),
+        h('button',{type:'button',className:'btn-primary',disabled:busy,onClick:enviar},busy?'Enviando…':'Reportar'))));}
+function normalizarReportes(arr){return (arr||[]).map(function(r){return r&&!r.codigo?Object.assign({},r,{codigo:'Directo',_directo:true}):r;});}
+window.__ReportarMensajeroModal=ReportarMensajeroModal;window.__normalizarReportes=normalizarReportes;
 function ReportesOperadorPanel(props){
   var fecha=props.fecha, toast=props.toast, esAdmin=props.esAdmin;
   // 05-11-2026: historial=true -> pestaña Operaciones → Incidencias (acumula todos los días, con rango).
@@ -550,6 +590,7 @@ function ReportesOperadorPanel(props){
   var _fest=useState(historial?'pendientes':'todos'),filtroEst=_fest[0],setFiltroEst=_fest[1];
   var _fm=useState(''),filtroMens=_fm[0],setFiltroMens=_fm[1];
   var esSuper=!!(window.__app.perfil&&window.__app.perfil.esSuperAdmin);
+  var _rmm=useState(false),repMen=_rmm[0],setRepMen=_rmm[1];
   // 17-11-2026: 'Pieza gestionada' solo Luis, Yohana o Fernando (puede_clasificar_incidencias).
   var _pg=useState(false),puedeGest=_pg[0],setPuedeGest=_pg[1];
   useEffect(function(){db.rpc('puede_clasificar_incidencias').then(function(r){setPuedeGest(!!(r&&r.data));},function(){});},[]);
@@ -557,7 +598,7 @@ function ReportesOperadorPanel(props){
   function cargar(){
     setCargando(true);
     db.from('reportes_operador').select('*').gte('fecha',desde).lte('fecha',hasta).order('created_at',{ascending:true}).limit(5000)
-      .then(function(r){setRows((r&&r.data)||[]);setCargando(false);},function(){setCargando(false);});
+        .then(function(r){setRows(normalizarReportes((r&&r.data)||[]));setCargando(false);},function(){setCargando(false);});
   }
   useEffect(function(){cargar();var iv=setInterval(function(){if(!document.hidden)cargar();},60000);return function(){clearInterval(iv);};},[desde,hasta]);
   var lista=rows.filter(function(r){return (!filtroMotivo||r.motivo===filtroMotivo)&&(!filtroPor||(r.reportado_por||'Sin nombre')===filtroPor)&&(filtroEst==='todos'||(filtroEst==='resueltos'?r.resuelto:!r.resuelto))&&(!filtroMens||(r.mensajero||'Sin mensajero').replace(/,\s*/g,' ')===filtroMens);});
@@ -569,7 +610,7 @@ function ReportesOperadorPanel(props){
   var mensOrd=Object.keys(porMens).sort(function(a,b){return porMens[b]-porMens[a];});
   var hora=function(d){try{return new Date(d).toLocaleTimeString('es-CL',{timeZone:'America/Santiago',hour:'2-digit',minute:'2-digit'});}catch(e){return '';}};
   var titulo=modo==='dia'?('del '+dmy(fecha)):modo==='rango'?('del '+dmy(desde)+' al '+dmy(hasta)):('semana '+dmy(desde)+' al '+dmy(hasta));
-  function codigosTxt(){var vistos={};return lista.filter(function(r){if(vistos[r.codigo])return false;vistos[r.codigo]=1;return true;}).map(function(r){return r.codigo;}).join('\n');}
+  function codigosTxt(){var vistos={};return lista.filter(function(r){if(r._directo)return false;if(vistos[r.codigo])return false;vistos[r.codigo]=1;return true;}).map(function(r){return r.codigo;}).join('\n');}
   function listadoTxt(){
     var lineas=['Piezas reportadas '+titulo+' ('+lista.length+')'];
     var grupos={};lista.forEach(function(r){(grupos[r.motivo]=grupos[r.motivo]||[]).push(r);});
@@ -829,7 +870,9 @@ function ReportesOperadorPanel(props){
       React.createElement('button',{className:'btn-primary',style:btn,disabled:!lista.length,onClick:function(){copiarTexto(codigosTxt(),toast,'Códigos copiados ('+lista.length+')');}},'Copiar códigos'),
       React.createElement('button',{className:'btn-secondary',style:btn,disabled:!lista.length,onClick:function(){copiarTexto(listadoTxt(),toast,'Listado copiado');}},'Copiar listado con motivos'),
       React.createElement('button',{className:'btn-secondary',style:btn,disabled:!lista.length,onClick:excel},'Excel'),
-      React.createElement('button',{className:'btn-secondary',style:btn,disabled:!lista.length,onClick:pdf},'PDF')),
+      React.createElement('button',{className:'btn-secondary',style:btn,disabled:!lista.length,onClick:pdf},'PDF'),
+      React.createElement('button',{className:'btn-primary',style:Object.assign({},btn,{marginLeft:'auto'}),onClick:function(){setRepMen(true);}},'Reportar a mensajero'),
+      repMen&&React.createElement(ReportarMensajeroModal,{toast:toast,onClose:function(){setRepMen(false);},onDone:cargar})),
     lista.length===0?React.createElement('div',{style:{fontSize:12,color:'var(--text-soft)',padding:'8px 0'}},cargando?'Cargando…':'Sin piezas reportadas '+titulo+'.'):
     React.createElement('div',{style:{maxHeight:420,overflow:'auto',border:'1px solid var(--border)',borderRadius:8}},
       React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',minWidth:820}},
