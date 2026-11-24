@@ -140,27 +140,32 @@ function SelectorArchivos(p){var ref=React.useRef(null);var L=p.archivos||[];
       h('button',{type:'button',onClick:function(){p.setArchivos(L.filter(function(_,j){return j!==i;}));},style:{border:'none',background:'rgba(255,255,255,.1)',color:K.txt,borderRadius:999,width:20,height:20,cursor:'pointer',fontWeight:900,lineHeight:1}},'×'));}));}
 function ModalComprobantes(p){var m=p.m,a=m.a,liq=m.tipo==='liq';var toast=p.toast;
   var _c=useState(null),comp=_c[0],setComp=_c[1];var _f=useState([]),arch=_f[0],setArch=_f[1];var _b=useState(false),busy=_b[0],setBusy=_b[1];
-  var _fe=useState(hoyCL()),fecha=_fe[0],setFecha=_fe[1];var _rf=useState(''),refe=_rf[0],setRefe=_rf[1];
+  var _fe=useState(hoyCL()),fecha=_fe[0],setFecha=_fe[1];var _rf=useState(''),refe=_rf[0],setRefe=_rf[1];var _ok=useState(false),conf=_ok[0],setConf=_ok[1];
   function recargar(lista){urlsComprobantes(Object.assign({},a,{comprobantes:lista})).then(setComp).catch(function(){setComp([]);});}
   useEffect(function(){recargar(a.comprobantes||[]);},[]);
   async function subir(){if(!arch.length)return true;setBusy(true);try{var r=await subirComprobantes(m.tipo,a,arch);a.comprobantes=r||a.comprobantes;setArch([]);recargar(a.comprobantes);p.onCambio();return true;}catch(e){toast(e.message);return false;}finally{setBusy(false);}}
   async function quitar(c){if(!window.confirm('Quitar el comprobante "'+(c.nombre||'')+'" del acta?'))return;setBusy(true);
     var r=await db.rpc('comprobante_cobro',{p_tipo:TIPO_DB[m.tipo],p_id:a.id,p_accion:'quitar',p_item:{path:c.path}});
     if(r.error){setBusy(false);toast(r.error.message);return;}await db.storage.from(BUCKET).remove([c.path]);a.comprobantes=r.data;recargar(r.data);setBusy(false);p.onCambio();}
-  async function marcarPagada(){if(!arch.length&&!(a.comprobantes||[]).length&&!window.confirm('No adjuntaste comprobante. ¿Marcar como pagada igual?'))return;
+  async function marcarPagada(){if(!conf){toast('Marca la casilla de confirmación');return;}if(!arch.length&&!(a.comprobantes||[]).length&&!refe.trim()){toast('Adjunta el comprobante o escribe el N° de operación');return;}
     if(!(await subir()))return;setBusy(true);var r=await db.rpc('pagar_liquidacion_cobro',{p_id:a.id,p_fecha:fecha,p_ref:refe});setBusy(false);
     if(r.error){toast('No se pudo marcar: '+r.error.message);return;}toast(a.numero+' marcada como pagada');p.onCambio();p.onClose();}
   var pagando=liq&&m.pagar&&a.estado!=='pagada';
   return h('div',{onClick:function(e){if(e.target===e.currentTarget&&!busy)p.onClose();},style:{position:'fixed',inset:0,zIndex:9999,background:'rgba(10,11,7,.6)',display:'grid',placeItems:'center',padding:16}},
     h('div',{style:Object.assign({},K.caja,{width:'min(640px,100%)',maxHeight:'90vh',overflowY:'auto',padding:'20px 22px',boxSizing:'border-box'})},
       h('div',{style:{display:'flex',alignItems:'flex-start',gap:12,marginBottom:14}},
-        h('div',{style:{flex:1}},h('div',{style:{fontFamily:'Bebas Neue',fontSize:26,letterSpacing:1.3,lineHeight:1}},pagando?'Registrar pago':'Comprobantes de pago'),
+        h('div',{style:{flex:1}},h('div',{style:{fontFamily:'Bebas Neue',fontSize:26,letterSpacing:1.3,lineHeight:1}},pagando?'Registrar el pago al cliente':'Comprobantes de pago'),
           h('div',{style:{fontSize:12.5,fontWeight:700,color:K.sub,marginTop:4}},a.numero+' · '+(liq?a.cliente:tit(a.mensajero))+' · '+money(liq?a.a_transferir:a.monto_recibido))),
         h('button',{type:'button',onClick:function(){if(!busy)p.onClose();},style:{border:'none',background:'rgba(255,255,255,.08)',color:K.txt,width:32,height:32,borderRadius:10,cursor:'pointer',fontSize:18,fontWeight:900}},'×')),
+      // 24-11-2026: resumen claro de qué se está registrando, antes de pedir los datos.
+      pagando&&h('div',{style:{padding:'14px 16px',borderRadius:14,background:'rgba(232,199,102,.08)',border:'1px solid '+K.bdOro,marginBottom:14}},
+        h('div',{style:{fontSize:13.5,fontWeight:700,lineHeight:1.5}},'Vas a dejar registrado que TransPgso le ',h('b',null,'transfirió '+money(a.a_transferir)),' a ',h('b',null,a.cliente),' por lo cobrado a sus destinatarios.'),
+        h('div',{style:{display:'flex',gap:16,flexWrap:'wrap',marginTop:10,fontSize:12.5,fontWeight:800,color:K.sub}},
+          h('span',null,plural((a.codigos||[]).length,'envío')),h('span',null,'Cobrado '+money(a.total_cobrado)),+a.directo_cliente?h('span',{style:{color:K.verde}},'Ya recibió directo '+money(a.directo_cliente)):null,h('span',{style:{color:'#f7dd8c'}},'A transferir '+money(a.a_transferir)))),
       pagando&&h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:12,marginBottom:14}},
         h('label',{style:{display:'flex',flexDirection:'column',gap:6}},eti('Fecha de la transferencia'),h('input',{type:'date',value:fecha,onChange:function(e){setFecha(e.target.value);},style:Object.assign({},inp,{colorScheme:'dark'})})),
-        h('label',{style:{display:'flex',flexDirection:'column',gap:6}},eti('N° de operación (opcional)'),h('input',{value:refe,onChange:function(e){setRefe(e.target.value);},placeholder:'Ej: 004512339',style:inp}))),
-      eti(pagando?'Comprobante de la transferencia':'Adjuntar nuevos'),
+        h('label',{style:{display:'flex',flexDirection:'column',gap:6}},eti('N° de operación'),h('input',{value:refe,onChange:function(e){setRefe(e.target.value);},placeholder:'Ej: 004512339',style:inp}))),
+      eti(pagando?'Comprobante de la transferencia (o el N° de operación)':'Adjuntar nuevos'),
       h(SelectorArchivos,{archivos:arch,setArchivos:setArch,texto:'Foto o PDF del comprobante'}),
       h('div',{style:{marginTop:16}},eti('En el acta'+(comp&&comp.length?' ('+comp.length+')':'')),
         comp==null?h('div',{style:{color:K.sub,fontWeight:700,marginTop:8}},'Cargando…'):comp.length===0?h('div',{style:{color:K.dim,fontWeight:700,marginTop:8,fontSize:13}},'Aún no hay comprobantes en esta acta.'):
@@ -172,7 +177,8 @@ function ModalComprobantes(p){var m=p.m,a=m.a,liq=m.tipo==='liq';var toast=p.toa
               esLuis()&&h('button',{type:'button',onClick:function(){quitar(c);},disabled:busy,style:{marginTop:5,border:'none',background:'none',color:K.rojo,fontWeight:800,fontSize:11.5,cursor:'pointer',padding:0,fontFamily:'inherit'}},'Quitar')));}))),
       h('div',{style:{display:'flex',justifyContent:'flex-end',gap:8,marginTop:18,flexWrap:'wrap'}},
         boton('Ver acta',function(){verActa(m.tipo,a);}),
-        pagando?boton(busy?'Guardando…':'Marcar como pagada',marcarPagada,'prim',busy):boton(busy?'Subiendo…':'Subir al acta',subir,'prim',busy||!arch.length))));}
+        pagando?h('label',{style:{flex:'1 1 100%',display:'flex',gap:10,alignItems:'flex-start',padding:'10px 12px',borderRadius:12,background:K.fila,cursor:'pointer',fontSize:12.5,fontWeight:700,lineHeight:1.45}},h('input',{type:'checkbox',checked:conf,onChange:function(e){setConf(e.target.checked);},style:{marginTop:2,width:16,height:16}}),h('span',null,'Confirmo que la transferencia de '+money(a.a_transferir)+' a '+a.cliente+' ya se hizo el '+dmy(fecha)+'. ',h('span',{style:{color:K.sub}},esLuis()?'Podrás corregirlo después si hace falta.':'Después solo Luis podrá modificarlo.'))):null,
+        pagando?boton(busy?'Guardando…':'Registrar pago de '+money(a.a_transferir),marcarPagada,'prim',busy||!conf):boton(busy?'Subiendo…':'Subir al acta',subir,'prim',busy||!arch.length))));}
 
 // 23-11-2026: evidencia por paquete (cobro al destinatario o pago al cliente). Tabla evidencias_cobro + bucket comprobantes-cobro.
 var TIPO_EV={cobro:['Evidencia de cobro','Lo que pagó el destinatario (transferencia, foto del efectivo)'],pago:['Evidencia de pago','Pago de TransPgso o del mensajero al cliente']};
@@ -350,10 +356,10 @@ function PorCobrar(props){
           h('div',{style:{flex:1,minWidth:0}},h('div',{style:{fontWeight:800,fontSize:13.5,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},x.cli),
             h('div',{style:{fontSize:11.5,fontWeight:700,color:x.sinRendir?K.ambar:K.sub}},plural(x.n,'paquete')+(x.sinRendir?' · '+x.sinRendir+' sin rendir':''))),
           h('div',{style:{fontFamily:'Bebas Neue',fontSize:21}},money(x.total-x.directo)));})),
-      liqPend.length>0&&h('div',{style:{marginTop:14,paddingTop:12,borderTop:'1px solid '+K.bd}},eti('Liquidaciones emitidas sin pagar'),
+      liqPend.length>0&&h('div',{style:{marginTop:14,paddingTop:12,borderTop:'1px solid '+K.bd}},eti('Por pagar · falta registrar la transferencia'),
         h('div',{style:{display:'flex',flexDirection:'column',gap:6,marginTop:8}},liqPend.slice(0,8).map(function(l){return h('div',{key:l.id,style:{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:10,background:K.fila}},
           h('div',{style:{flex:1,minWidth:0}},h('div',{style:{fontWeight:800,fontSize:12.5}},l.cliente),h('div',{style:{fontSize:11,color:K.sub,fontFamily:'JetBrains Mono, monospace'}},l.numero)),
-          h('b',{style:{fontSize:13}},money(l.a_transferir)),boton('Pagada',function(){pagar(l);},null,false,{padding:'5px 9px',fontSize:11.5}));}))));
+          h('b',{style:{fontSize:13}},money(l.a_transferir)),boton('Registrar pago',function(){pagar(l);},null,false,{padding:'5px 9px',fontSize:11.5}));}))));
     var detalleC;
     if(!c)detalleC=caja({padding:'40px 20px',textAlign:'center'},h('div',{style:{color:K.sub,fontWeight:700}},porCli.length?'Elige un cliente de la lista.':'Cuando haya cobros entregados aparecerán aquí.'));
     else{var itemsC=porLiquidar.filter(function(x){return x.cliente===selCli;}).sort(function(a,b){return a.fecha<b.fecha?-1:1;});var selL=itemsC.filter(function(x){return sel[x.codigo];});
@@ -413,7 +419,7 @@ function PorCobrar(props){
       h('div',{style:{fontFamily:'Bebas Neue',fontSize:22}},money(liq?a.a_transferir:a.monto_recibido)),
       liq&&(a.estado==='pagada'?pill('Pagada '+dmy(a.pagada_fecha),K.verde):pill('Por pagar',K.ambar)),
       boton('Ver / PDF',function(){verActa(liq?'liq':'ren',a);},'prim'),boton('Comprobantes'+((a.comprobantes||[]).length?' ('+a.comprobantes.length+')':''),function(){setModal({tipo:liq?'liq':'ren',a:a});}),boton('Excel',function(){excelActa(liq?'liq':'ren',a);}),
-      liq&&a.estado!=='pagada'&&boton('Marcar pagada',function(){pagar(a);}),
+      liq&&a.estado!=='pagada'&&boton('Registrar pago',function(){pagar(a);}),
       esLuis()&&!(liq&&a.estado==='pagada')&&boton('Eliminar',function(){eliminar(liq?'liquidacion':'rendicion',a);},'peligro'));};
     cuerpo=h('div',{style:{display:'flex',flexDirection:'column',gap:14}},
       caja(null,h('div',{style:{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:14}},
