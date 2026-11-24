@@ -432,7 +432,7 @@ function montarFlujo(T,cont,cnt,ui){
     var L={el:el,k:k};pintar(L);ui.labels.appendChild(el);return L;});
   // 23-11-2026: billete flotante "Dinero por rendir" junto a Entregado. Muestra el dinero de cobros contra entrega
   // que los mensajeros aún no rinden; baja a $0 solo cuando un administrativo registra la rendición.
-  var billete=(function(){if(ui.cliente)return null;
+  var billete=(function(){var CLI=!!ui.cliente;
     var cv=document.createElement('canvas');cv.width=1024;cv.height=480;var g2=cv.getContext('2d');
     function dibujar(activo){var x=g2;x.clearRect(0,0,1024,480);
       var gr=x.createLinearGradient(0,0,1024,480);gr.addColorStop(0,activo?'#3f7a4a':'#4a5148');gr.addColorStop(.5,activo?'#2c5e37':'#3a403a');gr.addColorStop(1,activo?'#1f4428':'#2b302b');x.fillStyle=gr;x.fillRect(0,0,1024,480);
@@ -441,8 +441,8 @@ function montarFlujo(T,cont,cnt,ui){
       x.fillStyle=activo?'rgba(232,199,102,.18)':'rgba(255,255,255,.08)';x.beginPath();x.arc(250,240,150,0,Math.PI*2);x.fill();
       x.strokeStyle=activo?'#e8c766':'#bbb';x.lineWidth=8;x.beginPath();x.arc(250,240,150,0,Math.PI*2);x.stroke();
       x.fillStyle=activo?'#f7dd8c':'#d8d8d0';x.font='bold 230px "Bebas Neue", Impact, sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText('$',250,250);
-      x.fillStyle=activo?'#f1ecda':'#cfcfc6';x.textAlign='left';x.font='bold 92px "Bebas Neue", Impact, sans-serif';x.fillText('POR RENDIR',440,200);
-      x.font='bold 44px "DM Sans", Arial, sans-serif';x.fillStyle=activo?'#e8c766':'#aaa';x.fillText('TRANSPGSO · COBROS',444,290);
+      x.fillStyle=activo?'#f1ecda':'#cfcfc6';x.textAlign='left';x.font='bold 92px "Bebas Neue", Impact, sans-serif';x.fillText(CLI?'POR PAGARTE':'POR RENDIR',440,200);
+      x.font='bold 44px "DM Sans", Arial, sans-serif';x.fillStyle=activo?'#e8c766':'#aaa';x.fillText(CLI?'TUS COBROS · TRANSPGSO':'TRANSPGSO · COBROS',444,290);
       x.font='bold 40px "Bebas Neue", Impact, sans-serif';x.fillStyle=activo?'rgba(247,221,140,.8)':'#999';x.fillText('$',80,100);x.fillText('$',920,420);}
     dibujar(true);var tx=new T.CanvasTexture(cv);if(T.sRGBEncoding)tx.encoding=T.sRGBEncoding;tx.anisotropy=8;
     var mt=new T.MeshStandardMaterial({map:tx,roughness:0.45,metalness:0.15,emissive:new T.Color('#2c5e37'),emissiveIntensity:0.35,side:T.DoubleSide});
@@ -452,13 +452,13 @@ function montarFlujo(T,cont,cnt,ui){
     var pos=[-3,0,-18];grp.scale.setScalar(1.05);grp.position.set(pos[0],5.5,pos[2]);E.sc.add(grp);hoja.userData.k='por_rendir';h2.userData.k='por_rendir';grp.userData.k='por_rendir';clicables.push(grp);
     var anillo=new T.Mesh(new T.RingGeometry(2.8,3.3,64),new T.MeshBasicMaterial({color:'#ff7a5c',transparent:true,opacity:0.55,side:T.DoubleSide}));anillo.rotation.x=-Math.PI/2;anillo.position.set(pos[0],0.06,pos[2]);E.sc.add(anillo);
     var luz=new T.PointLight('#ffcf7a',1.2,18);luz.position.set(pos[0],5.5,pos[2]+3);E.sc.add(luz);
-    var el=document.createElement('div');el.style.cssText='position:absolute;transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer;text-align:center;white-space:nowrap';el.title='Ver mensajeros con dinero por rendir';el.onclick=function(){ui.onNodo&&ui.onNodo('por_rendir');};ui.labels.appendChild(el);
+    var el=document.createElement('div');el.style.cssText='position:absolute;transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer;text-align:center;white-space:nowrap';el.title=CLI?'Ver tus cobros':'Ver mensajeros con dinero por rendir';el.onclick=function(){if(CLI){if(window.__irCobrosCli)window.__irCobrosCli();}else if(ui.onNodo)ui.onNodo('por_rendir');};ui.labels.appendChild(el);
     var activo=true;
     function pintarB(){var pr=window.__ccPorRendir||{total:0,n:0,mensajeros:[]};var on=pr.n>0;if(on!==activo){activo=on;dibujar(on);tx.needsUpdate=true;mt.emissiveIntensity=on?0.35:0.05;anillo.material.color.set(on?'#ff7a5c':'#7a7d6a');luz.intensity=on?1.2:0.2;}
       var top=(pr.mensajeros||[]).slice(0,1).map(function(m){return titulo(m.m)+' $'+Math.round(m.total).toLocaleString('es-CL');}).join(' · ');
       el.innerHTML='<div style="font-family:Bebas Neue;font-size:'+(chico?20:30)+'px;line-height:1;color:'+(on?'#ffd9a0':'#cfd3c4')+';text-shadow:0 0 18px '+(on?'#ff7a5c':'#7a7d6a')+',0 3px 0 rgba(0,0,0,.4)">$'+Math.round(pr.total||0).toLocaleString('es-CL')+'</div>'
-        +'<div style="margin-top:3px;padding:'+(chico?'1px 6px':'2px 10px')+';border-radius:999px;background:'+(on?'linear-gradient(180deg,#b3261e,#7a140f)':'rgba(20,22,15,.75)')+';border:1px solid '+(on?'#ff8a7a':'#7a7d6a')+';color:#fff;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif">Dinero por rendir'+(on?' · '+pr.n+(pr.n===1?' cobro':' cobros'):'')+'</div>'
-        +(chico?'':'<div style="margin-top:3px;font:700 11px DM Sans,system-ui,sans-serif;color:rgba(233,228,210,.8)">'+(on?(pr.mensajeros.length+' mensajero'+(pr.mensajeros.length===1?'':'s')+(top?' · más: '+top:'')):'todo rendido')+'</div>');}
+        +'<div style="margin-top:3px;padding:'+(chico?'1px 6px':'2px 10px')+';border-radius:999px;background:'+(on?'linear-gradient(180deg,#b3261e,#7a140f)':'rgba(20,22,15,.75)')+';border:1px solid '+(on?'#ff8a7a':'#7a7d6a')+';color:#fff;font:700 '+(chico?9:11)+'px DM Sans,system-ui,sans-serif">'+(CLI?'Por pagarte':'Dinero por rendir')+(on?' · '+pr.n+(pr.n===1?' cobro':' cobros'):'')+'</div>'
+        +(chico?'':'<div style="margin-top:3px;font:700 11px DM Sans,system-ui,sans-serif;color:rgba(233,228,210,.8)">'+(CLI?(on?'cobrado a tus destinatarios · ver detalle':'todo pagado'):(on?(pr.mensajeros.length+' mensajero'+(pr.mensajeros.length===1?'':'s')+(top?' · más: '+top:'')):'todo rendido'))+'</div>');}
     pintarB();
     return {grp:grp,anillo:anillo,el:el,pintar:pintarB,pos:pos,activo:function(){return activo;}};})();
   E.repintar=function(){labs.forEach(pintar);if(billete)billete.pintar();};
@@ -784,6 +784,14 @@ function CentroControl3D(props){
   var _tk=R.useState(0),setTick2=_tk[1];
   // 23-11-2026: dinero de cobros contra entrega que los mensajeros aún no rinden (RPC dinero_por_rendir).
   var _pr=R.useState(null),porRendir=_pr[0],setPorRendir=_pr[1];
+  // 24-11-2026: en el portal del cliente el billete muestra lo cobrado a sus destinatarios que aún está por pagarle (solo sus envíos).
+  R.useEffect(function(){if(!props.cliente)return;var db=window.__app&&window.__app.db;if(!db)return;var vivo=true;
+    function c(){var hoy=new Date().toLocaleDateString('en-CA',{timeZone:'America/Santiago'});var d=new Date(hoy+'T12:00:00');d.setDate(d.getDate()-180);
+      db.rpc('mis_cobros_cliente',{p_desde:d.toISOString().slice(0,10),p_hasta:hoy}).then(function(r){if(!vivo||!r||r.error||!r.data)return;
+        var L=(r.data.envios||[]).filter(function(x){return x.dinero==='por_pagar'||x.dinero==='en_liquidacion';});
+        window.__ccPorRendir={total:L.reduce(function(a,x){return a+(+x.cobrado_monto||+x.monto||0);},0),n:L.length,mensajeros:[],cliente:true};
+        try{refE.current&&refE.current.repintar&&refE.current.repintar();}catch(e){}},function(){});}
+    c();var iv=setInterval(c,300000);return function(){vivo=false;clearInterval(iv);};},[]);
   R.useEffect(function(){if(props.cliente)return;var db=window.__app&&window.__app.db;if(!db)return;var vivo=true;
     function c(){db.rpc('dinero_por_rendir').then(function(r){if(vivo&&r&&r.data){setPorRendir(r.data);window.__ccPorRendir=r.data;try{refE.current&&refE.current.repintar&&refE.current.repintar();}catch(e){}}},function(){});}
     c();var iv=setInterval(c,300000);return function(){vivo=false;clearInterval(iv);};},[]);
@@ -854,7 +862,7 @@ function CentroControl3D(props){
     if(!keyEscena)return;
     if(!envios.length)return;
     Promise.all([cargarThree(),modo==='mapa'?cargarGeo():null]).then(function(rr){var T=rr[0],geo=rr[1];if(!vivo||!refC.current)return;
-      var ui={cliente:!!props.cliente,lo:res.lo,hi:res.hi,tip:refTip.current,labels:refLab.current,onNodo:function(k){refNodo.current(function(prev){return k&&prev!==k?k:(k?null:null);});},onLost:function(){setTimeout(function(){setGen(function(g){return g+1;});},800);}};
+      var ui={cliente:!!props.cliente,lo:res.lo,hi:res.hi,tip:refTip.current,labels:refLab.current,onNodo:function(k){if(k==='por_rendir'&&props.cliente){if(window.__irCobrosCli)window.__irCobrosCli();return;}refNodo.current(function(prev){return k&&prev!==k?k:(k?null:null);});},onLost:function(){setTimeout(function(){setGen(function(g){return g+1;});},800);}};
       try{var cntVivo=Object.assign({},res.cnt);Object.keys(vivoRef.current).length&&Object.keys(deltasRef.current).forEach(function(k){cntVivo[k]=Math.max(0,(cntVivo[k]||0)+deltasRef.current[k]);});
         E=modo==='flujo'?montarFlujo(T,refC.current,cntVivo,ui):montarMapa(T,refC.current,res.datos,ui,geo);refE.current=E;window.__cc3dE=E;reintRef.current=0;}
       catch(e){console.error('[cc3d]',e);

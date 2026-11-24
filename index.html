@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261124092333;
+window.__MODULES_VERSION=20261124101930;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -14535,6 +14535,8 @@ function FichaEnvioCliente(props){
 function PortalCliente({usuario,onLogout}){
   var nombreCliente=(usuario.cliente_nombre||usuario.nombre||'').toUpperCase().trim();
   var _t=useState('dashboard'),tab=_t[0],setTab=_t[1];
+  // 24-11-2026: el billete del Seguimiento en vivo abre la pestaña Por cobrar del portal.
+  useEffect(function(){window.__irCobrosCli=function(){setTab('cobros');try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}};return function(){window.__irCobrosCli=null;};},[]);
   var _navMobCli=useState(false),navMobileOpenCli=_navMobCli[0],setNavMobileOpenCli=_navMobCli[1];
   function irACli(id){setTab(id);setNavMobileOpenCli(false);}
   var _e=useState([]),envios=_e[0],setEnvios=_e[1];
