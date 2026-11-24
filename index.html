@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261124075050;
+window.__MODULES_VERSION=20261124080636;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -12662,7 +12662,7 @@ function ruletaSvg(premios,size,logo){var r=size/2,n=premios.length||1,a=360/n,R
 function LucesRuleta(props){var n=props.n||24,size=props.size,R=size/2-size*.022,out=[];
   for(var i=0;i<n;i++){var ang=i/n*2*Math.PI-Math.PI/2;out.push(React.createElement('span',{key:i,className:'rlz '+(i%2?'rlz-b':'rlz-a'),style:{left:size/2+R*Math.cos(ang)-size*.013,top:size/2+R*Math.sin(ang)-size*.013,width:size*.026,height:size*.026,animationDelay:props.girando?(i*0.04)+'s':'0s'}}));}
   return React.createElement('div',{className:props.girando?'rlz-wrap rlz-run':'rlz-wrap',style:{position:'absolute',left:0,top:0,width:size,height:size,pointerEvents:'none'}},out);}
-var CSS_RULETA2='@keyframes ruletaPulso{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}'+
+var CSS_RULETA2='@keyframes ruletaPulso{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}'+'@keyframes ruletaLatido{0%,40%,100%{transform:scale(1);box-shadow:0 4px 0 #0b0c07,0 0 0 0 rgba(247,221,140,.55),0 0 18px rgba(247,221,140,.3)}12%{transform:scale(1.035);box-shadow:0 4px 0 #0b0c07,0 0 0 6px rgba(247,221,140,.28),0 0 30px rgba(247,221,140,.6)}24%{transform:scale(.99)}30%{transform:scale(1.025);box-shadow:0 4px 0 #0b0c07,0 0 0 12px rgba(247,221,140,0),0 0 26px rgba(247,221,140,.5)}}.rul-latido{animation:ruletaLatido 1.4s ease-in-out infinite;will-change:transform}@media (prefers-reduced-motion:reduce){.rul-latido{animation-duration:2.8s}}'+
  '.rlz{position:absolute;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0,#fff6cf 30%,#ffd44d 60%,#b8860b 100%);box-shadow:0 0 6px #ffe08a,0 0 14px rgba(255,200,60,.8)}'+
  '.rlz-a{animation:rlzBlink 1.2s steps(1) infinite}.rlz-b{animation:rlzBlink 1.2s steps(1) infinite .6s}'+
  '.rlz-run .rlz{animation:rlzChase .5s linear infinite}'+
@@ -12734,7 +12734,7 @@ function PorRendirRider(props){var L=props.lista||[],claro=props.claro;var tot=L
 function RuletaBannerRider(props){var d=props.data,claro=props.claro;if(!d||!d.activa)return null;
   var disp=ruletaDisponible(d),espera=ruletaEsperaMartes(d),gano=d.giro,ef=d.actual?d.actual.efectividad:0;
   var dorado=disp||gano||espera;
-  return React.createElement('div',{style:{padding:'0 12px 2px'}},React.createElement('style',null,CSS_RULETA2),React.createElement('button',{type:'button',onClick:props.onClick,style:{width:'100%',display:'flex',alignItems:'center',gap:12,padding:'11px 14px',borderRadius:16,cursor:'pointer',textAlign:'left',
+  return React.createElement('div',{style:{padding:'0 12px 2px'}},React.createElement('style',null,CSS_RULETA2),React.createElement('button',{type:'button',onClick:props.onClick,className:disp?'rul-latido':undefined,style:{width:'100%',display:'flex',alignItems:'center',gap:12,padding:'11px 14px',borderRadius:16,cursor:'pointer',textAlign:'left',
       background:dorado?'linear-gradient(180deg,#4a3a17,#2a2110)':(claro?'linear-gradient(180deg,#ffffff,#ece4cd)':'linear-gradient(180deg,#3a3f2b,#23271a)'),border:'1px solid '+(dorado?'rgba(232,199,102,.65)':(claro?'rgba(43,46,32,.14)':'rgba(232,199,102,.25)')),
       boxShadow:dorado?'inset 0 1px 0 rgba(255,255,255,.12), 0 4px 0 #0b0c07, 0 10px 18px rgba(0,0,0,.3)'+(disp?', 0 0 22px rgba(247,221,140,.35)':''):(claro?'inset 0 1px 0 #fff, 0 4px 0 #d2c7a8':'0 4px 0 #0b0c07'),color:dorado?'#f7dd8c':(claro?'#3a3d2e':'#d9d3bd')}},
     React.createElement('div',{style:{width:44,height:44,borderRadius:'50%',flexShrink:0,background:'conic-gradient(#C8A84B 0 45deg,#3A3D2E 45deg 90deg,#36c47f 90deg 135deg,#3A3D2E 135deg 180deg,#C8A84B 180deg 225deg,#3A3D2E 225deg 270deg,#e65100 270deg 315deg,#3A3D2E 315deg)',border:'3px solid '+(dorado?'#f7dd8c':'#b9b39c'),filter:dorado?'none':'grayscale(.85) opacity(.7)',boxShadow:disp?'0 0 0 4px rgba(247,221,140,.25), 0 0 16px rgba(247,221,140,.6)':'none',animation:disp?'ruletaPulso 1.6s ease-in-out infinite':'none'}}),
