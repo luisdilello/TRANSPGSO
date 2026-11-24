@@ -359,21 +359,35 @@ function PorCobrar(props){
         h('div',{style:{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',paddingBottom:12,borderBottom:'1px solid '+K.bd}},avatar(c.cli,'#e8c766'),
           h('div',{style:{flex:1,minWidth:180}},h('div',{style:{fontFamily:'Bebas Neue',fontSize:26,letterSpacing:1.2,lineHeight:1}},c.cli),h('div',{style:{fontSize:12.5,fontWeight:700,color:K.sub,marginTop:3}},plural(c.n,'cobro')+' pendiente'+(c.n>1?'s':'')+' de liquidar')),
           h('div',{style:{textAlign:'right'}},eti('Pendiente total'),h('div',{style:{fontFamily:'Bebas Neue',fontSize:40,lineHeight:1,color:'#f7dd8c'}},money(c.total-c.directo)))),
-        h('div',{style:{display:'flex',alignItems:'center',gap:8,margin:'14px 0 8px'}},h('span',{style:{fontFamily:'Bebas Neue',fontSize:15,color:'#1a1d13',background:'#e8c766',borderRadius:6,padding:'1px 7px'}},'A'),h('b',{style:{fontSize:13.5}},'Elige el período a pagar')),
+        h('div',{style:{display:'flex',alignItems:'center',gap:8,margin:'14px 0 8px'}},h('span',{style:{fontFamily:'Bebas Neue',fontSize:15,color:'#1a1d13',background:'#e8c766',borderRadius:6,padding:'1px 7px'}},'A'),h('b',{style:{fontSize:13.5}},'Elige qué período le pagas')),
         h('div',{style:{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}},[['semana_ant','Semana pasada'],['semana','Esta semana'],['mes_ant','Mes pasado'],['mes','Este mes']].map(function(o){var on=per===o[0];
             return h('button',{key:o[0],type:'button',onClick:function(){setPer(o[0]);marcarPeriodo(selCli,o[0]);},style:{padding:'9px 13px',borderRadius:10,fontWeight:800,fontSize:12.5,cursor:'pointer',fontFamily:'inherit',border:'1px solid '+(on?'#e8c766':'rgba(255,255,255,.14)'),background:on?'rgba(232,199,102,.18)':'rgba(0,0,0,.2)',color:on?'#f7dd8c':K.sub}},o[1]);}),
           h('span',{style:{fontSize:12.5,color:K.sub,fontWeight:700,marginLeft:4}},dmy(rg[0])+' al '+dmy(rg[1]))),
-        h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,margin:'16px 0 8px'}},
-          h('div',{style:{display:'flex',alignItems:'center',gap:8}},h('span',{style:{fontFamily:'Bebas Neue',fontSize:15,color:'#1a1d13',background:'#e8c766',borderRadius:6,padding:'1px 7px'}},'B'),h('b',{style:{fontSize:13.5}},'Revisa los paquetes'),h('span',{style:{fontSize:12,color:K.sub,fontWeight:700}},selL.length+' de '+itemsC.length+' marcados')),
-          h('button',{type:'button',onClick:function(){var o={};itemsC.forEach(function(x){o[x.codigo]=!todosC;});setSel(o);},style:{background:'none',border:'none',color:K.oro,fontWeight:800,fontSize:12.5,cursor:'pointer',fontFamily:'inherit'}},todosC?'Desmarcar todos':'Marcar todos')),
-        h('div',{style:{display:'flex',flexDirection:'column',gap:4}},itemsC.map(function(x){var on=!!sel[x.codigo];var d=DESTK[destinoDe(x)];var noRen=!x.rendicion_id&&destinoDe(x)==='mensajero';
-          return h('div',{key:x.codigo,className:'pc-it pc-fila',onClick:function(){toggle(x.codigo);},style:{padding:'9px 11px',borderRadius:10,cursor:'pointer',background:on?K.filaOn:K.fila,border:'1px solid '+(on?'rgba(232,199,102,.35)':'transparent'),opacity:on?1:.6}},
-            tick(on),
-            h('div',{style:{minWidth:0}},h('div',{style:{fontFamily:'JetBrains Mono, monospace',fontWeight:700,fontSize:12.5}},x.codigo),h('div',{style:{fontSize:11.5,color:K.sub,fontWeight:700}},dmy(x.fecha)+' · '+tit(x.mensajero))),
-            h('div',{className:'pc-x',style:{fontSize:12.5,fontWeight:700,minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},tit(x.destinatario)),
-            h('div',{className:'pc-x'},noRen?pill('Mensajero aún no rinde',K.ambar,'rgba(247,197,90,.1)'):pill(d[0],d[1])),
-            h('div',{style:{fontFamily:'Bebas Neue',fontSize:21,textAlign:'right'}},money(valor(x))),botonEvi(x.codigo,(evi[x.codigo]||[]).length,function(c){setModalEv({codigo:c,info:tit(x.destinatario||'')+' · '+money(valor(x))});}),botonVer(x.codigo));}),
-          itemsC.length===0&&h('div',{style:{color:K.sub,fontWeight:700,padding:10}},'Sin paquetes.')),
+        // 24-11-2026: lista agrupada por dónde está el dinero, para que sea claro qué se paga.
+        (function(){var rgP=rangoPer();var dondeDe=function(x){return destinoDe(x)==='cliente'?'cliente':(x.rendicion_id||destinoDe(x)==='transpgso')?'tp':'men';};
+          var GR=[['tp','Dinero en TransPgso · listo para transferir','El mensajero ya nos rindió este dinero.',K.azul],
+                  ['men','Aún lo tiene el mensajero','Todavía no nos rinde. Si lo incluyes, le pagas al cliente antes de recibirlo.',K.ambar],
+                  ['cliente','El cliente ya lo recibió directo','El destinatario le pagó directo al cliente. Se incluye solo para dejar registro: no se transfiere.',K.verde]];
+          return h('div',null,
+            h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,margin:'16px 0 4px',flexWrap:'wrap'}},
+              h('div',{style:{display:'flex',alignItems:'center',gap:8}},h('span',{style:{fontFamily:'Bebas Neue',fontSize:15,color:'#1a1d13',background:'#e8c766',borderRadius:6,padding:'1px 7px'}},'B'),h('b',{style:{fontSize:13.5}},'Marca los envíos que entran en esta liquidación'),h('span',{style:{fontSize:12,color:K.sub,fontWeight:700}},selL.length+' de '+itemsC.length+' marcados')),
+              h('button',{type:'button',onClick:function(){var o={};itemsC.forEach(function(x){o[x.codigo]=!todosC;});setSel(o);},style:{background:'none',border:'none',color:K.oro,fontWeight:800,fontSize:12.5,cursor:'pointer',fontFamily:'inherit'}},todosC?'Desmarcar todos':'Marcar todos')),
+            h('div',{style:{fontSize:12,color:K.sub,fontWeight:600,marginBottom:10}},'El período de arriba marca solo los envíos de esas fechas. Puedes marcar o desmarcar cualquiera tocándolo.'),
+            GR.map(function(g){var its=itemsC.filter(function(x){return dondeDe(x)===g[0];});if(!its.length)return null;var marc=its.filter(function(x){return sel[x.codigo];});var todosG=marc.length===its.length;
+              return h('div',{key:g[0],style:{marginBottom:12,borderRadius:14,border:'1px solid '+g[3]+'44',background:'rgba(0,0,0,.14)',overflow:'hidden'}},
+                h('div',{style:{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',padding:'10px 12px',borderBottom:'1px solid '+g[3]+'33',background:g[3]+'14'}},
+                  h('span',{style:{width:10,height:10,borderRadius:'50%',background:g[3],flexShrink:0}}),
+                  h('div',{style:{flex:1,minWidth:200}},h('div',{style:{fontWeight:900,fontSize:13.5,color:g[3]}},g[1]+' · '+plural(its.length,'envío')),h('div',{style:{fontSize:11.5,color:K.sub,fontWeight:700}},g[2])),
+                  h('div',{style:{textAlign:'right'}},h('div',{style:{fontFamily:'Bebas Neue',fontSize:22,lineHeight:1}},money(tot(its))),h('div',{style:{fontSize:11,color:K.sub,fontWeight:700}},marc.length+' marcados')),
+                  h('button',{type:'button',onClick:function(){var o=Object.assign({},sel);its.forEach(function(x){o[x.codigo]=!todosG;});setSel(o);},style:{background:'none',border:'1px solid '+g[3]+'66',borderRadius:8,padding:'5px 9px',color:g[3],fontWeight:800,fontSize:11.5,cursor:'pointer',fontFamily:'inherit'}},todosG?'Quitar todos':'Marcar todos')),
+                h('div',{style:{display:'flex',flexDirection:'column',gap:3,padding:6}},its.map(function(x){var on=!!sel[x.codigo];var fuera=x.fecha<rgP[0]||x.fecha>rgP[1];
+                  return h('div',{key:x.codigo,className:'pc-it pc-fila',onClick:function(){toggle(x.codigo);},style:{padding:'9px 11px',borderRadius:10,cursor:'pointer',background:on?K.filaOn:K.fila,border:'1px solid '+(on?'rgba(232,199,102,.4)':'transparent')}},
+                    tick(on),
+                    h('div',{style:{minWidth:0}},h('div',{style:{fontFamily:'JetBrains Mono, monospace',fontWeight:700,fontSize:12.5}},x.codigo),h('div',{style:{fontSize:11.5,color:K.sub,fontWeight:700}},dmy(x.fecha)+' · '+tit(x.mensajero))),
+                    h('div',{className:'pc-x',style:{fontSize:12.5,fontWeight:700,minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},tit(x.destinatario)),
+                    h('div',{className:'pc-x'},on?pill('Incluido',K.oro,'rgba(232,199,102,.12)'):fuera?pill('Fuera del período',K.dim):pill('No incluido',K.dim)),
+                    h('div',{style:{fontFamily:'Bebas Neue',fontSize:21,textAlign:'right',color:g[0]==='cliente'?K.verde:K.txt}},money(valor(x))),botonEvi(x.codigo,(evi[x.codigo]||[]).length,function(c){setModalEv({codigo:c,info:tit(x.destinatario||'')+' · '+money(valor(x))});}),botonVer(x.codigo));})));}),
+            itemsC.length===0&&h('div',{style:{color:K.sub,fontWeight:700,padding:10}},'Sin paquetes.'));})(),
         h('label',{style:{display:'flex',flexDirection:'column',gap:6,marginTop:14}},eti('Observación (opcional)'),h('input',{value:nota,onChange:function(e){setNota(e.target.value);},placeholder:'Ej: transferencia a cuenta Banco Estado',style:inp})),
         h('div',{style:{marginTop:12}},eti('Comprobante del pago al cliente (opcional)'),h(SelectorArchivos,{archivos:archL,setArchivos:setArchL,texto:'Si ya le transferiste, adjunta el comprobante; queda en el anexo del acta'})),
         h('div',{style:{marginTop:16,padding:'14px 16px',borderRadius:14,background:'rgba(0,0,0,.25)',border:'1px solid '+K.bdOro,display:'flex',alignItems:'center',gap:18,flexWrap:'wrap'}},
@@ -382,7 +396,7 @@ function PorCobrar(props){
           h('div',null,eti('Ya lo recibió directo'),h('div',{style:{fontFamily:'Bebas Neue',fontSize:24,lineHeight:1,color:K.verde}},money(dirL))),
           h('div',{style:{color:K.dim,fontWeight:900}},'='),
           h('div',null,eti('Le transferimos'),h('div',{style:{fontFamily:'Bebas Neue',fontSize:36,lineHeight:1,color:'#f7dd8c'}},money(totL-dirL))),
-          h('div',{style:{flex:1,minWidth:150,fontSize:12.5,fontWeight:800,color:sinRen?K.ambar:K.verde}},!selL.length?'Marca al menos un paquete':sinRen?plural(sinRen,'paquete')+' que el mensajero aún no nos rinde':'✓ Todo rendido'),
+          h('div',{style:{flex:1,minWidth:150,fontSize:12.5,fontWeight:800,color:sinRen?K.ambar:K.verde}},!selL.length?'Marca al menos un envío':sinRen?'Ojo: '+plural(sinRen,'envío')+' de esta liquidación aún lo tiene el mensajero':plural(selL.length,'envío')+' · todo el dinero ya está en TransPgso o con el cliente'),
           boton(busy?'Emitiendo…':'Emitir liquidación',liquidar,'prim',busy||!selL.length,{padding:'13px 22px',fontSize:14.5})));}
     cuerpo=h('div',{className:'pc-md'},listaC,detalleC);}
   // ── PASO 3: actas e informe del mes ──
