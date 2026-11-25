@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261124210619;
+window.__MODULES_VERSION=20261125144737;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -5373,6 +5373,7 @@ function EnvioDetalleCard(_ref_edc){
       // documento TransPgso (modules/doc-pdf.js), para responder consultas de clientes.
       React.createElement('div',{style:{display:'flex',justifyContent:'flex-end',alignItems:'center',gap:8,marginBottom:10}},
         pdfMsg&&React.createElement('span',{style:{fontSize:11,color:'var(--danger)'}},pdfMsg),
+        React.createElement(BotonLinkSeguimiento,{codigo:envio.codigo,style:{padding:'6px 14px',fontSize:12,marginRight:6}}),
         React.createElement(BotonPDFIdiomas,{codigo:envio.codigo,style:{padding:'6px 14px',fontSize:12},onError:function(err){setPdfMsg('No se pudo generar el PDF: '+(err&&err.message||''));}})),
       /*#__PURE__*/React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12,fontSize:13}},
         [['Código',envio.codigo],['Cliente',envio.cliente],['Destinatario',envio.destinatario],
@@ -5455,6 +5456,15 @@ function BotonPDFIdiomas(props){var _a=React.useState(false),ab=_a[0],setAb=_a[1
       React.createElement('div',{style:{padding:'7px 12px',fontSize:10.5,fontWeight:800,letterSpacing:1.2,color:'#A0842A',background:'#fbf6e6'}},'IDIOMA DEL DOCUMENTO'),
       op('es','Español',''),op('en','English','Inglés'),op('zh','中文','Chino')));}
 window.BotonPDFIdiomas=BotonPDFIdiomas;
+// 25-11-2026: link público para que el destinatario final siga su envío (seguimiento.html).
+function linkSeguimiento(codigo){return 'https://sistema.transpgso.cl/seguimiento.html?c='+encodeURIComponent(codigo);}
+function BotonLinkSeguimiento(props){var _c=React.useState(false),ok=_c[0],setOk=_c[1];var t=props.t||function(x){return x;};
+  function copiar(){var url=linkSeguimiento(props.codigo);var txt=t('Sigue tu envío aquí:')+' '+url;
+    if(navigator.share&&/Android|iPhone|iPad/i.test(navigator.userAgent)){navigator.share({title:'TransPgso',text:txt,url:url}).catch(function(){});return;}
+    var hecho=function(){setOk(true);setTimeout(function(){setOk(false);},2200);};
+    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(hecho,function(){window.prompt(t('Copia este link:'),url);});else window.prompt(t('Copia este link:'),url);}
+  return React.createElement('button',{type:'button',className:props.className||'btn-secondary',style:props.style,title:t('Link para que el destinatario siga su envío'),onClick:copiar},ok?t('Link copiado'):t('Link de seguimiento'));}
+window.BotonLinkSeguimiento=BotonLinkSeguimiento;
 function estadoInfo(val){return ESTADOS_ENVIO.find(e=>e.val===val)||ESTADOS_ENVIO[0];}function estadoBadge(val){const info=estadoInfo(val);return/*#__PURE__*/React.createElement("span",{style:{padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,letterSpacing:0.5,background:info.bg,color:info.color,whiteSpace:'nowrap'}},info.label);}function abrirVentanaEtiquetas(lista,logoSrc){const win=window.open('','_blank','width=500,height=700');const etiquetasHTML=lista.map(e=>{const qrData=e.codigo;return`
       <div class="etiqueta${(e.enUnCambio||(+e.monto>0))?' pc':''}">
         <div class="hdr">
@@ -14185,6 +14195,11 @@ var TRAD_CLIENTE={
   'Carga de Envíos':{en:'Upload Shipments',zh:'上传包裹'},
   'Retornos':{en:'Returns',zh:'退货'},
   'Por cobrar':{en:'Cash on delivery',zh:'代收货款'},
+  'Link de seguimiento':{en:'Tracking link',zh:'物流追踪链接'},
+  'Link copiado':{en:'Link copied',zh:'链接已复制'},
+  'Sigue tu envío aquí:':{en:'Track your package here:',zh:'在此追踪您的包裹：'},
+  'Copia este link:':{en:'Copy this link:',zh:'复制此链接：'},
+  'Link para que el destinatario siga su envío':{en:'Link so the recipient can track the package',zh:'收件人追踪包裹的链接'},
   'Mi ':{en:'My ',zh:'我的'},
   'Mis ':{en:'My ',zh:'我的'},
   'Mapa de ':{en:'Delivery ',zh:'配送'},
@@ -14936,6 +14951,7 @@ function PortalCliente({usuario,onLogout}){
     detalle&&React.createElement(Modal,{title:t('Envío ')+detalle.codigo,wide:true,onClose:function(){setDetalle(null);}},
       React.createElement(FichaEnvioCliente,{envio:detalle,t:t}),
       React.createElement('div',{className:'modal-actions'},
+        React.createElement(BotonLinkSeguimiento,{codigo:detalle.codigo,t:t,className:'btn-primary'}),
         React.createElement('button',{className:'btn-secondary',onClick:function(){setDetalle(null);}},t('Cerrar'))
       )
     )

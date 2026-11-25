@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Sigue tu envío · TransPgso</title>
+<meta name="description" content="Revisa en tiempo real dónde está tu envío TransPgso.">
+<meta name="theme-color" content="#15180F">
+<link rel="icon" href="/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--oro:#C8A84B;--oro2:#f7dd8c;--oliva:#3A3D2E;--oscuro:#15180F;--marfil:#F1ECDA;--sub:#bdb8a2;--verde:#36c47f;--morado:#b07cff;--rojo:#ff7b70}
+*{box-sizing:border-box}html,body{margin:0}html{background:#0b0d07}
+body{font-family:'DM Sans',system-ui,sans-serif;color:var(--marfil);min-height:100vh;
+  background:radial-gradient(80% 50% at 85% 0%,rgba(200,168,75,.22),transparent 60%),radial-gradient(70% 50% at 0% 100%,rgba(120,110,60,.18),transparent 60%),linear-gradient(170deg,#262a1b 0%,#151810 50%,#0b0d07 100%);background-attachment:fixed}
+.wrap{max-width:560px;margin:0 auto;padding:22px 16px calc(28px + env(safe-area-inset-bottom))}
+.top{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.top img{width:52px;height:52px;border-radius:14px;object-fit:cover;border:1px solid rgba(200,168,75,.5)}
+.marca{font-family:'Bebas Neue';font-size:26px;letter-spacing:4px;color:var(--oro2);line-height:1}
+.marca small{display:block;font-family:'DM Sans';font-size:11px;letter-spacing:3px;color:var(--sub);font-weight:700;margin-top:3px}
+h1{font-family:'Bebas Neue';font-weight:400;font-size:40px;letter-spacing:1.5px;line-height:1;margin:0 0 6px}
+.lead{color:var(--sub);font-size:14px;margin:0 0 16px;line-height:1.5}
+form{display:flex;gap:8px}
+input{flex:1;min-width:0;padding:14px 14px;border-radius:14px;border:1px solid rgba(200,168,75,.45);background:rgba(0,0,0,.35);color:var(--marfil);font:600 16px 'DM Sans';outline:none}
+input:focus{border-color:var(--oro2)}
+button{padding:0 18px;border-radius:14px;border:none;font:800 14px 'DM Sans';color:#1a1d13;cursor:pointer;background:linear-gradient(180deg,#f7dd8c,#d9b553 55%,#ae8829);box-shadow:0 4px 0 #6d561b}
+.card{margin-top:18px;border-radius:20px;background:rgba(21,24,15,.88);border:1px solid rgba(200,168,75,.35);box-shadow:0 18px 40px rgba(0,0,0,.45);overflow:hidden}
+.hero{padding:20px 20px 16px;border-bottom:1px solid rgba(255,255,255,.07)}
+.kick{font-size:11px;letter-spacing:2.5px;font-weight:800;color:var(--sub);text-transform:uppercase}
+.estado{font-family:'Bebas Neue';font-size:44px;letter-spacing:1px;line-height:1;margin:6px 0 4px}
+.detalle{font-size:14px;color:var(--marfil);line-height:1.5}
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,.06)}
+.meta div{background:rgba(21,24,15,.95);padding:12px 16px}
+.meta b{display:block;font-size:14px;margin-top:2px;word-break:break-word}
+.meta span{font-size:10.5px;letter-spacing:1.6px;font-weight:800;color:var(--sub);text-transform:uppercase}
+.pasos{display:flex;padding:18px 16px 6px;gap:0}
+.paso{flex:1;text-align:center;position:relative}
+.paso .pt{width:30px;height:30px;border-radius:50%;margin:0 auto;display:grid;place-items:center;font:800 13px 'DM Sans';background:rgba(255,255,255,.08);color:var(--sub);border:2px solid rgba(255,255,255,.15);position:relative;z-index:1}
+.paso.ok .pt{background:var(--oro);color:#1a1d13;border-color:var(--oro2)}
+.paso.act .pt{box-shadow:0 0 0 6px rgba(247,221,140,.18);animation:lat 1.6s ease-in-out infinite}
+.paso .lb{font-size:11.5px;font-weight:700;color:var(--sub);margin-top:7px}
+.paso.ok .lb{color:var(--marfil)}
+.paso:not(:last-child)::after{content:'';position:absolute;top:15px;left:calc(50% + 15px);right:calc(-50% + 15px);height:3px;background:rgba(255,255,255,.12);border-radius:2px}
+.paso.ok:not(:last-child)::after{background:var(--oro)}
+@keyframes lat{0%,100%{box-shadow:0 0 0 4px rgba(247,221,140,.25)}50%{box-shadow:0 0 0 9px rgba(247,221,140,.06)}}
+.hist{padding:8px 20px 18px}
+.hist h3{font-size:11px;letter-spacing:2.5px;font-weight:800;color:var(--sub);text-transform:uppercase;margin:12px 0 8px}
+.ev{display:flex;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,.05)}
+.ev i{width:10px;height:10px;border-radius:50%;margin-top:5px;flex-shrink:0}
+.ev b{font-size:14px}.ev small{display:block;color:var(--sub);font-size:12px;margin-top:2px}
+.aviso{margin:0 16px 16px;padding:12px 14px;border-radius:14px;font-size:13.5px;line-height:1.5}
+.vivo{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--sub);font-weight:700;padding:0 20px 16px}
+.vivo i{width:8px;height:8px;border-radius:50%;background:var(--verde);box-shadow:0 0 8px var(--verde);animation:pul 1.4s infinite}
+@keyframes pul{50%{opacity:.35}}
+.vacio{padding:26px 20px;text-align:center;color:var(--sub);font-size:14px;line-height:1.6}
+.pie{margin-top:22px;text-align:center;font-size:12px;color:var(--sub);line-height:1.7}
+.pie a{color:var(--oro2);text-decoration:none;font-weight:800}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><img src="/logo.jpg" alt="TransPgso"><div class="marca">TRANSPGSO<small>SIGUE TU ENVÍO</small></div></div>
+  <h1>¿Dónde está mi pedido?</h1>
+  <p class="lead">Escribe el código de tu envío (el número de la etiqueta) y mira su estado en tiempo real.</p>
+  <form id="f"><input id="c" inputmode="text" autocomplete="off" placeholder="Ej: 48621349749" aria-label="Código de envío"><button type="submit">Buscar</button></form>
+  <div id="r"></div>
+  <div class="pie">¿Dudas con tu entrega? Contacta a la tienda donde compraste.<br>Reparto de última milla por <a href="https://www.transpgso.cl" target="_blank" rel="noopener">TransPgso</a></div>
+</div>
+<script>
+(function(){
+var URL_='https://tiambblslqdloeqdbhrs.supabase.co',KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpYW1iYmxzbHFkbG9lcWRiaHJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzODEzNzIsImV4cCI6MjA5NDk1NzM3Mn0.LYu6YsoIfzW3sApLnYvDh0GPDizOhjDSLtZQyrGH4nU';
+var R=document.getElementById('r'),I=document.getElementById('c'),timer=null,actual='';
+var EST={
+  en_bodega:{t:'En nuestra bodega',c:'#7fc4e6',d:'Recibimos tu paquete y lo estamos preparando para salir a reparto.',paso:1},
+  en_bodega_fecha:{t:'Programado',c:'#8fb1ff',d:'Tu paquete está en bodega y saldrá a reparto en la fecha acordada.',paso:1},
+  en_ruta:{t:'En camino',c:'#f7dd8c',d:'Tu paquete va en el vehículo de reparto. Hoy lo entregamos.',paso:2},
+  entregado:{t:'Entregado',c:'#36c47f',d:'Tu paquete fue entregado.',paso:3},
+  reprogramado:{t:'Reprogramado',c:'#b07cff',d:'Intentamos entregarlo pero no fue posible. Volveremos a intentarlo pronto.',paso:2},
+  cancelado:{t:'No entregado',c:'#ff7b70',d:'La entrega no se pudo concretar. Contacta a la tienda donde compraste.',paso:2},
+  en_bodega_cancelado:{t:'No entregado',c:'#ff7b70',d:'La entrega no se pudo concretar. Contacta a la tienda donde compraste.',paso:2},
+  retorno:{t:'Devuelto a la tienda',c:'#ff7b70',d:'El paquete se devolvió a la tienda. Contacta a la tienda donde compraste.',paso:2},
+  siniestro:{t:'En revisión',c:'#ff7b70',d:'Estamos revisando tu envío. Contacta a la tienda donde compraste.',paso:2}};
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function fh(ts){try{var d=new Date(ts);return d.toLocaleDateString('es-CL',{timeZone:'America/Santiago',weekday:'long',day:'numeric',month:'long'})+' · '+d.toLocaleTimeString('es-CL',{timeZone:'America/Santiago',hour:'2-digit',minute:'2-digit',hour12:false})+' h';}catch(e){return '';}}
+function tit(s){return String(s||'').toLowerCase().replace(/(^|\s)\S/g,function(m){return m.toUpperCase();});}
+function pintar(d){
+  if(!d){R.innerHTML='<div class="card"><div class="vacio">No encontramos ese código.<br>Revisa que esté bien escrito: es el número que aparece en la etiqueta del paquete.</div></div>';return;}
+  var e=EST[d.estado]||{t:d.estado,c:'#f1ecda',d:'',paso:1};
+  var ev=(d.eventos||[]).slice().reverse();
+  var ent=(d.eventos||[]).filter(function(x){return x.estado==='entregado';}).pop();
+  var det=e.d;if(d.estado==='entregado'&&ent)det='Entregado el '+fh(ent.at)+'.';
+  if(d.estado==='en_ruta'&&d.mensajero)det+=' Te lo lleva '+esc(tit(d.mensajero))+'.';
+  var pasos=[['1','Recibido'],['2','En camino'],['3','Entregado']].map(function(p,i){var n=i+1;var cls=(n<e.paso||(n===e.paso))?'ok':'';if(n===e.paso&&d.estado!=='entregado')cls+=' act';return '<div class="paso '+cls+'"><div class="pt">'+(n<e.paso||d.estado==='entregado'?'✓':p[0])+'</div><div class="lb">'+p[1]+'</div></div>';}).join('');
+  var aviso='';
+  if(d.estado==='reprogramado')aviso='<div class="aviso" style="background:rgba(176,124,255,.12);border:1px solid rgba(176,124,255,.4)">Si necesitas coordinar la entrega, escríbele a la tienda donde compraste para que nos avise.</div>';
+  R.innerHTML='<div class="card"><div class="hero"><div class="kick">Envío '+esc(d.codigo)+'</div><div class="estado" style="color:'+e.c+'">'+esc(e.t)+'</div><div class="detalle">'+det+'</div></div>'
+    +'<div class="pasos">'+pasos+'</div>'+aviso
+    +'<div class="meta"><div><span>Tienda</span><b>'+esc(tit(d.vendedor)||'—')+'</b></div><div><span>Destino</span><b>'+esc(d.comuna||'—')+'</b></div>'
+    +(d.destinatario?'<div><span>Para</span><b>'+esc(d.destinatario)+'</b></div>':'')+'<div><span>Fecha de despacho</span><b>'+esc(d.fecha?d.fecha.split('-').reverse().join('-'):'—')+'</b></div></div>'
+    +'<div class="hist"><h3>Historial</h3>'+(ev.length?ev.map(function(x){var s=EST[x.estado]||{t:x.estado,c:'#aaa'};return '<div class="ev"><i style="background:'+s.c+'"></i><div><b>'+esc(s.t)+'</b><small>'+esc(fh(x.at))+'</small></div></div>';}).join(''):'<div class="ev"><div><small>Aún sin movimientos.</small></div></div>')+'</div>'
+    +(d.estado==='entregado'||d.estado==='retorno'?'':'<div class="vivo"><i></i>Se actualiza solo cada minuto</div>')+'</div>';
+}
+function buscar(c,silencioso){c=String(c||'').replace(/\s+/g,'').toUpperCase();if(!c)return;actual=c;
+  if(!silencioso)R.innerHTML='<div class="card"><div class="vacio">Buscando…</div></div>';
+  fetch(URL_+'/rest/v1/rpc/seguimiento_publico',{method:'POST',headers:{'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':'application/json'},body:JSON.stringify({p_codigo:c})})
+    .then(function(r){return r.ok?r.json():null;}).then(function(d){if(c!==actual)return;pintar(d);
+      clearTimeout(timer);if(d&&d.estado!=='entregado'&&d.estado!=='retorno')timer=setTimeout(function(){buscar(c,true);},60000);})
+    .catch(function(){if(!silencioso)R.innerHTML='<div class="card"><div class="vacio">No pudimos conectarnos. Revisa tu internet e inténtalo de nuevo.</div></div>';});
+  try{history.replaceState(null,'','?c='+encodeURIComponent(c));}catch(e){}}
+document.getElementById('f').addEventListener('submit',function(ev){ev.preventDefault();buscar(I.value);});
+var q=new URLSearchParams(location.search).get('c');if(q){I.value=q;buscar(q);}else I.focus();
+})();
+</script>
+</body>
+</html>
