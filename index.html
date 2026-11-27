@@ -773,7 +773,7 @@ animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 <script>
 // Helper de carga diferida de módulos JS (para componentes pesados que no son necesarios en el primer render)
 window.__moduleLoaders = window.__moduleLoaders || {};
-window.__MODULES_VERSION=20261125153100;
+window.__MODULES_VERSION=20261127132929;
 function loadScriptOnce(key, src){
   if(window.__moduleLoaders[key]) return window.__moduleLoaders[key];
   window.__moduleLoaders[key] = new Promise(function(resolve, reject){
@@ -5468,14 +5468,11 @@ window.BotonLinkSeguimiento=BotonLinkSeguimiento;
 function estadoInfo(val){return ESTADOS_ENVIO.find(e=>e.val===val)||ESTADOS_ENVIO[0];}function estadoBadge(val){const info=estadoInfo(val);return/*#__PURE__*/React.createElement("span",{style:{padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,letterSpacing:0.5,background:info.bg,color:info.color,whiteSpace:'nowrap'}},info.label);}function abrirVentanaEtiquetas(lista,logoSrc){const win=window.open('','_blank','width=500,height=700');const etiquetasHTML=lista.map(e=>{const qrData=e.codigo;return`
       <div class="etiqueta${(e.enUnCambio||(+e.monto>0))?' pc':''}">
         <div class="hdr">
-          <div class="logo-area">
-            <img src="${logoSrc}" onerror="this.style.display='none'" style="width:54px;height:54px;object-fit:contain;border-radius:6px"/>
-            <div><div style="font-family:'Bebas Neue',sans-serif;font-weight:900;font-size:15px;color:#C8A84B;letter-spacing:3px">TRANSPGSO</div>
-            <div style="font-size:7px;color:rgba(200,168,75,0.6);letter-spacing:2px">LAST MILE DELIVERY</div></div>
-          </div>
+          <div class="logo-area"><div class="logo-crop"><img src="${logoSrc}" onerror="this.style.display='none'" alt="TransPgso"/></div></div>
           <div style="text-align:right">
-            <div style="font-size:7px;color:rgba(255,255,255,0.5);letter-spacing:1px">CÓDIGO</div>
-            <div style="font-family:monospace;font-weight:700;font-size:10px;color:#C8A84B">${e.codigo}</div>
+            <div style="font-size:7.5px;color:#C8A84B;letter-spacing:2px;font-weight:700">LAST MILE DELIVERY</div>
+            <div style="font-size:7px;color:rgba(255,255,255,0.55);letter-spacing:1px;margin-top:10px">CÓDIGO</div>
+            <div style="font-family:monospace;font-weight:700;font-size:12px;color:#C8A84B">${e.codigo}</div>
           </div>
         </div>
         <div class="cliente-bar">
@@ -5536,8 +5533,17 @@ function estadoInfo(val){return ESTADOS_ENVIO.find(e=>e.val===val)||ESTADOS_ENVI
       .etiqueta{width:377px;min-height:560px;background:#fff;border:2px solid #2b2e20;border-radius:8px;
         font-family:Arial,sans-serif;font-size:11px;color:#2b2e20;overflow:hidden;
         display:flex;flex-direction:column;page-break-inside:avoid;}
-      .hdr{background:#2b2e20;padding:9px 13px;display:flex;align-items:center;justify-content:space-between;}
-      .logo-area{display:flex;align-items:center;gap:9px;}
+      .hdr{background:#31332b;padding:4px 13px 4px 6px;display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #C8A84B;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+      .logo-area{display:flex;align-items:center;}
+      .logo-crop{width:190px;height:112px;overflow:hidden;position:relative;flex-shrink:0;}
+      .logo-crop img{position:absolute;width:228px;height:228px;left:-14px;top:-46px;max-width:none;}
+      .etiqueta.pc .logo-crop{width:160px;height:94px;}
+      .etiqueta.pc .logo-crop img{width:192px;height:192px;left:-12px;top:-39px;}
+      @media print{
+        .hdr{background:#fff!important;border-bottom:3px solid #000!important;padding-top:2px;padding-bottom:2px;}
+        .hdr div{color:#000!important;}
+        .logo-crop img{filter:grayscale(1) invert(1) brightness(.75) contrast(6);}
+      }
       .cliente-bar{background:#C8A84B;padding:6px 13px;display:flex;justify-content:space-between;align-items:center;}
       .section-dest{padding:11px 13px;border-bottom:1px dashed #e0d8c0;}
       .section-dir{padding:9px 13px;border-bottom:1px dashed #e0d8c0;}
@@ -15239,14 +15245,11 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
     var etiquetasHTML=lista.map(e=>{const qrData=e.codigo;return`
       <div class="etiqueta${(e.enUnCambio||(+e.monto>0))?' pc':''}">
         <div class="hdr">
-          <div class="logo-area">
-            <img src="${logoSrc}" onerror="this.style.display='none'" style="width:54px;height:54px;object-fit:contain;border-radius:6px"/>
-            <div><div style="font-family:'Bebas Neue',sans-serif;font-weight:900;font-size:15px;color:#C8A84B;letter-spacing:3px">TRANSPGSO</div>
-            <div style="font-size:7px;color:rgba(200,168,75,0.6);letter-spacing:2px">LAST MILE DELIVERY</div></div>
-          </div>
+          <div class="logo-area"><div class="logo-crop"><img src="${logoSrc}" onerror="this.style.display='none'" alt="TransPgso"/></div></div>
           <div style="text-align:right">
-            <div style="font-size:7px;color:rgba(255,255,255,0.5);letter-spacing:1px">CÓDIGO</div>
-            <div style="font-family:monospace;font-weight:700;font-size:10px;color:#C8A84B">${e.codigo}</div>
+            <div style="font-size:7.5px;color:#C8A84B;letter-spacing:2px;font-weight:700">LAST MILE DELIVERY</div>
+            <div style="font-size:7px;color:rgba(255,255,255,0.55);letter-spacing:1px;margin-top:10px">CÓDIGO</div>
+            <div style="font-family:monospace;font-weight:700;font-size:12px;color:#C8A84B">${e.codigo}</div>
           </div>
         </div>
         <div class="cliente-bar">
@@ -15309,8 +15312,17 @@ function EtiquetasCliente({nombreCliente,envios,setEnvios,idioma}){
       .etiqueta{width:377px;min-height:560px;background:#fff;border:2px solid #2b2e20;border-radius:8px;
         font-family:Arial,sans-serif;font-size:11px;color:#2b2e20;overflow:hidden;
         display:flex;flex-direction:column;page-break-inside:avoid;}
-      .hdr{background:#2b2e20;padding:9px 13px;display:flex;align-items:center;justify-content:space-between;}
-      .logo-area{display:flex;align-items:center;gap:9px;}
+      .hdr{background:#31332b;padding:4px 13px 4px 6px;display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #C8A84B;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+      .logo-area{display:flex;align-items:center;}
+      .logo-crop{width:190px;height:112px;overflow:hidden;position:relative;flex-shrink:0;}
+      .logo-crop img{position:absolute;width:228px;height:228px;left:-14px;top:-46px;max-width:none;}
+      .etiqueta.pc .logo-crop{width:160px;height:94px;}
+      .etiqueta.pc .logo-crop img{width:192px;height:192px;left:-12px;top:-39px;}
+      @media print{
+        .hdr{background:#fff!important;border-bottom:3px solid #000!important;padding-top:2px;padding-bottom:2px;}
+        .hdr div{color:#000!important;}
+        .logo-crop img{filter:grayscale(1) invert(1) brightness(.75) contrast(6);}
+      }
       .cliente-bar{background:#C8A84B;padding:6px 13px;display:flex;justify-content:space-between;align-items:center;}
       .section-dest{padding:11px 13px;border-bottom:1px dashed #e0d8c0;}
       .section-dir{padding:9px 13px;border-bottom:1px dashed #e0d8c0;}
